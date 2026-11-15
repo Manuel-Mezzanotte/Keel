@@ -251,7 +251,7 @@ Il confronto non è alla pari: Cursor aveva anche albero dei file, terminale, se
 | 1.2 | Impostazioni: `settings.json` per utente e per progetto (legge anche `.vscode/settings.json`), passate alle estensioni | fatta |
 | 1.3 | Italiano e inglese: testi in una tabella per lingua, lingua predefinita quella del Mac | fatta |
 | 1.4 | Comandi e scorciatoie: registro dei comandi, `keybindings.json` nel formato di VS Code, tastiera italiana | da fare |
-| 1.5 | Temi Mezzanotte, Chiaro e Nero, cambio al volo, segue chiaro e scuro di macOS | da fare |
+| 1.5 | Temi Mezzanotte, Chiaro e Nero, cambio al volo, segue chiaro e scuro di macOS | fatta |
 | 1.6 | La disposizione della bozza scelta | da fare |
 | 1.7 | Menu di macOS, logo e icona di Keel | da fare |
 

@@ -6,6 +6,7 @@ mod editor_checks;
 mod i18n;
 mod paths;
 mod quick_pick;
+mod theme;
 mod workbench_window;
 
 use std::process::ExitCode;
@@ -15,7 +16,7 @@ use extensions::ExtensionHost;
 use gpui::{
     App, AppContext as _, Bounds, QuitMode, TitlebarOptions, WindowBounds, WindowOptions, px, size,
 };
-use gpui_component::{Root, Theme, ThemeMode};
+use gpui_component::Root;
 
 use crate::cli::Command;
 use crate::workbench_window::{ExtensionSetup, Workbench};
@@ -98,7 +99,7 @@ fn run(document: Option<Document>) {
         .with_quit_mode(QuitMode::LastWindowClosed)
         .run(move |cx: &mut App| {
             gpui_component::init(cx);
-            Theme::change(ThemeMode::Dark, None, cx);
+            theme::init(cx);
             language::register_grammars();
             workbench_window::init(cx);
 
@@ -125,6 +126,7 @@ fn run(document: Option<Document>) {
             for warning in &settings.warnings {
                 eprintln!("keel: {warning}");
             }
+            theme::apply(&theme::ThemeChoice::from_settings(&settings), None, cx);
             let setup = extension_setup();
             let opened = cx.open_window(options, move |window, cx| {
                 let view = cx.new(|cx| Workbench::new(document, settings, setup, window, cx));

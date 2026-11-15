@@ -171,6 +171,12 @@ impl Workbench {
                 }
             }
         }));
+        subscriptions.push(cx.observe_window_appearance(window, |this, window, cx| {
+            let choice = crate::theme::ThemeChoice::from_settings(&this.settings);
+            if choice.follow_system {
+                crate::theme::apply(&choice, Some(window), cx);
+            }
+        }));
         window.on_window_should_close(cx, {
             let this = this.clone();
             move |window, cx| {
@@ -735,6 +741,7 @@ impl Workbench {
                 "keel.language".to_owned(),
                 strings.command_language.to_owned(),
             ),
+            ("keel.theme".to_owned(), strings.command_theme.to_owned()),
         ];
         if let Some(extensions) = &self.extensions {
             entries.extend(extensions.titles.iter().cloned());
@@ -763,6 +770,7 @@ impl Workbench {
                 "keel.save" => this.save(&Save, window, cx),
                 "keel.closeWindow" => this.close_window(&CloseWindow, window, cx),
                 "keel.language" => this.choose_language(window, cx),
+                "keel.theme" => this.choose_theme(window, cx),
                 _ => {
                     if let Some(pane) = this.panes.get(this.active) {
                         let editor = pane.editor.clone();
@@ -795,6 +803,48 @@ impl Workbench {
             .ok();
         })
         .detach();
+    }
+
+    fn choose_theme(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let items = crate::theme::NAMES
+            .iter()
+            .map(|name| PickItem::new(*name))
+            .collect();
+        let title = Some(self.strings().choose_theme.to_owned());
+        let chosen = quick_pick::show(title, None, items, window, cx);
+        cx.spawn_in(window, async move |this, cx| {
+            let Ok(Some(index)) = chosen.await else {
+                return;
+            };
+            this.update_in(cx, |this, window, cx| {
+                this.set_theme(crate::theme::NAMES[index], window, cx)
+            })
+            .ok();
+        })
+        .detach();
+    }
+
+    /// Shows a theme at once and remembers it. When Keel follows macOS, the
+    /// theme becomes the preferred one for its mode, light or dark.
+    fn set_theme(&mut self, name: &str, window: &mut Window, cx: &mut Context<Self>) {
+        let mut choice = crate::theme::ThemeChoice::from_settings(&self.settings);
+        let key = if choice.follow_system {
+            if crate::theme::is_dark(name) {
+                choice.dark = name.to_owned();
+                "workbench.preferredDarkColorTheme"
+            } else {
+                choice.light = name.to_owned();
+                "workbench.preferredLightColorTheme"
+            }
+        } else {
+            choice.theme = name.to_owned();
+            "workbench.colorTheme"
+        };
+        if let Err(error) = self.settings.update_user(key, Some(json!(name))) {
+            self.status_message = Some(error.to_string());
+        }
+        crate::theme::apply(&choice, Some(window), cx);
+        cx.notify();
     }
 
     /// Switches the interface language at once and remembers it.
@@ -2223,6 +2273,23 @@ mod tests {
         assert_eq!(name(&view, cx), "Untitled 1");
         let saved = settings::parse_jsonc(&std::fs::read_to_string(&user_file).unwrap()).unwrap();
         assert_eq!(saved["keel.language"], "en");
+    }
+
+    #[gpui::test]
+    fn choosing_a_theme_shows_it_and_saves_it(cx: &mut TestAppContext) {
+        set_up(cx);
+        cx.update(crate::theme::init);
+        let folder = tempfile::tempdir().unwrap();
+        let user_file = folder.path().join("settings.json");
+        let settings = Settings::load(&user_file, None);
+        let (view, cx) =
+            cx.add_window_view(|window, cx| Workbench::new(None, settings, None, window, cx));
+
+        view.update_in(cx, |view, window, cx| view.set_theme("Chiaro", window, cx));
+
+        assert!(cx.update(|_, cx| !gpui_component::ActiveTheme::theme(cx).is_dark()));
+        let saved = settings::parse_jsonc(&std::fs::read_to_string(&user_file).unwrap()).unwrap();
+        assert_eq!(saved["workbench.colorTheme"], "Chiaro");
     }
 
     #[test]
