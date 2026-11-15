@@ -117,7 +117,7 @@ Da confermare con le misure della fase 0. Si misura con lo stesso script su Keel
 |---|---|---|---|
 | 0 | Prototipo e prova a tempo | 2–3 settimane | fatta; restano le tue prove a mano |
 | 1 | Fondamenta e design | media | fatta; restano le tue prove a mano |
-| 2 | Editor e file | grande | da fare |
+| 2 | Editor e file | grande | in corso |
 | 3 | Ricerca | piccola | da fare |
 | 4 | Terminale e pannello in basso | media | da fare |
 | 5 | Git: modifiche e commit | media | da fare |
@@ -321,6 +321,18 @@ Il confronto non è alla pari: Cursor aveva anche albero dei file, terminale, se
 ### Fase 2 — Editor e file
 
 **Obiettivo.** Lavorare sui file di un progetto come in Cursor.
+
+**Sottofasi**
+
+| Sottofase | Cosa | Stato |
+|---|---|---|
+| 2.1 | Progetti: `keel cartella` e `keel .`, File → Apri, una finestra per progetto, un solo Keel aperto, progetti recenti, schermata iniziale | in corso |
+| 2.2 | Esplora risorse: albero con le icone, file ignorati attenuati; nuovo file e cartella, rinomina, elimina nel Cestino, sposta trascinando, mostra nel Finder, copia il percorso | da fare |
+| 2.3 | Schede: più file per gruppo, anteprima, fissate, chiudi le altre, riapri l'ultima chiusa; editor affiancati e gruppi | da fare |
+| 2.4 | Apertura veloce (Cmd+P) e vai alla riga (Ctrl+G) | da fare |
+| 2.5 | Scrittura: commenta, sposta e duplica righe, piega i blocchi, guide di rientro, parentesi e tag chiusi da soli, a capo, zoom, breadcrumb, sticky scroll e minimappa | da fare |
+| 2.6 | Cambi dall'esterno e niente perso: ricarica i file cambiati fuori da Keel, salvataggio automatico, modifiche non salvate conservate, ripristino di schede e disposizione | da fare |
+| 2.7 | Altri file (immagini, binari, file molto grandi), misure e resoconto | da fare |
 
 **Cosa si fa**
 - **Progetti:** apri cartella, progetti recenti, schermata iniziale, una finestra per progetto, comando `keel .` dal terminale (come `code .`).
