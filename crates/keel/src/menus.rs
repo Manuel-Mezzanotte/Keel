@@ -10,6 +10,10 @@ use crate::workbench_window::{
     ShowCommands, ShowExplorer, ShowExtensions, ShowSearch, ShowSourceControl, ToggleAgent,
     ToggleOutput, TogglePanel, ToggleProblems, ToggleSidebar, ToggleTerminal,
 };
+use crate::workbench_window::{
+    CopyLinesDown, CopyLinesUp, MoveLinesDown, MoveLinesUp, ToggleBlockComment, ToggleLineComment,
+    ToggleWordWrap, ZoomIn, ZoomOut, ZoomReset,
+};
 
 /// The language the menu bar was last built in.
 struct MenuLanguage(UiLanguage);
@@ -88,6 +92,20 @@ pub fn set(language: UiLanguage, cx: &mut App) {
                 MenuItem::separator(),
                 MenuItem::action(strings.menu_find, Search),
                 MenuItem::action(strings.menu_replace, Replace),
+                MenuItem::separator(),
+                MenuItem::action(strings.command_comment_line, ToggleLineComment),
+                MenuItem::action(strings.command_block_comment, ToggleBlockComment),
+            ],
+        ),
+        menu(
+            strings.menu_selection,
+            vec![
+                MenuItem::os_action(strings.menu_select_all, SelectAll, OsAction::SelectAll),
+                MenuItem::separator(),
+                MenuItem::action(strings.command_copy_up, CopyLinesUp),
+                MenuItem::action(strings.command_copy_down, CopyLinesDown),
+                MenuItem::action(strings.command_move_up, MoveLinesUp),
+                MenuItem::action(strings.command_move_down, MoveLinesDown),
             ],
         ),
         menu(
@@ -96,6 +114,11 @@ pub fn set(language: UiLanguage, cx: &mut App) {
                 MenuItem::action(strings.menu_command_palette, ShowCommands),
                 MenuItem::separator(),
                 MenuItem::action(strings.menu_split_editor, SplitEditor),
+                MenuItem::action(strings.menu_word_wrap, ToggleWordWrap),
+                MenuItem::separator(),
+                MenuItem::action(strings.menu_zoom_in, ZoomIn),
+                MenuItem::action(strings.menu_zoom_out, ZoomOut),
+                MenuItem::action(strings.menu_zoom_reset, ZoomReset),
                 MenuItem::separator(),
                 MenuItem::action(strings.view_explorer, ShowExplorer),
                 MenuItem::action(strings.view_search, ShowSearch),
@@ -140,9 +163,15 @@ mod tests {
     #[gpui::test]
     fn the_menus_follow_the_interface_language(cx: &mut TestAppContext) {
         cx.update(|cx| set(UiLanguage::Italian, cx));
-        assert_eq!(menu_names(cx), ["Keel", "File", "Modifica", "Vista", "Vai"]);
+        assert_eq!(
+            menu_names(cx),
+            ["Keel", "File", "Modifica", "Selezione", "Vista", "Vai"]
+        );
 
         cx.update(|cx| set(UiLanguage::English, cx));
-        assert_eq!(menu_names(cx), ["Keel", "File", "Edit", "View", "Go"]);
+        assert_eq!(
+            menu_names(cx),
+            ["Keel", "File", "Edit", "Selection", "View", "Go"]
+        );
     }
 }

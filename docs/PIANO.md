@@ -330,7 +330,7 @@ Il confronto non è alla pari: Cursor aveva anche albero dei file, terminale, se
 | 2.2 | Esplora risorse: albero con le icone, file ignorati attenuati; nuovo file e cartella, rinomina, elimina nel Cestino, sposta trascinando, mostra nel Finder, copia il percorso | fatta |
 | 2.3 | Schede: più file per gruppo, anteprima, fissate, chiudi le altre, riapri l'ultima chiusa; editor affiancati e gruppi | fatta |
 | 2.4 | Apertura veloce (Cmd+P) e vai alla riga (Ctrl+G) | fatta |
-| 2.5 | Scrittura: commenta, sposta e duplica righe, piega i blocchi, guide di rientro, parentesi e tag chiusi da soli, a capo, zoom, breadcrumb, sticky scroll e minimappa | da fare |
+| 2.5 | Scrittura: commenta, sposta e duplica righe, piega i blocchi, guide di rientro, parentesi e tag chiusi da soli, a capo, zoom, breadcrumb, sticky scroll e minimappa | fatta; sticky scroll, minimappa e pieghe da tastiera rimandate alla fase 12 |
 | 2.6 | Cambi dall'esterno e niente perso: ricarica i file cambiati fuori da Keel, salvataggio automatico, modifiche non salvate conservate, ripristino di schede e disposizione | da fare |
 | 2.7 | Altri file (immagini, binari, file molto grandi), misure e resoconto | da fare |
 
@@ -443,6 +443,45 @@ Il confronto non è alla pari: Cursor aveva anche albero dei file, terminale, se
   - `card.tsx:42`, e anche `:42:7`, apre il file e va alla riga, o alla riga e colonna;
   - Vai alla riga (Ctrl+G) chiede la riga, anche con `:colonna`, e mostra la riga attuale e il totale.
 - **Misure su GestionaleHospitality:** 1.010 file elencati in 9 ms; ogni ricerca mentre scrivi richiede meno di 1 ms.
+
+**Note sulla 2.5**
+- **Comandi di scrittura, con i tasti di VS Code sul Mac:** funzionano solo con il cursore nell'editor, come in VS Code.
+
+  | Tasti | Cosa fa |
+  |---|---|
+  | Cmd+/ | commenta la riga o le righe |
+  | Shift+Alt+A | commento in blocco |
+  | Alt+↑ e Alt+↓ | spostano le righe |
+  | Shift+Alt+↑ e Shift+Alt+↓ | le duplicano |
+  | Cmd+Shift+K | elimina le righe |
+  | Cmd+Invio | nuova riga sotto, con lo stesso rientro |
+  | Cmd+Shift+Invio | nuova riga sopra, con lo stesso rientro |
+
+  Ogni comando si annulla con un solo Cmd+Z.
+- **Commenti per linguaggio:**
+  - `//` per TypeScript, JavaScript, Rust, C, C++, C#, Java, Swift, Go, Prisma;
+  - `#` per Python, shell, YAML, TOML;
+  - `--` per SQL e Lua;
+  - `/* */` per CSS;
+  - `<!-- -->` per HTML e Markdown.
+- **Tag chiusi da soli:** in JSX/TSX e HTML, scrivendo `>` dopo `<div className="card"` compare `</div>` dopo il cursore, come in VS Code. Non succede dove `<` è un confronto o un tipo (`a < b`, `Array<string>`), dentro un attributo non chiuso, con `<br>`, `<img>` e gli altri elementi senza chiusura. Con `<>` compare `</>`.
+- **Già nell'editor di gpui-component, ora con le impostazioni di Keel:**
+  - parentesi e virgolette chiuse da sole;
+  - rientro automatico;
+  - guide di rientro;
+  - pieghe dei blocchi dal margine;
+  - più cursori (Cmd+Alt+↑/↓).
+- **A capo automatico** (Alt+Z) vale per tutti gli editor e parte da `editor.wordWrap`.
+- **Zoom:** Cmd+= e Cmd+- cambiano la dimensione del testo del codice; Vista → Dimensioni originali la riporta a `editor.fontSize`, che ora Keel rispetta.
+- **Breadcrumb:** sotto le schede compare il percorso del file (`src › components › booking-card.tsx`); un clic su una cartella la mostra nell'Esplora risorse. Si spegne con `breadcrumbs.enabled`.
+- **Menu nuovi:**
+  - Selezione, con copia e sposta righe;
+  - in Modifica, i commenti;
+  - in Vista, a capo e zoom.
+- **Rimandati alla fase 12:**
+  - sticky scroll e minimappa: l'editor di gpui-component non li ha, vanno disegnati da Keel;
+  - pieghe da tastiera: gpui-component le apre e chiude solo dal margine;
+  - i comandi sulle righe con più cursori: oggi lavorano sul cursore principale.
 
 **Cosa si fa**
 - **Progetti:** apri cartella, progetti recenti, schermata iniziale, una finestra per progetto, comando `keel .` dal terminale (come `code .`).

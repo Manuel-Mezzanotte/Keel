@@ -226,6 +226,20 @@ impl Workbench {
         }
     }
 
+    /// Opens the Explorer on a folder and selects it.
+    pub(super) fn show_folder_in_tree(&mut self, folder: &Path, cx: &mut Context<Self>) {
+        let Some(tree) = &mut self.tree else {
+            return;
+        };
+        tree.reveal(folder);
+        tree.expand(folder);
+        self.tree_selection = Some(folder.to_path_buf());
+        self.layout
+            .show_side_view(crate::layout::SideView::Explorer);
+        self.tree_changed();
+        cx.notify();
+    }
+
     fn active_file_path(&self) -> Option<PathBuf> {
         let pane = self.panes.get(self.active)?;
         match &self.documents.get(&pane.uri)?.backing {

@@ -1,11 +1,17 @@
 //! The workbench: the window with its panels and editors, and the bridge
 //! between Keel and the extension host. The layout is drawn in `shell`.
 
+mod editing;
 pub(crate) mod explorer;
 mod navigation;
 mod shell;
 mod tabs;
 
+pub(crate) use editing::{
+    CopyLinesDown, CopyLinesUp, DeleteLines, EDITOR_CONTEXT, InsertLineAfter, InsertLineBefore,
+    MoveLinesDown, MoveLinesUp, ToggleBlockComment, ToggleLineComment, ToggleWordWrap, ZoomIn,
+    ZoomOut, ZoomReset,
+};
 pub(crate) use navigation::{GoToLine, QuickOpen};
 
 pub(crate) use tabs::{
@@ -234,6 +240,10 @@ pub struct Workbench {
     groups: Vec<Group>,
     /// Files closed lately, for Reopen Closed Editor.
     closed: Vec<String>,
+    /// Word wrap in every editor, from `editor.wordWrap` and Alt+Z.
+    word_wrap: bool,
+    /// The editors' font size, from `editor.fontSize` and the zoom keys.
+    font_size: f32,
     project: Project,
     layout: Layout,
     installed: Vec<ExtensionSummary>,
@@ -323,11 +333,17 @@ impl Workbench {
         );
         let opening = opening.into();
         let project = Project::new(opening.root.clone());
+        let word_wrap = settings
+            .string("editor.wordWrap")
+            .is_some_and(|wrap| wrap != "off");
+        let font_size = editing::font_size_setting(&settings);
         let mut workbench = Self {
             settings,
             language,
             groups: Vec::new(),
             closed: Vec::new(),
+            word_wrap,
+            font_size,
             project,
             layout: Layout::default(),
             installed: Vec::new(),
@@ -1290,6 +1306,17 @@ impl Workbench {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> bool {
+        // Typing `>` in JSX or HTML closes the tag, as in VS Code.
+        let keystroke = &event.keystroke;
+        if keystroke.key_char.as_deref() == Some(">")
+            && !keystroke.modifiers.platform
+            && !keystroke.modifiers.control
+            && !keystroke.modifiers.alt
+            && self.active_editor_focused(window, cx)
+            && self.close_tag(window, cx)
+        {
+            return true;
+        }
         // Escape leaves the Explorer's name field without changing anything.
         if self.tree_edit.is_some()
             && event.keystroke.key == "escape"

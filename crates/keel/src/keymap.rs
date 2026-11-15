@@ -17,6 +17,11 @@ use crate::workbench_window::{
     ShowCommands, ShowExplorer, ShowExtensions, ShowSearch, ShowSourceControl, ToggleAgent,
     ToggleOutput, TogglePanel, ToggleProblems, ToggleSidebar, ToggleTerminal,
 };
+use crate::workbench_window::{
+    CopyLinesDown, CopyLinesUp, DeleteLines, EDITOR_CONTEXT, InsertLineAfter, InsertLineBefore,
+    MoveLinesDown, MoveLinesUp, ToggleBlockComment, ToggleLineComment, ToggleWordWrap, ZoomIn,
+    ZoomOut, ZoomReset,
+};
 use crate::workbench_window::{GoToLine, QuickOpen};
 
 /// A Keel command: its VS Code name, the action it runs and its default key.
@@ -24,6 +29,8 @@ pub struct KeelCommand {
     pub id: &'static str,
     pub action: fn() -> Box<dyn Action>,
     pub default_key: Option<&'static str>,
+    /// Where the key works, such as only in an editor.
+    pub context: Option<&'static str>,
 }
 
 /// Keel's own commands. Their names follow VS Code, so a `keybindings.json`
@@ -33,203 +40,320 @@ pub const COMMANDS: &[KeelCommand] = &[
         id: "workbench.action.files.save",
         action: || Box::new(Save),
         default_key: Some("cmd+s"),
+        context: None,
     },
     KeelCommand {
         id: "workbench.action.closeWindow",
         action: || Box::new(CloseWindow),
         default_key: Some("cmd+shift+w"),
+        context: None,
     },
     KeelCommand {
         id: "workbench.action.quit",
         action: || Box::new(Quit),
         default_key: Some("cmd+q"),
+        context: None,
     },
     KeelCommand {
         id: "workbench.action.showCommands",
         action: || Box::new(ShowCommands),
         default_key: Some("cmd+shift+p"),
+        context: None,
     },
     KeelCommand {
         id: "workbench.action.selectTheme",
         action: || Box::new(SelectTheme),
         default_key: Some("cmd+k cmd+t"),
+        context: None,
     },
     KeelCommand {
         id: "keel.selectLanguage",
         action: || Box::new(SelectLanguage),
         default_key: None,
+        context: None,
     },
     KeelCommand {
         id: "workbench.action.toggleSidebarVisibility",
         action: || Box::new(ToggleSidebar),
         default_key: Some("cmd+b"),
+        context: None,
     },
     KeelCommand {
         id: "workbench.action.togglePanel",
         action: || Box::new(TogglePanel),
         default_key: Some("cmd+j"),
+        context: None,
     },
     KeelCommand {
         id: "workbench.action.toggleAuxiliaryBar",
         action: || Box::new(ToggleAgent),
         default_key: Some("cmd+alt+b"),
+        context: None,
     },
     KeelCommand {
         id: "workbench.view.explorer",
         action: || Box::new(ShowExplorer),
         default_key: Some("cmd+shift+e"),
+        context: None,
     },
     KeelCommand {
         id: "workbench.view.search",
         action: || Box::new(ShowSearch),
         default_key: Some("cmd+shift+f"),
+        context: None,
     },
     KeelCommand {
         id: "workbench.view.scm",
         action: || Box::new(ShowSourceControl),
         default_key: Some("ctrl+shift+g"),
+        context: None,
     },
     KeelCommand {
         id: "workbench.view.extensions",
         action: || Box::new(ShowExtensions),
         default_key: Some("cmd+shift+x"),
+        context: None,
     },
     KeelCommand {
         id: "workbench.actions.view.problems",
         action: || Box::new(ToggleProblems),
         default_key: Some("cmd+shift+m"),
+        context: None,
     },
     KeelCommand {
         id: "workbench.action.output.toggleOutput",
         action: || Box::new(ToggleOutput),
         default_key: Some("cmd+shift+u"),
+        context: None,
     },
     KeelCommand {
         id: "workbench.action.terminal.toggleTerminal",
         action: || Box::new(ToggleTerminal),
         default_key: Some("ctrl+`"),
+        context: None,
     },
     KeelCommand {
         id: "workbench.action.files.openFileFolder",
         action: || Box::new(Open),
         default_key: Some("cmd+o"),
+        context: None,
     },
     KeelCommand {
         id: "workbench.action.files.newUntitledFile",
         action: || Box::new(NewFile),
         default_key: Some("cmd+n"),
+        context: None,
     },
     KeelCommand {
         id: "workbench.action.newWindow",
         action: || Box::new(NewWindow),
         default_key: Some("cmd+shift+n"),
+        context: None,
     },
     KeelCommand {
         id: "workbench.action.openRecent",
         action: || Box::new(OpenRecent),
         default_key: Some("ctrl+r"),
+        context: None,
     },
     KeelCommand {
         id: "workbench.action.closeActiveEditor",
         action: || Box::new(CloseEditor),
         default_key: Some("cmd+w"),
+        context: None,
     },
     KeelCommand {
         id: "workbench.action.closeOtherEditors",
         action: || Box::new(CloseOtherEditors),
         default_key: Some("cmd+alt+t"),
+        context: None,
     },
     KeelCommand {
         id: "workbench.action.closeEditorsInGroup",
         action: || Box::new(CloseEditorsInGroup),
         default_key: Some("cmd+k w"),
+        context: None,
     },
     KeelCommand {
         id: "workbench.action.closeAllEditors",
         action: || Box::new(CloseAllEditors),
         default_key: Some("cmd+k cmd+w"),
+        context: None,
     },
     KeelCommand {
         id: "workbench.action.reopenClosedEditor",
         action: || Box::new(ReopenClosedEditor),
         default_key: Some("cmd+shift+t"),
+        context: None,
     },
     KeelCommand {
         id: "workbench.action.pinEditor",
         action: || Box::new(TogglePinEditor),
         default_key: Some("cmd+k shift+enter"),
+        context: None,
     },
     KeelCommand {
         id: "workbench.action.keepEditor",
         action: || Box::new(KeepEditor),
         default_key: Some("cmd+k enter"),
+        context: None,
     },
     KeelCommand {
         id: "workbench.action.nextEditor",
         action: || Box::new(NextEditor),
         default_key: Some("cmd+alt+right"),
+        context: None,
     },
     KeelCommand {
         id: "workbench.action.previousEditor",
         action: || Box::new(PreviousEditor),
         default_key: Some("cmd+alt+left"),
+        context: None,
     },
     KeelCommand {
         id: "workbench.action.splitEditor",
         action: || Box::new(SplitEditor),
         default_key: Some("cmd+\\"),
+        context: None,
     },
     KeelCommand {
         id: "workbench.action.focusFirstEditorGroup",
         action: || Box::new(FocusGroup1),
         default_key: Some("cmd+1"),
+        context: None,
     },
     KeelCommand {
         id: "workbench.action.focusSecondEditorGroup",
         action: || Box::new(FocusGroup2),
         default_key: Some("cmd+2"),
+        context: None,
     },
     KeelCommand {
         id: "workbench.action.focusThirdEditorGroup",
         action: || Box::new(FocusGroup3),
         default_key: Some("cmd+3"),
+        context: None,
     },
     KeelCommand {
         id: "workbench.action.quickOpen",
         action: || Box::new(QuickOpen),
         default_key: Some("cmd+p"),
+        context: None,
     },
     KeelCommand {
         id: "workbench.action.gotoLine",
         action: || Box::new(GoToLine),
         default_key: Some("ctrl+g"),
+        context: None,
+    },
+    KeelCommand {
+        id: "editor.action.commentLine",
+        action: || Box::new(ToggleLineComment),
+        default_key: Some("cmd+/"),
+        context: Some(EDITOR_CONTEXT),
+    },
+    KeelCommand {
+        id: "editor.action.blockComment",
+        action: || Box::new(ToggleBlockComment),
+        default_key: Some("shift+alt+a"),
+        context: Some(EDITOR_CONTEXT),
+    },
+    KeelCommand {
+        id: "editor.action.moveLinesUpAction",
+        action: || Box::new(MoveLinesUp),
+        default_key: Some("alt+up"),
+        context: Some(EDITOR_CONTEXT),
+    },
+    KeelCommand {
+        id: "editor.action.moveLinesDownAction",
+        action: || Box::new(MoveLinesDown),
+        default_key: Some("alt+down"),
+        context: Some(EDITOR_CONTEXT),
+    },
+    KeelCommand {
+        id: "editor.action.copyLinesUpAction",
+        action: || Box::new(CopyLinesUp),
+        default_key: Some("shift+alt+up"),
+        context: Some(EDITOR_CONTEXT),
+    },
+    KeelCommand {
+        id: "editor.action.copyLinesDownAction",
+        action: || Box::new(CopyLinesDown),
+        default_key: Some("shift+alt+down"),
+        context: Some(EDITOR_CONTEXT),
+    },
+    KeelCommand {
+        id: "editor.action.deleteLines",
+        action: || Box::new(DeleteLines),
+        default_key: Some("cmd+shift+k"),
+        context: Some(EDITOR_CONTEXT),
+    },
+    KeelCommand {
+        id: "editor.action.insertLineAfter",
+        action: || Box::new(InsertLineAfter),
+        default_key: Some("cmd+enter"),
+        context: Some(EDITOR_CONTEXT),
+    },
+    KeelCommand {
+        id: "editor.action.insertLineBefore",
+        action: || Box::new(InsertLineBefore),
+        default_key: Some("cmd+shift+enter"),
+        context: Some(EDITOR_CONTEXT),
+    },
+    KeelCommand {
+        id: "editor.action.toggleWordWrap",
+        action: || Box::new(ToggleWordWrap),
+        default_key: Some("alt+z"),
+        context: None,
+    },
+    KeelCommand {
+        id: "workbench.action.zoomIn",
+        action: || Box::new(ZoomIn),
+        default_key: Some("cmd+="),
+        context: None,
+    },
+    KeelCommand {
+        id: "workbench.action.zoomOut",
+        action: || Box::new(ZoomOut),
+        default_key: Some("cmd+-"),
+        context: None,
+    },
+    KeelCommand {
+        id: "workbench.action.zoomReset",
+        action: || Box::new(ZoomReset),
+        default_key: None,
+        context: None,
     },
     KeelCommand {
         id: "explorer.newFile",
         action: || Box::new(explorer::NewFileHere),
         default_key: None,
+        context: None,
     },
     KeelCommand {
         id: "explorer.newFolder",
         action: || Box::new(explorer::NewFolderHere),
         default_key: None,
+        context: None,
     },
     KeelCommand {
         id: "workbench.files.action.refreshFilesExplorer",
         action: || Box::new(explorer::Refresh),
         default_key: None,
+        context: None,
     },
     KeelCommand {
         id: "workbench.files.action.collapseExplorerFolders",
         action: || Box::new(explorer::CollapseAll),
         default_key: None,
+        context: None,
     },
 ];
 
 /// The editor's own key that VS Code uses for something else: gpui-component
 /// opens Replace with Cmd+Shift+F, which in VS Code searches all files.
 /// Replace moves to Cmd+Alt+F, as in VS Code.
-const EDITOR_CONTEXT: &str = "Input";
+const EDITOR_CONTEXT_INPUT: &str = "Input";
 
 /// An entry of the user's `keybindings.json`.
 #[derive(Clone, Debug, PartialEq)]
@@ -330,19 +454,38 @@ pub fn bind(user: &[UserBinding], cx: &mut App) -> Vec<String> {
     let mut warnings = Vec::new();
     let mut key_bindings = Vec::new();
     for (command, keystrokes) in keel_bindings(user) {
-        match KeyBinding::load(&keystrokes, (command.action)(), None, true, None, cx) {
+        let context = command
+            .context
+            .and_then(|context| gpui::KeyBindingContextPredicate::parse(context).ok())
+            .map(std::rc::Rc::new);
+        match KeyBinding::load(&keystrokes, (command.action)(), context, true, None, cx) {
             Ok(binding) => key_bindings.push(binding),
             Err(error) => warnings.push(format!("{}: {error}", command.id)),
         }
     }
     key_bindings.extend(explorer::tree_bindings());
+    // Cmd+Enter inserts a line below, as in VS Code, rather than the
+    // editor's own secondary Enter.
+    let enter = gpui_component::input::Enter {
+        secondary: true,
+        shift: false,
+    };
+    key_bindings.push(KeyBinding::new(
+        "cmd-enter",
+        gpui::Unbind(enter.name().into()),
+        Some(EDITOR_CONTEXT_INPUT),
+    ));
     let replace = gpui_component::input::Replace;
     key_bindings.push(KeyBinding::new(
         "cmd-shift-f",
         gpui::Unbind(replace.name().into()),
-        Some(EDITOR_CONTEXT),
+        Some(EDITOR_CONTEXT_INPUT),
     ));
-    key_bindings.push(KeyBinding::new("cmd-alt-f", replace, Some(EDITOR_CONTEXT)));
+    key_bindings.push(KeyBinding::new(
+        "cmd-alt-f",
+        replace,
+        Some(EDITOR_CONTEXT_INPUT),
+    ));
     cx.bind_keys(key_bindings);
     warnings
 }
@@ -408,7 +551,7 @@ mod tests {
         let (bindings, warnings) =
             read_user_bindings(Path::new("/nonexistent/keel/keybindings.json"));
         assert!(bindings.is_empty() && warnings.is_empty());
-        assert_eq!(keel_bindings(&[]).len(), 34);
+        assert_eq!(keel_bindings(&[]).len(), 46);
     }
 
     #[test]

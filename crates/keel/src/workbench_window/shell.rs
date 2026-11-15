@@ -809,6 +809,79 @@ impl Workbench {
             .into_any_element()
     }
 
+    /// The path of the file in view, under its tabs; a click on a folder
+    /// shows it in the Explorer.
+    fn render_breadcrumbs(
+        &self,
+        group: usize,
+        colors: Colors,
+        cx: &mut Context<Self>,
+    ) -> Option<AnyElement> {
+        let enabled = self
+            .settings
+            .get("breadcrumbs.enabled")
+            .and_then(Value::as_bool)
+            .unwrap_or(true);
+        let root = self.project.root.as_ref()?;
+        let pane = self.panes.get(group)?;
+        let path = match &self.documents.get(&pane.uri)?.backing {
+            Backing::File(file) => file.path().to_path_buf(),
+            _ => return None,
+        };
+        let relative = path.strip_prefix(root).ok()?;
+        if !enabled {
+            return None;
+        }
+        let parts: Vec<String> = relative
+            .components()
+            .map(|part| part.as_os_str().to_string_lossy().into_owned())
+            .collect();
+        let last = parts.len().saturating_sub(1);
+        let mut folder = root.clone();
+        let mut crumbs: Vec<AnyElement> = Vec::new();
+        for (position, part) in parts.into_iter().enumerate() {
+            if position > 0 {
+                crumbs.push(
+                    Icon::new(IconName::ChevronRight)
+                        .xsmall()
+                        .text_color(colors.faint)
+                        .into_any_element(),
+                );
+            }
+            if position == last {
+                crumbs.push(div().text_color(colors.text).child(part).into_any_element());
+                break;
+            }
+            folder.push(&part);
+            let target = folder.clone();
+            crumbs.push(
+                div()
+                    .id(("crumb", group * 1000 + position))
+                    .cursor_pointer()
+                    .hover(|crumb| crumb.text_color(colors.text))
+                    .on_click(
+                        cx.listener(move |this, _, _, cx| this.show_folder_in_tree(&target, cx)),
+                    )
+                    .child(part)
+                    .into_any_element(),
+            );
+        }
+        Some(
+            div()
+                .h(px(22.))
+                .flex_none()
+                .px_3()
+                .flex()
+                .items_center()
+                .gap_1()
+                .text_xs()
+                .text_color(colors.muted)
+                .overflow_hidden()
+                .children(crumbs)
+                .into_any_element(),
+        )
+    }
+
     fn render_editors(&self, colors: Colors, cx: &mut Context<Self>) -> Div {
         let panes = self.panes.iter().enumerate().map(|(index, pane)| {
             let tabs: Vec<AnyElement> = self.groups[index]
@@ -838,11 +911,21 @@ impl Workbench {
                         .overflow_x_scroll()
                         .children(tabs),
                 )
+                .when_some(
+                    self.render_breadcrumbs(index, colors, cx),
+                    |pane, crumbs| pane.child(crumbs),
+                )
                 .child(
                     div()
                         .flex_1()
                         .min_h_0()
-                        .child(Editor::new(&pane.editor).size_full().bordered(false)),
+                        .key_context(super::EDITOR_CONTEXT)
+                        .child(
+                            Editor::new(&pane.editor)
+                                .size_full()
+                                .bordered(false)
+                                .text_size(px(self.font_size)),
+                        ),
                 )
         });
 
@@ -1138,6 +1221,7 @@ impl Render for Workbench {
 
         let root = div().track_focus(&self.focus_handle);
         let root = self.tab_actions(root, cx);
+        let root = self.editing_actions(root, cx);
         self.explorer_actions(root, cx)
             .size_full()
             .flex()

@@ -132,10 +132,7 @@ impl Workbench {
         let language = Language::for_vscode_id(&document.language_id);
         let text = document.synced_text.clone();
         let tab_size = self.tab_size();
-        let soft_wrap = self
-            .settings
-            .string("editor.wordWrap")
-            .is_some_and(|wrap| wrap != "off");
+        let soft_wrap = self.word_wrap;
         let editor = cx.new(|cx| {
             EditorState::new(window, cx)
                 .language(language.highlighter_name())
