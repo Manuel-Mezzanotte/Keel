@@ -1,12 +1,15 @@
 //! Keel, a fast and lightweight code editor for macOS.
 
+mod assets;
 mod cli;
 #[cfg(test)]
 mod editor_checks;
 mod i18n;
 mod keymap;
+mod layout;
 mod menus;
 mod paths;
+mod project;
 mod quick_pick;
 mod theme;
 mod workbench_window;
@@ -15,9 +18,7 @@ use std::process::ExitCode;
 
 use editor::Document;
 use extensions::ExtensionHost;
-use gpui::{
-    App, AppContext as _, Bounds, QuitMode, TitlebarOptions, WindowBounds, WindowOptions, px, size,
-};
+use gpui::{App, AppContext as _, Bounds, QuitMode, px, size};
 use gpui_component::Root;
 
 use crate::cli::Command;
@@ -98,7 +99,7 @@ fn extension_setup(user_bindings: Vec<keymap::UserBinding>) -> Option<ExtensionS
 
 fn run(document: Option<Document>) {
     gpui_platform::application()
-        .with_assets(gpui_kit_assets::Assets)
+        .with_assets(assets::KeelAssets)
         .with_quit_mode(QuitMode::LastWindowClosed)
         .run(move |cx: &mut App| {
             gpui_component::init(cx);
@@ -115,18 +116,11 @@ fn run(document: Option<Document>) {
                 eprintln!("keel: {warning}");
             }
 
-            let options = WindowOptions {
-                titlebar: Some(TitlebarOptions {
-                    title: Some("Keel".into()),
-                    ..Default::default()
-                }),
-                window_bounds: Some(WindowBounds::Windowed(Bounds::centered(
-                    None,
-                    size(px(1200.), px(780.)),
-                    cx,
-                ))),
-                ..Default::default()
-            };
+            let options = workbench_window::window_options(Bounds::centered(
+                None,
+                size(px(1280.), px(820.)),
+                cx,
+            ));
             let project = document
                 .as_ref()
                 .and_then(|document| std::path::absolute(document.path()).ok())

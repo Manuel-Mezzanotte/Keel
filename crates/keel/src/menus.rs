@@ -4,7 +4,11 @@ use gpui::{App, Menu, MenuItem, OsAction, SystemMenuType};
 use gpui_component::input::{Copy, Cut, Paste, Redo, Replace, Search, SelectAll, Undo};
 
 use crate::i18n::UiLanguage;
-use crate::workbench_window::{CloseWindow, Quit, Save, SelectLanguage, SelectTheme, ShowCommands};
+use crate::workbench_window::{
+    CloseWindow, Quit, Save, SelectLanguage, SelectTheme, ShowCommands, ShowExplorer,
+    ShowExtensions, ShowSearch, ShowSourceControl, ToggleAgent, ToggleOutput, TogglePanel,
+    ToggleProblems, ToggleSidebar, ToggleTerminal,
+};
 
 /// Sets the menu bar. Called again when the interface language changes.
 pub fn set(language: UiLanguage, cx: &mut App) {
@@ -52,7 +56,22 @@ pub fn set(language: UiLanguage, cx: &mut App) {
         ),
         menu(
             strings.menu_view,
-            vec![MenuItem::action(strings.menu_command_palette, ShowCommands)],
+            vec![
+                MenuItem::action(strings.menu_command_palette, ShowCommands),
+                MenuItem::separator(),
+                MenuItem::action(strings.view_explorer, ShowExplorer),
+                MenuItem::action(strings.view_search, ShowSearch),
+                MenuItem::action(strings.view_source_control, ShowSourceControl),
+                MenuItem::action(strings.view_extensions, ShowExtensions),
+                MenuItem::separator(),
+                MenuItem::action(strings.panel_problems, ToggleProblems),
+                MenuItem::action(strings.panel_output, ToggleOutput),
+                MenuItem::action(strings.panel_terminal, ToggleTerminal),
+                MenuItem::separator(),
+                MenuItem::action(strings.toggle_sidebar, ToggleSidebar),
+                MenuItem::action(strings.toggle_panel, TogglePanel),
+                MenuItem::action(strings.toggle_agent, ToggleAgent),
+            ],
         ),
     ]);
 }

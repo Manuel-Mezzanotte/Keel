@@ -1,5 +1,9 @@
-//! The workbench: the window with editors side by side, the status bar, and
-//! the bridge between Keel and the extension host.
+//! The workbench: the window with its panels and editors, and the bridge
+//! between Keel and the extension host. The layout is drawn in `shell`.
+
+mod shell;
+
+pub(crate) use shell::window_options;
 
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::ops::Range;
@@ -15,8 +19,8 @@ use gpui::prelude::FluentBuilder as _;
 use gpui::{
     App, AppContext as _, Context, Entity, EntityInputHandler as _, Focusable as _, FontStyle,
     FontWeight, HighlightStyle, Hsla, InteractiveElement as _, IntoElement, Keystroke,
-    KeystrokeEvent, ParentElement as _, PromptLevel, Render, Rgba, Styled as _, Subscription, Task,
-    Window, actions, div, px,
+    KeystrokeEvent, ParentElement as _, PromptLevel, Rgba, Styled as _, Subscription, Task, Window,
+    actions, div, px,
 };
 use gpui_component::input::{
     CompletionProvider, Editor, EditorMode, EditorState, GutterDecoration,
@@ -33,7 +37,9 @@ use workbench::uri::Uri;
 use workbench::when_clause::{Context as WhenContext, WhenClause};
 
 use crate::i18n::{Strings, UiLanguage};
+use crate::layout::{Layout, PanelView, SideView};
 use crate::paths;
+use crate::project::Project;
 use crate::quick_pick::{self, PickItem};
 
 actions!(
@@ -44,9 +50,22 @@ actions!(
         Quit,
         ShowCommands,
         SelectTheme,
-        SelectLanguage
+        SelectLanguage,
+        ToggleSidebar,
+        TogglePanel,
+        ToggleAgent,
+        ShowExplorer,
+        ShowSearch,
+        ShowSourceControl,
+        ShowExtensions,
+        ToggleProblems,
+        ToggleOutput,
+        ToggleTerminal
     ]
 );
+
+/// The most lines the Output view keeps.
+const OUTPUT_LINES: usize = 1000;
 
 /// Registers the workbench with Keel's default key bindings.
 #[cfg(test)]
@@ -139,6 +158,13 @@ struct Extensions {
     status_items: BTreeMap<String, StatusItem>,
 }
 
+/// An installed extension, as the Extensions view lists it.
+struct ExtensionSummary {
+    name: String,
+    version: String,
+    id: String,
+}
+
 /// What to do once the user has dealt with unsaved changes.
 #[derive(Clone, Copy)]
 enum AfterConfirm {
@@ -149,6 +175,12 @@ enum AfterConfirm {
 pub struct Workbench {
     settings: Settings,
     language: UiLanguage,
+    project: Project,
+    layout: Layout,
+    installed: Vec<ExtensionSummary>,
+    /// Keel's messages for the Output view: problems with the settings,
+    /// extension logs and errors.
+    output: Vec<String>,
     documents: HashMap<String, OpenDocument>,
     panes: Vec<Pane>,
     active: usize,
@@ -187,6 +219,11 @@ impl Workbench {
                 }
             }
         }));
+        subscriptions.push(cx.observe_window_activation(window, |this, window, cx| {
+            if window.is_window_active() && this.project.refresh_branch() {
+                cx.notify();
+            }
+        }));
         subscriptions.push(cx.observe_window_appearance(window, |this, window, cx| {
             let choice = crate::theme::ThemeChoice::from_settings(&this.settings);
             if choice.follow_system {
@@ -204,13 +241,19 @@ impl Workbench {
         });
 
         let status_message = settings.warnings.first().cloned();
+        let output = settings.warnings.clone();
         let language = UiLanguage::from_setting(
             settings.string("keel.language"),
             UiLanguage::system_locale().as_deref(),
         );
+        let project = Project::for_file(document.as_ref().map(Document::path));
         let mut workbench = Self {
             settings,
             language,
+            project,
+            layout: Layout::default(),
+            installed: Vec::new(),
+            output,
             documents: HashMap::new(),
             panes: Vec::new(),
             active: 0,
@@ -238,6 +281,36 @@ impl Workbench {
 
     fn strings(&self) -> &'static Strings {
         self.language.strings()
+    }
+
+    /// The indentation from `editor.tabSize` and `editor.insertSpaces`.
+    fn tab_size(&self) -> gpui_component::input::TabSize {
+        gpui_component::input::TabSize {
+            tab_size: self
+                .settings
+                .number("editor.tabSize")
+                .map_or(2, |size| size.clamp(1.0, 16.0) as usize),
+            hard_tabs: self
+                .settings
+                .get("editor.insertSpaces")
+                .and_then(Value::as_bool)
+                == Some(false),
+        }
+    }
+
+    /// Adds a line to the Output view.
+    fn log(&mut self, line: impl Into<String>) {
+        self.output.push(line.into());
+        if self.output.len() > OUTPUT_LINES {
+            let extra = self.output.len() - OUTPUT_LINES;
+            self.output.drain(..extra);
+        }
+    }
+
+    /// Shows a problem in the status bar and keeps it in the Output view.
+    fn report(&mut self, message: String) {
+        self.log(message.clone());
+        self.status_message = Some(message);
     }
 
     /// The name shown for a document: its file name, or "Untitled 1".
@@ -327,17 +400,7 @@ impl Workbench {
         };
         let language = Language::for_vscode_id(&document.language_id);
         let text = document.synced_text.clone();
-        let tab_size = gpui_component::input::TabSize {
-            tab_size: self
-                .settings
-                .number("editor.tabSize")
-                .map_or(2, |size| size.clamp(1.0, 16.0) as usize),
-            hard_tabs: self
-                .settings
-                .get("editor.insertSpaces")
-                .and_then(Value::as_bool)
-                == Some(false),
-        };
+        let tab_size = self.tab_size();
         let soft_wrap = self
             .settings
             .string("editor.wordWrap")
@@ -854,7 +917,7 @@ impl Workbench {
             "workbench.colorTheme"
         };
         if let Err(error) = self.settings.update_user(key, Some(json!(name))) {
-            self.status_message = Some(error.to_string());
+            self.report(error.to_string());
         }
         crate::theme::apply(&choice, Some(window), cx);
         cx.notify();
@@ -867,7 +930,7 @@ impl Workbench {
             .settings
             .update_user("keel.language", Some(json!(language.code())))
         {
-            self.status_message = Some(error.to_string());
+            self.report(error.to_string());
         }
         self.notify_host("env/changed", json!({ "language": language.code() }));
         crate::menus::set(language, cx);
@@ -894,6 +957,18 @@ impl Workbench {
         let host = Rc::new(host);
         let mut titles = Vec::new();
         let mut bindings = Vec::new();
+        self.installed = installed
+            .iter()
+            .map(|extension| ExtensionSummary {
+                name: extension
+                    .manifest
+                    .display_name
+                    .clone()
+                    .unwrap_or_else(|| extension.manifest.name.clone()),
+                version: extension.manifest.version.clone(),
+                id: extension.id(),
+            })
+            .collect();
         for extension in &installed {
             for command in &extension.manifest.commands {
                 let title = if command.title.is_empty() {
@@ -1107,11 +1182,15 @@ impl Workbench {
             return;
         };
         match method {
-            "log" => eprintln!(
-                "[extension {}] {}",
-                params["level"].as_str().unwrap_or("info"),
-                params["message"].as_str().unwrap_or_default()
-            ),
+            "log" => {
+                let line = format!(
+                    "[{}] {}",
+                    params["level"].as_str().unwrap_or("info"),
+                    params["message"].as_str().unwrap_or_default()
+                );
+                eprintln!("keel: extension {line}");
+                self.log(line);
+            }
             "commands/registered" => {
                 if let Some(command) = params["command"].as_str() {
                     extensions.commands.insert(command.to_owned());
@@ -1125,7 +1204,8 @@ impl Workbench {
             "extensions/activationFailed" => {
                 let id = params["id"].as_str().unwrap_or_default();
                 let error = first_line(params["error"].as_str().unwrap_or_default());
-                self.status_message = Some(self.strings().could_not_start(id, error));
+                let message = self.strings().could_not_start(id, error);
+                self.report(message);
             }
             "decorations/createType" => {
                 if let Some(key) = params["key"].as_str() {
@@ -1821,125 +1901,6 @@ impl Workbench {
                 }));
             }
         }
-    }
-}
-
-impl Render for Workbench {
-    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        if !self.first_frame_drawn {
-            self.first_frame_drawn = true;
-            if std::env::var_os("KEEL_STARTUP_TIMING").is_some() {
-                window.on_next_frame(|_, _| {
-                    if let Some(started) = crate::STARTED.get() {
-                        eprintln!("keel: first frame after {:?}", started.elapsed());
-                    }
-                });
-            }
-        }
-        let theme = cx.theme();
-        let (foreground, muted, border, background) = (
-            theme.foreground,
-            theme.muted_foreground,
-            theme.border,
-            theme.background,
-        );
-        let panes = self.panes.iter().enumerate().map(|(index, pane)| {
-            let name = self
-                .documents
-                .get(&pane.uri)
-                .map(|document| {
-                    if document.modified {
-                        format!("{} ●", self.display_name(document))
-                    } else {
-                        self.display_name(document)
-                    }
-                })
-                .unwrap_or_default();
-            let header_color = if index == self.active {
-                foreground
-            } else {
-                muted
-            };
-            div()
-                .flex_1()
-                .min_w_0()
-                .h_full()
-                .flex()
-                .flex_col()
-                .when(index > 0, |pane| pane.border_l_1().border_color(border))
-                .child(
-                    div()
-                        .h(px(30.))
-                        .px_3()
-                        .flex()
-                        .items_center()
-                        .text_sm()
-                        .text_color(header_color)
-                        .border_b_1()
-                        .border_color(border)
-                        .child(name),
-                )
-                .child(
-                    div()
-                        .flex_1()
-                        .min_h_0()
-                        .child(Editor::new(&pane.editor).size_full().bordered(false)),
-                )
-        });
-
-        let (mut left, mut right) = (Vec::new(), Vec::new());
-        if let Some(extensions) = &self.extensions {
-            let mut items: Vec<&StatusItem> = extensions
-                .status_items
-                .values()
-                .filter(|item| item.visible)
-                .collect();
-            items.sort_by(|a, b| b.priority.total_cmp(&a.priority));
-            for item in items {
-                let text = strip_codicons(&item.text);
-                if item.right {
-                    right.push(text);
-                } else {
-                    left.push(text);
-                }
-            }
-        }
-        if let Some(message) = &self.status_message {
-            left.push(message.clone());
-        }
-
-        div()
-            .size_full()
-            .flex()
-            .flex_col()
-            .bg(background)
-            .on_action(cx.listener(Self::save))
-            .on_action(cx.listener(Self::close_window))
-            .on_action(cx.listener(Self::quit))
-            .on_action(cx.listener(Self::show_commands))
-            .on_action(
-                cx.listener(|this, _: &SelectTheme, window, cx| this.choose_theme(window, cx)),
-            )
-            .on_action(
-                cx.listener(|this, _: &SelectLanguage, window, cx| {
-                    this.choose_language(window, cx)
-                }),
-            )
-            .child(div().flex_1().min_h_0().flex().flex_row().children(panes))
-            .child(
-                div()
-                    .h(px(24.))
-                    .px_3()
-                    .flex()
-                    .items_center()
-                    .justify_between()
-                    .text_xs()
-                    .text_color(muted)
-                    .border_t_1()
-                    .border_color(border)
-                    .child(div().flex().gap_4().children(left))
-                    .child(div().flex().gap_4().children(right)),
-            )
     }
 }
 

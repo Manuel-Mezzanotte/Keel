@@ -6,7 +6,11 @@ use std::path::Path;
 use gpui::{Action, App, KeyBinding};
 use serde_json::Value;
 
-use crate::workbench_window::{CloseWindow, Quit, Save, SelectLanguage, SelectTheme, ShowCommands};
+use crate::workbench_window::{
+    CloseWindow, Quit, Save, SelectLanguage, SelectTheme, ShowCommands, ShowExplorer,
+    ShowExtensions, ShowSearch, ShowSourceControl, ToggleAgent, ToggleOutput, TogglePanel,
+    ToggleProblems, ToggleSidebar, ToggleTerminal,
+};
 
 /// A Keel command: its VS Code name, the action it runs and its default key.
 pub struct KeelCommand {
@@ -48,7 +52,62 @@ pub const COMMANDS: &[KeelCommand] = &[
         action: || Box::new(SelectLanguage),
         default_key: None,
     },
+    KeelCommand {
+        id: "workbench.action.toggleSidebarVisibility",
+        action: || Box::new(ToggleSidebar),
+        default_key: Some("cmd+b"),
+    },
+    KeelCommand {
+        id: "workbench.action.togglePanel",
+        action: || Box::new(TogglePanel),
+        default_key: Some("cmd+j"),
+    },
+    KeelCommand {
+        id: "workbench.action.toggleAuxiliaryBar",
+        action: || Box::new(ToggleAgent),
+        default_key: Some("cmd+alt+b"),
+    },
+    KeelCommand {
+        id: "workbench.view.explorer",
+        action: || Box::new(ShowExplorer),
+        default_key: Some("cmd+shift+e"),
+    },
+    KeelCommand {
+        id: "workbench.view.search",
+        action: || Box::new(ShowSearch),
+        default_key: Some("cmd+shift+f"),
+    },
+    KeelCommand {
+        id: "workbench.view.scm",
+        action: || Box::new(ShowSourceControl),
+        default_key: Some("ctrl+shift+g"),
+    },
+    KeelCommand {
+        id: "workbench.view.extensions",
+        action: || Box::new(ShowExtensions),
+        default_key: Some("cmd+shift+x"),
+    },
+    KeelCommand {
+        id: "workbench.actions.view.problems",
+        action: || Box::new(ToggleProblems),
+        default_key: Some("cmd+shift+m"),
+    },
+    KeelCommand {
+        id: "workbench.action.output.toggleOutput",
+        action: || Box::new(ToggleOutput),
+        default_key: Some("cmd+shift+u"),
+    },
+    KeelCommand {
+        id: "workbench.action.terminal.toggleTerminal",
+        action: || Box::new(ToggleTerminal),
+        default_key: Some("ctrl+`"),
+    },
 ];
+
+/// The editor's own key that VS Code uses for something else: gpui-component
+/// opens Replace with Cmd+Shift+F, which in VS Code searches all files.
+/// Replace moves to Cmd+Alt+F, as in VS Code.
+const EDITOR_CONTEXT: &str = "Input";
 
 /// An entry of the user's `keybindings.json`.
 #[derive(Clone, Debug, PartialEq)]
@@ -154,6 +213,13 @@ pub fn bind(user: &[UserBinding], cx: &mut App) -> Vec<String> {
             Err(error) => warnings.push(format!("{}: {error}", command.id)),
         }
     }
+    let replace = gpui_component::input::Replace;
+    key_bindings.push(KeyBinding::new(
+        "cmd-shift-f",
+        gpui::Unbind(replace.name().into()),
+        Some(EDITOR_CONTEXT),
+    ));
+    key_bindings.push(KeyBinding::new("cmd-alt-f", replace, Some(EDITOR_CONTEXT)));
     cx.bind_keys(key_bindings);
     warnings
 }
@@ -219,7 +285,7 @@ mod tests {
         let (bindings, warnings) =
             read_user_bindings(Path::new("/nonexistent/keel/keybindings.json"));
         assert!(bindings.is_empty() && warnings.is_empty());
-        assert_eq!(keel_bindings(&[]).len(), 5);
+        assert_eq!(keel_bindings(&[]).len(), 15);
     }
 
     #[test]
