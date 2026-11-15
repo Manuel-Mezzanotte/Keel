@@ -3694,13 +3694,19 @@ dependencies = [
 name = "keel"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
  "editor",
+ "extensions",
+ "futures",
  "gpui-component",
  "gpui-kit-assets",
  "gpui-pre",
  "gpui-pre-platform",
  "language",
+ "lsp-types",
+ "serde_json",
  "tempfile",
+ "workbench",
 ]
 
 [[package]]

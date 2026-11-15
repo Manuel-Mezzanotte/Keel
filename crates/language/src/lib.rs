@@ -27,6 +27,16 @@ impl Language {
         }
     }
 
+    /// The language for a VS Code language identifier, such as the one an
+    /// extension passes to `setTextDocumentLanguage`.
+    pub fn for_vscode_id(id: &str) -> Self {
+        match id {
+            "typescript" => Language::TypeScript,
+            "typescriptreact" | "javascript" | "javascriptreact" => Language::Tsx,
+            _ => Language::PlainText,
+        }
+    }
+
     /// The name gpui-component's highlighter knows this language by. Names it
     /// does not know, like the one for plain text, turn highlighting off.
     pub fn highlighter_name(self) -> &'static str {
@@ -35,6 +45,27 @@ impl Language {
             Language::Tsx => "tsx",
             Language::PlainText => "text",
         }
+    }
+}
+
+/// The VS Code language identifier of a file, which extensions see as
+/// `document.languageId`.
+pub fn vscode_id_for_path(path: &Path) -> &'static str {
+    let extension = path
+        .extension()
+        .and_then(|extension| extension.to_str())
+        .map(str::to_ascii_lowercase);
+    match extension.as_deref() {
+        Some("ts" | "mts" | "cts") => "typescript",
+        Some("tsx") => "typescriptreact",
+        Some("js" | "mjs" | "cjs") => "javascript",
+        Some("jsx") => "javascriptreact",
+        Some("json") => "json",
+        Some("md") => "markdown",
+        Some("css") => "css",
+        Some("html") => "html",
+        Some("rs") => "rust",
+        _ => "plaintext",
     }
 }
 
@@ -95,6 +126,17 @@ mod tests {
                 "{name}"
             );
         }
+    }
+
+    #[test]
+    fn vscode_language_identifiers() {
+        assert_eq!(vscode_id_for_path(Path::new("card.tsx")), "typescriptreact");
+        assert_eq!(vscode_id_for_path(Path::new("index.ts")), "typescript");
+        assert_eq!(vscode_id_for_path(Path::new("page.jsx")), "javascriptreact");
+        assert_eq!(vscode_id_for_path(Path::new("notes")), "plaintext");
+        assert_eq!(Language::for_vscode_id("typescriptreact"), Language::Tsx);
+        assert_eq!(Language::for_vscode_id("typescript"), Language::TypeScript);
+        assert_eq!(Language::for_vscode_id("markdown"), Language::PlainText);
     }
 
     #[test]
