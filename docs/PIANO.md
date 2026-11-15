@@ -116,7 +116,7 @@ Da confermare con le misure della fase 0. Si misura con lo stesso script su Keel
 | Fase | Nome | Dimensione | Stato |
 |---|---|---|---|
 | 0 | Prototipo e prova a tempo | 2–3 settimane | fatta; restano le tue prove a mano |
-| 1 | Fondamenta e design | media | da fare |
+| 1 | Fondamenta e design | media | in corso |
 | 2 | Editor e file | grande | da fare |
 | 3 | Ricerca | piccola | da fare |
 | 4 | Terminale e pannello in basso | media | da fare |
@@ -242,6 +242,18 @@ Il confronto non è alla pari: Cursor aveva anche albero dei file, terminale, se
 ### Fase 1 — Fondamenta e design
 
 **Obiettivo.** Lo scheletro definitivo dell'app e il suo aspetto, prima di riempirlo di funzioni.
+
+**Sottofasi**
+
+| Sottofase | Cosa | Stato |
+|---|---|---|
+| 1.1 | Bozze dell'interfaccia: tre proposte in `docs/bozze/index.html`, con i temi Mezzanotte, Chiaro e Nero | fatta, **aspetta la tua scelta** |
+| 1.2 | Impostazioni: `settings.json` per utente e per progetto (legge anche `.vscode/settings.json`), passate alle estensioni | da fare |
+| 1.3 | Italiano e inglese: testi in file separati, lingua predefinita quella del Mac | da fare |
+| 1.4 | Comandi e scorciatoie: registro dei comandi, `keybindings.json` nel formato di VS Code, tastiera italiana | da fare |
+| 1.5 | Temi Mezzanotte, Chiaro e Nero, cambio al volo, segue chiaro e scuro di macOS | da fare |
+| 1.6 | La disposizione della bozza scelta | da fare |
+| 1.7 | Menu di macOS, logo e icona di Keel | da fare |
 
 **Cosa si fa**
 - **Bozze:** 2–3 proposte di interfaccia in stile Apple e Cursor. Scegli tu, prima di costruire.
