@@ -151,8 +151,8 @@ Due traguardi: dopo la **fase 0** si decide se continuare; dopo la **fase 6** Ke
 | 0.2 | Finestra ed editor: GPUI e gpui-component, apertura di un file da riga di comando, modifica e salvataggio, colori TypeScript e TSX | fatta |
 | 0.3 | Prove dell'editor: tastiera italiana e accenti, più cursori, file grandi, scorrimento | fatta |
 | 0.4 | Motore delle estensioni: V8 in un thread separato, lettore di VSIX, primo modulo `vscode` | fatta |
-| 0.5 | Ponte per VSAuto Ghost: le circa 55 funzioni dell'API di VS Code che usa | da fare |
-| 0.6 | VSAuto Ghost funzionante da capo a fondo | da fare |
+| 0.5 | Ponte per VSAuto Ghost: le circa 55 funzioni dell'API di VS Code che usa | fatta |
+| 0.6 | VSAuto Ghost funzionante da capo a fondo | fatta (test automatico); manca la tua prova a mano |
 | 0.7 | Misure contro Cursor, resoconto e decisione se continuare | da fare |
 
 **Note dalla 0.2**
@@ -180,6 +180,32 @@ Due traguardi: dopo la **fase 0** si decide se continuare; dopo la **fase 6** Ke
 - **Sicurezza:** un'estensione può caricare moduli solo dalla propria cartella. Il lettore di VSIX rifiuta i file che uscirebbero dalla cartella di destinazione e i pacchetti oltre 1 GB.
 - **VSAuto Ghost si attiva già:** registra i suoi 16 comandi, compreso `type`, che in VS Code intercetta ogni tasto, più il tipo di decorazione, il file system `vsauto-ghost:` e il fornitore di suggerimenti.
 - **Cosa resta per la 0.5:** collegare tutto all'editor vero. Documenti ed editor visti dall'estensione, modifiche, testo grigio, menu dei suggerimenti, barra verde, barra di stato, scelta rapida, schede, e i tasti che passano da `type`.
+
+**Note dalla 0.5 e 0.6**
+- **La finestra è diventata un piccolo workbench:**
+  - editor affiancati, con il nome del file in alto e un pallino se ci sono modifiche;
+  - barra di stato in basso;
+  - palette dei comandi (Cmd+Shift+P) e scelta rapida delle estensioni, fatte con la palette di gpui-component.
+- **Estensioni installate come in VS Code:** `keel --install-extension file.vsix` le mette in `~/Library/Application Support/com.manuelmezzanotte.keel/extensions`. Una versione nuova va accanto alla vecchia, senza cancellarla, e all'avvio vince la più recente.
+- **Cosa fa il ponte:**
+  - documenti ed editor;
+  - modifiche (`applyEdit`) e selezioni;
+  - testo grigio con le decorazioni;
+  - barra verde delle righe aggiunte, dal confronto con la versione originale dell'estensione;
+  - menu dei suggerimenti alimentato dall'estensione;
+  - chiavi di contesto (`setContext`) e scorciatoie con condizioni «when»;
+  - scrittura che passa dal comando `type`;
+  - file system delle estensioni (`vsauto-ghost:`);
+  - messaggi, scelta rapida, appunti.
+- **Il cursore:** Keel lo manda all'estensione solo quando è cambiato rispetto a quello che lei conosce, e dopo ogni modifica lo aggiorna prima di rispondere, come VS Code. All'inizio lo mandava sempre e la scrittura si bloccava a caso.
+- **Il test da capo a fondo** fa tutto senza finestre:
+  - installa VSAuto Ghost dal VSIX e apre il file TSX di prova;
+  - avvia `vsauto.start`, che apre il ghost a fianco;
+  - preme 30 tasti a ritmo umano e controlla che il ghost contenga l'inizio del file originale, con l'originale intatto;
+  - controlla la barra verde e il suggerimento grigio chiesto con Cmd+O;
+  - ferma la sessione con Cmd+I.
+- **Due comportamenti voluti di VSAuto Ghost, utili da sapere:** i tasti premuti tutti insieme vengono in parte scartati, per non accumulare arretrato, e i suggerimenti grigi compaiono a caso nelle pause.
+- **Prima misura con le estensioni:** Keel in versione di sviluppo, con V8 e VSAuto Ghost caricata, occupa circa 134 MB.
 
 **Fatto quando** (criterio per continuare)
 - Scrivere e scorrere è fluido, anche con gli accenti.
