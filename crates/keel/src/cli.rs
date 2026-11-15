@@ -11,6 +11,8 @@ pub enum Command {
     Version,
     /// Print the usage and exit.
     Help,
+    /// Install a VSIX package and exit.
+    InstallExtension(PathBuf),
 }
 
 /// Usage text printed by `keel --help` and after a wrong invocation.
@@ -20,18 +22,26 @@ Usage: keel [FILE]
 Opens FILE in Keel. A file that does not exist yet is created on the first save.
 
 Options:
-  -h, --help     Print this help
-  -V, --version  Print the version";
+  --install-extension VSIX  Install a VS Code extension package
+  -h, --help                Print this help
+  -V, --version             Print the version";
 
 /// Parses the arguments that follow the program name.
 pub fn parse(arguments: impl IntoIterator<Item = String>) -> Result<Command, String> {
     let mut file = None;
     let mut only_files = false;
-    for argument in arguments {
+    let mut arguments = arguments.into_iter();
+    while let Some(argument) = arguments.next() {
         if !only_files && argument.starts_with('-') && argument != "-" {
             match argument.as_str() {
                 "-h" | "--help" => return Ok(Command::Help),
                 "-V" | "--version" => return Ok(Command::Version),
+                "--install-extension" => {
+                    return match arguments.next() {
+                        Some(package) => Ok(Command::InstallExtension(PathBuf::from(package))),
+                        None => Err("--install-extension needs a .vsix file".to_owned()),
+                    };
+                }
                 "--" => only_files = true,
                 other => return Err(format!("unknown option: {other}")),
             }
@@ -79,6 +89,15 @@ mod tests {
             parse_args(&["--", "-notes.md"]),
             Ok(Command::Open(Some(PathBuf::from("-notes.md"))))
         );
+    }
+
+    #[test]
+    fn install_extension_takes_a_package() {
+        assert_eq!(
+            parse_args(&["--install-extension", "ghost.vsix"]),
+            Ok(Command::InstallExtension(PathBuf::from("ghost.vsix")))
+        );
+        assert!(parse_args(&["--install-extension"]).is_err());
     }
 
     #[test]
