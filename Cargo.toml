@@ -8,6 +8,24 @@ edition = "2024"
 rust-version = "1.100"
 publish = false
 
+[workspace.dependencies]
+# UI framework. gpui-component is built on the `gpui-pre` snapshot of Zed's
+# GPUI, so the app must use the very same crate and version.
+gpui = { package = "gpui-pre", version = "=0.3.12" }
+gpui-component = { version = "=0.9.1", features = ["tree-sitter-typescript", "tree-sitter-tsx"] }
+# The macOS platform for GPUI; `font-kit` is needed to draw any text.
+gpui_platform = { package = "gpui-pre-platform", version = "=0.3.12", features = ["font-kit"] }
+# Icons used by gpui-component (search panel, folding chevrons...).
+gpui-kit-assets = "=0.9.1"
+
+# Keel crates
+editor = { path = "crates/editor" }
+language = { path = "crates/language" }
+
+# Testing
+tempfile = "3.27"
+tree-sitter = "0.26"
+
 [workspace.lints.clippy]
 all = { level = "warn", priority = -1 }
 

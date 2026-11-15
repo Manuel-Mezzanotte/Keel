@@ -10,5 +10,17 @@ publish.workspace = true
 name = "keel"
 path = "src/main.rs"
 
+[dependencies]
+editor.workspace = true
+gpui.workspace = true
+gpui-component.workspace = true
+gpui-kit-assets.workspace = true
+gpui_platform.workspace = true
+language.workspace = true
+
+[dev-dependencies]
+gpui = { workspace = true, features = ["test-support"] }
+tempfile.workspace = true
+
 [lints]
 workspace = true
