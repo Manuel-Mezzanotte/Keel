@@ -116,7 +116,7 @@ Da confermare con le misure della fase 0. Si misura con lo stesso script su Keel
 | Fase | Nome | Dimensione | Stato |
 |---|---|---|---|
 | 0 | Prototipo e prova a tempo | 2–3 settimane | fatta; restano le tue prove a mano |
-| 1 | Fondamenta e design | media | in corso |
+| 1 | Fondamenta e design | media | fatta; restano le tue prove a mano |
 | 2 | Editor e file | grande | da fare |
 | 3 | Ricerca | piccola | da fare |
 | 4 | Terminale e pannello in basso | media | da fare |
@@ -247,13 +247,13 @@ Il confronto non è alla pari: Cursor aveva anche albero dei file, terminale, se
 
 | Sottofase | Cosa | Stato |
 |---|---|---|
-| 1.1 | Bozze dell'interfaccia: tre proposte in `docs/bozze/index.html`, con i temi Mezzanotte, Chiaro e Nero | fatta, **aspetta la tua scelta** |
+| 1.1 | Bozze dell'interfaccia in `docs/bozze/index.html`, con i temi Mezzanotte, Chiaro e Nero | fatta: hai scelto B e C, unite nella bozza **D · Pannelli e Studio** |
 | 1.2 | Impostazioni: `settings.json` per utente e per progetto (legge anche `.vscode/settings.json`), passate alle estensioni | fatta |
 | 1.3 | Italiano e inglese: testi in una tabella per lingua, lingua predefinita quella del Mac | fatta |
 | 1.4 | Comandi e scorciatoie: registro dei comandi, `keybindings.json` nel formato di VS Code, tastiera italiana | fatta; la tastiera italiana va provata a mano |
 | 1.5 | Temi Mezzanotte, Chiaro e Nero, cambio al volo, segue chiaro e scuro di macOS | fatta |
-| 1.6 | La disposizione della bozza scelta | da fare |
-| 1.7 | Menu di macOS, logo e icona di Keel | menu fatti (italiano e inglese); logo e icona dopo la scelta della bozza |
+| 1.6 | La disposizione della bozza D | fatta |
+| 1.7 | Menu di macOS, logo e icona di Keel | fatta: menu Keel, File, Modifica e Vista; gli altri arrivano con le loro funzioni |
 
 **Cosa si fa**
 - **Bozze:** 2–3 proposte di interfaccia in stile Apple e Cursor. Scegli tu, prima di costruire.
@@ -264,7 +264,7 @@ Il confronto non è alla pari: Cursor aveva anche albero dei file, terminale, se
   - **Nero**, con i neri di Sail (`#050505`, `#0A0A0A`, `#2A2A2C`).
 
   Keel può seguire chiaro e scuro di macOS. Il formato è compatibile con i temi di VS Code, così più avanti si importano quelli dei VSIX.
-- **Disposizione come Cursor:** barra delle attività, barra laterale, area degli editor, pannello in basso, barra di stato, barra del titolo integrata con i semafori di macOS, palette dei comandi.
+- **Disposizione della bozza D:** pannelli arrotondati sospesi sullo sfondo (come Finder e Xcode su macOS Tahoe), barra unica in alto con i semafori di macOS, barra laterale, area degli editor con il pannello in basso, Claude Code a destra, barra di stato, palette dei comandi.
 - **Logo e icona di Keel**, con un marchio proprio.
 - **Infrastruttura:**
   - registro dei comandi;
@@ -273,6 +273,45 @@ Il confronto non è alla pari: Cursor aveva anche albero dei file, terminale, se
   - italiano e inglese, con la scelta nelle impostazioni e come predefinita la lingua del Mac;
   - registri e gestione degli errori.
 - **Menu di macOS:** Keel, File, Modifica, Selezione, Vista, Vai, Terminale, Finestra, Aiuto.
+
+**Note sulla 1.6 e la 1.7**
+- **La finestra, da sinistra a destra:**
+  - **barra unica in alto**, accanto ai semafori: nome del progetto e branch git; un campo «Cerca comandi» che apre la palette; tre interruttori per barra laterale, pannello in basso e Claude Code;
+  - **barra laterale**, con un selettore in cima: Esplora risorse (per ora gli editor aperti, l'albero dei file arriva nella fase 2), Cerca, Controllo del codice sorgente e Estensioni (quelle installate);
+  - **editor**, con una scheda per riquadro e la X per chiuderlo. Un file chiuso resta tra gli editor aperti, così non si perde niente;
+  - **pannello in basso**, nascosto all'inizio: Problemi, Output (i messaggi di Keel e delle estensioni), Terminale e Porte;
+  - **Claude Code a destra**, un riquadro sospeso come gli altri. Si collega nella fase 10;
+  - **barra di stato:** branch, messaggi delle estensioni, riga e colonna, rientro, codifica e linguaggio.
+- **Le parti che arrivano dopo** mostrano solo «Arriva con la fase N».
+- **Scorciatoie, con i nomi e i tasti di VS Code:**
+
+  | Tasti | Cosa |
+  |---|---|
+  | Cmd+B | barra laterale |
+  | Cmd+J | pannello in basso |
+  | Cmd+Alt+B | Claude Code |
+  | Cmd+Shift+E | Esplora risorse |
+  | Cmd+Shift+F | Cerca |
+  | Ctrl+Shift+G | Controllo del codice sorgente |
+  | Cmd+Shift+X | Estensioni |
+  | Cmd+Shift+M | Problemi |
+  | Cmd+Shift+U | Output |
+  | Ctrl+` | Terminale |
+
+  Sono anche nel menu Vista. Sostituisci, nell'editor, passa da Cmd+Shift+F a Cmd+Alt+F, come in VS Code.
+- **Per ora Keel non ricorda la disposizione:** riparte con barra laterale e Claude Code aperti. Il ripristino arriva nella fase 2, insieme a schede e file.
+- **Il marchio** è la chiglia di una barca a vela vista da prua: scafo, deriva e bulbo. L'icona lo disegna in bianco sul riquadro blu notte di Sail, sulla griglia delle icone di Apple, così Keel e Sail sembrano della stessa famiglia.
+  - `assets/brand/generate.py` contiene la forma e rifà marchio, icona e `Keel.icns`.
+  - `scripts/bundle-macos.sh` crea `target/release/Keel.app` con l'icona, da usare sul Mac come le altre app. Non è firmata per altri computer: la pubblicazione resta per la fine.
+- **Misure dopo la 1.6:** 132 MB con VSAuto Ghost e un file TSX aperto, prima schermata in 419 ms. Sono uguali a prima della nuova disposizione.
+
+**Le tue prove a mano della fase 1**
+1. Crea l'app: `scripts/bundle-macos.sh`, poi apri `target/release/Keel.app` dal Finder e controlla l'icona nel Dock.
+2. Per aprire un file: `target/release/Keel.app/Contents/MacOS/keel fixtures/samples/booking-card.tsx`.
+3. Guarda la finestra nei tre temi: Cmd+K e poi Cmd+T, oppure Keel → Tema colori.
+4. Cambia lingua da Keel → Lingua e controlla menu, barra laterale, pannello e barra di stato.
+5. Prova le scorciatoie della tabella con la tastiera italiana, in particolare Cmd+Shift+F e Ctrl+`. Sulla tastiera italiana non c'è il tasto `: Keel lo cerca nella stessa posizione della tastiera americana, il tasto a sinistra dell'1. Se non va, dimmelo.
+6. Per cambiare un tasto, scrivilo in `~/Library/Application Support/com.manuelmezzanotte.keel/keybindings.json`, nel formato di VS Code.
 
 **Fatto quando**
 - La finestra ha la disposizione definitiva e ti piace.
@@ -510,7 +549,7 @@ Firma e notarizzazione di Apple, aggiornamenti automatici, un eventuale sito: ci
 ## Punti aperti
 
 - **Debug Console:** l'hai citata nel pannello in basso, ma senza debugger resta vuota. Proposta: arriva con il debugger opzionale.
-- **Bozze della fase 1:** pagine HTML statiche, più veloci da cambiare, oppure direttamente in Keel.
+- ~~**Bozze della fase 1**~~ fatte in HTML statico; hai scelto la bozza D, che unisce B e C.
 - ~~**Libreria per le lingue**~~ deciso nella 1.3: una tabella di testi per lingua scritta in Rust, così il compilatore controlla che nessun testo manchi. Con più lingue si potrà passare a Fluent.
 - **Font del codice:** SF Mono di serie, oppure un altro (JetBrains Mono, Geist Mono…).
 - **Minimappa:** accesa o spenta di serie.
