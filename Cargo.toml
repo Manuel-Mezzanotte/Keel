@@ -35,6 +35,7 @@ lsp-types = "0.97"
 
 # Keel crates
 extensions = { path = "crates/extensions" }
+settings = { path = "crates/settings" }
 workbench = { path = "crates/workbench" }
 editor = { path = "crates/editor" }
 language = { path = "crates/language" }

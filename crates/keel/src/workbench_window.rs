@@ -27,6 +27,7 @@ use gpui_component::{ActiveTheme as _, WindowExt as _};
 use language::Language;
 use lsp_types::{CompletionContext, CompletionItem, CompletionItemKind, CompletionResponse};
 use serde_json::{Value, json};
+use settings::Settings;
 use workbench::position::{self, Position};
 use workbench::uri::Uri;
 use workbench::when_clause::{Context as WhenContext, WhenClause};
@@ -129,6 +130,7 @@ enum AfterConfirm {
 }
 
 pub struct Workbench {
+    settings: Settings,
     documents: HashMap<String, OpenDocument>,
     panes: Vec<Pane>,
     active: usize,
@@ -149,6 +151,7 @@ pub struct Workbench {
 impl Workbench {
     pub fn new(
         document: Option<Document>,
+        settings: Settings,
         extensions: Option<ExtensionSetup>,
         window: &mut Window,
         cx: &mut Context<Self>,
@@ -176,7 +179,9 @@ impl Workbench {
             }
         });
 
+        let status_message = settings.warnings.first().cloned();
         let mut workbench = Self {
+            settings,
             documents: HashMap::new(),
             panes: Vec::new(),
             active: 0,
@@ -184,7 +189,7 @@ impl Workbench {
             next_untitled: 1,
             extensions: None,
             context: WhenContext::default(),
-            status_message: None,
+            status_message,
             discard_changes: false,
             gutter_refresh: Task::ready(()),
             known_selections: HashMap::new(),
@@ -281,9 +286,26 @@ impl Workbench {
         };
         let language = Language::for_vscode_id(&document.language_id);
         let text = document.synced_text.clone();
+        let tab_size = gpui_component::input::TabSize {
+            tab_size: self
+                .settings
+                .number("editor.tabSize")
+                .map_or(2, |size| size.clamp(1.0, 16.0) as usize),
+            hard_tabs: self
+                .settings
+                .get("editor.insertSpaces")
+                .and_then(Value::as_bool)
+                == Some(false),
+        };
+        let soft_wrap = self
+            .settings
+            .string("editor.wordWrap")
+            .is_some_and(|wrap| wrap != "off");
         let editor = cx.new(|cx| {
             EditorState::new(window, cx)
                 .language(language.highlighter_name())
+                .tab_size(tab_size)
+                .soft_wrap(soft_wrap)
                 .default_value(text)
         });
         let watched_uri = uri.to_owned();
@@ -744,6 +766,11 @@ impl Workbench {
             }
             bindings.extend(contributed_bindings(extension));
         }
+        // Extensions read the user's and the project's settings from the start.
+        let _ = host.notify(
+            "configuration/changed",
+            json!({ "values": self.settings.merged() }),
+        );
         self.extensions = Some(Extensions {
             host: host.clone(),
             commands: HashSet::new(),
@@ -1182,7 +1209,16 @@ impl Workbench {
                 })
                 .detach();
             }
-            "configuration/update" => self.reply(id, Ok(Value::Null)),
+            "configuration/update" => {
+                let key = params["key"].as_str().unwrap_or_default().to_owned();
+                let value = (!params["value"].is_null()).then(|| params["value"].clone());
+                let result = self
+                    .settings
+                    .update_user(&key, value)
+                    .map(|_| Value::Null)
+                    .map_err(|error| error.to_string());
+                self.reply(id, result);
+            }
             "env/readClipboard" => {
                 let text = cx
                     .read_from_clipboard()
@@ -2025,6 +2061,10 @@ mod tests {
 
     use super::*;
 
+    pub(super) fn test_settings() -> Settings {
+        Settings::load("/nonexistent/keel-test/settings.json", None)
+    }
+
     fn set_up(cx: &mut TestAppContext) {
         cx.update(|cx| {
             gpui_component::init(cx);
@@ -2047,8 +2087,9 @@ mod tests {
         std::fs::write(&path, "let total = 1;\n").unwrap();
         let document = Document::open(&path).unwrap();
 
-        let (view, cx) =
-            cx.add_window_view(|window, cx| Workbench::new(Some(document), None, window, cx));
+        let (view, cx) = cx.add_window_view(|window, cx| {
+            Workbench::new(Some(document), test_settings(), None, window, cx)
+        });
         assert!(!view.read_with(cx, |view, _| view.has_unsaved_changes()));
 
         cx.simulate_input("è");
@@ -2071,8 +2112,9 @@ mod tests {
         std::fs::write(&path, "export const a = <div />;\n").unwrap();
         let document = Document::open(&path).unwrap();
 
-        let (view, cx) =
-            cx.add_window_view(|window, cx| Workbench::new(Some(document), None, window, cx));
+        let (view, cx) = cx.add_window_view(|window, cx| {
+            Workbench::new(Some(document), test_settings(), None, window, cx)
+        });
         cx.simulate_input("x");
         cx.run_until_parked();
         assert!(view.read_with(cx, |view, _| view.has_unsaved_changes()));
@@ -2150,6 +2192,7 @@ mod extension_tests {
 
     use gpui::{TestAppContext, VisualTestContext};
 
+    use super::tests::test_settings;
     use super::*;
 
     fn wait_until(
@@ -2240,7 +2283,8 @@ mod extension_tests {
         // Dialogs need gpui-component's Root around the workbench, as in Keel.
         let mut workbench = None;
         let (_root, cx) = cx.add_window_view(|window, cx| {
-            let view = cx.new(|cx| Workbench::new(Some(document), Some(setup), window, cx));
+            let view = cx
+                .new(|cx| Workbench::new(Some(document), test_settings(), Some(setup), window, cx));
             workbench = Some(view.clone());
             gpui_component::Root::new(view, window, cx)
         });

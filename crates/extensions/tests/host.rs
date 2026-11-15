@@ -568,3 +568,38 @@ async fn the_bridge_mirrors_documents_editors_and_edits() {
         .collect();
     assert_eq!(labels, ["alpha", "beta"]);
 }
+
+#[tokio::test]
+async fn user_settings_override_the_extension_defaults() {
+    let Setup {
+        host,
+        mut events,
+        mut seen,
+        folder: _folder,
+    } = start_with(hello_extension).await;
+    host.notify(
+        "configuration/changed",
+        json!({ "values": { "hello.name": "Manuel" } }),
+    )
+    .unwrap();
+
+    let answer = |method: &str, _params: &Value| match method {
+        "window/showMessage" => json!(1),
+        _ => Value::Null,
+    };
+    drive(
+        &host,
+        &mut events,
+        &mut seen,
+        answer,
+        host.execute_command("hello.greet", vec![]),
+    )
+    .await
+    .unwrap();
+
+    let message = seen.iter().find_map(|event| match event {
+        HostEvent::Call { method, params, .. } if method == "window/showMessage" => Some(params),
+        _ => None,
+    });
+    assert_eq!(message.unwrap()["message"], "Ciao Manuel");
+}

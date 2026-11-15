@@ -18,6 +18,11 @@ pub fn data_dir() -> PathBuf {
         .join("Library/Application Support/com.manuelmezzanotte.keel")
 }
 
+/// The user's settings, `settings.json` in the data folder.
+pub fn user_settings_file(data: &Path) -> PathBuf {
+    data.join("settings.json")
+}
+
 pub fn extensions_dir(data: &Path) -> PathBuf {
     data.join("extensions")
 }

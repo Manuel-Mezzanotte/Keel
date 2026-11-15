@@ -113,9 +113,20 @@ fn run(document: Option<Document>) {
                 ))),
                 ..Default::default()
             };
+            let project = document
+                .as_ref()
+                .and_then(|document| std::path::absolute(document.path()).ok())
+                .and_then(|path| settings::project_root_for(&path));
+            let settings = settings::Settings::load(
+                paths::user_settings_file(&paths::data_dir()),
+                project.as_deref(),
+            );
+            for warning in &settings.warnings {
+                eprintln!("keel: {warning}");
+            }
             let setup = extension_setup();
             let opened = cx.open_window(options, move |window, cx| {
-                let view = cx.new(|cx| Workbench::new(document, setup, window, cx));
+                let view = cx.new(|cx| Workbench::new(document, settings, setup, window, cx));
                 cx.new(|cx| Root::new(view, window, cx))
             });
             if let Err(error) = opened {

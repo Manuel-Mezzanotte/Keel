@@ -3705,6 +3705,7 @@ dependencies = [
  "language",
  "lsp-types",
  "serde_json",
+ "settings",
  "tempfile",
  "workbench",
 ]
@@ -6358,6 +6359,15 @@ dependencies = [
  "serde",
  "smallvec",
  "thiserror 2.0.21",
+]
+
+[[package]]
+name = "settings"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "serde_json",
+ "tempfile",
 ]
 
 [[package]]
