@@ -1,6 +1,8 @@
 //! Keel, a fast and lightweight code editor for macOS.
 
 mod cli;
+#[cfg(test)]
+mod editor_checks;
 mod editor_window;
 
 use std::process::ExitCode;
