@@ -719,7 +719,318 @@
     visibleEditors: [],
     activeEditor: undefined,
     tabGroups: { all: [], activeTabGroup: { tabs: [], viewColumn: ViewColumn.One, isActive: true, activeTab: undefined } },
+    workspaceFolders: undefined,
   };
+
+  const documentsByUri = new Map();
+  const editorsById = new Map();
+
+  function lineStartsOf(text) {
+    const starts = [0];
+    for (let index = 0; index < text.length; index++) {
+      const code = text.charCodeAt(index);
+      if (code === 13 && text.charCodeAt(index + 1) === 10) {
+        starts.push(index + 2);
+        index++;
+      } else if (code === 10 || code === 13) {
+        starts.push(index + 1);
+      }
+    }
+    return starts;
+  }
+
+  class TextLine {
+    constructor(lineNumber, text, lineBreakLength) {
+      this.lineNumber = lineNumber;
+      this.text = text;
+      this.range = new Range(lineNumber, 0, lineNumber, text.length);
+      this.rangeIncludingLineBreak = lineBreakLength
+        ? new Range(lineNumber, 0, lineNumber + 1, 0)
+        : this.range;
+      this.firstNonWhitespaceCharacterIndex = text.length - text.trimStart().length;
+      this.isEmptyOrWhitespace = text.trim().length === 0;
+    }
+  }
+
+  /// A document as extensions see it. Keel sends its text on every change.
+  class TextDocument {
+    constructor(data) {
+      this.uri = Uri.parse(data.uri);
+      this.isUntitled = this.uri.scheme === "untitled";
+      this.isClosed = false;
+      this._update(data);
+    }
+    _update(data) {
+      this.languageId = data.languageId ?? this.languageId ?? "plaintext";
+      this.version = data.version ?? (this.version ?? 0) + 1;
+      this.isDirty = !!data.isDirty;
+      this._text = data.text ?? this._text ?? "";
+      this._lineStarts = lineStartsOf(this._text);
+      this.eol = this._text.includes("\r\n") ? EndOfLine.CRLF : EndOfLine.LF;
+    }
+    get fileName() {
+      return this.uri.fsPath;
+    }
+    get lineCount() {
+      return this._lineStarts.length;
+    }
+    _lineEnd(line) {
+      const next = this._lineStarts[line + 1];
+      if (next === undefined) return this._text.length;
+      let end = next;
+      if (this._text.charCodeAt(end - 1) === 10) end--;
+      if (this._text.charCodeAt(end - 1) === 13) end--;
+      return end;
+    }
+    validatePosition(position) {
+      position = toPosition(position);
+      if (position.line >= this.lineCount) {
+        const last = this.lineCount - 1;
+        return new Position(last, this._lineEnd(last) - this._lineStarts[last]);
+      }
+      const length = this._lineEnd(position.line) - this._lineStarts[position.line];
+      return position.character > length ? new Position(position.line, length) : position;
+    }
+    validateRange(range) {
+      return new Range(this.validatePosition(range.start), this.validatePosition(range.end));
+    }
+    offsetAt(position) {
+      const valid = this.validatePosition(position);
+      return this._lineStarts[valid.line] + valid.character;
+    }
+    positionAt(offset) {
+      const clamped = Math.max(0, Math.min(Math.floor(offset), this._text.length));
+      let low = 0;
+      let high = this._lineStarts.length - 1;
+      while (low < high) {
+        const middle = (low + high + 1) >> 1;
+        if (this._lineStarts[middle] <= clamped) low = middle;
+        else high = middle - 1;
+      }
+      const character = Math.min(clamped, this._lineEnd(low)) - this._lineStarts[low];
+      return new Position(low, character);
+    }
+    getText(range) {
+      if (!range) return this._text;
+      const valid = this.validateRange(range);
+      return this._text.slice(this.offsetAt(valid.start), this.offsetAt(valid.end));
+    }
+    lineAt(lineOrPosition) {
+      const line = typeof lineOrPosition === "number" ? lineOrPosition : lineOrPosition.line;
+      if (line < 0 || line >= this.lineCount) throw new Error(`illegal line ${line}`);
+      const start = this._lineStarts[line];
+      const end = this._lineEnd(line);
+      const next = this._lineStarts[line + 1] ?? end;
+      return new TextLine(line, this._text.slice(start, end), next - end);
+    }
+    getWordRangeAtPosition(position, regex = /[\w$]+/g) {
+      const valid = this.validatePosition(position);
+      const text = this.lineAt(valid.line).text;
+      const pattern = new RegExp(regex.source, regex.flags.includes("g") ? regex.flags : regex.flags + "g");
+      for (const match of text.matchAll(pattern)) {
+        const start = match.index;
+        const end = start + match[0].length;
+        if (start <= valid.character && valid.character <= end && match[0].length > 0) {
+          return new Range(valid.line, start, valid.line, end);
+        }
+      }
+      return undefined;
+    }
+    async save() {
+      return (await host.call("documents/save", { uri: this.uri.toString() })) === true;
+    }
+  }
+
+  function toSelection(data) {
+    return new Selection(toPosition(data.anchor), toPosition(data.active));
+  }
+
+  /// Where two texts start and stop differing, as one VS Code content change.
+  function contentChange(document, oldText, newText) {
+    let start = 0;
+    const shortest = Math.min(oldText.length, newText.length);
+    while (start < shortest && oldText.charCodeAt(start) === newText.charCodeAt(start)) start++;
+    let oldEnd = oldText.length;
+    let newEnd = newText.length;
+    while (oldEnd > start && newEnd > start && oldText.charCodeAt(oldEnd - 1) === newText.charCodeAt(newEnd - 1)) {
+      oldEnd--;
+      newEnd--;
+    }
+    const before = new TextDocument({ uri: document.uri.toString(), text: oldText });
+    return {
+      range: new Range(before.positionAt(start), before.positionAt(oldEnd)),
+      rangeOffset: start,
+      rangeLength: oldEnd - start,
+      text: newText.slice(start, newEnd),
+    };
+  }
+
+  /// An editor as extensions see it.
+  class TextEditor {
+    constructor(data) {
+      this.id = data.id;
+      this.options = { tabSize: 2, insertSpaces: true, cursorStyle: 1, lineNumbers: 1 };
+      this._update(data);
+    }
+    _update(data) {
+      this.document = documentsByUri.get(data.uri);
+      this.viewColumn = data.viewColumn;
+      this._selections = (data.selections ?? []).map(toSelection);
+      if (!this._selections.length) this._selections = [new Selection(0, 0, 0, 0)];
+      this.visibleRanges = (data.visibleRanges ?? []).map((range) => new Range(toPosition(range.start), toPosition(range.end)));
+    }
+    get selection() {
+      return this._selections[0];
+    }
+    set selection(selection) {
+      this.selections = [selection];
+    }
+    get selections() {
+      return this._selections;
+    }
+    set selections(selections) {
+      this._selections = selections.map((selection) =>
+        selection instanceof Selection ? selection : new Selection(selection.anchor ?? selection.start, selection.active ?? selection.end));
+      host.notify("editor/setSelections", {
+        editorId: this.id,
+        selections: this._selections.map((selection) => ({ anchor: plain(selection.anchor), active: plain(selection.active) })),
+      });
+    }
+    setDecorations(decorationType, rangesOrOptions) {
+      const ranges = rangesOrOptions.map((item) => {
+        const range = item instanceof Range ? item : item.range;
+        return {
+          range: plain(range),
+          renderOptions: item instanceof Range ? null : plain(item.renderOptions ?? null),
+          hoverMessage: item instanceof Range ? null : plain(item.hoverMessage ?? null),
+        };
+      });
+      host.notify("editor/setDecorations", { editorId: this.id, key: decorationType.key, ranges });
+    }
+    revealRange(range, revealType = TextEditorRevealType.Default) {
+      host.notify("editor/revealRange", { editorId: this.id, range: plain(range), revealType });
+    }
+    async edit(callback) {
+      const edit = new WorkspaceEdit();
+      const uri = this.document.uri;
+      callback({
+        replace: (location, value) => edit.replace(uri, location instanceof Range ? location : new Range(location, location), value),
+        insert: (position, value) => edit.insert(uri, position, value),
+        delete: (location) => edit.delete(uri, location),
+        setEndOfLine() {},
+      });
+      return workspaceApi.applyEdit(edit);
+    }
+    async insertSnippet(snippet, location) {
+      const value = typeof snippet === "string" ? snippet : snippet.value;
+      const target = location ?? this.selection;
+      const range = target instanceof Position ? new Range(target, target) : target;
+      return this.edit((builder) => builder.replace(range, value.replace(/\$\{?\d+(:[^}]*)?\}?/g, "")));
+    }
+    show() {}
+    hide() {}
+  }
+
+  host.onNotify("documents/opened", (data) => {
+    const document = new TextDocument(data);
+    documentsByUri.set(data.uri, document);
+    state.documents.push(document);
+    documentOpened.fire(document);
+  });
+
+  host.onNotify("documents/changed", (data) => {
+    const document = documentsByUri.get(data.uri);
+    if (!document) return;
+    const oldText = document._text;
+    document._update({ ...data, languageId: data.languageId ?? document.languageId });
+    if (oldText !== document._text || data.reason) {
+      documentChanged.fire({
+        document,
+        contentChanges: oldText === document._text ? [] : [contentChange(document, oldText, document._text)],
+        reason: data.reason === "undo" ? TextDocumentChangeReason.Undo : data.reason === "redo" ? TextDocumentChangeReason.Redo : undefined,
+      });
+    }
+  });
+
+  host.onNotify("documents/saved", ({ uri }) => {
+    const document = documentsByUri.get(uri);
+    if (!document) return;
+    document.isDirty = false;
+    documentSaved.fire(document);
+  });
+
+  host.onNotify("documents/closed", ({ uri }) => {
+    const document = documentsByUri.get(uri);
+    if (!document) return;
+    document.isClosed = true;
+    documentsByUri.delete(uri);
+    state.documents.splice(state.documents.indexOf(document), 1);
+    documentClosed.fire(document);
+  });
+
+  function tabFor(editor, isActive) {
+    const document = editor.document;
+    const label = document ? globalThis.__keel.builtin("path").basename(document.uri.path) : "";
+    return {
+      label,
+      input: document ? new TabInputText(document.uri) : undefined,
+      isActive,
+      isDirty: !!document?.isDirty,
+      isPinned: false,
+      isPreview: false,
+      group: undefined,
+    };
+  }
+
+  host.onNotify("editors/changed", ({ editors, activeId }) => {
+    const previousVisible = state.visibleEditors.map((editor) => editor.id).join(",");
+    const previousActive = state.activeEditor?.id;
+    const seen = new Set();
+    state.visibleEditors = editors.map((data) => {
+      seen.add(data.id);
+      let editor = editorsById.get(data.id);
+      if (editor) editor._update(data);
+      else {
+        editor = new TextEditor(data);
+        editorsById.set(data.id, editor);
+      }
+      return editor;
+    });
+    for (const id of [...editorsById.keys()]) {
+      if (!seen.has(id)) editorsById.delete(id);
+    }
+    state.activeEditor = activeId != null ? editorsById.get(activeId) : undefined;
+
+    const groups = [];
+    for (const editor of state.visibleEditors) {
+      const group = { viewColumn: editor.viewColumn, isActive: editor === state.activeEditor, tabs: [], activeTab: undefined };
+      const tab = tabFor(editor, true);
+      tab.group = group;
+      group.tabs.push(tab);
+      group.activeTab = tab;
+      groups.push(group);
+    }
+    state.tabGroups.all = groups;
+    state.tabGroups.activeTabGroup = groups.find((group) => group.isActive) ?? groups[0] ?? state.tabGroups.activeTabGroup;
+
+    if (previousVisible !== state.visibleEditors.map((editor) => editor.id).join(",")) {
+      visibleEditorsChanged.fire(state.visibleEditors);
+      tabGroupsChanged.fire({ opened: [], closed: [], changed: groups });
+      tabsChanged.fire({ opened: [], closed: [], changed: groups.flatMap((group) => group.tabs) });
+    }
+    if (previousActive !== state.activeEditor?.id) activeEditorChanged.fire(state.activeEditor);
+  });
+
+  host.onNotify("editors/selectionChanged", ({ id, selections, kind }) => {
+    const editor = editorsById.get(id);
+    if (!editor) return;
+    editor._selections = selections.map(toSelection);
+    selectionChanged.fire({ textEditor: editor, selections: editor._selections, kind });
+  });
+
+  host.onNotify("workspace/foldersChanged", ({ folders }) => {
+    state.workspaceFolders = folders.map((folder, index) => ({ uri: Uri.parse(folder), name: folder.split("/").pop(), index }));
+  });
 
   // ---------------------------------------------------------------------
   // Window
@@ -930,7 +1241,7 @@
       return document;
     },
     getLanguages: async () => ["typescript", "typescriptreact", "javascript", "javascriptreact", "plaintext"],
-    match: () => 10,
+    match: () => 0,
   };
 
   // ---------------------------------------------------------------------
@@ -1004,6 +1315,99 @@
     bundle: undefined,
     uri: undefined,
   };
+
+  // ---------------------------------------------------------------------
+  // What Keel asks of extensions
+
+  function selectorMatches(selector, document) {
+    if (Array.isArray(selector)) return selector.some((part) => selectorMatches(part, document));
+    if (typeof selector === "string") return selector === "*" || selector === document.languageId;
+    if (!selector || typeof selector !== "object") return false;
+    if (selector.scheme && selector.scheme !== "*" && selector.scheme !== document.uri.scheme) return false;
+    if (selector.language && selector.language !== "*" && selector.language !== document.languageId) return false;
+    if (selector.pattern) {
+      const pattern = String(selector.pattern?.pattern ?? selector.pattern);
+      const suffix = pattern.replace(/^\*\*\//, "").replace(/^\*/, "");
+      if (suffix && !document.uri.path.endsWith(suffix)) return false;
+    }
+    return true;
+  }
+
+  languagesApi.match = (selector, document) => (selectorMatches(selector, document) ? 10 : 0);
+
+  function plainCompletion(item) {
+    const label = typeof item.label === "string" ? item.label : item.label?.label ?? "";
+    const insertText = item.insertText == null
+      ? label
+      : typeof item.insertText === "string" ? item.insertText : item.insertText.value;
+    const range = item.range instanceof Range ? item.range : item.range?.replacing;
+    const documentation = typeof item.documentation === "string" ? item.documentation : item.documentation?.value;
+    return {
+      label,
+      kind: item.kind ?? null,
+      detail: item.detail ?? null,
+      documentation: documentation ?? null,
+      sortText: item.sortText ?? null,
+      filterText: item.filterText ?? null,
+      insertText,
+      range: range ? plain(range) : null,
+      preselect: !!item.preselect,
+    };
+  }
+
+  host.onCall("completion/provide", async ({ uri, position, triggerCharacter }) => {
+    const document = documentsByUri.get(uri);
+    if (!document) return [];
+    const items = [];
+    const context = {
+      triggerKind: triggerCharacter ? CompletionTriggerKind.TriggerCharacter : CompletionTriggerKind.Invoke,
+      triggerCharacter: triggerCharacter ?? undefined,
+    };
+    for (const entry of completionProviders) {
+      if (!selectorMatches(entry.selector, document)) continue;
+      if (triggerCharacter && !entry.triggerCharacters.includes(triggerCharacter)) continue;
+      try {
+        const result = await entry.provider.provideCompletionItems(document, toPosition(position), noCancellation, context);
+        const list = Array.isArray(result) ? result : result?.items ?? [];
+        for (const item of list) items.push(plainCompletion(item));
+      } catch (error) {
+        console.error("a completion provider failed:", error);
+      }
+    }
+    return items;
+  });
+
+  host.onCall("fileSystem/readFile", async ({ uri }) => {
+    const target = Uri.parse(uri);
+    const provider = fileSystemProviders.get(target.scheme);
+    if (!provider) throw new Error(`no file system is registered for ${target.scheme}:`);
+    const bytes = await provider.readFile(target);
+    return { text: Buffer.from(bytes).toString("utf8") };
+  });
+
+  host.onCall("fileSystem/writeFile", async ({ uri, text }) => {
+    const target = Uri.parse(uri);
+    const provider = fileSystemProviders.get(target.scheme);
+    if (!provider) throw new Error(`no file system is registered for ${target.scheme}:`);
+    await provider.writeFile(target, Buffer.from(text, "utf8"), { create: true, overwrite: true });
+    return true;
+  });
+
+  host.onCall("contentProvider/provide", async ({ uri }) => {
+    const target = Uri.parse(uri);
+    const provider = contentProviders.get(target.scheme);
+    if (!provider) throw new Error(`no content provider is registered for ${target.scheme}:`);
+    return (await provider.provideTextDocumentContent(target, noCancellation)) ?? "";
+  });
+
+  host.onCall("scm/originalResource", async ({ uri }) => {
+    const target = Uri.parse(uri);
+    for (const control of sourceControls.values()) {
+      const original = await control.quickDiffProvider?.provideOriginalResource?.(target, noCancellation);
+      if (original) return original.toString();
+    }
+    return null;
+  });
 
   // ---------------------------------------------------------------------
   // The module

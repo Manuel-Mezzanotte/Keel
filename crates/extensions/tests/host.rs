@@ -397,3 +397,174 @@ async fn vsauto_ghost_activates_and_registers_what_it_needs() {
     assert!(!notifications(&seen, "completion/registered").is_empty());
     assert!(notifications(&seen, "extensions/activationFailed").is_empty());
 }
+
+const MIRROR_PACKAGE: &str = r#"{
+    "name": "mirror",
+    "publisher": "keel-tests",
+    "version": "0.0.1",
+    "main": "./extension.js",
+    "activationEvents": ["*"]
+}"#;
+
+const MIRROR_EXTENSION: &str = r#"
+const vscode = require("vscode");
+
+exports.activate = function (context) {
+  const ghost = vscode.window.createTextEditorDecorationType({
+    color: new vscode.ThemeColor("editorGhostText.foreground"),
+    fontStyle: "italic",
+  });
+  context.subscriptions.push(
+    vscode.commands.registerCommand("mirror.edit", async () => {
+      const editor = vscode.window.activeTextEditor;
+      const document = editor.document;
+      const before = document.getText();
+      const position = document.positionAt(before.indexOf("più"));
+      const edit = new vscode.WorkspaceEdit();
+      edit.insert(document.uri, new vscode.Position(1, 0), "// ghost\n");
+      const applied = await vscode.workspace.applyEdit(edit);
+      editor.selection = new vscode.Selection(1, 2, 1, 8);
+      editor.setDecorations(ghost, [new vscode.Range(1, 0, 1, 8)]);
+      return {
+        before,
+        firstLine: document.lineAt(0).text,
+        position: [position.line, position.character],
+        offset: document.offsetAt(new vscode.Position(2, 2)),
+        applied,
+        after: document.getText(),
+        version: document.version,
+        lineCount: document.lineCount,
+        languageId: document.languageId,
+        visible: vscode.window.visibleTextEditors.length,
+        tabs: vscode.window.tabGroups.all.length,
+      };
+    }),
+    vscode.languages.registerCompletionItemProvider({ language: "typescript" }, {
+      provideCompletionItems: () => [
+        new vscode.CompletionItem("alpha", vscode.CompletionItemKind.Variable),
+        new vscode.CompletionItem("beta", vscode.CompletionItemKind.Function),
+      ],
+    }),
+  );
+};
+"#;
+
+fn mirror_extension(folder: &Path) -> InstalledExtension {
+    let root = folder.join("mirror");
+    fs::create_dir_all(&root).unwrap();
+    fs::write(root.join("package.json"), MIRROR_PACKAGE).unwrap();
+    fs::write(root.join("extension.js"), MIRROR_EXTENSION).unwrap();
+    InstalledExtension::load(&root).unwrap()
+}
+
+#[tokio::test]
+async fn the_bridge_mirrors_documents_editors_and_edits() {
+    let Setup {
+        host,
+        mut events,
+        mut seen,
+        folder: _folder,
+    } = start_with(mirror_extension).await;
+    let uri = "file:///tmp/app.ts";
+    let text = "const a = 1;\nè più bello\n";
+    host.notify(
+        "documents/opened",
+        json!({ "uri": uri, "languageId": "typescript", "version": 1, "text": text, "isDirty": false }),
+    )
+    .unwrap();
+    host.notify(
+        "editors/changed",
+        json!({
+            "editors": [{
+                "id": "editor-1",
+                "uri": uri,
+                "viewColumn": 1,
+                "selections": [{ "anchor": { "line": 0, "character": 0 }, "active": { "line": 0, "character": 0 } }],
+            }],
+            "activeId": "editor-1",
+        }),
+    )
+    .unwrap();
+
+    // Keel applies the edit, sends the new text, then answers.
+    let edited = "const a = 1;\n// ghost\nè più bello\n";
+    let answer = |method: &str, _params: &Value| match method {
+        "workspace/applyEdit" => {
+            host.notify(
+                "documents/changed",
+                json!({ "uri": uri, "version": 2, "text": edited, "isDirty": true }),
+            )
+            .unwrap();
+            json!(true)
+        }
+        _ => Value::Null,
+    };
+    let result = drive(
+        &host,
+        &mut events,
+        &mut seen,
+        answer,
+        host.execute_command("mirror.edit", vec![]),
+    )
+    .await
+    .unwrap();
+
+    assert_eq!(
+        result,
+        json!({
+            "before": text,
+            "firstLine": "const a = 1;",
+            "position": [1, 2],
+            "offset": 24,
+            "applied": true,
+            "after": edited,
+            "version": 2,
+            "lineCount": 4,
+            "languageId": "typescript",
+            "visible": 1,
+            "tabs": 1,
+        })
+    );
+
+    let edits = seen.iter().find_map(|event| match event {
+        HostEvent::Call { method, params, .. } if method == "workspace/applyEdit" => Some(params),
+        _ => None,
+    });
+    assert_eq!(
+        edits.unwrap()["entries"][0]["edits"][0],
+        json!({ "range": { "start": { "line": 1, "character": 0 }, "end": { "line": 1, "character": 0 } }, "newText": "// ghost\n" })
+    );
+    assert_eq!(
+        notifications(&seen, "editor/setSelections")[0]["selections"],
+        json!([{ "anchor": { "line": 1, "character": 2 }, "active": { "line": 1, "character": 8 } }])
+    );
+    let decorations = notifications(&seen, "editor/setDecorations");
+    assert_eq!(
+        decorations[0]["ranges"][0]["range"],
+        json!({ "start": { "line": 1, "character": 0 }, "end": { "line": 1, "character": 8 } })
+    );
+    assert_eq!(
+        notifications(&seen, "decorations/createType")[0]["options"]["color"],
+        json!({ "themeColor": "editorGhostText.foreground" })
+    );
+
+    let completions = drive(
+        &host,
+        &mut events,
+        &mut seen,
+        quiet_keel,
+        host.call(
+            "completion/provide",
+            json!({ "uri": uri, "position": { "line": 0, "character": 0 }, "triggerCharacter": null }),
+        ),
+    )
+    .await
+    .unwrap();
+    let labels: Vec<&str> = completions
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|item| item["label"].as_str().unwrap())
+        .collect();
+    assert_eq!(labels, ["alpha", "beta"]);
+}
