@@ -1302,6 +1302,10 @@
     openExternal: async (uri) => (await host.call("env/openExternal", { uri: uri.toString() })) === true,
   };
 
+  host.onNotify("env/changed", ({ language }) => {
+    if (language) envApi.language = language;
+  });
+
   const l10nApi = {
     t(message, ...args) {
       const text = typeof message === "string" ? message : message.message;

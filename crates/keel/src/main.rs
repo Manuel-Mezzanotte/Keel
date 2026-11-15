@@ -3,6 +3,7 @@
 mod cli;
 #[cfg(test)]
 mod editor_checks;
+mod i18n;
 mod paths;
 mod quick_pick;
 mod workbench_window;

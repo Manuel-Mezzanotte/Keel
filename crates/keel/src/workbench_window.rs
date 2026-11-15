@@ -32,6 +32,7 @@ use workbench::position::{self, Position};
 use workbench::uri::Uri;
 use workbench::when_clause::{Context as WhenContext, WhenClause};
 
+use crate::i18n::{Strings, UiLanguage};
 use crate::paths;
 use crate::quick_pick::{self, PickItem};
 
@@ -131,6 +132,7 @@ enum AfterConfirm {
 
 pub struct Workbench {
     settings: Settings,
+    language: UiLanguage,
     documents: HashMap<String, OpenDocument>,
     panes: Vec<Pane>,
     active: usize,
@@ -180,8 +182,13 @@ impl Workbench {
         });
 
         let status_message = settings.warnings.first().cloned();
+        let language = UiLanguage::from_setting(
+            settings.string("keel.language"),
+            UiLanguage::system_locale().as_deref(),
+        );
         let mut workbench = Self {
             settings,
+            language,
             documents: HashMap::new(),
             panes: Vec::new(),
             active: 0,
@@ -205,6 +212,18 @@ impl Workbench {
         };
         workbench.open_in_pane(&uri, 0, true, window, cx);
         workbench
+    }
+
+    fn strings(&self) -> &'static Strings {
+        self.language.strings()
+    }
+
+    /// The name shown for a document: its file name, or "Untitled 1".
+    fn display_name(&self, document: &OpenDocument) -> String {
+        match document.uri.strip_prefix("untitled:Untitled-") {
+            Some(number) => format!("{} {number}", self.strings().untitled),
+            None => document.name(),
+        }
     }
 
     // -----------------------------------------------------------------
@@ -502,7 +521,7 @@ impl Workbench {
             .panes
             .get(self.active)
             .and_then(|pane| self.documents.get(&pane.uri))
-            .map_or_else(|| "Keel".to_owned(), OpenDocument::name);
+            .map_or_else(|| "Keel".to_owned(), |document| self.display_name(document));
         window.set_window_title(&format!("{name} — Keel"));
         window.set_window_edited(self.has_unsaved_changes());
         let path = self
@@ -556,8 +575,14 @@ impl Workbench {
                     }
                 }
                 Err(error) => {
-                    let message = format!("Keel could not save {}", file.file_name());
-                    show_error(&message, &error.to_string(), window, cx);
+                    let message = self.language.strings().could_not_save(&file.file_name());
+                    show_error(
+                        &message,
+                        &error.to_string(),
+                        self.language.strings().ok,
+                        window,
+                        cx,
+                    );
                 }
             },
             Backing::Untitled => self.save_as(uri.to_owned(), text, after, window, cx),
@@ -584,7 +609,7 @@ impl Workbench {
         cx: &mut Context<Self>,
     ) {
         let folder = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("/"));
-        let chosen = cx.prompt_for_new_path(&folder, Some("Untitled.txt"));
+        let chosen = cx.prompt_for_new_path(&folder, Some(self.strings().untitled_file_name));
         cx.spawn_in(window, async move |this, cx| {
             let Ok(Ok(Some(path))) = chosen.await else {
                 return;
@@ -593,14 +618,16 @@ impl Workbench {
                 let mut document = match Document::open(&path) {
                     Ok(document) => document,
                     Err(error) => {
-                        let message = format!("Keel could not use {}", path.display());
-                        show_error(&message, &error.to_string(), window, cx);
+                        let strings = this.strings();
+                        let message = strings.could_not_use(&path.display().to_string());
+                        show_error(&message, &error.to_string(), strings.ok, window, cx);
                         return;
                     }
                 };
                 if let Err(error) = document.save(&text) {
-                    let message = format!("Keel could not save {}", document.file_name());
-                    show_error(&message, &error.to_string(), window, cx);
+                    let strings = this.strings();
+                    let message = strings.could_not_save(&document.file_name());
+                    show_error(&message, &error.to_string(), strings.ok, window, cx);
                     return;
                 }
                 // The untitled buffer becomes the saved file.
@@ -655,13 +682,13 @@ impl Workbench {
         else {
             return true;
         };
-        let name = self.documents[&uri].name();
-        let message = format!("Do you want to save the changes you made to {name}?");
+        let strings = self.strings();
+        let message = strings.save_changes(&self.display_name(&self.documents[&uri]));
         let answer = window.prompt(
             PromptLevel::Warning,
             &message,
-            Some("Your changes will be lost if you don't save them."),
-            &["Save", "Don't Save", "Cancel"],
+            Some(strings.changes_lost),
+            &[strings.save, strings.dont_save, strings.cancel],
             cx,
         );
         cx.spawn_in(window, async move |this, cx| {
@@ -697,11 +724,16 @@ impl Workbench {
     // Command palette
 
     fn show_commands(&mut self, _: &ShowCommands, window: &mut Window, cx: &mut Context<Self>) {
+        let strings = self.strings();
         let mut entries: Vec<(String, String)> = vec![
-            ("keel.save".to_owned(), "File: Save".to_owned()),
+            ("keel.save".to_owned(), strings.command_save.to_owned()),
             (
                 "keel.closeWindow".to_owned(),
-                "View: Close Window".to_owned(),
+                strings.command_close_window.to_owned(),
+            ),
+            (
+                "keel.language".to_owned(),
+                strings.command_language.to_owned(),
             ),
         ];
         if let Some(extensions) = &self.extensions {
@@ -715,7 +747,13 @@ impl Workbench {
                 item
             })
             .collect();
-        let chosen = quick_pick::show(None, Some("Type a command".to_owned()), items, window, cx);
+        let chosen = quick_pick::show(
+            None,
+            Some(strings.type_a_command.to_owned()),
+            items,
+            window,
+            cx,
+        );
         cx.spawn_in(window, async move |this, cx| {
             let Ok(Some(index)) = chosen.await else {
                 return;
@@ -724,6 +762,7 @@ impl Workbench {
             this.update_in(cx, |this, window, cx| match command.as_str() {
                 "keel.save" => this.save(&Save, window, cx),
                 "keel.closeWindow" => this.close_window(&CloseWindow, window, cx),
+                "keel.language" => this.choose_language(window, cx),
                 _ => {
                     if let Some(pane) = this.panes.get(this.active) {
                         let editor = pane.editor.clone();
@@ -735,6 +774,41 @@ impl Workbench {
             .ok();
         })
         .detach();
+    }
+
+    fn choose_language(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let items = vec![PickItem::new("Italiano"), PickItem::new("English")];
+        let title = Some(self.strings().choose_language.to_owned());
+        let chosen = quick_pick::show(title, None, items, window, cx);
+        cx.spawn_in(window, async move |this, cx| {
+            let Ok(Some(index)) = chosen.await else {
+                return;
+            };
+            let language = if index == 0 {
+                UiLanguage::Italian
+            } else {
+                UiLanguage::English
+            };
+            this.update_in(cx, |this, window, cx| {
+                this.set_language(language, window, cx)
+            })
+            .ok();
+        })
+        .detach();
+    }
+
+    /// Switches the interface language at once and remembers it.
+    fn set_language(&mut self, language: UiLanguage, window: &mut Window, cx: &mut Context<Self>) {
+        self.language = language;
+        if let Err(error) = self
+            .settings
+            .update_user("keel.language", Some(json!(language.code())))
+        {
+            self.status_message = Some(error.to_string());
+        }
+        self.notify_host("env/changed", json!({ "language": language.code() }));
+        self.refresh_title(window);
+        cx.notify();
     }
 
     // -----------------------------------------------------------------
@@ -771,6 +845,7 @@ impl Workbench {
             "configuration/changed",
             json!({ "values": self.settings.merged() }),
         );
+        let _ = host.notify("env/changed", json!({ "language": self.language.code() }));
         self.extensions = Some(Extensions {
             host: host.clone(),
             commands: HashSet::new(),
@@ -984,7 +1059,7 @@ impl Workbench {
             "extensions/activationFailed" => {
                 let id = params["id"].as_str().unwrap_or_default();
                 let error = first_line(params["error"].as_str().unwrap_or_default());
-                self.status_message = Some(format!("{id} could not start: {error}"));
+                self.status_message = Some(self.strings().could_not_start(id, error));
             }
             "decorations/createType" => {
                 if let Some(key) = params["key"].as_str() {
@@ -1295,7 +1370,7 @@ impl Workbench {
                 Ok(Value::Null)
             }
             "workbench.action.openSettings" => {
-                self.status_message = Some("Settings are not available yet".to_owned());
+                self.status_message = Some(self.strings().settings_unavailable.to_owned());
                 cx.notify();
                 Ok(Value::Null)
             }
@@ -1330,7 +1405,7 @@ impl Workbench {
             _ => PromptLevel::Info,
         };
         let mut buttons: Vec<&str> = items.iter().map(String::as_str).collect();
-        buttons.push("Cancel");
+        buttons.push(self.strings().cancel);
         let answer = window.prompt(level, &message, params["detail"].as_str(), &buttons, cx);
         let count = items.len();
         cx.spawn_in(window, async move |this, cx| {
@@ -1708,9 +1783,9 @@ impl Render for Workbench {
                 .get(&pane.uri)
                 .map(|document| {
                     if document.modified {
-                        format!("{} ●", document.name())
+                        format!("{} ●", self.display_name(document))
                     } else {
-                        document.name()
+                        self.display_name(document)
                     }
                 })
                 .unwrap_or_default();
@@ -2050,9 +2125,9 @@ fn first_line(text: &str) -> &str {
 }
 
 /// Shows an error in a dialog with a single OK button.
-fn show_error(message: &str, detail: &str, window: &mut Window, cx: &mut App) {
+fn show_error(message: &str, detail: &str, ok: &str, window: &mut Window, cx: &mut App) {
     // The dialog stays open on its own; there is no answer to wait for.
-    let _dismissed = window.prompt(PromptLevel::Critical, message, Some(detail), &["OK"], cx);
+    let _dismissed = window.prompt(PromptLevel::Critical, message, Some(detail), &[ok], cx);
 }
 
 #[cfg(test)]
@@ -2122,6 +2197,32 @@ mod tests {
         cx.simulate_keystrokes("cmd-z");
         cx.run_until_parked();
         assert!(!view.read_with(cx, |view, _| view.has_unsaved_changes()));
+    }
+
+    #[gpui::test]
+    fn the_interface_language_follows_the_setting_and_switches_at_once(cx: &mut TestAppContext) {
+        set_up(cx);
+        let folder = tempfile::tempdir().unwrap();
+        let user_file = folder.path().join("settings.json");
+        std::fs::write(&user_file, r#"{ "keel.language": "it" }"#).unwrap();
+        let settings = Settings::load(&user_file, None);
+
+        let (view, cx) =
+            cx.add_window_view(|window, cx| Workbench::new(None, settings, None, window, cx));
+        let name = |view: &Entity<Workbench>, cx: &mut gpui::VisualTestContext| {
+            view.read_with(cx, |view, _| {
+                let document = &view.documents[&view.panes[view.active].uri];
+                view.display_name(document)
+            })
+        };
+        assert_eq!(name(&view, cx), "Senza titolo 1");
+
+        view.update_in(cx, |view, window, cx| {
+            view.set_language(UiLanguage::English, window, cx)
+        });
+        assert_eq!(name(&view, cx), "Untitled 1");
+        let saved = settings::parse_jsonc(&std::fs::read_to_string(&user_file).unwrap()).unwrap();
+        assert_eq!(saved["keel.language"], "en");
     }
 
     #[test]

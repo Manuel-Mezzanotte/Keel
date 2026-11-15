@@ -3706,6 +3706,7 @@ dependencies = [
  "lsp-types",
  "serde_json",
  "settings",
+ "sys-locale",
  "tempfile",
  "workbench",
 ]

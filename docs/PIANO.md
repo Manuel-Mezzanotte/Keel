@@ -249,7 +249,7 @@ Il confronto non è alla pari: Cursor aveva anche albero dei file, terminale, se
 |---|---|---|
 | 1.1 | Bozze dell'interfaccia: tre proposte in `docs/bozze/index.html`, con i temi Mezzanotte, Chiaro e Nero | fatta, **aspetta la tua scelta** |
 | 1.2 | Impostazioni: `settings.json` per utente e per progetto (legge anche `.vscode/settings.json`), passate alle estensioni | fatta |
-| 1.3 | Italiano e inglese: testi in file separati, lingua predefinita quella del Mac | da fare |
+| 1.3 | Italiano e inglese: testi in una tabella per lingua, lingua predefinita quella del Mac | fatta |
 | 1.4 | Comandi e scorciatoie: registro dei comandi, `keybindings.json` nel formato di VS Code, tastiera italiana | da fare |
 | 1.5 | Temi Mezzanotte, Chiaro e Nero, cambio al volo, segue chiaro e scuro di macOS | da fare |
 | 1.6 | La disposizione della bozza scelta | da fare |
@@ -511,7 +511,7 @@ Firma e notarizzazione di Apple, aggiornamenti automatici, un eventuale sito: ci
 
 - **Debug Console:** l'hai citata nel pannello in basso, ma senza debugger resta vuota. Proposta: arriva con il debugger opzionale.
 - **Bozze della fase 1:** pagine HTML statiche, più veloci da cambiare, oppure direttamente in Keel.
-- **Libreria per le lingue:** Fluent di Mozilla o `rust-i18n`, da scegliere nella fase 1.
+- ~~**Libreria per le lingue**~~ deciso nella 1.3: una tabella di testi per lingua scritta in Rust, così il compilatore controlla che nessun testo manchi. Con più lingue si potrà passare a Fluent.
 - **Font del codice:** SF Mono di serie, oppure un altro (JetBrains Mono, Geist Mono…).
 - **Minimappa:** accesa o spenta di serie.
 
