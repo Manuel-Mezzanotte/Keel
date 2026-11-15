@@ -1,17 +1,18 @@
 #!/usr/bin/env python3
-"""Generates Keel's mark and app icon from the keel glyph.
+"""Generates Keel's mark and app icon from the paper boat glyph.
 
-The glyph geometry in this file is the single source of truth for the logo.
-The outputs are committed next to this file, so a normal build never runs
-this script. Run it again only after changing the logo:
+The geometry in this file is the single source of truth for the logo. The
+outputs are committed next to this file, so a normal build never runs this
+script. Run it again only after changing the logo:
 
     python3 assets/brand/generate.py
 
 Requires ImageMagick (`magick`) and `iconutil` (part of macOS).
 
-The glyph is the keel of a sailing boat seen from the bow: the hull, the
-fin and the bulb. The tile uses the midnight blues of Sail, Manuel's
-browser, so the two apps look like one family.
+The logo is a paper boat folded from a page of code: the boat stands for
+the name, the coloured lines are Keel's syntax colours. The tile uses the
+midnight blues of Sail, Manuel's browser, so the two apps look like one
+family: Sail is the sail, Keel is the boat.
 """
 
 import shutil
@@ -23,90 +24,124 @@ OUT = Path(__file__).resolve().parent
 
 # Apple's icon grid: a 1024 canvas with an 824 tile whose corners are 185.4.
 APPLE_MARGIN = 100
-RADIUS_RATIO = 185.4 / 824
+TILE = 1024 - 2 * APPLE_MARGIN
+RADIUS = 185.4
 # Sail's "blu-notte" palette: gradient top and bottom.
 TILE_TOP = '#1E2B47'
 TILE_BOTTOM = '#070B14'
-GLYPH = '#FFFFFF'
 
-# The glyph on a 1024 canvas, centred on 512.
-DECK_Y = 308          # the deck line, the top of the hull
-HULL_LEFT = 232
-HULL_RIGHT = 792
-HULL_BOTTOM = 468     # the lowest point of the hull
-FIN_TOP = 450         # inside the hull, so the two join cleanly
-FIN_BOTTOM = 640
-FIN_TOP_HALF = 34     # the fin narrows towards the bulb
-FIN_BOTTOM_HALF = 26
-BULB_Y = 664
-BULB_RX = 74
-BULB_RY = 54
+# The boat on the 1024 canvas: a sail and a hull, each folded in two, with
+# the light coming from the left.
+SAIL_TOP = (512, 220)
+SAIL_BASE = 548
+SAIL_HALF = 160
+HULL_TOP = 548
+HULL_BOTTOM = 760
+HULL_HALF_TOP = 362
+HULL_HALF_BOTTOM = 226
 
+FACETS = {
+    'sail-left': (f'M512 {SAIL_TOP[1]} L {512 - SAIL_HALF} {SAIL_BASE} H 512 Z', '#FFFFFF'),
+    'sail-right': (f'M512 {SAIL_TOP[1]} L 512 {SAIL_BASE} H {512 + SAIL_HALF} Z', '#B3C8EC'),
+    'hull-left': (f'M{512 - HULL_HALF_TOP} {HULL_TOP} H 512 V {HULL_BOTTOM} '
+                  f'H {512 - HULL_HALF_BOTTOM} Z', '#E4EDFB'),
+    'hull-right': (f'M512 {HULL_TOP} H {512 + HULL_HALF_TOP} L {512 + HULL_HALF_BOTTOM} '
+                   f'{HULL_BOTTOM} H 512 Z', '#86A3D8'),
+}
 
-def fmt(value):
-    return f'{value:.2f}'.rstrip('0').rstrip('.')
+PINK, BLUE, GREEN, VIOLET = '#FF5FA2', '#3B82F6', '#1F9D7A', '#8B5CF6'
+SHADE = '#24365E'
+# The lines of code printed on the paper: (facet, x, y, width, colour,
+# opacity). Each facet clips its lines, as a fold would.
+CODE = [
+    ('sail-left', 430, 380, 90, PINK, 0.85),
+    ('sail-left', 400, 420, 60, BLUE, 0.85),
+    ('sail-left', 470, 420, 50, GREEN, 0.85),
+    ('sail-left', 380, 460, 140, VIOLET, 0.7),
+    ('sail-left', 360, 500, 70, PINK, 0.85),
+    ('sail-left', 440, 500, 80, BLUE, 0.8),
+    ('sail-right', 520, 380, 40, SHADE, 0.32),
+    ('sail-right', 520, 420, 90, SHADE, 0.32),
+    ('sail-right', 520, 460, 70, SHADE, 0.32),
+    ('sail-right', 520, 500, 110, SHADE, 0.32),
+    ('hull-left', 200, 590, 120, BLUE, 0.75),
+    ('hull-left', 330, 590, 90, PINK, 0.8),
+    ('hull-left', 260, 630, 160, GREEN, 0.75),
+    ('hull-left', 260, 670, 70, VIOLET, 0.7),
+    ('hull-left', 340, 670, 130, BLUE, 0.7),
+    ('hull-left', 300, 710, 100, PINK, 0.75),
+    ('hull-right', 540, 590, 150, SHADE, 0.28),
+    ('hull-right', 540, 630, 220, SHADE, 0.28),
+    ('hull-right', 540, 670, 120, SHADE, 0.28),
+    ('hull-right', 540, 710, 160, SHADE, 0.28),
+]
+LINE_HEIGHT = 20
 
-
-def glyph_paths(scale=1.0, dx=0.0, dy=0.0):
-    """The glyph as SVG elements, scaled and moved."""
-    def x(value):
-        return fmt(value * scale + dx)
-
-    def y(value):
-        return fmt(value * scale + dy)
-
-    centre = 512
-    depth = HULL_BOTTOM - DECK_Y
-    half = (HULL_RIGHT - HULL_LEFT) / 2
-    hull = (
-        f'M{x(HULL_LEFT)} {y(DECK_Y)} H{x(HULL_RIGHT)} '
-        f'C{x(HULL_RIGHT)} {y(DECK_Y + depth * 0.56)} {x(centre + half * 0.56)} {y(HULL_BOTTOM)} '
-        f'{x(centre)} {y(HULL_BOTTOM)} '
-        f'C{x(centre - half * 0.56)} {y(HULL_BOTTOM)} {x(HULL_LEFT)} {y(DECK_Y + depth * 0.56)} '
-        f'{x(HULL_LEFT)} {y(DECK_Y)} Z'
-    )
-    fin = (
-        f'M{x(centre - FIN_TOP_HALF)} {y(FIN_TOP)} H{x(centre + FIN_TOP_HALF)} '
-        f'L{x(centre + FIN_BOTTOM_HALF)} {y(FIN_BOTTOM)} H{x(centre - FIN_BOTTOM_HALF)} Z'
-    )
-    return [
-        ('path', {'d': hull}),
-        ('path', {'d': fin}),
-        ('ellipse', {'cx': x(centre), 'cy': y(BULB_Y), 'rx': fmt(BULB_RX * scale),
-                     'ry': fmt(BULB_RY * scale)}),
-    ]
-
-
-def elements(fill, **transform):
-    return ''.join(
-        f'<{tag} ' + ' '.join(f'{key}="{value}"' for key, value in attributes.items())
-        + f' fill="{fill}"/>'
-        for tag, attributes in glyph_paths(**transform)
-    )
+# Two strokes of water under the boat.
+WATER = [(286, 738, 800, 0.5), (360, 664, 846, 0.25)]
+WATER_COLOUR = '#6EA8FE'
+WATER_WIDTH = 18
 
 
-def svg(width, height, body, view_box=None):
-    view_box = view_box or f'0 0 {width} {height}'
+def svg(width, height, body, view_box='0 0 1024 1024'):
     return (f'<svg width="{width}" height="{height}" viewBox="{view_box}" '
             f'fill="none" xmlns="http://www.w3.org/2000/svg">{body}</svg>\n')
 
 
+def boat():
+    """The boat with its code and the water, in flat colours."""
+    clips = ''.join(f'<clipPath id="{name}"><path d="{path}"/></clipPath>'
+                    for name, (path, _) in FACETS.items())
+    facets = ''.join(f'<path d="{path}" fill="{colour}"/>' for path, colour in FACETS.values())
+    code = ''
+    for facet in FACETS:
+        lines = ''.join(
+            f'<rect x="{x}" y="{y}" width="{width}" height="{LINE_HEIGHT}" '
+            f'rx="{LINE_HEIGHT // 2}" fill="{colour}" fill-opacity="{opacity}"/>'
+            for name, x, y, width, colour, opacity in CODE if name == facet)
+        code += f'<g clip-path="url(#{facet})">{lines}</g>'
+    # Rounded bars rather than strokes with round caps: ImageMagick draws
+    # the caps over the line, which darkens the ends of see-through strokes.
+    half = WATER_WIDTH / 2
+    water = ''.join(
+        f'<rect x="{left - half}" y="{y - half}" width="{right - left + WATER_WIDTH}" '
+        f'height="{WATER_WIDTH}" rx="{half}" fill="{WATER_COLOUR}" fill-opacity="{opacity}"/>'
+        for left, right, y, opacity in WATER)
+    return f'<defs>{clips}</defs>{facets}{code}{water}'
+
+
+def tile_edge():
+    """A faint light line along the tile's edge."""
+    inset = 1.5
+    return (f'<rect x="{APPLE_MARGIN + inset}" y="{APPLE_MARGIN + inset}" '
+            f'width="{TILE - 2 * inset}" height="{TILE - 2 * inset}" rx="{RADIUS - inset}" '
+            f'stroke="#FFFFFF" stroke-opacity="0.08" stroke-width="3"/>')
+
+
 def mark_svg():
-    """The glyph alone, in the text colour, for use inside Keel."""
-    return svg(24, 24, elements('currentColor'), view_box='202 202 620 620')
+    """The boat's outline in one colour, for use inside Keel: sail and hull
+    with a gap between them, so it reads at 16 px."""
+    gap = 28
+    sail = f'M512 {SAIL_TOP[1]} L {512 - SAIL_HALF} {SAIL_BASE} H {512 + SAIL_HALF} Z'
+    hull = (f'M{512 - HULL_HALF_TOP} {HULL_TOP + gap} H {512 + HULL_HALF_TOP} '
+            f'L {512 + HULL_HALF_BOTTOM} {HULL_BOTTOM} H {512 - HULL_HALF_BOTTOM} Z')
+    body = f'<path d="{sail}" fill="currentColor"/><path d="{hull}" fill="currentColor"/>'
+    return svg(24, 24, body, view_box='130 108 764 764')
 
 
 def icon_svg():
-    """The vector master: tile and glyph on Apple's 1024 grid."""
-    size = 1024 - 2 * APPLE_MARGIN
-    scale = size / 1024
-    return svg(1024, 1024,
-               '<defs><linearGradient id="tile" x1="0" y1="0" x2="0" y2="1">'
-               f'<stop offset="0" stop-color="{TILE_TOP}"/>'
-               f'<stop offset="1" stop-color="{TILE_BOTTOM}"/></linearGradient></defs>'
-               f'<rect x="{APPLE_MARGIN}" y="{APPLE_MARGIN}" width="{size}" height="{size}" '
-               f'rx="{fmt(size * RADIUS_RATIO)}" fill="url(#tile)"/>'
-               + elements(GLYPH, scale=scale, dx=APPLE_MARGIN, dy=APPLE_MARGIN))
+    """The vector master: tile and boat on Apple's 1024 grid."""
+    defs = ('<defs><linearGradient id="tile" x1="0" y1="0" x2="0" y2="1">'
+            f'<stop offset="0" stop-color="{TILE_TOP}"/>'
+            f'<stop offset="1" stop-color="{TILE_BOTTOM}"/></linearGradient>'
+            '<linearGradient id="sheen" x1="0" y1="0" x2="0" y2="1">'
+            '<stop offset="0" stop-color="#FFFFFF" stop-opacity="0.10"/>'
+            '<stop offset="0.5" stop-color="#FFFFFF" stop-opacity="0"/></linearGradient></defs>')
+    tile = (f'<rect x="{APPLE_MARGIN}" y="{APPLE_MARGIN}" width="{TILE}" height="{TILE}" '
+            f'rx="{RADIUS}" fill="url(#tile)"/>'
+            f'<rect x="{APPLE_MARGIN}" y="{APPLE_MARGIN}" width="{TILE}" height="{TILE}" '
+            f'rx="{RADIUS}" fill="url(#sheen)"/>')
+    return svg(1024, 1024, defs + tile + tile_edge() + boat())
 
 
 def magick(*args):
@@ -115,18 +150,15 @@ def magick(*args):
 
 def icon_png(out, supersample=4):
     """The 1024 icon. ImageMagick's SVG renderer ignores gradients, so the
-    tile is drawn with ImageMagick primitives and the glyph on top."""
+    tile and its sheen are drawn with ImageMagick and the boat on top."""
     canvas = 1024
-    size = canvas - 2 * APPLE_MARGIN
     big = canvas * supersample
-    tile_px = size * supersample
-    radius = fmt(tile_px * RADIUS_RATIO)
-    scale = size / 1024 * supersample
+    tile_px = TILE * supersample
+    radius = RADIUS * supersample
     offset = APPLE_MARGIN * supersample
-    glyph = svg(big, big, elements(GLYPH, scale=scale, dx=offset, dy=offset))
     with tempfile.TemporaryDirectory() as tmp:
         glyph_svg = Path(tmp) / 'glyph.svg'
-        glyph_svg.write_text(glyph)
+        glyph_svg.write_text(svg(big, big, tile_edge() + boat()))
         glyph_png = Path(tmp) / 'glyph.png'
         # ImageMagick reads SVG sizes at 96 dpi; force the exact size anyway.
         magick('-background', 'none', '-density', 96, glyph_svg,
@@ -134,6 +166,9 @@ def icon_png(out, supersample=4):
         flat = Path(tmp) / 'flat.png'
         magick('-size', f'{big}x{big}', 'xc:none',
                '(', '-size', f'{tile_px}x{tile_px}', f'gradient:{TILE_TOP}-{TILE_BOTTOM}',
+               '(', '-size', f'{tile_px}x{tile_px // 2}', 'gradient:#FFFFFF1A-#FFFFFF00',
+               '-background', 'none', '-extent', f'{tile_px}x{tile_px}', ')',
+               '-compose', 'Over', '-composite',
                '(', '-size', f'{tile_px}x{tile_px}', 'xc:black', '-fill', 'white',
                '-draw', f'roundrectangle 0,0 {tile_px - 1},{tile_px - 1} {radius},{radius}', ')',
                '-alpha', 'off', '-compose', 'CopyOpacity', '-composite', ')',

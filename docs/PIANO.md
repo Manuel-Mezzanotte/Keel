@@ -300,7 +300,7 @@ Il confronto non è alla pari: Cursor aveva anche albero dei file, terminale, se
 
   Sono anche nel menu Vista. Sostituisci, nell'editor, passa da Cmd+Shift+F a Cmd+Alt+F, come in VS Code.
 - **Per ora Keel non ricorda la disposizione:** riparte con barra laterale e Claude Code aperti. Il ripristino arriva nella fase 2, insieme a schede e file.
-- **Il marchio** è la chiglia di una barca a vela vista da prua: scafo, deriva e bulbo. L'icona lo disegna in bianco sul riquadro blu notte di Sail, sulla griglia delle icone di Apple, così Keel e Sail sembrano della stessa famiglia.
+- **Il marchio** è una barchetta di carta piegata da un foglio di codice: la barca del nome, con i colori della sintassi di Keel sulla carta. Sta sul riquadro blu notte di Sail, sulla griglia delle icone di Apple, così Keel e Sail sembrano della stessa famiglia: Sail è la vela, Keel la barchetta. L'hai scelta il 15 novembre tra una decina di proposte; nella barra in alto c'è la sua sagoma in un solo colore.
   - `assets/brand/generate.py` contiene la forma e rifà marchio, icona e `Keel.icns`.
   - `scripts/bundle-macos.sh` crea `target/release/Keel.app` con l'icona, da usare sul Mac come le altre app. Non è firmata per altri computer: la pubblicazione resta per la fine.
 - **Misure dopo la 1.6:** 132 MB con VSAuto Ghost e un file TSX aperto, prima schermata in 419 ms. Sono uguali a prima della nuova disposizione.

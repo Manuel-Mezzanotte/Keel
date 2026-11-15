@@ -7,7 +7,7 @@ use gpui::{AssetSource, Result, SharedString};
 
 gpui_kit_assets::icon_assets!(ExtraIcons, [Files, GitBranch, Blocks, Sparkles, ArrowUp, X]);
 
-/// Keel's mark, the keel of a boat seen from the bow.
+/// Keel's mark, the outline of a paper boat.
 pub const LOGO: &str = "brand/keel-mark.svg";
 const LOGO_SVG: &[u8] = include_bytes!("../../../assets/brand/keel-mark.svg");
 
