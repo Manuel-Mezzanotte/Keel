@@ -1,0 +1,23 @@
+[workspace]
+resolver = "3"
+members = ["crates/*"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.100"
+publish = false
+
+[workspace.lints.clippy]
+all = { level = "warn", priority = -1 }
+
+[profile.dev]
+split-debuginfo = "unpacked"
+
+# GPUI is noticeably slow when compiled without optimizations, so dependencies
+# are optimized even in debug builds. They are built once and then cached.
+[profile.dev.package."*"]
+opt-level = 2
+
+[profile.release]
+lto = "thin"
