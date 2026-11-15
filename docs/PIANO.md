@@ -117,7 +117,7 @@ Da confermare con le misure della fase 0. Si misura con lo stesso script su Keel
 |---|---|---|---|
 | 0 | Prototipo e prova a tempo | 2–3 settimane | fatta; restano le tue prove a mano |
 | 1 | Fondamenta e design | media | fatta; restano le tue prove a mano |
-| 2 | Editor e file | grande | in corso |
+| 2 | Editor e file | grande | fatta; restano le tue prove a mano |
 | 3 | Ricerca | piccola | da fare |
 | 4 | Terminale e pannello in basso | media | da fare |
 | 5 | Git: modifiche e commit | media | da fare |
@@ -332,7 +332,7 @@ Il confronto non è alla pari: Cursor aveva anche albero dei file, terminale, se
 | 2.4 | Apertura veloce (Cmd+P) e vai alla riga (Ctrl+G) | fatta |
 | 2.5 | Scrittura: commenta, sposta e duplica righe, piega i blocchi, guide di rientro, parentesi e tag chiusi da soli, a capo, zoom, breadcrumb, sticky scroll e minimappa | fatta; sticky scroll, minimappa e pieghe da tastiera rimandate alla fase 12 |
 | 2.6 | Cambi dall'esterno e niente perso: ricarica i file cambiati fuori da Keel, salvataggio automatico, modifiche non salvate conservate, ripristino di schede e disposizione | fatta |
-| 2.7 | Altri file (immagini, binari, file molto grandi), misure e resoconto | da fare |
+| 2.7 | Altri file (immagini, binari, file molto grandi), misure e resoconto | fatta |
 
 **Note sulla 2.1**
 - **Aprire:**
@@ -506,6 +506,11 @@ Il confronto non è alla pari: Cursor aveva anche albero dei file, terminale, se
   - 50 riscritture di un file aperto e 200 file nuovi creati mentre Keel gira: nessun errore, 130 MB;
   - avviato senza percorso, Keel riapre il progetto lasciato aperto.
 
+**Note sulla 2.7**
+- **Immagini** (PNG, JPEG, GIF, WebP, BMP, ICO, SVG, TIFF): si aprono in una scheda di anteprima, adattate allo spazio, con nome e dimensione. Le estensioni non le vedono come testo.
+- **File binari:** Keel non li apre e lo dice nella barra di stato: «data.bin» non è un file di testo.
+- **File oltre 50 MB:** Keel chiede prima di aprirli.
+
 **Cosa si fa**
 - **Progetti:** apri cartella, progetti recenti, schermata iniziale, una finestra per progetto, comando `keel .` dal terminale (come `code .`).
 - **Esplora file:** albero con le icone; crea, rinomina, sposta, elimina (nel Cestino); trascina e rilascia; mostra nel Finder; copia il percorso; file ignorati da git attenuati.
@@ -521,6 +526,38 @@ Il confronto non è alla pari: Cursor aveva anche albero dei file, terminale, se
 - **Cambi dall'esterno:** quando un file cambia fuori da Keel, per esempio perché lo modifica Claude Code, si ricarica da solo. Se avevi modifiche non salvate, Keel te lo segnala.
 - **Mai perdere niente:** salvataggio automatico attivabile, modifiche non salvate conservate dopo una chiusura o un crash, ripristino di schede e disposizione.
 - **Altri file:** file molto grandi, anteprima delle immagini, avviso per i file binari.
+
+**Resoconto della fase 2**
+
+Misure del 15 novembre 2026, versione ottimizzata, con `scripts/measure-memory.sh`:
+
+| | RAM | Processi | Avvio |
+|---|---|---|---|
+| Keel su GestionaleHospitality, VSAuto Ghost caricata, 5 file `.tsx` in schede | 143 MB | 1 | prima schermata in 383 ms |
+| Keel a fine fase 0, un file aperto | 132 MB | 1 | 375 ms |
+| Cursor a fine fase 0, cartella Keel aperta | 1.616 MB | 11 | — |
+
+Con albero, schede, ricerca dei file e controllo della cartella, Keel è cresciuto di circa 11 MB. 167 test automatici, tutti verdi.
+
+**Le tue prove a mano della fase 2**
+1. Crea l'app con `scripts/bundle-macos.sh` e, dal Terminale, nella cartella di un progetto: `~/Desktop/MiniPCProgram/Keel/target/release/Keel.app/Contents/MacOS/keel .`. Da un secondo Terminale prova `keel` su un altro file: deve aprirsi nella stessa app.
+2. Esplora risorse:
+   - apri cartelle e file;
+   - crea, rinomina, sposta trascinando ed elimina, che va nel Cestino;
+   - prova il menu col tasto destro.
+3. Schede:
+   - un clic apre in anteprima, il doppio clic la tiene;
+   - Cmd+W, Cmd+Shift+T, fissa una scheda;
+   - Cmd+\\ per affiancare.
+4. Cmd+P con poche lettere, anche `nome:riga`, e Ctrl+G.
+5. Scrittura:
+   - Cmd+/ per commentare;
+   - Alt+↑/↓ e Shift+Alt+↑/↓ per spostare e duplicare righe;
+   - scrivi `<div>` in un `.tsx`;
+   - Alt+Z per andare a capo, Cmd+= e Cmd+- per lo zoom.
+6. Lascia che Claude Code modifichi un file aperto: deve aggiornarsi da solo. Con modifiche tue non salvate, al salvataggio Keel deve chiedere.
+7. Scrivi senza salvare e premi Cmd+Q: riaprendo Keel ritrovi finestre, schede e modifiche.
+8. Apri un'immagine dal progetto.
 
 **Fatto quando**
 - Apri GestionaleHospitality e ci lavori (navighi, modifichi, salvi) come in Cursor, a parte gli aiuti dei linguaggi che arrivano nella fase 6.

@@ -177,6 +177,8 @@ pub struct Strings {
     pub menu_zoom_reset: &'static str,
     pub overwrite: &'static str,
     pub use_disk_version: &'static str,
+    pub large_file_detail: &'static str,
+    pub open_anyway: &'static str,
     pub overwrite_detail: &'static str,
     pub command_toggle_sidebar: &'static str,
     pub command_toggle_panel: &'static str,
@@ -196,6 +198,8 @@ pub struct Strings {
     could_not_change: &'static str,
     go_to_line: &'static str,
     changed_on_disk: &'static str,
+    not_text: &'static str,
+    large_file: &'static str,
     overwrite_question: &'static str,
     move_question: &'static str,
     trash_question: &'static str,
@@ -300,6 +304,16 @@ impl Strings {
         self.go_to_line
             .replace("{current}", &current.to_string())
             .replace("{total}", &total.to_string())
+    }
+
+    pub fn not_text(&self, name: &str) -> String {
+        self.not_text.replace("{name}", name)
+    }
+
+    pub fn large_file_question(&self, name: &str, size: &str) -> String {
+        self.large_file
+            .replace("{name}", name)
+            .replace("{size}", size)
     }
 
     pub fn changed_on_disk(&self, name: &str) -> String {
@@ -472,6 +486,8 @@ pub const ITALIAN: Strings = Strings {
     menu_zoom_reset: "Dimensioni originali",
     overwrite: "Sovrascrivi",
     use_disk_version: "Usa la versione sul disco",
+    large_file_detail: "Aprirlo può rallentare Keel per qualche momento.",
+    open_anyway: "Apri comunque",
     overwrite_detail: "Se usi la versione sul disco, le modifiche fatte in Keel si perdono.",
     command_toggle_sidebar: "Vista: Mostra o nascondi la barra laterale",
     command_toggle_panel: "Vista: Mostra o nascondi il pannello",
@@ -491,6 +507,8 @@ pub const ITALIAN: Strings = Strings {
     could_not_change: "Operazione non riuscita su {name}: {error}",
     go_to_line: "Riga attuale {current} di {total}. Scrivi la riga, anche con :colonna",
     changed_on_disk: "«{name}» è cambiato sul disco; quando salvi, Keel ti chiede quale versione tenere",
+    not_text: "«{name}» non è un file di testo: Keel non lo apre",
+    large_file: "«{name}» è grande ({size}). Vuoi aprirlo?",
     overwrite_question: "«{name}» è cambiato sul disco dopo che Keel l'ha letto. Vuoi sovrascriverlo con le tue modifiche?",
     move_question: "Vuoi spostare «{name}» in «{folder}»?",
     trash_question: "Vuoi spostare «{name}» nel Cestino?",
@@ -629,6 +647,8 @@ pub const ENGLISH: Strings = Strings {
     menu_zoom_reset: "Reset Zoom",
     overwrite: "Overwrite",
     use_disk_version: "Use the Version on Disk",
+    large_file_detail: "Opening it may slow Keel down for a moment.",
+    open_anyway: "Open Anyway",
     overwrite_detail: "If you use the version on disk, the changes made in Keel are lost.",
     command_toggle_sidebar: "View: Toggle Sidebar",
     command_toggle_panel: "View: Toggle Panel",
@@ -648,6 +668,8 @@ pub const ENGLISH: Strings = Strings {
     could_not_change: "Could not change {name}: {error}",
     go_to_line: "Current line {current} of {total}. Type a line, with :column if you like",
     changed_on_disk: "\"{name}\" changed on disk; when you save, Keel asks which version to keep",
+    not_text: "\"{name}\" is not a text file, so Keel does not open it",
+    large_file: "\"{name}\" is large ({size}). Do you want to open it?",
     overwrite_question: "\"{name}\" changed on disk after Keel read it. Do you want to overwrite it with your changes?",
     move_question: "Do you want to move \"{name}\" into \"{folder}\"?",
     trash_question: "Do you want to move \"{name}\" to the Trash?",

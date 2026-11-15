@@ -472,7 +472,9 @@ impl Workbench {
         if self.views_of(uri) > 0 {
             return;
         }
-        if self.documents.remove(uri).is_some() {
+        let removed = self.documents.remove(uri);
+        // Extensions never knew about images.
+        if removed.is_some_and(|document| !matches!(document.backing, Backing::Image(_))) {
             self.notify_host("documents/closed", json!({ "uri": uri }));
         }
         self.forget_backup(uri);

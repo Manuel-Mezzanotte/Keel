@@ -40,10 +40,10 @@ impl Workbench {
                 let mut active = 0;
                 let mut tabs = Vec::new();
                 for (index, tab) in group.tabs.iter().enumerate() {
-                    let Some(Backing::File(file)) = self
+                    let Some(path) = self
                         .documents
                         .get(&tab.uri)
-                        .map(|document| &document.backing)
+                        .and_then(|document| document.disk_path())
                     else {
                         continue;
                     };
@@ -51,7 +51,7 @@ impl Workbench {
                         active = tabs.len();
                     }
                     tabs.push(TabState {
-                        path: file.path().to_path_buf(),
+                        path: path.to_path_buf(),
                         pinned: tab.pinned,
                     });
                 }
@@ -104,7 +104,7 @@ impl Workbench {
             let path = match &document.backing {
                 Backing::File(file) => Some(file.path().to_path_buf()),
                 Backing::Untitled => None,
-                Backing::Extension => continue,
+                Backing::Extension | Backing::Image(_) => continue,
             };
             if !document.modified {
                 session::remove_backup(&folder, &document.uri);
@@ -191,15 +191,9 @@ impl Workbench {
         for group in &state.groups {
             let column = self.groups.len();
             for tab in group.tabs.iter().filter(|tab| tab.path.is_file()) {
-                let uri = Uri::file(&tab.path).to_string();
-                if !self.documents.contains_key(&uri) {
-                    match Document::open(&tab.path) {
-                        Ok(document) => {
-                            self.add_file_document(document);
-                        }
-                        Err(_) => continue,
-                    }
-                }
+                let Ok(uri) = self.load_document(&tab.path) else {
+                    continue;
+                };
                 self.push_tab(column, &uri, tab.pinned, window, cx);
             }
             if column < self.groups.len() {
@@ -267,7 +261,7 @@ impl Workbench {
         document.modified = match &document.backing {
             Backing::File(file) => file.is_modified(text),
             Backing::Untitled => !text.is_empty(),
-            Backing::Extension => false,
+            Backing::Extension | Backing::Image(_) => false,
         };
         document.synced_text = text.to_owned();
         document.version += 1;

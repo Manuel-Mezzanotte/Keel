@@ -829,10 +829,7 @@ impl Workbench {
             .unwrap_or(true);
         let root = self.project.root.as_ref()?;
         let pane = self.panes.get(group)?;
-        let path = match &self.documents.get(&pane.uri)?.backing {
-            Backing::File(file) => file.path().to_path_buf(),
-            _ => return None,
-        };
+        let path = self.documents.get(&pane.uri)?.disk_path()?.to_path_buf();
         let relative = path.strip_prefix(root).ok()?;
         if !enabled {
             return None;
@@ -921,16 +918,26 @@ impl Workbench {
                     |pane, crumbs| pane.child(crumbs),
                 )
                 .child(
-                    div()
-                        .flex_1()
-                        .min_h_0()
-                        .key_context(super::EDITOR_CONTEXT)
-                        .child(
-                            Editor::new(&pane.editor)
-                                .size_full()
-                                .bordered(false)
-                                .text_size(px(self.font_size)),
-                        ),
+                    match self
+                        .documents
+                        .get(&pane.uri)
+                        .map(|document| &document.backing)
+                    {
+                        Some(Backing::Image(path)) => div()
+                            .flex_1()
+                            .min_h_0()
+                            .child(self.render_image(path, colors)),
+                        _ => div()
+                            .flex_1()
+                            .min_h_0()
+                            .key_context(super::EDITOR_CONTEXT)
+                            .child(
+                                Editor::new(&pane.editor)
+                                    .size_full()
+                                    .bordered(false)
+                                    .text_size(px(self.font_size)),
+                            ),
+                    },
                 )
         });
 
@@ -1136,7 +1143,15 @@ impl Workbench {
         if let Some(message) = &self.status_message {
             left.push(message.clone());
         }
-        if let Some(pane) = self.panes.get(self.active) {
+        let image = self.panes.get(self.active).is_some_and(|pane| {
+            matches!(
+                self.documents
+                    .get(&pane.uri)
+                    .map(|document| &document.backing),
+                Some(Backing::Image(_))
+            )
+        });
+        if let Some(pane) = self.panes.get(self.active).filter(|_| !image) {
             let position = pane.editor.read(cx).cursor_position();
             right.push(
                 strings.line_column(position.line as usize + 1, position.character as usize + 1),

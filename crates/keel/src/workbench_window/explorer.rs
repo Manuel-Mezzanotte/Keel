@@ -242,10 +242,10 @@ impl Workbench {
 
     fn active_file_path(&self) -> Option<PathBuf> {
         let pane = self.panes.get(self.active)?;
-        match &self.documents.get(&pane.uri)?.backing {
-            Backing::File(document) => Some(document.path().to_path_buf()),
-            _ => None,
-        }
+        self.documents
+            .get(&pane.uri)?
+            .disk_path()
+            .map(Path::to_path_buf)
     }
 
     fn selected_index(&self) -> Option<usize> {
@@ -570,8 +570,8 @@ impl Workbench {
             .documents
             .values()
             .filter_map(|document| match &document.backing {
-                Backing::File(file) => {
-                    let rest = file.path().strip_prefix(from).ok()?;
+                Backing::File(_) | Backing::Image(_) => {
+                    let rest = document.disk_path()?.strip_prefix(from).ok()?;
                     let target = if rest.as_os_str().is_empty() {
                         to.to_path_buf()
                     } else {
@@ -587,8 +587,10 @@ impl Workbench {
                 continue;
             };
             let new_uri = Uri::file(&target).to_string();
-            if let Backing::File(file) = &mut document.backing {
-                file.set_path(target.clone());
+            match &mut document.backing {
+                Backing::File(file) => file.set_path(target.clone()),
+                Backing::Image(path) => *path = target.clone(),
+                Backing::Untitled | Backing::Extension => {}
             }
             document.uri = new_uri.clone();
             document.language_id = language::vscode_id_for_path(&target).to_owned();

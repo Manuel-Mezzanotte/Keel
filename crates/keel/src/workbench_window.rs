@@ -5,6 +5,7 @@ mod disk;
 mod editing;
 pub(crate) mod explorer;
 mod navigation;
+mod other_files;
 mod restore;
 mod shell;
 mod tabs;
@@ -173,6 +174,19 @@ enum Backing {
     Untitled,
     /// Owned by an extension's file system, such as `vsauto-ghost:`.
     Extension,
+    /// An image shown in a preview; extensions never see it.
+    Image(PathBuf),
+}
+
+impl OpenDocument {
+    /// The file on disk behind the document, for files and images.
+    fn disk_path(&self) -> Option<&Path> {
+        match &self.backing {
+            Backing::File(file) => Some(file.path()),
+            Backing::Image(path) => Some(path),
+            Backing::Untitled | Backing::Extension => None,
+        }
+    }
 }
 
 struct OpenDocument {
@@ -253,6 +267,8 @@ pub struct Workbench {
     groups: Vec<Group>,
     /// Files closed lately, for Reopen Closed Editor.
     closed: Vec<String>,
+    /// Very large files the user agreed to open.
+    large_files_ok: other_files::LargeFilesOk,
     /// Where the session and the backups are kept, if anywhere.
     data_dir: Option<PathBuf>,
     /// True while the session comes back, so it is not written meanwhile.
@@ -374,6 +390,7 @@ impl Workbench {
             language,
             groups: Vec::new(),
             closed: Vec::new(),
+            large_files_ok: Default::default(),
             data_dir: None,
             restoring: false,
             session_task: Task::ready(()),
@@ -452,18 +469,13 @@ impl Workbench {
         let path = std::path::absolute(path).unwrap_or_else(|_| path.to_path_buf());
         let uri = Uri::file(&path).to_string();
         if !self.documents.contains_key(&uri) {
-            match Document::open(&path) {
-                Ok(document) => {
-                    self.add_file_document(document);
-                }
-                Err(error) => {
-                    let message = self
-                        .strings()
-                        .could_not_open(&path.display().to_string(), &error.to_string());
-                    self.report(message);
-                    cx.notify();
-                    return;
-                }
+            if !self.large_file_ok(&path, open_as, window, cx) {
+                return;
+            }
+            if let Err(message) = self.load_document(&path) {
+                self.report(message);
+                cx.notify();
+                return;
             }
         }
         let column = self.active.min(self.panes.len().saturating_sub(1));
@@ -697,7 +709,7 @@ impl Workbench {
         document.modified = match &document.backing {
             Backing::File(file) => file.is_modified(&text),
             Backing::Untitled => !text.is_empty(),
-            Backing::Extension => false,
+            Backing::Extension | Backing::Image(_) => false,
         };
         let params = json!({
             "uri": uri,
@@ -781,6 +793,14 @@ impl Workbench {
             .panes
             .iter()
             .enumerate()
+            .filter(|(_, pane)| {
+                !matches!(
+                    self.documents
+                        .get(&pane.uri)
+                        .map(|document| &document.backing),
+                    Some(Backing::Image(_))
+                )
+            })
             .map(|(index, pane)| {
                 json!({
                     "id": pane.editor_id,
@@ -870,6 +890,7 @@ impl Workbench {
         match &document.backing {
             Backing::File(_) => self.save_file(uri, after, window, cx),
             Backing::Untitled => self.save_as(uri.to_owned(), text, after, window, cx),
+            Backing::Image(_) => {}
             Backing::Extension => {
                 if let Some(extensions) = &self.extensions {
                     let write = extensions
@@ -2094,7 +2115,19 @@ impl Workbench {
         }
         let host = extensions.host.clone();
         let content_providers = extensions.content_providers.clone();
-        let uris: Vec<String> = self.panes.iter().map(|pane| pane.uri.clone()).collect();
+        let uris: Vec<String> = self
+            .panes
+            .iter()
+            .filter(|pane| {
+                !matches!(
+                    self.documents
+                        .get(&pane.uri)
+                        .map(|document| &document.backing),
+                    Some(Backing::Image(_))
+                )
+            })
+            .map(|pane| pane.uri.clone())
+            .collect();
         self.gutter_refresh = cx.spawn_in(window, async move |this, cx| {
             cx.background_executor()
                 .timer(Duration::from_millis(120))
