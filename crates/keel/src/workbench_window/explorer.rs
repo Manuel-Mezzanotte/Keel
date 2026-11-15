@@ -271,11 +271,14 @@ impl Workbench {
             self.tree_changed();
             self.tree_focus.focus(window, cx);
         } else {
-            // One click shows the file and keeps the keyboard in the tree;
-            // a double click moves to the editor.
-            self.open_file(&row.path, window, cx);
+            // One click shows the file in a preview tab and keeps the
+            // keyboard in the tree; a double click keeps the tab and moves
+            // to the editor.
             if event.click_count() < 2 {
+                self.open_file_as(&row.path, OpenAs::Preview, window, cx);
                 self.tree_focus.focus(window, cx);
+            } else {
+                self.open_file_as(&row.path, OpenAs::Normal, window, cx);
             }
         }
         cx.notify();
@@ -587,9 +590,7 @@ impl Workbench {
                 }),
             );
             self.documents.insert(new_uri.clone(), document);
-            for pane in self.panes.iter_mut().filter(|pane| pane.uri == old_uri) {
-                pane.uri = new_uri.clone();
-            }
+            self.retarget_uri(&old_uri, &new_uri);
             if self.tree_selection.as_deref() == Some(from) {
                 self.tree_selection = Some(to.to_path_buf());
             }

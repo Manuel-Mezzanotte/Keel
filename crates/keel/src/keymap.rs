@@ -8,6 +8,11 @@ use serde_json::Value;
 
 use crate::workbench_window::explorer;
 use crate::workbench_window::{
+    CloseAllEditors, CloseEditor, CloseEditorsInGroup, CloseOtherEditors, FocusGroup1, FocusGroup2,
+    FocusGroup3, KeepEditor, NextEditor, PreviousEditor, ReopenClosedEditor, SplitEditor,
+    TogglePinEditor,
+};
+use crate::workbench_window::{
     CloseWindow, NewFile, NewWindow, Open, OpenRecent, Quit, Save, SelectLanguage, SelectTheme,
     ShowCommands, ShowExplorer, ShowExtensions, ShowSearch, ShowSourceControl, ToggleAgent,
     ToggleOutput, TogglePanel, ToggleProblems, ToggleSidebar, ToggleTerminal,
@@ -31,7 +36,7 @@ pub const COMMANDS: &[KeelCommand] = &[
     KeelCommand {
         id: "workbench.action.closeWindow",
         action: || Box::new(CloseWindow),
-        default_key: Some("cmd+w"),
+        default_key: Some("cmd+shift+w"),
     },
     KeelCommand {
         id: "workbench.action.quit",
@@ -122,6 +127,71 @@ pub const COMMANDS: &[KeelCommand] = &[
         id: "workbench.action.openRecent",
         action: || Box::new(OpenRecent),
         default_key: Some("ctrl+r"),
+    },
+    KeelCommand {
+        id: "workbench.action.closeActiveEditor",
+        action: || Box::new(CloseEditor),
+        default_key: Some("cmd+w"),
+    },
+    KeelCommand {
+        id: "workbench.action.closeOtherEditors",
+        action: || Box::new(CloseOtherEditors),
+        default_key: Some("cmd+alt+t"),
+    },
+    KeelCommand {
+        id: "workbench.action.closeEditorsInGroup",
+        action: || Box::new(CloseEditorsInGroup),
+        default_key: Some("cmd+k w"),
+    },
+    KeelCommand {
+        id: "workbench.action.closeAllEditors",
+        action: || Box::new(CloseAllEditors),
+        default_key: Some("cmd+k cmd+w"),
+    },
+    KeelCommand {
+        id: "workbench.action.reopenClosedEditor",
+        action: || Box::new(ReopenClosedEditor),
+        default_key: Some("cmd+shift+t"),
+    },
+    KeelCommand {
+        id: "workbench.action.pinEditor",
+        action: || Box::new(TogglePinEditor),
+        default_key: Some("cmd+k shift+enter"),
+    },
+    KeelCommand {
+        id: "workbench.action.keepEditor",
+        action: || Box::new(KeepEditor),
+        default_key: Some("cmd+k enter"),
+    },
+    KeelCommand {
+        id: "workbench.action.nextEditor",
+        action: || Box::new(NextEditor),
+        default_key: Some("cmd+alt+right"),
+    },
+    KeelCommand {
+        id: "workbench.action.previousEditor",
+        action: || Box::new(PreviousEditor),
+        default_key: Some("cmd+alt+left"),
+    },
+    KeelCommand {
+        id: "workbench.action.splitEditor",
+        action: || Box::new(SplitEditor),
+        default_key: Some("cmd+\\"),
+    },
+    KeelCommand {
+        id: "workbench.action.focusFirstEditorGroup",
+        action: || Box::new(FocusGroup1),
+        default_key: Some("cmd+1"),
+    },
+    KeelCommand {
+        id: "workbench.action.focusSecondEditorGroup",
+        action: || Box::new(FocusGroup2),
+        default_key: Some("cmd+2"),
+    },
+    KeelCommand {
+        id: "workbench.action.focusThirdEditorGroup",
+        action: || Box::new(FocusGroup3),
+        default_key: Some("cmd+3"),
     },
     KeelCommand {
         id: "explorer.newFile",
@@ -327,7 +397,7 @@ mod tests {
         let (bindings, warnings) =
             read_user_bindings(Path::new("/nonexistent/keel/keybindings.json"));
         assert!(bindings.is_empty() && warnings.is_empty());
-        assert_eq!(keel_bindings(&[]).len(), 19);
+        assert_eq!(keel_bindings(&[]).len(), 32);
     }
 
     #[test]

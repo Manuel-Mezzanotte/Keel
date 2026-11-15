@@ -328,7 +328,7 @@ Il confronto non è alla pari: Cursor aveva anche albero dei file, terminale, se
 |---|---|---|
 | 2.1 | Progetti: `keel cartella` e `keel .`, File → Apri, una finestra per progetto, un solo Keel aperto, progetti recenti, schermata iniziale | fatta |
 | 2.2 | Esplora risorse: albero con le icone, file ignorati attenuati; nuovo file e cartella, rinomina, elimina nel Cestino, sposta trascinando, mostra nel Finder, copia il percorso | fatta |
-| 2.3 | Schede: più file per gruppo, anteprima, fissate, chiudi le altre, riapri l'ultima chiusa; editor affiancati e gruppi | da fare |
+| 2.3 | Schede: più file per gruppo, anteprima, fissate, chiudi le altre, riapri l'ultima chiusa; editor affiancati e gruppi | fatta |
 | 2.4 | Apertura veloce (Cmd+P) e vai alla riga (Ctrl+G) | da fare |
 | 2.5 | Scrittura: commenta, sposta e duplica righe, piega i blocchi, guide di rientro, parentesi e tag chiusi da soli, a capo, zoom, breadcrumb, sticky scroll e minimappa | da fare |
 | 2.6 | Cambi dall'esterno e niente perso: ricarica i file cambiati fuori da Keel, salvataggio automatico, modifiche non salvate conservate, ripristino di schede e disposizione | da fare |
@@ -389,6 +389,42 @@ Il confronto non è alla pari: Cursor aveva anche albero dei file, terminale, se
 - **Spostare trascinando** chiede conferma. Eliminare sposta nel Cestino, sempre dopo una conferma: niente si cancella per sempre.
 - **I file aperti seguono** rinomine e spostamenti, anche quelli dentro una cartella spostata.
 - **Aggiornamento:** quando torni su Keel l'albero si rilegge, per vedere i file creati da altri, per esempio da Claude Code. Il controllo continuo arriva con la 2.6.
+
+**Note sulla 2.3**
+- **Gruppi e schede:**
+  - ogni colonna dell'area degli editor è un gruppo con le sue schede;
+  - le schede nascoste tengono il loro editor, con cursore, scorrimento e annullamenti;
+  - se un file cambia mentre la sua scheda è nascosta, per esempio per un'estensione, la scheda si aggiorna quando torna in vista.
+- **Anteprima:**
+  - un clic nell'Esplora risorse apre il file in una scheda in corsivo, che lascia il posto al prossimo file aperto così;
+  - scriverci dentro o fare doppio clic sulla scheda la mantiene;
+  - si spegne con `workbench.editor.enablePreview`.
+- **Chiudere:**
+  - chiudere l'ultima scheda di un file con modifiche chiede se salvare;
+  - un file non più in nessuna scheda si chiude anche per le estensioni;
+  - senza schede torna la schermata iniziale.
+- **Schede fissate:** stanno all'inizio, con la puntina. Chiudi gli altri, Chiudi quelli a destra e Chiudi tutti le lasciano aperte, come i file non salvati, così niente si perde senza chiedere.
+- **Editor affiancati:** Dividi l'editor (Cmd+\\) apre lo stesso file in un gruppo a destra, e i due lati restano allineati mentre scrivi.
+- **Scorciatoie come in VS Code sul Mac:**
+
+  | Tasti | Cosa fa |
+  |---|---|
+  | Cmd+W | chiude la scheda (senza schede, la finestra) |
+  | Cmd+Shift+W | chiude la finestra |
+  | Cmd+Alt+T | chiude le altre |
+  | Cmd+K W | chiude il gruppo |
+  | Cmd+K Cmd+W | chiude tutto |
+  | Cmd+Shift+T | riapre l'ultima chiusa |
+  | Cmd+K Shift+Invio | fissa o sblocca |
+  | Cmd+K Invio | mantiene l'anteprima |
+  | Cmd+Alt+→ e Cmd+Alt+← | scheda successiva e precedente |
+  | Cmd+1, Cmd+2, Cmd+3 | vai al gruppo |
+
+- **Sulla scheda:**
+  - menu col tasto destro: chiudi, chiudi gli altri, chiudi quelli a destra, chiudi tutti, fissa, dividi a destra, copia percorso, mostra nel Finder;
+  - il clic con la rotella chiude la scheda;
+  - un pallino segna le modifiche non salvate.
+- **Per ora non si fa:** trascinare le schede per riordinarle o spostarle tra i gruppi.
 
 **Cosa si fa**
 - **Progetti:** apri cartella, progetti recenti, schermata iniziale, una finestra per progetto, comando `keel .` dal terminale (come `code .`).

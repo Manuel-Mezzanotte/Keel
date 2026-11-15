@@ -7,6 +7,7 @@ use gpui::{
     TitlebarOptions, WindowBounds, WindowOptions, point, size, svg,
 };
 use gpui_component::button::{Button, ButtonVariants as _};
+use gpui_component::menu::ContextMenuExt as _;
 use gpui_component::{Disableable as _, Icon, Selectable as _, Sizable as _, TitleBar};
 use gpui_kit_assets::IconName;
 
@@ -200,16 +201,6 @@ impl Workbench {
         }
         let column = self.active.min(self.panes.len().saturating_sub(1));
         self.open_in_pane(uri, column, true, window, cx);
-        self.publish_editors(window, cx);
-        self.refresh_title(window);
-        cx.notify();
-    }
-
-    fn activate_pane(&mut self, index: usize, window: &mut Window, cx: &mut Context<Self>) {
-        if index >= self.panes.len() {
-            return;
-        }
-        self.focus_pane(index, window, cx);
         self.publish_editors(window, cx);
         self.refresh_title(window);
         cx.notify();
@@ -646,50 +637,175 @@ impl Workbench {
             .into_any_element()
     }
 
-    fn render_editors(&self, colors: Colors, cx: &mut Context<Self>) -> Div {
+    /// A tab: pinned, preview in italics, a dot for unsaved changes, and a
+    /// close button on the tab in view or under the pointer.
+    fn render_tab(
+        &self,
+        group: usize,
+        index: usize,
+        tab: &super::tabs::Tab,
+        colors: Colors,
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
+        use super::tabs::{TabAction, TabCommand};
         let strings = self.strings();
-        let panes = self.panes.iter().enumerate().map(|(index, pane)| {
-            let name = self
-                .documents
-                .get(&pane.uri)
-                .map(|document| {
-                    if document.modified {
-                        format!("{} ●", self.display_name(document))
-                    } else {
-                        self.display_name(document)
-                    }
-                })
-                .unwrap_or_default();
-            let is_active = index == self.active;
-            let tab = div()
-                .id(("tab", index))
-                .h(px(28.))
-                .pl_3()
-                .pr_1()
+        let (name, modified) = self
+            .documents
+            .get(&tab.uri)
+            .map(|document| (self.display_name(document), document.modified))
+            .unwrap_or_default();
+        let in_view = self.groups[group].active == index;
+        let focused_group = group == self.active;
+        let hover_group: gpui::SharedString = format!("tab-{group}-{index}").into();
+        let close = Button::new(("close-tab", group * 1000 + index))
+            .ghost()
+            .xsmall()
+            .icon(Icon::new(if tab.pinned {
+                IconName::Pin
+            } else {
+                IconName::X
+            }))
+            .tooltip(if tab.pinned {
+                strings.tab_unpin
+            } else {
+                strings.close_editor
+            })
+            .on_click(cx.listener(move |this, _, window, cx| {
+                let command = if this.groups[group].tabs[index].pinned {
+                    TabCommand::TogglePin
+                } else {
+                    TabCommand::Close
+                };
+                this.run_tab_command(
+                    &TabAction {
+                        group,
+                        tab: index,
+                        command,
+                    },
+                    window,
+                    cx,
+                )
+            }));
+        let marker = if modified && !tab.pinned {
+            div()
+                .size(px(16.))
                 .flex()
                 .items_center()
-                .gap_1()
-                .rounded(px(8.))
-                .text_sm()
-                .text_color(if is_active { colors.text } else { colors.muted })
-                .when(is_active, |tab| tab.bg(colors.selected))
-                .cursor_pointer()
-                .on_click(
-                    cx.listener(move |this, _, window, cx| this.activate_pane(index, window, cx)),
-                )
-                .child(name)
-                .child(
-                    Button::new(("close-tab", index))
-                        .ghost()
-                        .xsmall()
-                        .icon(Icon::new(IconName::X))
-                        .tooltip(strings.close_editor)
-                        .on_click(cx.listener(move |this, _, window, cx| {
-                            if index < this.panes.len() {
-                                this.close_pane(index, window, cx);
-                            }
-                        })),
-                );
+                .justify_center()
+                .group_hover(hover_group.clone(), |marker| marker.invisible())
+                .child(div().size(px(7.)).rounded_full().bg(colors.muted))
+                .into_any_element()
+        } else {
+            div().into_any_element()
+        };
+        let focus = self.focus_handle.clone();
+        let menu_entry = move |label: &'static str, command: TabCommand| {
+            (
+                label,
+                Box::new(TabAction {
+                    group,
+                    tab: index,
+                    command,
+                }) as Box<dyn gpui::Action>,
+            )
+        };
+        let pin_label = if tab.pinned {
+            strings.tab_unpin
+        } else {
+            strings.tab_pin
+        };
+        let entries = [
+            menu_entry(strings.close_editor, TabCommand::Close),
+            menu_entry(strings.tab_close_others, TabCommand::CloseOthers),
+            menu_entry(strings.tab_close_right, TabCommand::CloseToTheRight),
+            menu_entry(strings.tab_close_all, TabCommand::CloseAll),
+            menu_entry(pin_label, TabCommand::TogglePin),
+            menu_entry(strings.tab_split, TabCommand::Split),
+            menu_entry(strings.explorer_copy_path, TabCommand::CopyPath),
+            menu_entry(strings.explorer_reveal, TabCommand::Reveal),
+        ];
+        div()
+            .id(("tab", group * 1000 + index))
+            .group(hover_group.clone())
+            .flex_none()
+            .h(px(28.))
+            .pl_3()
+            .pr_1()
+            .flex()
+            .items_center()
+            .gap_1()
+            .rounded(px(8.))
+            .text_sm()
+            .text_color(if in_view { colors.text } else { colors.muted })
+            .when(in_view && focused_group, |tab| tab.bg(colors.selected))
+            .when(in_view && !focused_group, |tab| tab.bg(colors.hover))
+            .when(!in_view, |tab| tab.hover(|tab| tab.bg(colors.hover)))
+            .cursor_pointer()
+            .on_click(
+                cx.listener(move |this, event: &gpui::ClickEvent, window, cx| {
+                    if event.click_count() >= 2
+                        && let Some(tab) = this
+                            .groups
+                            .get_mut(group)
+                            .and_then(|g| g.tabs.get_mut(index))
+                    {
+                        tab.preview = false;
+                    }
+                    this.activate_tab(group, index, true, window, cx)
+                }),
+            )
+            .on_mouse_down(
+                gpui::MouseButton::Middle,
+                cx.listener(move |this, _, window, cx| this.close_tab(group, index, window, cx)),
+            )
+            .context_menu(move |menu, _, _| {
+                let mut menu = menu.action_context(focus.clone());
+                for (position, (label, action)) in entries.iter().enumerate() {
+                    if position == 4 || position == 6 {
+                        menu = menu.separator();
+                    }
+                    menu = menu.menu(*label, action.boxed_clone());
+                }
+                menu
+            })
+            .when(tab.pinned, |row| {
+                row.child(Icon::new(IconName::Pin).xsmall().text_color(colors.faint))
+            })
+            .child(
+                div()
+                    .whitespace_nowrap()
+                    .when(tab.preview, |name| name.italic())
+                    .child(name),
+            )
+            .child(
+                div()
+                    .size(px(20.))
+                    .flex()
+                    .items_center()
+                    .justify_center()
+                    .child(marker)
+                    .child(
+                        div()
+                            .absolute()
+                            .when(!in_view || (modified && !tab.pinned), |button| {
+                                button
+                                    .invisible()
+                                    .group_hover(hover_group.clone(), |button| button.visible())
+                            })
+                            .child(close),
+                    ),
+            )
+            .into_any_element()
+    }
+
+    fn render_editors(&self, colors: Colors, cx: &mut Context<Self>) -> Div {
+        let panes = self.panes.iter().enumerate().map(|(index, pane)| {
+            let tabs: Vec<AnyElement> = self.groups[index]
+                .tabs
+                .iter()
+                .enumerate()
+                .map(|(position, tab)| self.render_tab(index, position, tab, colors, cx))
+                .collect();
             div()
                 .flex_1()
                 .min_w_0()
@@ -701,12 +817,15 @@ impl Workbench {
                 })
                 .child(
                     div()
+                        .id(("tab-strip", index))
                         .h(px(38.))
                         .flex_none()
                         .px_2()
                         .flex()
                         .items_center()
-                        .child(tab),
+                        .gap_0p5()
+                        .overflow_x_scroll()
+                        .children(tabs),
                 )
                 .child(
                     div()
@@ -1007,6 +1126,7 @@ impl Render for Workbench {
         let status = self.render_status_bar(colors, cx);
 
         let root = div().track_focus(&self.focus_handle);
+        let root = self.tab_actions(root, cx);
         self.explorer_actions(root, cx)
             .size_full()
             .flex()

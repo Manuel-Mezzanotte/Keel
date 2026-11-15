@@ -3,6 +3,14 @@
 
 pub(crate) mod explorer;
 mod shell;
+mod tabs;
+
+pub(crate) use tabs::{
+    CloseAllEditors, CloseEditor, CloseEditorsInGroup, CloseOtherEditors, FocusGroup1, FocusGroup2,
+    FocusGroup3, KeepEditor, NextEditor, PreviousEditor, ReopenClosedEditor, SplitEditor,
+    TogglePinEditor,
+};
+use tabs::{Group, OpenAs};
 
 pub(crate) use shell::window_options;
 
@@ -219,6 +227,10 @@ enum AfterConfirm {
 pub struct Workbench {
     settings: Settings,
     language: UiLanguage,
+    /// The editor groups, one per pane, with their tabs.
+    groups: Vec<Group>,
+    /// Files closed lately, for Reopen Closed Editor.
+    closed: Vec<String>,
     project: Project,
     layout: Layout,
     installed: Vec<ExtensionSummary>,
@@ -307,6 +319,8 @@ impl Workbench {
         let mut workbench = Self {
             settings,
             language,
+            groups: Vec::new(),
+            closed: Vec::new(),
             project,
             layout: Layout::default(),
             installed: Vec::new(),
@@ -356,6 +370,17 @@ impl Workbench {
     /// Opens a file in the active pane, or brings it forward if a pane
     /// already shows it. A missing file opens empty and is created on save.
     pub fn open_file(&mut self, path: &Path, window: &mut Window, cx: &mut Context<Self>) {
+        self.open_file_as(path, OpenAs::Normal, window, cx);
+    }
+
+    /// Opens a file in the active group, in a preview tab or a normal one.
+    fn open_file_as(
+        &mut self,
+        path: &Path,
+        open_as: OpenAs,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
         let path = std::path::absolute(path).unwrap_or_else(|_| path.to_path_buf());
         let uri = Uri::file(&path).to_string();
         if !self.documents.contains_key(&uri) {
@@ -374,7 +399,7 @@ impl Workbench {
             }
         }
         let column = self.active.min(self.panes.len().saturating_sub(1));
-        self.open_in_pane(&uri, column, true, window, cx);
+        self.show_tab(&uri, column, open_as, true, window, cx);
     }
 
     /// Opens a new untitled document in the active pane.
@@ -516,8 +541,8 @@ impl Workbench {
             .position(|pane| pane.editor_id == editor_id)
     }
 
-    /// Shows a loaded document in the pane at `column`, creating the pane
-    /// when needed. Returns the editor id extensions know the pane by.
+    /// Shows a loaded document in group `column`, creating the group when
+    /// needed. Returns the editor id extensions know it by.
     fn open_in_pane(
         &mut self,
         uri: &str,
@@ -526,65 +551,7 @@ impl Workbench {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> String {
-        if let Some(index) = self.pane_index(uri) {
-            if focus {
-                self.focus_pane(index, window, cx);
-            }
-            return self.panes[index].editor_id.clone();
-        }
-        let Some(document) = self.documents.get(uri) else {
-            return String::new();
-        };
-        let language = Language::for_vscode_id(&document.language_id);
-        let text = document.synced_text.clone();
-        let tab_size = self.tab_size();
-        let soft_wrap = self
-            .settings
-            .string("editor.wordWrap")
-            .is_some_and(|wrap| wrap != "off");
-        let editor = cx.new(|cx| {
-            EditorState::new(window, cx)
-                .language(language.highlighter_name())
-                .tab_size(tab_size)
-                .soft_wrap(soft_wrap)
-                .default_value(text)
-        });
-        let watched_uri = uri.to_owned();
-        let subscription = cx.subscribe_in(
-            &editor,
-            window,
-            move |this, _, event: &InputEvent, window, cx| {
-                if matches!(event, InputEvent::Change) {
-                    this.sync_document(&watched_uri, window, cx);
-                }
-            },
-        );
-        let editor_id = format!("editor-{}", self.next_editor);
-        self.next_editor += 1;
-        let pane = Pane {
-            editor_id: editor_id.clone(),
-            uri: uri.to_owned(),
-            editor,
-            decorations: HashMap::new(),
-            gutter: None,
-            _subscriptions: vec![subscription],
-        };
-        let index = if column < self.panes.len() {
-            self.panes[column] = pane;
-            column
-        } else {
-            self.panes.push(pane);
-            self.panes.len() - 1
-        };
-        self.install_completions(index, cx);
-        if focus || self.panes.len() == 1 {
-            self.focus_pane(index, window, cx);
-        }
-        self.publish_editors(window, cx);
-        self.schedule_gutter_refresh(window, cx);
-        self.refresh_title(window);
-        cx.notify();
-        editor_id
+        self.show_tab(uri, column, OpenAs::Normal, focus, window, cx)
     }
 
     fn focus_pane(&mut self, index: usize, window: &mut Window, cx: &mut Context<Self>) {
@@ -594,30 +561,12 @@ impl Workbench {
         self.reveal_active_in_tree();
     }
 
+    /// Closes the tab in view in group `index`, without asking.
+    #[cfg(test)]
     fn close_pane(&mut self, index: usize, window: &mut Window, cx: &mut Context<Self>) {
-        let pane = self.panes.remove(index);
-        let still_shown = self.panes.iter().any(|other| other.uri == pane.uri);
-        let disposable = matches!(
-            self.documents
-                .get(&pane.uri)
-                .map(|document| &document.backing),
-            Some(Backing::Extension)
-        );
-        if !still_shown && disposable {
-            self.documents.remove(&pane.uri);
-            self.notify_host("documents/closed", json!({ "uri": pane.uri }));
+        if let Some(tab) = self.groups.get(index).map(|group| group.active) {
+            self.close_tab_now(index, tab, window, cx);
         }
-        // With no pane left, the window shows the welcome screen.
-        if self.panes.is_empty() {
-            self.active = 0;
-            self.focus_handle.focus(window, cx);
-        } else {
-            self.active = self.active.min(self.panes.len() - 1);
-            self.focus_pane(self.active, window, cx);
-        }
-        self.publish_editors(window, cx);
-        self.refresh_title(window);
-        cx.notify();
     }
 
     fn active_editor(&self) -> Option<Entity<EditorState>> {
@@ -646,9 +595,28 @@ impl Workbench {
 
     /// Tells extensions about the new text of `uri`, unless they know it already.
     fn sync_document(&mut self, uri: &str, window: &mut Window, cx: &mut Context<Self>) {
-        let Some(index) = self.pane_index(uri) else {
+        self.sync_document_from(uri, None, window, cx);
+    }
+
+    /// Takes the text of the editor that changed, `source` or the first
+    /// one showing `uri`, into its document, and into the other editors
+    /// showing the same file side by side.
+    fn sync_document_from(
+        &mut self,
+        uri: &str,
+        source: Option<&str>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let Some(index) = source
+            .and_then(|id| self.pane_by_editor_id(id))
+            .or_else(|| self.pane_index(uri))
+        else {
             return;
         };
+        // The editor's file may have been renamed since it was created.
+        let uri = self.panes[index].uri.clone();
+        let uri = uri.as_str();
         let text = self.panes[index].editor.read(cx).value().to_string();
         let Some(document) = self.documents.get_mut(uri) else {
             return;
@@ -668,8 +636,30 @@ impl Workbench {
             "text": text,
             "isDirty": document.modified,
         });
-        document.synced_text = text;
+        document.synced_text = text.clone();
+        let modified = document.modified;
         self.notify_host("documents/changed", params);
+        // Editing a file keeps its preview tab.
+        if modified {
+            for tab in self
+                .groups
+                .iter_mut()
+                .flat_map(|group| &mut group.tabs)
+                .filter(|tab| tab.uri == uri)
+            {
+                tab.preview = false;
+            }
+        }
+        let siblings: Vec<Entity<EditorState>> = self
+            .panes
+            .iter()
+            .enumerate()
+            .filter(|(other, pane)| *other != index && pane.uri == uri)
+            .map(|(_, pane)| pane.editor.clone())
+            .collect();
+        for editor in siblings {
+            tabs::replace_text(&editor, &text, window, cx);
+        }
         self.schedule_gutter_refresh(window, cx);
         self.refresh_title(window);
         cx.notify();
@@ -869,15 +859,14 @@ impl Workbench {
                     show_error(&message, &error.to_string(), strings.ok, window, cx);
                     return;
                 }
-                // The untitled buffer becomes the saved file.
-                let index = this.pane_index(&uri);
+                // The untitled buffer becomes the saved file, in the same tab.
                 this.documents.remove(&uri);
                 this.notify_host("documents/closed", json!({ "uri": uri }));
                 let new_uri = this.add_file_document(document);
-                if let Some(index) = index {
-                    this.panes.remove(index);
-                    this.open_in_pane(&new_uri, index, true, window, cx);
-                }
+                this.retarget_uri(&uri, &new_uri);
+                this.publish_editors(window, cx);
+                this.refresh_title(window);
+                cx.notify();
                 if let Some(after) = after {
                     this.finish(after, window, cx);
                 }
@@ -1527,8 +1516,8 @@ impl Workbench {
                     .filter_map(|tab| tab["input"]["uri"].as_str().map(str::to_owned))
                     .collect();
                 for uri in uris {
-                    if let Some(index) = self.pane_index(&uri) {
-                        self.close_pane(index, window, cx);
+                    while let Some((group, tab)) = self.find_tab(&uri, self.active) {
+                        self.close_tab_now(group, tab, window, cx);
                     }
                 }
                 self.reply(id, Ok(json!(true)));

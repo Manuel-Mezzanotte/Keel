@@ -21,7 +21,8 @@ gpui_kit_assets::icon_assets!(
         FileText,
         FileImage,
         RefreshCw,
-        ChevronsDownUp
+        ChevronsDownUp,
+        Pin
     ]
 );
 
@@ -78,6 +79,7 @@ mod tests {
             IconName::File,
             IconName::RefreshCw,
             IconName::ChevronsDownUp,
+            IconName::Pin,
             IconName::ChevronRight,
             IconName::ChevronDown,
             IconName::FolderOpen,

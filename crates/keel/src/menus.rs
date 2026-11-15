@@ -4,6 +4,7 @@ use gpui::{App, Global, Menu, MenuItem, OsAction, SystemMenuType};
 use gpui_component::input::{Copy, Cut, Paste, Redo, Replace, Search, SelectAll, Undo};
 
 use crate::i18n::UiLanguage;
+use crate::workbench_window::{CloseEditor, ReopenClosedEditor, SplitEditor};
 use crate::workbench_window::{
     CloseWindow, NewFile, NewWindow, Open, OpenProject, Quit, Save, SelectLanguage, SelectTheme,
     ShowCommands, ShowExplorer, ShowExtensions, ShowSearch, ShowSourceControl, ToggleAgent,
@@ -68,6 +69,8 @@ pub fn set(language: UiLanguage, cx: &mut App) {
                 MenuItem::separator(),
                 MenuItem::action(strings.save, Save),
                 MenuItem::separator(),
+                MenuItem::action(strings.menu_reopen_editor, ReopenClosedEditor),
+                MenuItem::action(strings.menu_close_editor, CloseEditor),
                 MenuItem::action(strings.menu_close_window, CloseWindow),
             ],
         ),
@@ -91,6 +94,8 @@ pub fn set(language: UiLanguage, cx: &mut App) {
             strings.menu_view,
             vec![
                 MenuItem::action(strings.menu_command_palette, ShowCommands),
+                MenuItem::separator(),
+                MenuItem::action(strings.menu_split_editor, SplitEditor),
                 MenuItem::separator(),
                 MenuItem::action(strings.view_explorer, ShowExplorer),
                 MenuItem::action(strings.view_search, ShowSearch),
