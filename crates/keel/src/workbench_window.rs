@@ -139,6 +139,8 @@ pub struct Workbench {
     status_message: Option<String>,
     discard_changes: bool,
     gutter_refresh: Task<()>,
+    /// Whether the first frame was already drawn, for `KEEL_STARTUP_TIMING`.
+    first_frame_drawn: bool,
     /// The selections extensions believe each editor has, by editor id.
     known_selections: HashMap<String, Value>,
     _subscriptions: Vec<Subscription>,
@@ -186,6 +188,7 @@ impl Workbench {
             discard_changes: false,
             gutter_refresh: Task::ready(()),
             known_selections: HashMap::new(),
+            first_frame_drawn: false,
             _subscriptions: subscriptions,
         };
         if let Some(setup) = extensions {
@@ -1645,7 +1648,17 @@ impl Workbench {
 }
 
 impl Render for Workbench {
-    fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        if !self.first_frame_drawn {
+            self.first_frame_drawn = true;
+            if std::env::var_os("KEEL_STARTUP_TIMING").is_some() {
+                window.on_next_frame(|_, _| {
+                    if let Some(started) = crate::STARTED.get() {
+                        eprintln!("keel: first frame after {:?}", started.elapsed());
+                    }
+                });
+            }
+        }
         let theme = cx.theme();
         let (foreground, muted, border, background) = (
             theme.foreground,

@@ -19,7 +19,11 @@ use gpui_component::{Root, Theme, ThemeMode};
 use crate::cli::Command;
 use crate::workbench_window::{ExtensionSetup, Workbench};
 
+/// When Keel started, for `KEEL_STARTUP_TIMING`.
+pub static STARTED: std::sync::OnceLock<std::time::Instant> = std::sync::OnceLock::new();
+
 fn main() -> ExitCode {
+    STARTED.get_or_init(std::time::Instant::now);
     let command = match cli::parse(std::env::args().skip(1)) {
         Ok(command) => command,
         Err(message) => {
