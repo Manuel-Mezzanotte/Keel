@@ -46,7 +46,9 @@ Versioni lette su crates.io il 14 e il 15 novembre 2026; si bloccano quando entr
 |---|---|---|---|
 | Linguaggio | Rust, fissato in `rust-toolchain.toml` | 1.100.0 | — |
 | Interfaccia (disegna con la scheda video, Metal) | `gpui-pre`, istantanea del GPUI di Zed usata da gpui-component | 0.3.12 | Apache-2.0 |
-| Componenti ed editor di codice | `gpui-component` | 0.9.1 | Apache-2.0 |
+| Piattaforma macOS di GPUI (finestre, testo) | `gpui-pre-platform` | 0.3.12 | Apache-2.0 |
+| Componenti ed editor di codice | `gpui-component` (l'editor sta in `gpui-base`) | 0.9.1 | Apache-2.0 |
+| Icone dei componenti | `gpui-kit-assets` | 0.9.1 | Apache-2.0 |
 | Colori della sintassi | `tree-sitter` più le grammatiche, la versione di gpui-component | 0.26 | MIT |
 | Testo in memoria (dentro gpui-component) | `ropey` | 2.0 beta | MIT/Apache |
 | Linguaggi (client LSP nostro) | `lsp-types` | 0.97.0 | MIT |
@@ -146,12 +148,19 @@ Due traguardi: dopo la **fase 0** si decide se continuare; dopo la **fase 6** Ke
 | Sottofase | Cosa | Stato |
 |---|---|---|
 | 0.1 | Fondamenta della repo: branch `develop`, workspace Cargo, Rust fissato, README, VSIX di VSAuto Ghost tra i file di prova | fatta |
-| 0.2 | Finestra ed editor: GPUI e gpui-component, apertura di un file da riga di comando, modifica e salvataggio, colori TypeScript e TSX | da fare |
+| 0.2 | Finestra ed editor: GPUI e gpui-component, apertura di un file da riga di comando, modifica e salvataggio, colori TypeScript e TSX | fatta |
 | 0.3 | Prove dell'editor: tastiera italiana e accenti, più cursori, file grandi, scorrimento | da fare |
 | 0.4 | Motore delle estensioni: V8 in un thread separato, lettore di VSIX, primo modulo `vscode` | da fare |
 | 0.5 | Ponte per VSAuto Ghost: le circa 55 funzioni dell'API di VS Code che usa | da fare |
 | 0.6 | VSAuto Ghost funzionante da capo a fondo | da fare |
 | 0.7 | Misure contro Cursor, resoconto e decisione se continuare | da fare |
+
+**Note dalla 0.2**
+- **Cosa ha già l'editor di gpui-component:** più cursori (Alt+clic, Cmd+Alt+↑/↓), accenti con i tasti morti, pieghe dei blocchi, cerca e sostituisci (senza regex), annulla fino a 1000 passi, menu dei suggerimenti, errori sottolineati, decorazioni.
+- **Cosa manca:** i suggerimenti in linea (inlay hints) e un modo diretto per mostrare il testo grigio. Oggi il testo grigio passa solo dal fornitore di completamenti, con 300 ms di attesa. Per VSAuto Ghost va valutato nella 0.5.
+- **Limite dichiarato:** circa 50.000 righe per file; si misura nella 0.3.
+- **Colori del TSX:** gpui-component dava al TSX solo poche regole. Keel aggiunge quelle complete di TypeScript più tag e attributi JSX, verificate dai test.
+- **Prima misura:** Keel in versione di sviluppo, con un file TSX aperto, occupa circa 116 MB di RAM.
 
 **Fatto quando** (criterio per continuare)
 - Scrivere e scorrere è fluido, anche con gli accenti.
