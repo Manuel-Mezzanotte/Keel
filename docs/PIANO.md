@@ -75,7 +75,7 @@ Un workspace Cargo diviso in pezzi (crate), ognuno con un compito:
 | `keel` | avvio, finestre, menu di macOS, comando `keel` | 0 |
 | `editor` | editor di codice, decorazioni, testo fantasma | 0 |
 | `extensions` | lettore VSIX, motore V8, ponte `vscode`, Open VSX | 0 |
-| `bridge/vscode` | il modulo `vscode` finto, scritto in TypeScript | 0 |
+| `extensions/src/js` | il modulo `vscode` finto e il minimo di Node, scritti in JavaScript | 0 |
 | `language` | grammatiche tree-sitter e registro dei linguaggi | 0 |
 | `ui` | sistema di design, temi, icone, componenti comuni | 1 |
 | `settings` | impostazioni, scorciatoie con «when», lingue | 1 |
@@ -150,7 +150,7 @@ Due traguardi: dopo la **fase 0** si decide se continuare; dopo la **fase 6** Ke
 | 0.1 | Fondamenta della repo: branch `develop`, workspace Cargo, Rust fissato, README, VSIX di VSAuto Ghost tra i file di prova | fatta |
 | 0.2 | Finestra ed editor: GPUI e gpui-component, apertura di un file da riga di comando, modifica e salvataggio, colori TypeScript e TSX | fatta |
 | 0.3 | Prove dell'editor: tastiera italiana e accenti, più cursori, file grandi, scorrimento | fatta |
-| 0.4 | Motore delle estensioni: V8 in un thread separato, lettore di VSIX, primo modulo `vscode` | da fare |
+| 0.4 | Motore delle estensioni: V8 in un thread separato, lettore di VSIX, primo modulo `vscode` | fatta |
 | 0.5 | Ponte per VSAuto Ghost: le circa 55 funzioni dell'API di VS Code che usa | da fare |
 | 0.6 | VSAuto Ghost funzionante da capo a fondo | da fare |
 | 0.7 | Misure contro Cursor, resoconto e decisione se continuare | da fare |
@@ -173,6 +173,13 @@ Due traguardi: dopo la **fase 0** si decide se continuare; dopo la **fase 6** Ke
 
   Il limite dichiarato di circa 50.000 righe non è un muro. I tempi non comprendono il disegno sullo schermo: la fluidità dello scorrimento la provi tu.
 - **Comandi che l'editor non ha ancora** e che aggiungiamo nella fase 2: commenta (Cmd+/), sposta e duplica righe, seleziona la prossima occorrenza (Cmd+D), vai alla riga.
+
+**Note dalla 0.4**
+- **Il motore:** V8 gira in un thread suo, con deno_core. Keel e le estensioni si parlano con messaggi JSON: avvisi senza risposta, oppure chiamate con risposta.
+- **Il ponte `vscode` è in JavaScript, non in TypeScript:** così la compilazione di Keel non ha bisogno di Node. Sta in `crates/extensions/src/js`, insieme al minimo di Node che serve (`require`, `Buffer`, timer, `console`, `path`, `crypto` per SHA-256).
+- **Sicurezza:** un'estensione può caricare moduli solo dalla propria cartella. Il lettore di VSIX rifiuta i file che uscirebbero dalla cartella di destinazione e i pacchetti oltre 1 GB.
+- **VSAuto Ghost si attiva già:** registra i suoi 16 comandi, compreso `type`, che in VS Code intercetta ogni tasto, più il tipo di decorazione, il file system `vsauto-ghost:` e il fornitore di suggerimenti.
+- **Cosa resta per la 0.5:** collegare tutto all'editor vero. Documenti ed editor visti dall'estensione, modifiche, testo grigio, menu dei suggerimenti, barra verde, barra di stato, scelta rapida, schede, e i tasti che passano da `type`.
 
 **Fatto quando** (criterio per continuare)
 - Scrivere e scorrere è fluido, anche con gli accenti.
