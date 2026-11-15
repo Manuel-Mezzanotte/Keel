@@ -4,7 +4,7 @@ Keel è il tuo IDE personale: scritto in Rust, veloce e leggero, bello come Curs
 
 Si lavora **una fase alla volta**. All'inizio di ogni fase ne dettagliamo i passi; alla fine la provi tu, e si passa alla successiva solo quando ti convince. La pubblicazione dell'app non è in questo piano: ci si pensa alla fine, dopo i tuoi test.
 
-*Scritto il 14 novembre 2026, aggiornato il 15 novembre. Stato: fase 0 in corso.*
+*Scritto il 14 novembre 2026, aggiornato il 15 novembre. Stato: fase 0 fatta, fase 1 in corso.*
 
 ---
 
@@ -115,7 +115,7 @@ Da confermare con le misure della fase 0. Si misura con lo stesso script su Keel
 
 | Fase | Nome | Dimensione | Stato |
 |---|---|---|---|
-| 0 | Prototipo e prova a tempo | 2–3 settimane | in corso |
+| 0 | Prototipo e prova a tempo | 2–3 settimane | fatta; restano le tue prove a mano |
 | 1 | Fondamenta e design | media | da fare |
 | 2 | Editor e file | grande | da fare |
 | 3 | Ricerca | piccola | da fare |
@@ -153,7 +153,7 @@ Due traguardi: dopo la **fase 0** si decide se continuare; dopo la **fase 6** Ke
 | 0.4 | Motore delle estensioni: V8 in un thread separato, lettore di VSIX, primo modulo `vscode` | fatta |
 | 0.5 | Ponte per VSAuto Ghost: le circa 55 funzioni dell'API di VS Code che usa | fatta |
 | 0.6 | VSAuto Ghost funzionante da capo a fondo | fatta (test automatico); manca la tua prova a mano |
-| 0.7 | Misure contro Cursor, resoconto e decisione se continuare | da fare |
+| 0.7 | Misure contro Cursor, resoconto e decisione se continuare | fatta |
 
 **Note dalla 0.2**
 - **Cosa ha già l'editor di gpui-component:** più cursori (Alt+clic, Cmd+Alt+↑/↓), accenti con i tasti morti, pieghe dei blocchi, cerca e sostituisci (senza regex), annulla fino a 1000 passi, menu dei suggerimenti, errori sottolineati, decorazioni.
@@ -206,6 +206,31 @@ Due traguardi: dopo la **fase 0** si decide se continuare; dopo la **fase 6** Ke
   - ferma la sessione con Cmd+I.
 - **Due comportamenti voluti di VSAuto Ghost, utili da sapere:** i tasti premuti tutti insieme vengono in parte scartati, per non accumulare arretrato, e i suggerimenti grigi compaiono a caso nelle pause.
 - **Prima misura con le estensioni:** Keel in versione di sviluppo, con V8 e VSAuto Ghost caricata, occupa circa 134 MB.
+
+**Resoconto della fase 0 (0.7)**
+
+Misure del 15 novembre 2026, con `scripts/measure-memory.sh`, che somma la RAM di un programma e di tutti i processi che avvia:
+
+| | RAM | Processi | Avvio |
+|---|---|---|---|
+| Keel, versione ottimizzata, con V8 e VSAuto Ghost caricata e un file TSX aperto | 132 MB | 1 | prima schermata in 375 ms (`KEEL_STARTUP_TIMING=1`) |
+| Cursor come lo stavi usando, con la cartella Keel aperta | 1.616 MB | 11 | — |
+
+Il confronto non è alla pari: Cursor aveva anche albero dei file, terminale, server MCP e osservatore dei file, e nessuno dei due un language server. Già la sola finestra di Cursor (`Renderer`) occupava 531 MB, quattro volte tutto Keel. Le misure si rifanno a ogni fase, a parità di condizioni, man mano che Keel aggiunge quelle parti.
+
+**Criteri per continuare**
+- Scrivere e scorrere fluido, anche con gli accenti: ✅ nei test (accenti, tasti morti, più cursori, file fino a 200.000 righe). La fluidità vera la giudichi tu.
+- VSAuto Ghost come in Cursor: ✅ nel test da capo a fondo. Manca la tua prova a mano.
+- RAM ben sotto Cursor: ✅ 132 MB contro 1,6 GB.
+
+**Decisione:** si continua con la fase 1, come avevi già deciso di fare a fase 0 finita.
+
+**Le tue prove a mano della fase 0**
+1. Dalla cartella Keel compila la versione ottimizzata: `cargo build --release -p keel`.
+2. Installa VSAuto Ghost: `./target/release/keel --install-extension fixtures/extensions/vsauto-ghost-local-0.6.1-editor-layout.vsix`.
+3. Apri un file: `./target/release/keel fixtures/samples/booking-card.tsx` (oppure uno dei tuoi progetti).
+4. Scrivi, scorri, prova gli accenti e Cmd+Alt+↓ per più cursori; Cmd+S salva, Cmd+W chiede se ci sono modifiche.
+5. Cmd+Shift+P → «Start Ghost Fake Coding». Premi tasti a caso nel ghost a destra; prova Tab sul grigio, Cmd+O, Cmd+Shift+I (pausa) e Cmd+I (stop).
 
 **Fatto quando** (criterio per continuare)
 - Scrivere e scorrere è fluido, anche con gli accenti.
