@@ -327,7 +327,7 @@ Il confronto non è alla pari: Cursor aveva anche albero dei file, terminale, se
 | Sottofase | Cosa | Stato |
 |---|---|---|
 | 2.1 | Progetti: `keel cartella` e `keel .`, File → Apri, una finestra per progetto, un solo Keel aperto, progetti recenti, schermata iniziale | fatta |
-| 2.2 | Esplora risorse: albero con le icone, file ignorati attenuati; nuovo file e cartella, rinomina, elimina nel Cestino, sposta trascinando, mostra nel Finder, copia il percorso | da fare |
+| 2.2 | Esplora risorse: albero con le icone, file ignorati attenuati; nuovo file e cartella, rinomina, elimina nel Cestino, sposta trascinando, mostra nel Finder, copia il percorso | fatta |
 | 2.3 | Schede: più file per gruppo, anteprima, fissate, chiudi le altre, riapri l'ultima chiusa; editor affiancati e gruppi | da fare |
 | 2.4 | Apertura veloce (Cmd+P) e vai alla riga (Ctrl+G) | da fare |
 | 2.5 | Scrittura: commenta, sposta e duplica righe, piega i blocchi, guide di rientro, parentesi e tag chiusi da soli, a capo, zoom, breadcrumb, sticky scroll e minimappa | da fare |
@@ -348,6 +348,47 @@ Il confronto non è alla pari: Cursor aveva anche albero dei file, terminale, se
 - **Progetti recenti:** gli ultimi 20, in `recent.json`, nel menu File → Apri recente e nella schermata iniziale.
 - **Schermata iniziale:** una finestra senza file mostra il marchio, Apri…, Nuovo file e i progetti recenti. Chiudendo l'ultimo file si torna lì. Una finestra vuota che apre un progetto lascia il posto alla finestra del progetto.
 - **Estensioni:** sanno qual è la cartella del progetto (`workspace.workspaceFolders`).
+
+**Note sulla 2.2**
+- **L'albero:**
+  - cartelle prima dei file;
+  - nomi in ordine come nel Finder: `pagina2` prima di `pagina10`;
+  - le cartelle si leggono solo quando le apri, e la lista disegna solo le righe in vista, così anche `node_modules` aperta resta veloce;
+  - icone colorate per tipo di file: TypeScript, JavaScript, Rust, Python, Java, C, C++, C#, Swift, HTML, CSS, JSON, Markdown, immagini.
+- **File nascosti e attenuati:**
+  - nascosti come in VS Code: `.git`, `.DS_Store` e gli altri di `files.exclude`, più quelli che aggiungi nelle impostazioni;
+  - attenuati: i file ignorati da git, seguendo tutti i `.gitignore`, anche quello globale.
+- **Il file aperto** si vede sempre nell'albero, con le cartelle aperte fino a lui (`explorer.autoReveal`).
+- **Clic:** un clic apre il file e lascia la tastiera nell'albero; il doppio clic passa all'editor.
+- **Tasti come in VS Code sul Mac:**
+
+  | Tasti | Cosa fa |
+  |---|---|
+  | frecce | si muovono, aprono e chiudono le cartelle |
+  | Invio o F2 | rinomina |
+  | Cmd+↓ o spazio | apre |
+  | Cmd+Backspace | sposta nel Cestino |
+
+- **Menu col tasto destro:**
+  - nuovo file;
+  - nuova cartella;
+  - mostra nel Finder;
+  - copia percorso;
+  - copia percorso relativo;
+  - rinomina;
+  - sposta nel Cestino.
+- **Barra dell'Esplora risorse:**
+  - nuovo file;
+  - nuova cartella;
+  - aggiorna;
+  - comprimi tutto.
+- **Nomi scritti sul posto:**
+  - `lib/utils.ts` crea anche le cartelle;
+  - Esc annulla;
+  - nella rinomina è già selezionato il nome senza estensione.
+- **Spostare trascinando** chiede conferma. Eliminare sposta nel Cestino, sempre dopo una conferma: niente si cancella per sempre.
+- **I file aperti seguono** rinomine e spostamenti, anche quelli dentro una cartella spostata.
+- **Aggiornamento:** quando torni su Keel l'albero si rilegge, per vedere i file creati da altri, per esempio da Claude Code. Il controllo continuo arriva con la 2.6.
 
 **Cosa si fa**
 - **Progetti:** apri cartella, progetti recenti, schermata iniziale, una finestra per progetto, comando `keel .` dal terminale (come `code .`).

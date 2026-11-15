@@ -44,24 +44,24 @@ pub(crate) fn window_options(bounds: Bounds<Pixels>) -> WindowOptions {
 
 /// The theme's colors under the names of the sketch.
 #[derive(Clone, Copy)]
-struct Colors {
+pub(super) struct Colors {
     /// The window's background, around the panels.
-    desk: Hsla,
+    pub(super) desk: Hsla,
     /// The sidebar and Claude Code.
-    panel: Hsla,
+    pub(super) panel: Hsla,
     /// The editors.
-    editor: Hsla,
-    border: Hsla,
-    text: Hsla,
-    muted: Hsla,
-    faint: Hsla,
-    accent: Hsla,
-    selected: Hsla,
-    hover: Hsla,
+    pub(super) editor: Hsla,
+    pub(super) border: Hsla,
+    pub(super) text: Hsla,
+    pub(super) muted: Hsla,
+    pub(super) faint: Hsla,
+    pub(super) accent: Hsla,
+    pub(super) selected: Hsla,
+    pub(super) hover: Hsla,
 }
 
 impl Colors {
-    fn new(cx: &App) -> Self {
+    pub(super) fn new(cx: &App) -> Self {
         let theme = cx.theme();
         Self {
             desk: theme.title_bar,
@@ -91,7 +91,7 @@ fn floating(background: Hsla, border: Hsla) -> Div {
         .bg(background)
 }
 
-fn heading(text: &str, colors: Colors) -> Div {
+pub(super) fn heading(text: &str, colors: Colors) -> Div {
     div()
         .px_2()
         .pt_1()
@@ -103,7 +103,7 @@ fn heading(text: &str, colors: Colors) -> Div {
 }
 
 /// A short note for a part of the window that comes in a later phase.
-fn note(text: String, colors: Colors) -> Div {
+pub(super) fn note(text: String, colors: Colors) -> Div {
     div()
         .px_2()
         .py_1()
@@ -354,6 +354,7 @@ impl Workbench {
             }));
 
         let content: AnyElement = match self.layout.side_view {
+            SideView::Explorer if self.project.root.is_some() => self.render_explorer(colors, cx),
             SideView::Explorer => self.render_open_editors(colors, cx).into_any_element(),
             SideView::Search => div()
                 .child(heading(strings.view_search, colors))
@@ -387,11 +388,15 @@ impl Workbench {
             .gap_2()
             .child(switch)
             .child(
+                // The Explorer scrolls its own list, the other views as a whole.
                 div()
                     .id("sidebar-content")
                     .flex_1()
                     .min_h_0()
-                    .overflow_y_scroll()
+                    .when(
+                        self.layout.side_view != SideView::Explorer || self.project.root.is_none(),
+                        |content| content.overflow_y_scroll(),
+                    )
                     .child(content),
             )
     }
@@ -1001,8 +1006,8 @@ impl Render for Workbench {
             });
         let status = self.render_status_bar(colors, cx);
 
-        div()
-            .track_focus(&self.focus_handle)
+        let root = div().track_focus(&self.focus_handle);
+        self.explorer_actions(root, cx)
             .size_full()
             .flex()
             .flex_col()

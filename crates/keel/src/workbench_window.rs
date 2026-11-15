@@ -1,6 +1,7 @@
 //! The workbench: the window with its panels and editors, and the bridge
 //! between Keel and the extension host. The layout is drawn in `shell`.
 
+pub(crate) mod explorer;
 mod shell;
 
 pub(crate) use shell::window_options;
@@ -241,6 +242,13 @@ pub struct Workbench {
     /// Holds the keyboard when no editor does, so shortcuts work on the
     /// welcome screen.
     focus_handle: gpui::FocusHandle,
+    /// The Explorer: the project's tree, its rows as shown, the selected
+    /// file or folder, and the name field when creating or renaming.
+    tree: Option<files::FileTree>,
+    tree_rows: Vec<files::Row>,
+    tree_selection: Option<PathBuf>,
+    tree_edit: Option<explorer::TreeEdit>,
+    tree_focus: gpui::FocusHandle,
     _subscriptions: Vec<Subscription>,
 }
 
@@ -266,8 +274,10 @@ impl Workbench {
             }
         }));
         subscriptions.push(cx.observe_window_activation(window, |this, window, cx| {
-            if window.is_window_active() && this.project.refresh_branch() {
-                cx.notify();
+            // Files may have changed in another app, such as Claude Code.
+            if window.is_window_active() {
+                this.project.refresh_branch();
+                this.refresh_tree(cx);
             }
         }));
         subscriptions.push(cx.observe_window_appearance(window, |this, window, cx| {
@@ -313,9 +323,15 @@ impl Workbench {
             gutter_refresh: Task::ready(()),
             known_selections: HashMap::new(),
             focus_handle: cx.focus_handle(),
+            tree: None,
+            tree_rows: Vec::new(),
+            tree_selection: None,
+            tree_edit: None,
+            tree_focus: cx.focus_handle(),
             first_frame_drawn: false,
             _subscriptions: subscriptions,
         };
+        workbench.build_tree();
         if let Some(setup) = extensions {
             workbench.start_extensions(setup, window, cx);
         }
@@ -575,6 +591,7 @@ impl Workbench {
         self.active = index;
         let editor = self.panes[index].editor.clone();
         editor.update(cx, |editor, cx| editor.focus(window, cx));
+        self.reveal_active_in_tree();
     }
 
     fn close_pane(&mut self, index: usize, window: &mut Window, cx: &mut Context<Self>) {
@@ -621,6 +638,7 @@ impl Workbench {
             .position(|pane| pane.editor.read(cx).focus_handle(cx).is_focused(window));
         if let Some(index) = focused.filter(|index| *index != self.active) {
             self.active = index;
+            self.reveal_active_in_tree();
             self.publish_editors(window, cx);
             self.refresh_title(window);
         }
@@ -1273,6 +1291,14 @@ impl Workbench {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> bool {
+        // Escape leaves the Explorer's name field without changing anything.
+        if self.tree_edit.is_some()
+            && event.keystroke.key == "escape"
+            && !event.keystroke.modifiers.modified()
+        {
+            self.finish_tree_edit(false, window, cx);
+            return true;
+        }
         if self.extensions.is_none() || window.has_active_dialog(cx) {
             return false;
         }

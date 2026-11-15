@@ -77,6 +77,11 @@ impl Document {
         &self.path
     }
 
+    /// Follows the file after it was renamed or moved on disk.
+    pub fn set_path(&mut self, path: impl Into<PathBuf>) {
+        self.path = path.into();
+    }
+
     /// The file name, for window titles and tabs.
     pub fn file_name(&self) -> String {
         self.path

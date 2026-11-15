@@ -7,7 +7,22 @@ use gpui::{AssetSource, Result, SharedString};
 
 gpui_kit_assets::icon_assets!(
     ExtraIcons,
-    [Files, GitBranch, Blocks, Sparkles, ArrowUp, X, FilePlus]
+    [
+        Files,
+        GitBranch,
+        Blocks,
+        Sparkles,
+        ArrowUp,
+        X,
+        FilePlus,
+        FolderPlus,
+        FileCode,
+        FileBraces,
+        FileText,
+        FileImage,
+        RefreshCw,
+        ChevronsDownUp
+    ]
 );
 
 /// Keel's mark, the outline of a paper boat.
@@ -55,6 +70,16 @@ mod tests {
             IconName::ArrowUp,
             IconName::X,
             IconName::FilePlus,
+            IconName::FolderPlus,
+            IconName::FileCode,
+            IconName::FileBraces,
+            IconName::FileText,
+            IconName::FileImage,
+            IconName::File,
+            IconName::RefreshCw,
+            IconName::ChevronsDownUp,
+            IconName::ChevronRight,
+            IconName::ChevronDown,
             IconName::FolderOpen,
             IconName::Folder,
             IconName::Search,

@@ -6,6 +6,7 @@ use std::path::Path;
 use gpui::{Action, App, KeyBinding};
 use serde_json::Value;
 
+use crate::workbench_window::explorer;
 use crate::workbench_window::{
     CloseWindow, NewFile, NewWindow, Open, OpenRecent, Quit, Save, SelectLanguage, SelectTheme,
     ShowCommands, ShowExplorer, ShowExtensions, ShowSearch, ShowSourceControl, ToggleAgent,
@@ -122,6 +123,26 @@ pub const COMMANDS: &[KeelCommand] = &[
         action: || Box::new(OpenRecent),
         default_key: Some("ctrl+r"),
     },
+    KeelCommand {
+        id: "explorer.newFile",
+        action: || Box::new(explorer::NewFileHere),
+        default_key: None,
+    },
+    KeelCommand {
+        id: "explorer.newFolder",
+        action: || Box::new(explorer::NewFolderHere),
+        default_key: None,
+    },
+    KeelCommand {
+        id: "workbench.files.action.refreshFilesExplorer",
+        action: || Box::new(explorer::Refresh),
+        default_key: None,
+    },
+    KeelCommand {
+        id: "workbench.files.action.collapseExplorerFolders",
+        action: || Box::new(explorer::CollapseAll),
+        default_key: None,
+    },
 ];
 
 /// The editor's own key that VS Code uses for something else: gpui-component
@@ -233,6 +254,7 @@ pub fn bind(user: &[UserBinding], cx: &mut App) -> Vec<String> {
             Err(error) => warnings.push(format!("{}: {error}", command.id)),
         }
     }
+    key_bindings.extend(explorer::tree_bindings());
     let replace = gpui_component::input::Replace;
     key_bindings.push(KeyBinding::new(
         "cmd-shift-f",

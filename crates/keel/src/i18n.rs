@@ -112,6 +112,22 @@ pub struct Strings {
     pub command_new_file: &'static str,
     pub command_new_window: &'static str,
     pub command_open_recent: &'static str,
+    pub no_folder: &'static str,
+    pub explorer_new_file: &'static str,
+    pub explorer_new_folder: &'static str,
+    pub explorer_refresh: &'static str,
+    pub explorer_collapse: &'static str,
+    pub explorer_rename: &'static str,
+    pub explorer_trash: &'static str,
+    pub explorer_reveal: &'static str,
+    pub explorer_copy_path: &'static str,
+    pub explorer_copy_relative: &'static str,
+    pub explorer_move: &'static str,
+    pub trash_detail: &'static str,
+    pub command_explorer_new_file: &'static str,
+    pub command_explorer_new_folder: &'static str,
+    pub command_explorer_refresh: &'static str,
+    pub command_explorer_collapse: &'static str,
     pub command_toggle_sidebar: &'static str,
     pub command_toggle_panel: &'static str,
     pub command_toggle_agent: &'static str,
@@ -127,6 +143,9 @@ pub struct Strings {
     could_not_use: &'static str,
     could_not_start: &'static str,
     could_not_open: &'static str,
+    could_not_change: &'static str,
+    move_question: &'static str,
+    trash_question: &'static str,
     coming_in_phase: &'static str,
     line_column: &'static str,
     spaces: &'static str,
@@ -157,6 +176,10 @@ impl Strings {
             "workbench.action.files.newUntitledFile" => self.command_new_file,
             "workbench.action.newWindow" => self.command_new_window,
             "workbench.action.openRecent" => self.command_open_recent,
+            "explorer.newFile" => self.command_explorer_new_file,
+            "explorer.newFolder" => self.command_explorer_new_folder,
+            "workbench.files.action.refreshFilesExplorer" => self.command_explorer_refresh,
+            "workbench.files.action.collapseExplorerFolders" => self.command_explorer_collapse,
             _ => return None,
         })
     }
@@ -184,6 +207,22 @@ impl Strings {
         self.could_not_open
             .replace("{path}", path)
             .replace("{error}", error)
+    }
+
+    pub fn could_not_change(&self, name: &str, error: &str) -> String {
+        self.could_not_change
+            .replace("{name}", name)
+            .replace("{error}", error)
+    }
+
+    pub fn move_question(&self, name: &str, folder: &str) -> String {
+        self.move_question
+            .replace("{name}", name)
+            .replace("{folder}", folder)
+    }
+
+    pub fn trash_question(&self, name: &str) -> String {
+        self.trash_question.replace("{name}", name)
     }
 
     /// "Coming in phase 3", for the parts of the window not built yet.
@@ -273,6 +312,22 @@ pub const ITALIAN: Strings = Strings {
     command_new_file: "File: Nuovo file",
     command_new_window: "File: Nuova finestra",
     command_open_recent: "File: Apri recente…",
+    no_folder: "Apri una cartella per vederne i file.",
+    explorer_new_file: "Nuovo file…",
+    explorer_new_folder: "Nuova cartella…",
+    explorer_refresh: "Aggiorna",
+    explorer_collapse: "Comprimi tutto",
+    explorer_rename: "Rinomina…",
+    explorer_trash: "Sposta nel Cestino",
+    explorer_reveal: "Mostra nel Finder",
+    explorer_copy_path: "Copia percorso",
+    explorer_copy_relative: "Copia percorso relativo",
+    explorer_move: "Sposta",
+    trash_detail: "Puoi recuperarlo dal Cestino.",
+    command_explorer_new_file: "Esplora risorse: Nuovo file",
+    command_explorer_new_folder: "Esplora risorse: Nuova cartella",
+    command_explorer_refresh: "Esplora risorse: Aggiorna",
+    command_explorer_collapse: "Esplora risorse: Comprimi tutto",
     command_toggle_sidebar: "Vista: Mostra o nascondi la barra laterale",
     command_toggle_panel: "Vista: Mostra o nascondi il pannello",
     command_toggle_agent: "Vista: Mostra o nascondi Claude Code",
@@ -288,6 +343,9 @@ pub const ITALIAN: Strings = Strings {
     could_not_use: "Keel non può usare {path}",
     could_not_start: "{extension} non è partita: {error}",
     could_not_open: "Keel non riesce ad aprire {path}: {error}",
+    could_not_change: "Operazione non riuscita su {name}: {error}",
+    move_question: "Vuoi spostare «{name}» in «{folder}»?",
+    trash_question: "Vuoi spostare «{name}» nel Cestino?",
     coming_in_phase: "Arriva con la fase {phase}",
     line_column: "Riga {line}, col {column}",
     spaces: "Spazi: {size}",
@@ -358,6 +416,22 @@ pub const ENGLISH: Strings = Strings {
     command_new_file: "File: New File",
     command_new_window: "File: New Window",
     command_open_recent: "File: Open Recent…",
+    no_folder: "Open a folder to see its files.",
+    explorer_new_file: "New File…",
+    explorer_new_folder: "New Folder…",
+    explorer_refresh: "Refresh",
+    explorer_collapse: "Collapse All",
+    explorer_rename: "Rename…",
+    explorer_trash: "Move to Trash",
+    explorer_reveal: "Reveal in Finder",
+    explorer_copy_path: "Copy Path",
+    explorer_copy_relative: "Copy Relative Path",
+    explorer_move: "Move",
+    trash_detail: "You can restore it from the Trash.",
+    command_explorer_new_file: "Explorer: New File",
+    command_explorer_new_folder: "Explorer: New Folder",
+    command_explorer_refresh: "Explorer: Refresh",
+    command_explorer_collapse: "Explorer: Collapse All",
     command_toggle_sidebar: "View: Toggle Sidebar",
     command_toggle_panel: "View: Toggle Panel",
     command_toggle_agent: "View: Toggle Claude Code",
@@ -373,6 +447,9 @@ pub const ENGLISH: Strings = Strings {
     could_not_use: "Keel could not use {path}",
     could_not_start: "{extension} could not start: {error}",
     could_not_open: "Keel could not open {path}: {error}",
+    could_not_change: "Could not change {name}: {error}",
+    move_question: "Do you want to move \"{name}\" into \"{folder}\"?",
+    trash_question: "Do you want to move \"{name}\" to the Trash?",
     coming_in_phase: "Coming in phase {phase}",
     line_column: "Ln {line}, Col {column}",
     spaces: "Spaces: {size}",
