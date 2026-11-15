@@ -4,7 +4,7 @@ use gpui::{App, Global, Menu, MenuItem, OsAction, SystemMenuType};
 use gpui_component::input::{Copy, Cut, Paste, Redo, Replace, Search, SelectAll, Undo};
 
 use crate::i18n::UiLanguage;
-use crate::workbench_window::{CloseEditor, ReopenClosedEditor, SplitEditor};
+use crate::workbench_window::{CloseEditor, GoToLine, QuickOpen, ReopenClosedEditor, SplitEditor};
 use crate::workbench_window::{
     CloseWindow, NewFile, NewWindow, Open, OpenProject, Quit, Save, SelectLanguage, SelectTheme,
     ShowCommands, ShowExplorer, ShowExtensions, ShowSearch, ShowSourceControl, ToggleAgent,
@@ -111,6 +111,13 @@ pub fn set(language: UiLanguage, cx: &mut App) {
                 MenuItem::action(strings.toggle_agent, ToggleAgent),
             ],
         ),
+        menu(
+            strings.menu_go,
+            vec![
+                MenuItem::action(strings.menu_go_to_file, QuickOpen),
+                MenuItem::action(strings.menu_go_to_line, GoToLine),
+            ],
+        ),
     ]);
 }
 
@@ -133,9 +140,9 @@ mod tests {
     #[gpui::test]
     fn the_menus_follow_the_interface_language(cx: &mut TestAppContext) {
         cx.update(|cx| set(UiLanguage::Italian, cx));
-        assert_eq!(menu_names(cx), ["Keel", "File", "Modifica", "Vista"]);
+        assert_eq!(menu_names(cx), ["Keel", "File", "Modifica", "Vista", "Vai"]);
 
         cx.update(|cx| set(UiLanguage::English, cx));
-        assert_eq!(menu_names(cx), ["Keel", "File", "Edit", "View"]);
+        assert_eq!(menu_names(cx), ["Keel", "File", "Edit", "View", "Go"]);
     }
 }

@@ -255,12 +255,23 @@ impl Workbench {
             .text_color(colors.faint)
             .cursor_pointer()
             .hover(|search| search.text_color(colors.muted))
-            .on_click(
-                cx.listener(|this, _, window, cx| this.show_commands(&ShowCommands, window, cx)),
-            )
+            .on_click(cx.listener(|this, _, window, cx| this.quick_open(window, cx)))
             .child(Icon::new(IconName::Search).small())
-            .child(strings.search_commands)
-            .child(div().ml_auto().text_xs().child("⇧⌘P"));
+            .child(if self.project.root.is_some() {
+                strings.search_files
+            } else {
+                strings.search_commands
+            })
+            .child(
+                div()
+                    .ml_auto()
+                    .text_xs()
+                    .child(if self.project.root.is_some() {
+                        "⌘P"
+                    } else {
+                        "⇧⌘P"
+                    }),
+            );
 
         let toggles = div()
             .flex_none()
@@ -1172,6 +1183,8 @@ impl Render for Workbench {
                 this.toggle_panel_view(PanelView::Terminal, cx)
             }))
             .on_action(cx.listener(|this, _: &NewFile, window, cx| this.new_file(window, cx)))
+            .on_action(cx.listener(|this, _: &QuickOpen, window, cx| this.quick_open(window, cx)))
+            .on_action(cx.listener(|this, _: &GoToLine, window, cx| this.ask_line(window, cx)))
             .on_action(
                 cx.listener(|this, _: &OpenRecent, window, cx| this.choose_recent(window, cx)),
             )

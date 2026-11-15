@@ -17,6 +17,7 @@ use crate::workbench_window::{
     ShowCommands, ShowExplorer, ShowExtensions, ShowSearch, ShowSourceControl, ToggleAgent,
     ToggleOutput, TogglePanel, ToggleProblems, ToggleSidebar, ToggleTerminal,
 };
+use crate::workbench_window::{GoToLine, QuickOpen};
 
 /// A Keel command: its VS Code name, the action it runs and its default key.
 pub struct KeelCommand {
@@ -192,6 +193,16 @@ pub const COMMANDS: &[KeelCommand] = &[
         id: "workbench.action.focusThirdEditorGroup",
         action: || Box::new(FocusGroup3),
         default_key: Some("cmd+3"),
+    },
+    KeelCommand {
+        id: "workbench.action.quickOpen",
+        action: || Box::new(QuickOpen),
+        default_key: Some("cmd+p"),
+    },
+    KeelCommand {
+        id: "workbench.action.gotoLine",
+        action: || Box::new(GoToLine),
+        default_key: Some("ctrl+g"),
     },
     KeelCommand {
         id: "explorer.newFile",
@@ -397,7 +408,7 @@ mod tests {
         let (bindings, warnings) =
             read_user_bindings(Path::new("/nonexistent/keel/keybindings.json"));
         assert!(bindings.is_empty() && warnings.is_empty());
-        assert_eq!(keel_bindings(&[]).len(), 32);
+        assert_eq!(keel_bindings(&[]).len(), 34);
     }
 
     #[test]

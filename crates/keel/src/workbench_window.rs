@@ -2,8 +2,11 @@
 //! between Keel and the extension host. The layout is drawn in `shell`.
 
 pub(crate) mod explorer;
+mod navigation;
 mod shell;
 mod tabs;
+
+pub(crate) use navigation::{GoToLine, QuickOpen};
 
 pub(crate) use tabs::{
     CloseAllEditors, CloseEditor, CloseEditorsInGroup, CloseOtherEditors, FocusGroup1, FocusGroup2,
@@ -261,6 +264,9 @@ pub struct Workbench {
     tree_selection: Option<PathBuf>,
     tree_edit: Option<explorer::TreeEdit>,
     tree_focus: gpui::FocusHandle,
+    /// The project's files for Quick Open, listed in the background.
+    file_index: Option<std::sync::Arc<Vec<String>>>,
+    indexing: Task<()>,
     _subscriptions: Vec<Subscription>,
 }
 
@@ -290,6 +296,7 @@ impl Workbench {
             if window.is_window_active() {
                 this.project.refresh_branch();
                 this.refresh_tree(cx);
+                this.index_files(cx);
             }
         }));
         subscriptions.push(cx.observe_window_appearance(window, |this, window, cx| {
@@ -342,10 +349,13 @@ impl Workbench {
             tree_selection: None,
             tree_edit: None,
             tree_focus: cx.focus_handle(),
+            file_index: None,
+            indexing: Task::ready(()),
             first_frame_drawn: false,
             _subscriptions: subscriptions,
         };
         workbench.build_tree();
+        workbench.index_files(cx);
         if let Some(setup) = extensions {
             workbench.start_extensions(setup, window, cx);
         }

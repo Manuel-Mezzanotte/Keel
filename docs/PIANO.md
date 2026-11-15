@@ -329,7 +329,7 @@ Il confronto non è alla pari: Cursor aveva anche albero dei file, terminale, se
 | 2.1 | Progetti: `keel cartella` e `keel .`, File → Apri, una finestra per progetto, un solo Keel aperto, progetti recenti, schermata iniziale | fatta |
 | 2.2 | Esplora risorse: albero con le icone, file ignorati attenuati; nuovo file e cartella, rinomina, elimina nel Cestino, sposta trascinando, mostra nel Finder, copia il percorso | fatta |
 | 2.3 | Schede: più file per gruppo, anteprima, fissate, chiudi le altre, riapri l'ultima chiusa; editor affiancati e gruppi | fatta |
-| 2.4 | Apertura veloce (Cmd+P) e vai alla riga (Ctrl+G) | da fare |
+| 2.4 | Apertura veloce (Cmd+P) e vai alla riga (Ctrl+G) | fatta |
 | 2.5 | Scrittura: commenta, sposta e duplica righe, piega i blocchi, guide di rientro, parentesi e tag chiusi da soli, a capo, zoom, breadcrumb, sticky scroll e minimappa | da fare |
 | 2.6 | Cambi dall'esterno e niente perso: ricarica i file cambiati fuori da Keel, salvataggio automatico, modifiche non salvate conservate, ripristino di schede e disposizione | da fare |
 | 2.7 | Altri file (immagini, binari, file molto grandi), misure e resoconto | da fare |
@@ -425,6 +425,24 @@ Il confronto non è alla pari: Cursor aveva anche albero dei file, terminale, se
   - il clic con la rotella chiude la scheda;
   - un pallino segna le modifiche non salvate.
 - **Per ora non si fa:** trascinare le schede per riordinarle o spostarle tra i gruppi.
+
+**Note sulla 2.4**
+- **Vai al file (Cmd+P)**, anche dal campo «Cerca file» nella barra in alto e dal menu Vai:
+  - cerca tra i file del progetto, lasciando fuori quelli ignorati da git e quelli nascosti;
+  - l'elenco si prepara in sottofondo all'apertura e ogni volta che torni su Keel;
+  - in cima ci sono i file usati da poco;
+  - accanto a ogni file c'è la sua cartella.
+- **Ricerca «fuzzy» come in VS Code:**
+  - le lettere devono comparire in ordine, anche separate: `bkcard` trova `booking-card.tsx`;
+  - contano di più le lettere a inizio parola e quelle di seguito;
+  - le lettere nel nome del file contano più di quelle nelle cartelle;
+  - con una `/` la ricerca guarda il percorso.
+
+  Ora la usano tutte le liste: palette dei comandi, progetti recenti, temi e liste delle estensioni.
+- **Righe:**
+  - `card.tsx:42`, e anche `:42:7`, apre il file e va alla riga, o alla riga e colonna;
+  - Vai alla riga (Ctrl+G) chiede la riga, anche con `:colonna`, e mostra la riga attuale e il totale.
+- **Misure su GestionaleHospitality:** 1.010 file elencati in 9 ms; ogni ricerca mentre scrivi richiede meno di 1 ms.
 
 **Cosa si fa**
 - **Progetti:** apri cartella, progetti recenti, schermata iniziale, una finestra per progetto, comando `keel .` dal terminale (come `code .`).

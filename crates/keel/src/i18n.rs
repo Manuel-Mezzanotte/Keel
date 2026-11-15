@@ -150,6 +150,13 @@ pub struct Strings {
     pub command_focus_group_1: &'static str,
     pub command_focus_group_2: &'static str,
     pub command_focus_group_3: &'static str,
+    pub search_files: &'static str,
+    pub quick_open_placeholder: &'static str,
+    pub menu_go: &'static str,
+    pub menu_go_to_file: &'static str,
+    pub menu_go_to_line: &'static str,
+    pub command_quick_open: &'static str,
+    pub command_go_to_line: &'static str,
     pub command_toggle_sidebar: &'static str,
     pub command_toggle_panel: &'static str,
     pub command_toggle_agent: &'static str,
@@ -166,6 +173,7 @@ pub struct Strings {
     could_not_start: &'static str,
     could_not_open: &'static str,
     could_not_change: &'static str,
+    go_to_line: &'static str,
     move_question: &'static str,
     trash_question: &'static str,
     coming_in_phase: &'static str,
@@ -215,6 +223,8 @@ impl Strings {
             "workbench.action.focusFirstEditorGroup" => self.command_focus_group_1,
             "workbench.action.focusSecondEditorGroup" => self.command_focus_group_2,
             "workbench.action.focusThirdEditorGroup" => self.command_focus_group_3,
+            "workbench.action.quickOpen" => self.command_quick_open,
+            "workbench.action.gotoLine" => self.command_go_to_line,
             _ => return None,
         })
     }
@@ -248,6 +258,12 @@ impl Strings {
         self.could_not_change
             .replace("{name}", name)
             .replace("{error}", error)
+    }
+
+    pub fn go_to_line_placeholder(&self, current: usize, total: usize) -> String {
+        self.go_to_line
+            .replace("{current}", &current.to_string())
+            .replace("{total}", &total.to_string())
     }
 
     pub fn move_question(&self, name: &str, folder: &str) -> String {
@@ -385,6 +401,13 @@ pub const ITALIAN: Strings = Strings {
     command_focus_group_1: "Vista: Vai al primo gruppo",
     command_focus_group_2: "Vista: Vai al secondo gruppo",
     command_focus_group_3: "Vista: Vai al terzo gruppo",
+    search_files: "Cerca file",
+    quick_open_placeholder: "Cerca un file per nome; aggiungi :riga per andarci",
+    menu_go: "Vai",
+    menu_go_to_file: "Vai al file…",
+    menu_go_to_line: "Vai alla riga…",
+    command_quick_open: "Vai al file…",
+    command_go_to_line: "Vai alla riga o colonna…",
     command_toggle_sidebar: "Vista: Mostra o nascondi la barra laterale",
     command_toggle_panel: "Vista: Mostra o nascondi il pannello",
     command_toggle_agent: "Vista: Mostra o nascondi Claude Code",
@@ -401,6 +424,7 @@ pub const ITALIAN: Strings = Strings {
     could_not_start: "{extension} non è partita: {error}",
     could_not_open: "Keel non riesce ad aprire {path}: {error}",
     could_not_change: "Operazione non riuscita su {name}: {error}",
+    go_to_line: "Riga attuale {current} di {total}. Scrivi la riga, anche con :colonna",
     move_question: "Vuoi spostare «{name}» in «{folder}»?",
     trash_question: "Vuoi spostare «{name}» nel Cestino?",
     coming_in_phase: "Arriva con la fase {phase}",
@@ -511,6 +535,13 @@ pub const ENGLISH: Strings = Strings {
     command_focus_group_1: "View: Focus First Editor Group",
     command_focus_group_2: "View: Focus Second Editor Group",
     command_focus_group_3: "View: Focus Third Editor Group",
+    search_files: "Search files",
+    quick_open_placeholder: "Search files by name; add :line to go there",
+    menu_go: "Go",
+    menu_go_to_file: "Go to File…",
+    menu_go_to_line: "Go to Line…",
+    command_quick_open: "Go to File…",
+    command_go_to_line: "Go to Line/Column…",
     command_toggle_sidebar: "View: Toggle Sidebar",
     command_toggle_panel: "View: Toggle Panel",
     command_toggle_agent: "View: Toggle Claude Code",
@@ -527,6 +558,7 @@ pub const ENGLISH: Strings = Strings {
     could_not_start: "{extension} could not start: {error}",
     could_not_open: "Keel could not open {path}: {error}",
     could_not_change: "Could not change {name}: {error}",
+    go_to_line: "Current line {current} of {total}. Type a line, with :column if you like",
     move_question: "Do you want to move \"{name}\" into \"{folder}\"?",
     trash_question: "Do you want to move \"{name}\" to the Trash?",
     coming_in_phase: "Coming in phase {phase}",
