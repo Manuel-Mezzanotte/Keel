@@ -1,6 +1,7 @@
 //! The workbench: the window with its panels and editors, and the bridge
 //! between Keel and the extension host. The layout is drawn in `shell`.
 
+mod disk;
 mod editing;
 pub(crate) mod explorer;
 mod navigation;
@@ -274,6 +275,9 @@ pub struct Workbench {
     tree_selection: Option<PathBuf>,
     tree_edit: Option<explorer::TreeEdit>,
     tree_focus: gpui::FocusHandle,
+    /// Watches the project for changes made outside Keel.
+    watcher: Option<files::ProjectWatcher>,
+    watching: Task<()>,
     /// The project's files for Quick Open, listed in the background.
     file_index: Option<std::sync::Arc<Vec<String>>>,
     indexing: Task<()>,
@@ -365,6 +369,8 @@ impl Workbench {
             tree_selection: None,
             tree_edit: None,
             tree_focus: cx.focus_handle(),
+            watcher: None,
+            watching: Task::ready(()),
             file_index: None,
             indexing: Task::ready(()),
             first_frame_drawn: false,
@@ -372,6 +378,7 @@ impl Workbench {
         };
         workbench.build_tree();
         workbench.index_files(cx);
+        workbench.watch_project(window, cx);
         if let Some(setup) = extensions {
             workbench.start_extensions(setup, window, cx);
         }
@@ -814,32 +821,12 @@ impl Workbench {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let Some(document) = self.documents.get_mut(uri) else {
+        let Some(document) = self.documents.get(uri) else {
             return;
         };
         let text = document.synced_text.clone();
-        match &mut document.backing {
-            Backing::File(file) => match file.save(&text) {
-                Ok(()) => {
-                    document.modified = false;
-                    self.notify_host("documents/saved", json!({ "uri": uri }));
-                    self.refresh_title(window);
-                    cx.notify();
-                    if let Some(after) = after {
-                        self.finish(after, window, cx);
-                    }
-                }
-                Err(error) => {
-                    let message = self.language.strings().could_not_save(&file.file_name());
-                    show_error(
-                        &message,
-                        &error.to_string(),
-                        self.language.strings().ok,
-                        window,
-                        cx,
-                    );
-                }
-            },
+        match &document.backing {
+            Backing::File(_) => self.save_file(uri, after, window, cx),
             Backing::Untitled => self.save_as(uri.to_owned(), text, after, window, cx),
             Backing::Extension => {
                 if let Some(extensions) = &self.extensions {
@@ -863,7 +850,12 @@ impl Workbench {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let folder = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("/"));
+        let folder = self
+            .project
+            .root
+            .clone()
+            .or_else(|| std::env::current_dir().ok())
+            .unwrap_or_else(|| PathBuf::from("/"));
         let chosen = cx.prompt_for_new_path(&folder, Some(self.strings().untitled_file_name));
         cx.spawn_in(window, async move |this, cx| {
             let Ok(Ok(Some(path))) = chosen.await else {

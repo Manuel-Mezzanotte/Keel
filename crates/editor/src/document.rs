@@ -77,6 +77,20 @@ impl Document {
         &self.path
     }
 
+    /// The file's text if it changed on disk since Keel last read or saved
+    /// it, for example because Claude Code wrote it. A missing or unreadable
+    /// file counts as unchanged.
+    pub fn changed_on_disk(&self) -> Option<String> {
+        let text = fs::read_to_string(&self.path).ok()?;
+        (text != self.saved_text).then_some(text)
+    }
+
+    /// Takes the text now on disk as the saved one, after a reload.
+    pub fn accept_disk_text(&mut self, text: String) {
+        self.saved_text = text;
+        self.exists_on_disk = true;
+    }
+
     /// Follows the file after it was renamed or moved on disk.
     pub fn set_path(&mut self, path: impl Into<PathBuf>) {
         self.path = path.into();
@@ -161,6 +175,23 @@ fn write_atomically(path: &Path, contents: &[u8]) -> io::Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn changes_made_outside_are_noticed() {
+        let folder = tempfile::tempdir().unwrap();
+        let path = folder.path().join("app.ts");
+        fs::write(&path, "one").unwrap();
+        let mut document = Document::open(&path).unwrap();
+        assert_eq!(document.changed_on_disk(), None);
+
+        fs::write(&path, "two").unwrap();
+        assert_eq!(document.changed_on_disk().as_deref(), Some("two"));
+        document.accept_disk_text("two".to_owned());
+        assert_eq!(document.changed_on_disk(), None);
+
+        document.save("three").unwrap();
+        assert_eq!(document.changed_on_disk(), None);
+    }
 
     #[test]
     fn opens_an_existing_file() {
