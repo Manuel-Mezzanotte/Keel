@@ -5,6 +5,7 @@ mod cli;
 mod editor_checks;
 mod i18n;
 mod keymap;
+mod menus;
 mod paths;
 mod quick_pick;
 mod theme;
@@ -138,6 +139,13 @@ fn run(document: Option<Document>) {
                 eprintln!("keel: {warning}");
             }
             theme::apply(&theme::ThemeChoice::from_settings(&settings), None, cx);
+            menus::set(
+                i18n::UiLanguage::from_setting(
+                    settings.string("keel.language"),
+                    i18n::UiLanguage::system_locale().as_deref(),
+                ),
+                cx,
+            );
             let setup = extension_setup(user_bindings);
             let opened = cx.open_window(options, move |window, cx| {
                 let view = cx.new(|cx| Workbench::new(document, settings, setup, window, cx));

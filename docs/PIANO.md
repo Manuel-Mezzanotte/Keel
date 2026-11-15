@@ -253,7 +253,7 @@ Il confronto non è alla pari: Cursor aveva anche albero dei file, terminale, se
 | 1.4 | Comandi e scorciatoie: registro dei comandi, `keybindings.json` nel formato di VS Code, tastiera italiana | fatta; la tastiera italiana va provata a mano |
 | 1.5 | Temi Mezzanotte, Chiaro e Nero, cambio al volo, segue chiaro e scuro di macOS | fatta |
 | 1.6 | La disposizione della bozza scelta | da fare |
-| 1.7 | Menu di macOS, logo e icona di Keel | da fare |
+| 1.7 | Menu di macOS, logo e icona di Keel | menu fatti (italiano e inglese); logo e icona dopo la scelta della bozza |
 
 **Cosa si fa**
 - **Bozze:** 2–3 proposte di interfaccia in stile Apple e Cursor. Scegli tu, prima di costruire.

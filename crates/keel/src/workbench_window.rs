@@ -870,6 +870,7 @@ impl Workbench {
             self.status_message = Some(error.to_string());
         }
         self.notify_host("env/changed", json!({ "language": language.code() }));
+        crate::menus::set(language, cx);
         self.refresh_title(window);
         cx.notify();
     }
