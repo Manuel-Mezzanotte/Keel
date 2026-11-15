@@ -326,13 +326,28 @@ Il confronto non è alla pari: Cursor aveva anche albero dei file, terminale, se
 
 | Sottofase | Cosa | Stato |
 |---|---|---|
-| 2.1 | Progetti: `keel cartella` e `keel .`, File → Apri, una finestra per progetto, un solo Keel aperto, progetti recenti, schermata iniziale | in corso |
+| 2.1 | Progetti: `keel cartella` e `keel .`, File → Apri, una finestra per progetto, un solo Keel aperto, progetti recenti, schermata iniziale | fatta |
 | 2.2 | Esplora risorse: albero con le icone, file ignorati attenuati; nuovo file e cartella, rinomina, elimina nel Cestino, sposta trascinando, mostra nel Finder, copia il percorso | da fare |
 | 2.3 | Schede: più file per gruppo, anteprima, fissate, chiudi le altre, riapri l'ultima chiusa; editor affiancati e gruppi | da fare |
 | 2.4 | Apertura veloce (Cmd+P) e vai alla riga (Ctrl+G) | da fare |
 | 2.5 | Scrittura: commenta, sposta e duplica righe, piega i blocchi, guide di rientro, parentesi e tag chiusi da soli, a capo, zoom, breadcrumb, sticky scroll e minimappa | da fare |
 | 2.6 | Cambi dall'esterno e niente perso: ricarica i file cambiati fuori da Keel, salvataggio automatico, modifiche non salvate conservate, ripristino di schede e disposizione | da fare |
 | 2.7 | Altri file (immagini, binari, file molto grandi), misure e resoconto | da fare |
+
+**Note sulla 2.1**
+- **Aprire:**
+  - `keel cartella` e `keel .` aprono una cartella come progetto;
+  - `keel file` apre un file nella finestra del progetto che lo contiene, oppure in una finestra nuova con la sua cartella (quella con `.git`, `.vscode` o `.keel`);
+  - File → Apri… (Cmd+O) sceglie un file o una cartella.
+- **Un solo Keel:** se Keel è già aperto, `keel` gli passa il percorso ed esce subito, come `code .` con VS Code. Anche aprire un file dal Finder con Keel.app passa da lì.
+- **Una finestra per progetto:** riaprire un progetto già aperto porta avanti la sua finestra. Ogni finestra ha le sue impostazioni di progetto e le sue estensioni.
+- **Comandi nuovi:**
+  - Nuova finestra (Cmd+Shift+N);
+  - Nuovo file (Cmd+N);
+  - Apri recente (Ctrl+R).
+- **Progetti recenti:** gli ultimi 20, in `recent.json`, nel menu File → Apri recente e nella schermata iniziale.
+- **Schermata iniziale:** una finestra senza file mostra il marchio, Apri…, Nuovo file e i progetti recenti. Chiudendo l'ultimo file si torna lì. Una finestra vuota che apre un progetto lascia il posto alla finestra del progetto.
+- **Estensioni:** sanno qual è la cartella del progetto (`workspace.workspaceFolders`).
 
 **Cosa si fa**
 - **Progetti:** apri cartella, progetti recenti, schermata iniziale, una finestra per progetto, comando `keel .` dal terminale (come `code .`).

@@ -101,6 +101,17 @@ pub struct Strings {
     pub ask_claude: &'static str,
     pub plain_text: &'static str,
     pub close_editor: &'static str,
+    pub welcome_open: &'static str,
+    pub welcome_new_file: &'static str,
+    pub menu_new_window: &'static str,
+    pub menu_open_recent: &'static str,
+    pub recent_projects: &'static str,
+    pub open_recent_title: &'static str,
+    pub no_recent_projects: &'static str,
+    pub command_open: &'static str,
+    pub command_new_file: &'static str,
+    pub command_new_window: &'static str,
+    pub command_open_recent: &'static str,
     pub command_toggle_sidebar: &'static str,
     pub command_toggle_panel: &'static str,
     pub command_toggle_agent: &'static str,
@@ -115,6 +126,7 @@ pub struct Strings {
     could_not_save: &'static str,
     could_not_use: &'static str,
     could_not_start: &'static str,
+    could_not_open: &'static str,
     coming_in_phase: &'static str,
     line_column: &'static str,
     spaces: &'static str,
@@ -141,6 +153,10 @@ impl Strings {
             "workbench.actions.view.problems" => self.command_problems,
             "workbench.action.output.toggleOutput" => self.command_output,
             "workbench.action.terminal.toggleTerminal" => self.command_terminal,
+            "workbench.action.files.openFileFolder" => self.command_open,
+            "workbench.action.files.newUntitledFile" => self.command_new_file,
+            "workbench.action.newWindow" => self.command_new_window,
+            "workbench.action.openRecent" => self.command_open_recent,
             _ => return None,
         })
     }
@@ -161,6 +177,12 @@ impl Strings {
     pub fn could_not_start(&self, extension: &str, error: &str) -> String {
         self.could_not_start
             .replace("{extension}", extension)
+            .replace("{error}", error)
+    }
+
+    pub fn could_not_open(&self, path: &str, error: &str) -> String {
+        self.could_not_open
+            .replace("{path}", path)
             .replace("{error}", error)
     }
 
@@ -240,6 +262,17 @@ pub const ITALIAN: Strings = Strings {
     ask_claude: "Chiedi a Claude…",
     plain_text: "Testo normale",
     close_editor: "Chiudi",
+    welcome_open: "Apri…",
+    welcome_new_file: "Nuovo file",
+    menu_new_window: "Nuova finestra",
+    menu_open_recent: "Apri recente",
+    recent_projects: "Recenti",
+    open_recent_title: "Apri un progetto recente",
+    no_recent_projects: "Nessun progetto recente",
+    command_open: "File: Apri…",
+    command_new_file: "File: Nuovo file",
+    command_new_window: "File: Nuova finestra",
+    command_open_recent: "File: Apri recente…",
     command_toggle_sidebar: "Vista: Mostra o nascondi la barra laterale",
     command_toggle_panel: "Vista: Mostra o nascondi il pannello",
     command_toggle_agent: "Vista: Mostra o nascondi Claude Code",
@@ -254,6 +287,7 @@ pub const ITALIAN: Strings = Strings {
     could_not_save: "Keel non è riuscito a salvare {name}",
     could_not_use: "Keel non può usare {path}",
     could_not_start: "{extension} non è partita: {error}",
+    could_not_open: "Keel non riesce ad aprire {path}: {error}",
     coming_in_phase: "Arriva con la fase {phase}",
     line_column: "Riga {line}, col {column}",
     spaces: "Spazi: {size}",
@@ -313,6 +347,17 @@ pub const ENGLISH: Strings = Strings {
     ask_claude: "Ask Claude…",
     plain_text: "Plain Text",
     close_editor: "Close",
+    welcome_open: "Open…",
+    welcome_new_file: "New File",
+    menu_new_window: "New Window",
+    menu_open_recent: "Open Recent",
+    recent_projects: "Recent",
+    open_recent_title: "Open a recent project",
+    no_recent_projects: "No recent projects",
+    command_open: "File: Open…",
+    command_new_file: "File: New File",
+    command_new_window: "File: New Window",
+    command_open_recent: "File: Open Recent…",
     command_toggle_sidebar: "View: Toggle Sidebar",
     command_toggle_panel: "View: Toggle Panel",
     command_toggle_agent: "View: Toggle Claude Code",
@@ -327,6 +372,7 @@ pub const ENGLISH: Strings = Strings {
     could_not_save: "Keel could not save {name}",
     could_not_use: "Keel could not use {path}",
     could_not_start: "{extension} could not start: {error}",
+    could_not_open: "Keel could not open {path}: {error}",
     coming_in_phase: "Coming in phase {phase}",
     line_column: "Ln {line}, Col {column}",
     spaces: "Spaces: {size}",

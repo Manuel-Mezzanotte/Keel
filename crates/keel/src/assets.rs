@@ -5,7 +5,10 @@ use std::borrow::Cow;
 
 use gpui::{AssetSource, Result, SharedString};
 
-gpui_kit_assets::icon_assets!(ExtraIcons, [Files, GitBranch, Blocks, Sparkles, ArrowUp, X]);
+gpui_kit_assets::icon_assets!(
+    ExtraIcons,
+    [Files, GitBranch, Blocks, Sparkles, ArrowUp, X, FilePlus]
+);
 
 /// Keel's mark, the outline of a paper boat.
 pub const LOGO: &str = "brand/keel-mark.svg";
@@ -51,6 +54,9 @@ mod tests {
             IconName::Sparkles,
             IconName::ArrowUp,
             IconName::X,
+            IconName::FilePlus,
+            IconName::FolderOpen,
+            IconName::Folder,
             IconName::Search,
             IconName::PanelLeft,
             IconName::PanelBottom,

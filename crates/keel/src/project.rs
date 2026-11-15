@@ -14,10 +14,16 @@ pub struct Project {
 impl Project {
     /// The project of a file: the nearest folder with `.git`, `.vscode` or
     /// `.keel`, otherwise the file's own folder.
+    #[cfg(test)]
     pub fn for_file(file: Option<&Path>) -> Self {
         let root = file
             .and_then(|file| std::path::absolute(file).ok())
             .and_then(|file| settings::project_root_for(&file));
+        Self::new(root)
+    }
+
+    /// The project in a folder, or none for a window without one.
+    pub fn new(root: Option<PathBuf>) -> Self {
         let name = root.as_deref().and_then(Path::file_name).map_or_else(
             || "Keel".to_owned(),
             |name| name.to_string_lossy().into_owned(),

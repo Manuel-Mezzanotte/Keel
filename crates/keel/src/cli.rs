@@ -1,11 +1,11 @@
-//! Command-line arguments: `keel [FILE]`.
+//! Command-line arguments: `keel [PATH]`.
 
 use std::path::PathBuf;
 
 /// What the user asked for on the command line.
 #[derive(Debug, PartialEq, Eq)]
 pub enum Command {
-    /// Open the editor, optionally on a file.
+    /// Open a window, on a folder, a file, or nothing.
     Open(Option<PathBuf>),
     /// Print the version and exit.
     Version,
@@ -17,9 +17,11 @@ pub enum Command {
 
 /// Usage text printed by `keel --help` and after a wrong invocation.
 pub const USAGE: &str = "\
-Usage: keel [FILE]
+Usage: keel [PATH]
 
-Opens FILE in Keel. A file that does not exist yet is created on the first save.
+Opens PATH in Keel: a folder as a project, a file in its project. `keel .`
+opens the current folder. A file that does not exist yet is created on the
+first save. If Keel is already running, PATH opens there.
 
 Options:
   --install-extension VSIX  Install a VS Code extension package
@@ -48,7 +50,7 @@ pub fn parse(arguments: impl IntoIterator<Item = String>) -> Result<Command, Str
         } else if file.is_none() {
             file = Some(PathBuf::from(argument));
         } else {
-            return Err("only one file can be opened for now".to_owned());
+            return Err("only one file or folder can be opened at a time".to_owned());
         }
     }
     Ok(Command::Open(file))
@@ -72,6 +74,14 @@ mod tests {
         assert_eq!(
             parse_args(&["src/app.tsx"]),
             Ok(Command::Open(Some(PathBuf::from("src/app.tsx"))))
+        );
+    }
+
+    #[test]
+    fn a_dot_opens_the_current_folder() {
+        assert_eq!(
+            parse_args(&["."]),
+            Ok(Command::Open(Some(PathBuf::from("."))))
         );
     }
 

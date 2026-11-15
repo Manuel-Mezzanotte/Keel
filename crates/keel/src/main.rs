@@ -5,24 +5,27 @@ mod cli;
 #[cfg(test)]
 mod editor_checks;
 mod i18n;
+mod instance;
 mod keymap;
 mod layout;
 mod menus;
 mod paths;
 mod project;
 mod quick_pick;
+mod recent;
 mod theme;
+mod windows;
 mod workbench_window;
 
+use std::path::PathBuf;
 use std::process::ExitCode;
 
-use editor::Document;
-use extensions::ExtensionHost;
-use gpui::{App, AppContext as _, Bounds, QuitMode, px, size};
-use gpui_component::Root;
+use futures::StreamExt as _;
+use futures::channel::mpsc;
+use gpui::{App, QuitMode};
+use workbench::uri::Uri;
 
 use crate::cli::Command;
-use crate::workbench_window::{ExtensionSetup, Workbench};
 
 /// When Keel started, for `KEEL_STARTUP_TIMING`.
 pub static STARTED: std::sync::OnceLock<std::time::Instant> = std::sync::OnceLock::new();
@@ -64,92 +67,77 @@ fn main() -> ExitCode {
             }
         }
         Command::Open(path) => {
-            let document = match path.map(Document::open).transpose() {
-                Ok(document) => document,
-                Err(error) => {
-                    eprintln!("keel: {error}");
-                    return ExitCode::FAILURE;
-                }
-            };
-            run(document);
+            let path = path.map(|path| paths::normalize(&path));
+            let socket = instance::socket_path(&paths::data_dir());
+            // A Keel already running opens the path in a window of its own.
+            if instance::forward(&socket, path.as_deref()) {
+                return ExitCode::SUCCESS;
+            }
+            run(path, socket);
             ExitCode::SUCCESS
         }
     }
 }
 
-/// Starts the extension host with the installed extensions. Keel still runs
-/// without extensions if the host cannot start.
-fn extension_setup(user_bindings: Vec<keymap::UserBinding>) -> Option<ExtensionSetup> {
-    let data_dir = paths::data_dir();
-    let installed = paths::installed_extensions(&data_dir);
-    match ExtensionHost::start() {
-        Ok((host, events)) => Some(ExtensionSetup {
-            user_bindings,
-            host,
-            events,
-            installed,
-            data_dir,
-        }),
-        Err(error) => {
-            eprintln!("keel: extensions are off, the extension host did not start: {error:#}");
-            None
-        }
-    }
-}
-
-fn run(document: Option<Document>) {
-    gpui_platform::application()
+fn run(path: Option<PathBuf>, socket: PathBuf) {
+    // Paths to open arrive from other `keel` commands and from Finder.
+    let (requests, mut incoming) = mpsc::unbounded::<instance::OpenRequest>();
+    let from_finder = requests.clone();
+    let app = gpui_platform::application()
         .with_assets(assets::KeelAssets)
-        .with_quit_mode(QuitMode::LastWindowClosed)
-        .run(move |cx: &mut App| {
-            gpui_component::init(cx);
-            theme::init(cx);
-            language::register_grammars();
-            let data_dir = paths::data_dir();
-            let (user_bindings, mut warnings) =
-                keymap::read_user_bindings(&paths::user_keybindings_file(&data_dir));
-            warnings.extend(workbench_window::init_with_user_bindings(
-                &user_bindings,
-                cx,
-            ));
-            for warning in &warnings {
-                eprintln!("keel: {warning}");
+        .with_quit_mode(QuitMode::LastWindowClosed);
+    app.on_open_urls(move |urls| {
+        for url in urls {
+            if let Some(path) = Uri::parse(&url).and_then(|uri| uri.file_path()) {
+                let _ = from_finder.unbounded_send(Some(path));
             }
+        }
+    });
+    app.on_reopen(|cx| {
+        if cx.windows().is_empty() {
+            windows::open(None, cx);
+        }
+    });
+    app.run(move |cx: &mut App| {
+        gpui_component::init(cx);
+        theme::init(cx);
+        language::register_grammars();
+        let data = paths::data_dir();
+        let (user_bindings, mut warnings) =
+            keymap::read_user_bindings(&paths::user_keybindings_file(&data));
+        warnings.extend(workbench_window::init_with_user_bindings(
+            &user_bindings,
+            cx,
+        ));
+        for warning in &warnings {
+            eprintln!("keel: {warning}");
+        }
+        recent::init(paths::recent_projects_file(&data), cx);
+        windows::init(cx);
 
-            let options = workbench_window::window_options(Bounds::centered(
-                None,
-                size(px(1280.), px(820.)),
-                cx,
-            ));
-            let project = document
-                .as_ref()
-                .and_then(|document| std::path::absolute(document.path()).ok())
-                .and_then(|path| settings::project_root_for(&path));
-            let settings = settings::Settings::load(
-                paths::user_settings_file(&paths::data_dir()),
-                project.as_deref(),
-            );
-            for warning in &settings.warnings {
-                eprintln!("keel: {warning}");
+        // The theme and the menus follow the user's settings; each window
+        // reads its project's settings too.
+        let settings = settings::Settings::load(paths::user_settings_file(&data), None);
+        theme::apply(&theme::ThemeChoice::from_settings(&settings), None, cx);
+        menus::set(
+            i18n::UiLanguage::from_setting(
+                settings.string("keel.language"),
+                i18n::UiLanguage::system_locale().as_deref(),
+            ),
+            cx,
+        );
+
+        if let Err(error) = instance::listen(&socket, requests) {
+            eprintln!("keel: other keel commands will start their own Keel: {error}");
+        }
+        cx.spawn(async move |cx| {
+            while let Some(path) = incoming.next().await {
+                cx.update(|cx| windows::open(path, cx));
             }
-            theme::apply(&theme::ThemeChoice::from_settings(&settings), None, cx);
-            menus::set(
-                i18n::UiLanguage::from_setting(
-                    settings.string("keel.language"),
-                    i18n::UiLanguage::system_locale().as_deref(),
-                ),
-                cx,
-            );
-            let setup = extension_setup(user_bindings);
-            let opened = cx.open_window(options, move |window, cx| {
-                let view = cx.new(|cx| Workbench::new(document, settings, setup, window, cx));
-                cx.new(|cx| Root::new(view, window, cx))
-            });
-            if let Err(error) = opened {
-                eprintln!("keel: could not open the window: {error}");
-                cx.quit();
-                return;
-            }
-            cx.activate(true);
-        });
+        })
+        .detach();
+
+        windows::open(path, cx);
+        cx.activate(true);
+    });
 }

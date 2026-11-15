@@ -1,18 +1,41 @@
 //! Keel's menu bar on macOS, in the interface language.
 
-use gpui::{App, Menu, MenuItem, OsAction, SystemMenuType};
+use gpui::{App, Global, Menu, MenuItem, OsAction, SystemMenuType};
 use gpui_component::input::{Copy, Cut, Paste, Redo, Replace, Search, SelectAll, Undo};
 
 use crate::i18n::UiLanguage;
 use crate::workbench_window::{
-    CloseWindow, Quit, Save, SelectLanguage, SelectTheme, ShowCommands, ShowExplorer,
-    ShowExtensions, ShowSearch, ShowSourceControl, ToggleAgent, ToggleOutput, TogglePanel,
-    ToggleProblems, ToggleSidebar, ToggleTerminal,
+    CloseWindow, NewFile, NewWindow, Open, OpenProject, Quit, Save, SelectLanguage, SelectTheme,
+    ShowCommands, ShowExplorer, ShowExtensions, ShowSearch, ShowSourceControl, ToggleAgent,
+    ToggleOutput, TogglePanel, ToggleProblems, ToggleSidebar, ToggleTerminal,
 };
+
+/// The language the menu bar was last built in.
+struct MenuLanguage(UiLanguage);
+
+impl Global for MenuLanguage {}
+
+/// Builds the menu bar again, for example after the recent projects changed.
+pub fn refresh(cx: &mut App) {
+    if let Some(language) = cx.try_global::<MenuLanguage>().map(|language| language.0) {
+        set(language, cx);
+    }
+}
 
 /// Sets the menu bar. Called again when the interface language changes.
 pub fn set(language: UiLanguage, cx: &mut App) {
+    cx.set_global(MenuLanguage(language));
     let strings = language.strings();
+    let recent: Vec<MenuItem> = crate::recent::projects(cx)
+        .into_iter()
+        .take(10)
+        .map(|project| {
+            MenuItem::action(
+                crate::recent::short_path(&project),
+                OpenProject { path: project },
+            )
+        })
+        .collect();
     let menu = |name: &str, items: Vec<MenuItem>| Menu {
         name: name.to_owned().into(),
         items,
@@ -33,6 +56,16 @@ pub fn set(language: UiLanguage, cx: &mut App) {
         menu(
             strings.menu_file,
             vec![
+                MenuItem::action(strings.welcome_new_file, NewFile),
+                MenuItem::action(strings.menu_new_window, NewWindow),
+                MenuItem::separator(),
+                MenuItem::action(strings.welcome_open, Open),
+                MenuItem::submenu(Menu {
+                    name: strings.menu_open_recent.into(),
+                    disabled: recent.is_empty(),
+                    items: recent,
+                }),
+                MenuItem::separator(),
                 MenuItem::action(strings.save, Save),
                 MenuItem::separator(),
                 MenuItem::action(strings.menu_close_window, CloseWindow),

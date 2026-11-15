@@ -488,6 +488,159 @@ impl Workbench {
         }))
     }
 
+    /// What the editors' panel shows with no file open: how to start, and
+    /// the recent projects.
+    fn render_welcome(&self, colors: Colors, cx: &mut Context<Self>) -> AnyElement {
+        let strings = self.strings();
+        let start = |id: &'static str, icon: IconName, label: &'static str, keys: &'static str| {
+            div()
+                .id(id)
+                .h(px(32.))
+                .px_2()
+                .flex()
+                .items_center()
+                .gap_2p5()
+                .rounded(px(8.))
+                .text_sm()
+                .text_color(colors.text)
+                .cursor_pointer()
+                .hover(|row| row.bg(colors.hover))
+                .child(Icon::new(icon).small().text_color(colors.accent))
+                .child(label)
+                .child(
+                    div()
+                        .ml_auto()
+                        .text_xs()
+                        .text_color(colors.faint)
+                        .child(keys),
+                )
+        };
+        let recent = crate::recent::projects(cx);
+        let recent_rows = recent
+            .into_iter()
+            .take(8)
+            .enumerate()
+            .map(|(index, project)| {
+                let name = project
+                    .file_name()
+                    .map(|name| name.to_string_lossy().into_owned())
+                    .unwrap_or_else(|| project.display().to_string());
+                let location = project
+                    .parent()
+                    .map(crate::recent::short_path)
+                    .unwrap_or_default();
+                div()
+                    .id(("recent-project", index))
+                    .h(px(30.))
+                    .px_2()
+                    .flex()
+                    .items_center()
+                    .gap_2p5()
+                    .rounded(px(8.))
+                    .text_sm()
+                    .cursor_pointer()
+                    .hover(|row| row.bg(colors.hover))
+                    .on_click(cx.listener(move |_, _, window, cx| {
+                        window.dispatch_action(
+                            Box::new(OpenProject {
+                                path: project.clone(),
+                            }),
+                            cx,
+                        )
+                    }))
+                    .child(Icon::new(IconName::Folder).small().text_color(colors.muted))
+                    .child(div().text_color(colors.text).child(name))
+                    .child(
+                        div()
+                            .min_w_0()
+                            .truncate()
+                            .text_xs()
+                            .text_color(colors.faint)
+                            .child(location),
+                    )
+            });
+        let recent_rows: Vec<_> = recent_rows.collect();
+
+        div()
+            .id("welcome")
+            .flex_1()
+            .min_h_0()
+            .overflow_y_scroll()
+            .flex()
+            .flex_col()
+            .items_center()
+            .justify_center()
+            .child(
+                div()
+                    .w(px(400.))
+                    .max_w_full()
+                    .px_4()
+                    .flex()
+                    .flex_col()
+                    .gap_6()
+                    .child(
+                        div()
+                            .flex()
+                            .items_center()
+                            .gap_3()
+                            .child(
+                                svg()
+                                    .path(crate::assets::LOGO)
+                                    .size(px(40.))
+                                    .text_color(colors.muted),
+                            )
+                            .child(
+                                div()
+                                    .text_xl()
+                                    .font_weight(FontWeight::SEMIBOLD)
+                                    .text_color(colors.text)
+                                    .child(if self.project.root.is_some() {
+                                        self.project.name.clone()
+                                    } else {
+                                        "Keel".to_owned()
+                                    }),
+                            ),
+                    )
+                    .child(
+                        div()
+                            .flex()
+                            .flex_col()
+                            .child(
+                                start(
+                                    "welcome-open",
+                                    IconName::FolderOpen,
+                                    strings.welcome_open,
+                                    "⌘O",
+                                )
+                                .on_click(cx.listener(
+                                    |_, _, window, cx| window.dispatch_action(Box::new(Open), cx),
+                                )),
+                            )
+                            .child(
+                                start(
+                                    "welcome-new-file",
+                                    IconName::FilePlus,
+                                    strings.welcome_new_file,
+                                    "⌘N",
+                                )
+                                .on_click(
+                                    cx.listener(|this, _, window, cx| this.new_file(window, cx)),
+                                ),
+                            ),
+                    )
+                    .when(!recent_rows.is_empty(), |welcome| {
+                        welcome.child(
+                            div()
+                                .flex()
+                                .flex_col()
+                                .child(heading(strings.recent_projects, colors))
+                                .children(recent_rows),
+                        )
+                    }),
+            )
+            .into_any_element()
+    }
+
     fn render_editors(&self, colors: Colors, cx: &mut Context<Self>) -> Div {
         let strings = self.strings();
         let panes = self.panes.iter().enumerate().map(|(index, pane)| {
@@ -558,10 +711,21 @@ impl Workbench {
                 )
         });
 
+        let content = if self.panes.is_empty() {
+            self.render_welcome(colors, cx)
+        } else {
+            div()
+                .flex_1()
+                .min_h_0()
+                .flex()
+                .flex_row()
+                .children(panes)
+                .into_any_element()
+        };
         floating(colors.editor, colors.border)
             .flex_1()
             .min_w_0()
-            .child(div().flex_1().min_h_0().flex().flex_row().children(panes))
+            .child(content)
             .when(self.layout.panel, |main| {
                 main.child(self.render_bottom_panel(colors, cx))
             })
@@ -806,7 +970,11 @@ impl Render for Workbench {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         if !self.first_frame_drawn {
             self.first_frame_drawn = true;
-            if std::env::var_os("KEEL_STARTUP_TIMING").is_some() {
+            // Only the first window counts: later ones open long after start.
+            static TIMED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+            if std::env::var_os("KEEL_STARTUP_TIMING").is_some()
+                && !TIMED.swap(true, std::sync::atomic::Ordering::Relaxed)
+            {
                 window.on_next_frame(|_, _| {
                     if let Some(started) = crate::STARTED.get() {
                         eprintln!("keel: first frame after {:?}", started.elapsed());
@@ -834,6 +1002,7 @@ impl Render for Workbench {
         let status = self.render_status_bar(colors, cx);
 
         div()
+            .track_focus(&self.focus_handle)
             .size_full()
             .flex()
             .flex_col()
@@ -877,6 +1046,10 @@ impl Render for Workbench {
             .on_action(cx.listener(|this, _: &ToggleTerminal, _, cx| {
                 this.toggle_panel_view(PanelView::Terminal, cx)
             }))
+            .on_action(cx.listener(|this, _: &NewFile, window, cx| this.new_file(window, cx)))
+            .on_action(
+                cx.listener(|this, _: &OpenRecent, window, cx| this.choose_recent(window, cx)),
+            )
             .child(toolbar)
             .child(body)
             .child(status)
@@ -935,7 +1108,8 @@ mod tests {
         assert_eq!(layout(&view, cx).side_view, SideView::Extensions);
         cx.simulate_keystrokes("cmd-shift-e");
         assert_eq!(layout(&view, cx).side_view, SideView::Explorer);
-        // Typing still goes to the editor.
+        // Typing goes to the editor once a file is open.
+        cx.simulate_keystrokes("cmd-n");
         cx.simulate_input("ok");
         assert!(view.read_with(cx, |view, _| view.has_unsaved_changes()));
     }
@@ -1045,6 +1219,63 @@ mod tests {
             view.show_document(&file_uri, window, cx)
         });
         view.read_with(cx, |view, _| assert_eq!(view.panes[0].uri, file_uri));
+    }
+
+    #[gpui::test]
+    fn an_empty_window_welcomes_and_cmd_n_opens_a_file(cx: &mut TestAppContext) {
+        set_up(cx);
+        let folder = tempfile::tempdir().unwrap();
+        let settings = english(folder.path());
+        let (view, cx) =
+            cx.add_window_view(|window, cx| Workbench::new(None, settings, None, window, cx));
+        view.read_with(cx, |view, _| {
+            assert!(view.is_blank());
+            assert!(view.panes.is_empty());
+            assert_eq!(view.window_title(), "Keel");
+        });
+
+        cx.simulate_keystrokes("cmd-n");
+        view.read_with(cx, |view, _| {
+            assert_eq!(view.panes.len(), 1);
+            assert_eq!(view.window_title(), "Untitled 1");
+        });
+
+        view.update_in(cx, |view, window, cx| view.close_pane(0, window, cx));
+        view.read_with(cx, |view, _| assert!(view.panes.is_empty()));
+        // The window still answers shortcuts with no editor in it.
+        cx.simulate_keystrokes("cmd-b");
+        assert!(!layout(&view, cx).sidebar);
+    }
+
+    #[gpui::test]
+    fn a_project_window_opens_its_files_once(cx: &mut TestAppContext) {
+        set_up(cx);
+        let folder = tempfile::tempdir().unwrap();
+        let root = folder.path().join("Silo");
+        std::fs::create_dir_all(root.join("src")).unwrap();
+        let file = root.join("src/main.rs");
+        std::fs::write(&file, "fn main() {}\n").unwrap();
+        let settings = english(folder.path());
+
+        let opening = Opening::new(Some(root.clone()), Some(file.clone()));
+        let (view, cx) =
+            cx.add_window_view(|window, cx| Workbench::new(opening, settings, None, window, cx));
+        view.read_with(cx, |view, _| {
+            assert!(!view.is_blank());
+            assert_eq!(view.window_title(), "main.rs — Silo");
+            assert_eq!(view.documents.len(), 1);
+        });
+
+        view.update_in(cx, |view, window, cx| {
+            view.open_file(&file, window, cx);
+            view.open_file(&root.join("src"), window, cx);
+        });
+        view.read_with(cx, |view, _| {
+            assert_eq!(view.documents.len(), 1);
+            assert_eq!(view.panes.len(), 1);
+            let last = view.output.last().unwrap();
+            assert!(last.starts_with("Keel could not open"), "{last}");
+        });
     }
 
     #[test]

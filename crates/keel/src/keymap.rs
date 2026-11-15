@@ -7,9 +7,9 @@ use gpui::{Action, App, KeyBinding};
 use serde_json::Value;
 
 use crate::workbench_window::{
-    CloseWindow, Quit, Save, SelectLanguage, SelectTheme, ShowCommands, ShowExplorer,
-    ShowExtensions, ShowSearch, ShowSourceControl, ToggleAgent, ToggleOutput, TogglePanel,
-    ToggleProblems, ToggleSidebar, ToggleTerminal,
+    CloseWindow, NewFile, NewWindow, Open, OpenRecent, Quit, Save, SelectLanguage, SelectTheme,
+    ShowCommands, ShowExplorer, ShowExtensions, ShowSearch, ShowSourceControl, ToggleAgent,
+    ToggleOutput, TogglePanel, ToggleProblems, ToggleSidebar, ToggleTerminal,
 };
 
 /// A Keel command: its VS Code name, the action it runs and its default key.
@@ -101,6 +101,26 @@ pub const COMMANDS: &[KeelCommand] = &[
         id: "workbench.action.terminal.toggleTerminal",
         action: || Box::new(ToggleTerminal),
         default_key: Some("ctrl+`"),
+    },
+    KeelCommand {
+        id: "workbench.action.files.openFileFolder",
+        action: || Box::new(Open),
+        default_key: Some("cmd+o"),
+    },
+    KeelCommand {
+        id: "workbench.action.files.newUntitledFile",
+        action: || Box::new(NewFile),
+        default_key: Some("cmd+n"),
+    },
+    KeelCommand {
+        id: "workbench.action.newWindow",
+        action: || Box::new(NewWindow),
+        default_key: Some("cmd+shift+n"),
+    },
+    KeelCommand {
+        id: "workbench.action.openRecent",
+        action: || Box::new(OpenRecent),
+        default_key: Some("ctrl+r"),
     },
 ];
 
@@ -285,7 +305,7 @@ mod tests {
         let (bindings, warnings) =
             read_user_bindings(Path::new("/nonexistent/keel/keybindings.json"));
         assert!(bindings.is_empty() && warnings.is_empty());
-        assert_eq!(keel_bindings(&[]).len(), 15);
+        assert_eq!(keel_bindings(&[]).len(), 19);
     }
 
     #[test]

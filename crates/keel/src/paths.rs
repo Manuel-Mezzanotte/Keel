@@ -18,6 +18,23 @@ pub fn data_dir() -> PathBuf {
         .join("Library/Application Support/com.manuelmezzanotte.keel")
 }
 
+/// A path written the way Finder knows it: absolute, without `.` or `..`,
+/// with symbolic links resolved. A file that does not exist yet keeps its
+/// name in its resolved folder.
+pub fn normalize(path: &Path) -> PathBuf {
+    if let Ok(resolved) = fs::canonicalize(path) {
+        return resolved;
+    }
+    let absolute = std::path::absolute(path).unwrap_or_else(|_| path.to_path_buf());
+    match (absolute.parent(), absolute.file_name()) {
+        (Some(folder), Some(name)) => match fs::canonicalize(folder) {
+            Ok(folder) => folder.join(name),
+            Err(_) => absolute,
+        },
+        _ => absolute,
+    }
+}
+
 /// The user's settings, `settings.json` in the data folder.
 pub fn user_settings_file(data: &Path) -> PathBuf {
     data.join("settings.json")
@@ -26,6 +43,11 @@ pub fn user_settings_file(data: &Path) -> PathBuf {
 /// The user's key bindings, `keybindings.json` in the data folder.
 pub fn user_keybindings_file(data: &Path) -> PathBuf {
     data.join("keybindings.json")
+}
+
+/// The projects opened lately, `recent.json` in the data folder.
+pub fn recent_projects_file(data: &Path) -> PathBuf {
+    data.join("recent.json")
 }
 
 pub fn extensions_dir(data: &Path) -> PathBuf {
@@ -131,6 +153,19 @@ mod tests {
         let installed = installed_extensions(data.path());
         assert_eq!(installed.len(), 1);
         assert_eq!(installed[0].manifest.version, "0.10.0");
+    }
+
+    #[test]
+    fn paths_are_normalized() {
+        let folder = tempfile::tempdir().unwrap();
+        let base = fs::canonicalize(folder.path()).unwrap();
+        fs::create_dir_all(base.join("Keel")).unwrap();
+        fs::create_dir_all(base.join("Silo")).unwrap();
+        assert_eq!(normalize(&base.join("Keel/../Silo")), base.join("Silo"));
+        assert_eq!(
+            normalize(&base.join("Keel/./new.rs")),
+            base.join("Keel/new.rs")
+        );
     }
 
     #[test]

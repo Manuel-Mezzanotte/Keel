@@ -7,7 +7,7 @@ pub(crate) use shell::window_options;
 
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::ops::Range;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::rc::Rc;
 use std::time::Duration;
 
@@ -60,9 +60,52 @@ actions!(
         ShowExtensions,
         ToggleProblems,
         ToggleOutput,
-        ToggleTerminal
+        ToggleTerminal,
+        NewFile,
+        NewWindow,
+        Open,
+        OpenRecent
     ]
 );
+
+/// Opens a project folder, from File → Open Recent and the welcome screen.
+#[derive(Clone, Debug, PartialEq, gpui::Action)]
+#[action(namespace = keel, no_json)]
+pub struct OpenProject {
+    pub path: PathBuf,
+}
+
+/// What a new window shows: a project folder, a file, both or neither.
+pub struct Opening {
+    root: Option<PathBuf>,
+    file: Option<PathBuf>,
+    document: Option<Document>,
+}
+
+impl Opening {
+    pub fn new(root: Option<PathBuf>, file: Option<PathBuf>) -> Self {
+        Self {
+            root,
+            file,
+            document: None,
+        }
+    }
+}
+
+impl From<Option<Document>> for Opening {
+    /// A document already read, in the project that holds it.
+    fn from(document: Option<Document>) -> Self {
+        let root = document
+            .as_ref()
+            .and_then(|document| std::path::absolute(document.path()).ok())
+            .and_then(|path| settings::project_root_for(&path));
+        Self {
+            root,
+            file: None,
+            document,
+        }
+    }
+}
 
 /// The most lines the Output view keeps.
 const OUTPUT_LINES: usize = 1000;
@@ -195,12 +238,15 @@ pub struct Workbench {
     first_frame_drawn: bool,
     /// The selections extensions believe each editor has, by editor id.
     known_selections: HashMap<String, Value>,
+    /// Holds the keyboard when no editor does, so shortcuts work on the
+    /// welcome screen.
+    focus_handle: gpui::FocusHandle,
     _subscriptions: Vec<Subscription>,
 }
 
 impl Workbench {
     pub fn new(
-        document: Option<Document>,
+        opening: impl Into<Opening>,
         settings: Settings,
         extensions: Option<ExtensionSetup>,
         window: &mut Window,
@@ -246,7 +292,8 @@ impl Workbench {
             settings.string("keel.language"),
             UiLanguage::system_locale().as_deref(),
         );
-        let project = Project::for_file(document.as_ref().map(Document::path));
+        let opening = opening.into();
+        let project = Project::new(opening.root.clone());
         let mut workbench = Self {
             settings,
             language,
@@ -265,18 +312,92 @@ impl Workbench {
             discard_changes: false,
             gutter_refresh: Task::ready(()),
             known_selections: HashMap::new(),
+            focus_handle: cx.focus_handle(),
             first_frame_drawn: false,
             _subscriptions: subscriptions,
         };
         if let Some(setup) = extensions {
             workbench.start_extensions(setup, window, cx);
         }
-        let uri = match document {
-            Some(document) => workbench.add_file_document(document),
-            None => workbench.add_untitled_document(),
-        };
-        workbench.open_in_pane(&uri, 0, true, window, cx);
+        if let Some(document) = opening.document {
+            let uri = workbench.add_file_document(document);
+            workbench.open_in_pane(&uri, 0, true, window, cx);
+        } else if let Some(file) = opening.file {
+            workbench.open_file(&file, window, cx);
+        }
+        if workbench.panes.is_empty() {
+            workbench.focus_handle.focus(window, cx);
+        }
+        workbench.refresh_title(window);
         workbench
+    }
+
+    /// Whether the window shows nothing: no project and no files.
+    pub fn is_blank(&self) -> bool {
+        self.project.root.is_none() && self.documents.is_empty()
+    }
+
+    /// Opens a file in the active pane, or brings it forward if a pane
+    /// already shows it. A missing file opens empty and is created on save.
+    pub fn open_file(&mut self, path: &Path, window: &mut Window, cx: &mut Context<Self>) {
+        let path = std::path::absolute(path).unwrap_or_else(|_| path.to_path_buf());
+        let uri = Uri::file(&path).to_string();
+        if !self.documents.contains_key(&uri) {
+            match Document::open(&path) {
+                Ok(document) => {
+                    self.add_file_document(document);
+                }
+                Err(error) => {
+                    let message = self
+                        .strings()
+                        .could_not_open(&path.display().to_string(), &error.to_string());
+                    self.report(message);
+                    cx.notify();
+                    return;
+                }
+            }
+        }
+        let column = self.active.min(self.panes.len().saturating_sub(1));
+        self.open_in_pane(&uri, column, true, window, cx);
+    }
+
+    /// Opens a new untitled document in the active pane.
+    pub fn new_file(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let uri = self.add_untitled_document();
+        let column = self.active.min(self.panes.len().saturating_sub(1));
+        self.open_in_pane(&uri, column, true, window, cx);
+    }
+
+    /// Lets the user pick a recent project and opens it.
+    fn choose_recent(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let projects = crate::recent::projects(cx);
+        let strings = self.strings();
+        if projects.is_empty() {
+            self.status_message = Some(strings.no_recent_projects.to_owned());
+            cx.notify();
+            return;
+        }
+        let items = projects
+            .iter()
+            .map(|project| {
+                let name = project
+                    .file_name()
+                    .map(|name| name.to_string_lossy().into_owned())
+                    .unwrap_or_else(|| project.display().to_string());
+                let mut item = PickItem::new(name);
+                item.keywords.push(crate::recent::short_path(project));
+                item
+            })
+            .collect();
+        let title = Some(strings.open_recent_title.to_owned());
+        let chosen = quick_pick::show(title, None, items, window, cx);
+        cx.spawn_in(window, async move |_, cx| {
+            if let Ok(Some(index)) = chosen.await {
+                let path = projects[index].clone();
+                let _ = cx.update(|_, cx| crate::windows::open(Some(path), cx));
+            }
+        })
+        .detach();
     }
 
     fn strings(&self) -> &'static Strings {
@@ -469,13 +590,14 @@ impl Workbench {
             self.documents.remove(&pane.uri);
             self.notify_host("documents/closed", json!({ "uri": pane.uri }));
         }
+        // With no pane left, the window shows the welcome screen.
         if self.panes.is_empty() {
-            let uri = self.add_untitled_document();
-            self.open_in_pane(&uri, 0, true, window, cx);
-            return;
+            self.active = 0;
+            self.focus_handle.focus(window, cx);
+        } else {
+            self.active = self.active.min(self.panes.len() - 1);
+            self.focus_pane(self.active, window, cx);
         }
-        self.active = self.active.min(self.panes.len() - 1);
-        self.focus_pane(self.active, window, cx);
         self.publish_editors(window, cx);
         self.refresh_title(window);
         cx.notify();
@@ -601,13 +723,27 @@ impl Workbench {
         );
     }
 
-    fn refresh_title(&self, window: &mut Window) {
-        let name = self
+    /// The window's title: the file and the project, as in VS Code.
+    fn window_title(&self) -> String {
+        let file = self
             .panes
             .get(self.active)
             .and_then(|pane| self.documents.get(&pane.uri))
-            .map_or_else(|| "Keel".to_owned(), |document| self.display_name(document));
-        window.set_window_title(&format!("{name} — Keel"));
+            .map(|document| self.display_name(document));
+        let project = self
+            .project
+            .root
+            .as_ref()
+            .map(|_| self.project.name.clone());
+        match (file, project) {
+            (Some(file), Some(project)) => format!("{file} — {project}"),
+            (Some(name), None) | (None, Some(name)) => name,
+            (None, None) => "Keel".to_owned(),
+        }
+    }
+
+    fn refresh_title(&self, window: &mut Window) {
+        window.set_window_title(&self.window_title());
         window.set_window_edited(self.has_unsaved_changes());
         let path = self
             .panes
@@ -987,6 +1123,13 @@ impl Workbench {
             json!({ "values": self.settings.merged() }),
         );
         let _ = host.notify("env/changed", json!({ "language": self.language.code() }));
+        let folders: Vec<String> = self
+            .project
+            .root
+            .iter()
+            .map(|root| Uri::file(root).to_string())
+            .collect();
+        let _ = host.notify("workspace/foldersChanged", json!({ "folders": folders }));
         self.extensions = Some(Extensions {
             host: host.clone(),
             commands: HashSet::new(),
@@ -2277,6 +2420,7 @@ mod tests {
 
         let (view, cx) =
             cx.add_window_view(|window, cx| Workbench::new(None, settings, None, window, cx));
+        view.update_in(cx, |view, window, cx| view.new_file(window, cx));
         let name = |view: &Entity<Workbench>, cx: &mut gpui::VisualTestContext| {
             view.read_with(cx, |view, _| {
                 let document = &view.documents[&view.panes[view.active].uri];
