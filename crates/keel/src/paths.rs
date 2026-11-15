@@ -23,6 +23,11 @@ pub fn user_settings_file(data: &Path) -> PathBuf {
     data.join("settings.json")
 }
 
+/// The user's key bindings, `keybindings.json` in the data folder.
+pub fn user_keybindings_file(data: &Path) -> PathBuf {
+    data.join("keybindings.json")
+}
+
 pub fn extensions_dir(data: &Path) -> PathBuf {
     data.join("extensions")
 }

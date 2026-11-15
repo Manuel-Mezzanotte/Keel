@@ -14,7 +14,7 @@ use futures::channel::mpsc::UnboundedReceiver;
 use gpui::prelude::FluentBuilder as _;
 use gpui::{
     App, AppContext as _, Context, Entity, EntityInputHandler as _, Focusable as _, FontStyle,
-    FontWeight, HighlightStyle, Hsla, InteractiveElement as _, IntoElement, KeyBinding, Keystroke,
+    FontWeight, HighlightStyle, Hsla, InteractiveElement as _, IntoElement, Keystroke,
     KeystrokeEvent, ParentElement as _, PromptLevel, Render, Rgba, Styled as _, Subscription, Task,
     Window, actions, div, px,
 };
@@ -36,22 +36,38 @@ use crate::i18n::{Strings, UiLanguage};
 use crate::paths;
 use crate::quick_pick::{self, PickItem};
 
-actions!(keel, [Save, CloseWindow, Quit, ShowCommands]);
+actions!(
+    keel,
+    [
+        Save,
+        CloseWindow,
+        Quit,
+        ShowCommands,
+        SelectTheme,
+        SelectLanguage
+    ]
+);
 
-/// Registers the workbench key bindings.
+/// Registers the workbench with Keel's default key bindings.
+#[cfg(test)]
 pub fn init(cx: &mut App) {
-    cx.bind_keys([
-        KeyBinding::new("cmd-s", Save, None),
-        KeyBinding::new("cmd-w", CloseWindow, None),
-        KeyBinding::new("cmd-q", Quit, None),
-        KeyBinding::new("cmd-shift-p", ShowCommands, None),
-    ]);
+    init_with_user_bindings(&[], cx);
+}
+
+/// Registers the workbench, with the user's `keybindings.json` applied on
+/// top of Keel's defaults. Returns problems found in the user's bindings.
+pub fn init_with_user_bindings(user: &[crate::keymap::UserBinding], cx: &mut App) -> Vec<String> {
+    let warnings = crate::keymap::bind(user, cx);
     // Reached only when no window handles Quit, so nothing is left unsaved.
     cx.on_action(|_: &Quit, cx| cx.quit());
+    warnings
 }
 
 /// Everything the workbench needs to run extensions.
 pub struct ExtensionSetup {
+    /// The user's `keybindings.json` entries, some of which may be for
+    /// extension commands.
+    pub user_bindings: Vec<crate::keymap::UserBinding>,
     pub host: ExtensionHost,
     pub events: UnboundedReceiver<HostEvent>,
     pub installed: Vec<InstalledExtension>,
@@ -731,18 +747,15 @@ impl Workbench {
 
     fn show_commands(&mut self, _: &ShowCommands, window: &mut Window, cx: &mut Context<Self>) {
         let strings = self.strings();
-        let mut entries: Vec<(String, String)> = vec![
-            ("keel.save".to_owned(), strings.command_save.to_owned()),
-            (
-                "keel.closeWindow".to_owned(),
-                strings.command_close_window.to_owned(),
-            ),
-            (
-                "keel.language".to_owned(),
-                strings.command_language.to_owned(),
-            ),
-            ("keel.theme".to_owned(), strings.command_theme.to_owned()),
-        ];
+        let mut entries: Vec<(String, String)> = crate::keymap::COMMANDS
+            .iter()
+            .filter_map(|command| {
+                Some((
+                    command.id.to_owned(),
+                    strings.command_title(command.id)?.to_owned(),
+                ))
+            })
+            .collect();
         if let Some(extensions) = &self.extensions {
             entries.extend(extensions.titles.iter().cloned());
         }
@@ -766,17 +779,17 @@ impl Workbench {
                 return;
             };
             let command = entries[index].0.clone();
-            this.update_in(cx, |this, window, cx| match command.as_str() {
-                "keel.save" => this.save(&Save, window, cx),
-                "keel.closeWindow" => this.close_window(&CloseWindow, window, cx),
-                "keel.language" => this.choose_language(window, cx),
-                "keel.theme" => this.choose_theme(window, cx),
-                _ => {
-                    if let Some(pane) = this.panes.get(this.active) {
-                        let editor = pane.editor.clone();
-                        editor.update(cx, |editor, cx| editor.focus(window, cx));
-                    }
-                    this.run_extension_command(command, Vec::new(), window, cx);
+            this.update_in(cx, |this, window, cx| {
+                if let Some(pane) = this.panes.get(this.active) {
+                    let editor = pane.editor.clone();
+                    editor.update(cx, |editor, cx| editor.focus(window, cx));
+                }
+                match crate::keymap::COMMANDS
+                    .iter()
+                    .find(|keel| keel.id == command)
+                {
+                    Some(keel) => window.dispatch_action((keel.action)(), cx),
+                    None => this.run_extension_command(command, Vec::new(), window, cx),
                 }
             })
             .ok();
@@ -871,6 +884,7 @@ impl Workbench {
         cx: &mut Context<Self>,
     ) {
         let ExtensionSetup {
+            user_bindings,
             host,
             mut events,
             installed,
@@ -890,6 +904,7 @@ impl Workbench {
             }
             bindings.extend(contributed_bindings(extension));
         }
+        apply_user_bindings(&mut bindings, &user_bindings);
         // Extensions read the user's and the project's settings from the start.
         let _ = host.notify(
             "configuration/changed",
@@ -1901,6 +1916,14 @@ impl Render for Workbench {
             .on_action(cx.listener(Self::close_window))
             .on_action(cx.listener(Self::quit))
             .on_action(cx.listener(Self::show_commands))
+            .on_action(
+                cx.listener(|this, _: &SelectTheme, window, cx| this.choose_theme(window, cx)),
+            )
+            .on_action(
+                cx.listener(|this, _: &SelectLanguage, window, cx| {
+                    this.choose_language(window, cx)
+                }),
+            )
             .child(div().flex_1().min_h_0().flex().flex_row().children(panes))
             .child(
                 div()
@@ -1967,6 +1990,39 @@ impl CompletionProvider for ExtensionCompletions {
 
     fn is_completion_trigger(&self, _offset: usize, new_text: &str, _cx: &mut App) -> bool {
         self.triggers.iter().any(|trigger| trigger == new_text)
+    }
+}
+
+/// Applies the user's `keybindings.json` to extension commands: `-command`
+/// entries remove a binding, the others come last so they win.
+fn apply_user_bindings(bindings: &mut Vec<Binding>, user: &[crate::keymap::UserBinding]) {
+    let keel_commands: HashSet<&str> = crate::keymap::COMMANDS
+        .iter()
+        .map(|command| command.id)
+        .collect();
+    for entry in user
+        .iter()
+        .filter(|entry| !keel_commands.contains(entry.command.as_str()))
+    {
+        // Chords are not supported for extension commands yet.
+        let Some(keystroke) = BindingKeystroke::parse(&entry.keystrokes) else {
+            continue;
+        };
+        if entry.removes {
+            bindings.retain(|binding| {
+                !(binding.command == entry.command && binding.keystroke == keystroke)
+            });
+            continue;
+        }
+        let Ok(when) = WhenClause::parse(entry.when.as_deref().unwrap_or_default()) else {
+            continue;
+        };
+        bindings.push(Binding {
+            keystroke,
+            command: entry.command.clone(),
+            when,
+            args: entry.args.clone(),
+        });
     }
 }
 
@@ -2293,6 +2349,59 @@ mod tests {
     }
 
     #[test]
+    fn the_user_can_remove_and_add_extension_bindings() {
+        let binding = |keys: &str, command: &str| Binding {
+            keystroke: BindingKeystroke::parse(keys).unwrap(),
+            command: command.to_owned(),
+            when: WhenClause::True,
+            args: None,
+        };
+        let mut bindings = vec![
+            binding("cmd-i", "vsauto.stop"),
+            binding("cmd-o", "vsauto.requestOrExpandSuggestion"),
+        ];
+        let user = vec![
+            crate::keymap::UserBinding {
+                command: "vsauto.stop".to_owned(),
+                removes: true,
+                keystrokes: "cmd-i".to_owned(),
+                when: None,
+                args: None,
+            },
+            crate::keymap::UserBinding {
+                command: "vsauto.stop".to_owned(),
+                removes: false,
+                keystrokes: "cmd-.".to_owned(),
+                when: Some("vsauto.running".to_owned()),
+                args: None,
+            },
+            // Keel's own commands are bound by GPUI, not here.
+            crate::keymap::UserBinding {
+                command: "workbench.action.files.save".to_owned(),
+                removes: false,
+                keystrokes: "cmd-alt-s".to_owned(),
+                when: None,
+                args: None,
+            },
+        ];
+        apply_user_bindings(&mut bindings, &user);
+        let summary: Vec<(String, String)> = bindings
+            .iter()
+            .map(|binding| (binding.keystroke.key.clone(), binding.command.clone()))
+            .collect();
+        assert_eq!(
+            summary,
+            [
+                (
+                    "o".to_owned(),
+                    "vsauto.requestOrExpandSuggestion".to_owned()
+                ),
+                (".".to_owned(), "vsauto.stop".to_owned())
+            ]
+        );
+    }
+
+    #[test]
     fn edits_shift_offsets_after_them() {
         let edits = vec![(2..4, "xyz".to_owned()), (10..10, "ab".to_owned())];
         assert_eq!(map_offset(1, &edits), 1);
@@ -2442,6 +2551,7 @@ mod extension_tests {
 
         let (host, events) = ExtensionHost::start().unwrap();
         let setup = ExtensionSetup {
+            user_bindings: Vec::new(),
             host,
             events,
             installed: vec![installed],

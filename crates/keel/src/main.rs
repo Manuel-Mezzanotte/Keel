@@ -4,6 +4,7 @@ mod cli;
 #[cfg(test)]
 mod editor_checks;
 mod i18n;
+mod keymap;
 mod paths;
 mod quick_pick;
 mod theme;
@@ -76,11 +77,12 @@ fn main() -> ExitCode {
 
 /// Starts the extension host with the installed extensions. Keel still runs
 /// without extensions if the host cannot start.
-fn extension_setup() -> Option<ExtensionSetup> {
+fn extension_setup(user_bindings: Vec<keymap::UserBinding>) -> Option<ExtensionSetup> {
     let data_dir = paths::data_dir();
     let installed = paths::installed_extensions(&data_dir);
     match ExtensionHost::start() {
         Ok((host, events)) => Some(ExtensionSetup {
+            user_bindings,
             host,
             events,
             installed,
@@ -101,7 +103,16 @@ fn run(document: Option<Document>) {
             gpui_component::init(cx);
             theme::init(cx);
             language::register_grammars();
-            workbench_window::init(cx);
+            let data_dir = paths::data_dir();
+            let (user_bindings, mut warnings) =
+                keymap::read_user_bindings(&paths::user_keybindings_file(&data_dir));
+            warnings.extend(workbench_window::init_with_user_bindings(
+                &user_bindings,
+                cx,
+            ));
+            for warning in &warnings {
+                eprintln!("keel: {warning}");
+            }
 
             let options = WindowOptions {
                 titlebar: Some(TitlebarOptions {
@@ -127,7 +138,7 @@ fn run(document: Option<Document>) {
                 eprintln!("keel: {warning}");
             }
             theme::apply(&theme::ThemeChoice::from_settings(&settings), None, cx);
-            let setup = extension_setup();
+            let setup = extension_setup(user_bindings);
             let opened = cx.open_window(options, move |window, cx| {
                 let view = cx.new(|cx| Workbench::new(document, settings, setup, window, cx));
                 cx.new(|cx| Root::new(view, window, cx))

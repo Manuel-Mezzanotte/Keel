@@ -62,6 +62,7 @@ pub struct Strings {
     pub command_close_window: &'static str,
     pub command_language: &'static str,
     pub command_theme: &'static str,
+    pub command_quit: &'static str,
     pub choose_theme: &'static str,
     pub settings_unavailable: &'static str,
     save_changes: &'static str,
@@ -71,6 +72,19 @@ pub struct Strings {
 }
 
 impl Strings {
+    /// The palette title of a Keel command, or `None` for commands the
+    /// palette does not list, such as the palette itself.
+    pub fn command_title(&self, id: &str) -> Option<&'static str> {
+        Some(match id {
+            "workbench.action.files.save" => self.command_save,
+            "workbench.action.closeWindow" => self.command_close_window,
+            "workbench.action.quit" => self.command_quit,
+            "workbench.action.selectTheme" => self.command_theme,
+            "keel.selectLanguage" => self.command_language,
+            _ => return None,
+        })
+    }
+
     /// "Do you want to save the changes you made to {name}?"
     pub fn save_changes(&self, name: &str) -> String {
         self.save_changes.replace("{name}", name)
@@ -105,6 +119,7 @@ pub const ITALIAN: Strings = Strings {
     command_close_window: "Vista: Chiudi finestra",
     command_language: "Preferenze: Lingua",
     command_theme: "Preferenze: Tema colori",
+    command_quit: "Esci da Keel",
     choose_theme: "Tema colori",
     settings_unavailable: "Le impostazioni non sono ancora disponibili",
     save_changes: "Vuoi salvare le modifiche a {name}?",
@@ -127,6 +142,7 @@ pub const ENGLISH: Strings = Strings {
     command_close_window: "View: Close Window",
     command_language: "Preferences: Language",
     command_theme: "Preferences: Color Theme",
+    command_quit: "Quit Keel",
     choose_theme: "Color theme",
     settings_unavailable: "Settings are not available yet",
     save_changes: "Do you want to save the changes you made to {name}?",
