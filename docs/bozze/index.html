@@ -194,20 +194,38 @@
   .diff .actions span { padding: 3px 10px; border-radius: 6px; background: var(--raised); color: var(--text); }
   .diff .actions span.ok { background: var(--accent); color: #fff; }
   .agent .compose { margin: 10px; height: 64px; border-radius: 12px; border: 1px solid var(--border); background: var(--panel); color: var(--faint); padding: 10px 12px; }
+
+  /* ---------- Proposal D: B's floating panels with C's toolbar and agent panel ---------- */
+  [data-layout="d"] .window { background: var(--chrome-solid); }
+  [data-layout="d"] .titlebar { height: 52px; background: transparent; border-bottom: 0; backdrop-filter: none; }
+  [data-layout="d"] .titlebar .title { display: none; }
+  [data-layout="d"] .toolbar { display: flex; flex: 1; align-items: center; gap: 12px; padding-right: 14px; }
+  [data-layout="d"] .activity { display: none; }
+  [data-layout="d"] .body { padding: 0 8px 8px; gap: 8px; }
+  [data-layout="d"] .sidebar { border-radius: 12px; border: 1px solid var(--border); background: var(--chrome); }
+  [data-layout="d"] .sidebar .modes { display: flex; }
+  [data-layout="d"] .main { border-radius: 12px; overflow: hidden; border: 1px solid var(--border); background: var(--editor); }
+  [data-layout="d"] .tabs { background: var(--editor); padding: 6px 8px 0; gap: 4px; border-bottom: 0; }
+  [data-layout="d"] .tab { border: 0; border-radius: 8px; }
+  [data-layout="d"] .tab.on { background: var(--accent-soft); box-shadow: none; }
+  [data-layout="d"] .panel { height: 130px; }
+  [data-layout="d"] .agent { display: flex; border-radius: 12px; border: 1px solid var(--border); overflow: hidden; }
+  [data-layout="d"] .status { background: transparent; border-top: 0; padding: 0 16px; }
 </style>
 </head>
 <body>
 <div class="page">
   <header class="intro">
     <div>
-      <h1>Keel, tre bozze</h1>
-      <p>Stessa finestra, tre disposizioni. Cambia proposta e tema con i due interruttori: il tema Mezzanotte usa i blu di Sail, Nero i suoi neri.</p>
+      <h1>Keel, le bozze</h1>
+      <p>Stessa finestra, quattro disposizioni: D unisce B e C ed è quella scelta. Cambia proposta e tema con i due interruttori: il tema Mezzanotte usa i blu di Sail, Nero i suoi neri.</p>
     </div>
     <div class="switches">
       <div class="segmented" id="layouts">
         <button data-value="a" aria-pressed="true">A · Classica</button>
         <button data-value="b" aria-pressed="false">B · Pannelli sospesi</button>
         <button data-value="c" aria-pressed="false">C · Studio</button>
+        <button data-value="d" aria-pressed="false">D · Pannelli e Studio</button>
       </div>
       <div class="segmented" id="themes">
         <button data-value="mezzanotte" aria-pressed="true">Mezzanotte</button>
@@ -299,6 +317,11 @@
       ["Meno barre", "Niente barra delle attività: file, ricerca, git ed estensioni sono un selettore in cima alla barra laterale."],
       ["Per chi", "Se vuoi la sensazione più moderna e più «Mac», con più spazio per il codice."],
     ],
+    d: [
+      ["Pannelli e Studio", "I riquadri arrotondati di B che galleggiano sullo sfondo, con la barra unica di C in alto: progetto, ricerca (⌘P), branch e pnpm dev."],
+      ["Claude a destra", "Il pannello di Claude Code è un riquadro sospeso come gli altri, con conversazione e modifiche da accettare o rifiutare."],
+      ["La tua scelta", "Unisce le due bozze che ti sono piaciute. È quella che Keel prende come disposizione definitiva."],
+    ],
     c: [
       ["Studio", "Una barra unica in alto con progetto, ricerca (⌘P), branch e un pulsante per pnpm dev. A destra il pannello agente di Claude Code, con le modifiche da accettare o rifiutare."],
       ["Lavoro con l'IA", "Pensata per quando Claude Code scrive e tu controlli: conversazione e differenze sempre in vista."],
@@ -361,7 +384,7 @@
       if (button) choose(groupId, attribute, button.dataset.value);
     });
   }
-  choose("layouts", "data-layout", "a");
+  choose("layouts", "data-layout", "d");
   choose("themes", "data-theme", "mezzanotte");
 </script>
 </body>
