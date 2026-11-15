@@ -475,6 +475,44 @@ impl Workbench {
         if self.documents.remove(uri).is_some() {
             self.notify_host("documents/closed", json!({ "uri": uri }));
         }
+        self.forget_backup(uri);
+    }
+
+    /// Adds a tab at the end of group `column`, or a new group when
+    /// `column` is one past the last, without looking for the file in other
+    /// tabs. Restoring a session uses it.
+    pub(super) fn push_tab(
+        &mut self,
+        column: usize,
+        uri: &str,
+        pinned: bool,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let Some(pane) = self.create_pane(uri, window, cx) else {
+            return;
+        };
+        let tab = Tab {
+            uri: uri.to_owned(),
+            preview: false,
+            pinned,
+            parked: None,
+        };
+        if column < self.groups.len() {
+            let group = &mut self.groups[column];
+            let shown = std::mem::replace(&mut self.panes[column], pane);
+            group.tabs[group.active].parked = Some(shown);
+            group.tabs.push(tab);
+            group.active = group.tabs.len() - 1;
+        } else {
+            self.panes.push(pane);
+            self.groups.push(Group {
+                tabs: vec![tab],
+                active: 0,
+            });
+        }
+        let column = column.min(self.groups.len() - 1);
+        self.install_completions(column, cx);
     }
 
     fn reopen_closed(&mut self, window: &mut Window, cx: &mut Context<Self>) {

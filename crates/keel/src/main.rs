@@ -13,6 +13,7 @@ mod paths;
 mod project;
 mod quick_pick;
 mod recent;
+mod session;
 mod theme;
 mod windows;
 mod workbench_window;
@@ -137,7 +138,7 @@ fn run(path: Option<PathBuf>, socket: PathBuf) {
         })
         .detach();
 
-        windows::open(path, cx);
+        windows::open_startup(path, cx);
         cx.activate(true);
     });
 }

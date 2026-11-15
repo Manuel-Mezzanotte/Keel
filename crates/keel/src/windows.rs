@@ -15,7 +15,7 @@ use gpui_component::Root;
 use crate::workbench_window::{
     ExtensionSetup, NewWindow, Open, OpenProject, Opening, Workbench, window_options,
 };
-use crate::{keymap, menus, paths, recent};
+use crate::{keymap, menus, paths, recent, session};
 
 /// Where a path opens.
 #[derive(Debug, PartialEq, Eq)]
@@ -111,6 +111,83 @@ pub fn prompt_and_open(cx: &mut App) {
     .detach();
 }
 
+/// Opens what Keel starts with: the path given, or else the projects that
+/// were open when Keel quit (`window.restoreWindows`, on by default).
+pub fn open_startup(path: Option<PathBuf>, cx: &mut App) {
+    if path.is_some() {
+        open(path, cx);
+        return;
+    }
+    let data = paths::data_dir();
+    let settings = settings::Settings::load(paths::user_settings_file(&data), None);
+    let restore = settings.string("window.restoreWindows") != Some("none");
+    let projects: Vec<PathBuf> = session::load_windows(&data)
+        .into_iter()
+        .filter(|project| project.is_dir())
+        .collect();
+    if !restore || projects.is_empty() {
+        open(None, cx);
+        return;
+    }
+    for project in projects {
+        open(Some(project), cx);
+    }
+}
+
+/// The projects of the open windows, to reopen at the next start.
+fn remember_windows(windows: &[Option<PathBuf>]) {
+    let projects: Vec<PathBuf> = windows.iter().flatten().cloned().collect();
+    if let Err(error) = session::save_windows(&paths::data_dir(), &projects) {
+        eprintln!("keel: could not keep the open windows: {error}");
+    }
+}
+
+/// A window is closing: the others are remembered, or, if it is the last
+/// one, this one, so Keel reopens where you left.
+pub fn window_closing(workbench: gpui::EntityId, cx: &mut App) {
+    let Some(windows) = cx.try_global::<Windows>() else {
+        return;
+    };
+    let closing = windows
+        .0
+        .iter()
+        .find(|window| window.workbench.entity_id() == workbench)
+        .map(|window| window.root.clone());
+    let others: Vec<Option<PathBuf>> = windows
+        .0
+        .iter()
+        .filter(|window| window.workbench.entity_id() != workbench)
+        .filter(|window| window.workbench.upgrade().is_some())
+        .map(|window| window.root.clone())
+        .collect();
+    if others.iter().any(Option::is_some) {
+        remember_windows(&others);
+    } else if let Some(closing) = closing {
+        remember_windows(&[closing]);
+    }
+}
+
+/// Quits keeping everything: every window's session and unsaved changes,
+/// and which windows were open. `asking` is the window that asked, which
+/// already kept its own.
+pub fn quit_keeping_everything(asking: gpui::EntityId, cx: &mut App) {
+    if let Some(windows) = cx.try_global::<Windows>() {
+        let open: Vec<_> = windows
+            .0
+            .iter()
+            .filter_map(|window| Some((window.workbench.upgrade()?, window.root.clone())))
+            .collect();
+        for (workbench, _) in &open {
+            if workbench.entity_id() != asking {
+                workbench.read(cx).persist_now();
+            }
+        }
+        let roots: Vec<Option<PathBuf>> = open.into_iter().map(|(_, root)| root).collect();
+        remember_windows(&roots);
+    }
+    cx.quit();
+}
+
 /// Opens a path, or an empty window for `None`, where [`plan`] says.
 pub fn open(path: Option<PathBuf>, cx: &mut App) {
     let path = path.map(|path| paths::normalize(&path));
@@ -165,7 +242,7 @@ fn open_window(root: Option<PathBuf>, file: Option<PathBuf>, cx: &mut App) {
     bounds.origin += point(cascade, cascade);
 
     let created: Rc<RefCell<Option<WeakEntity<Workbench>>>> = Rc::default();
-    let opening = Opening::new(root.clone(), file);
+    let opening = Opening::new(root.clone(), file).with_data_dir(data.clone());
     let opened = cx.open_window(window_options(bounds), {
         let created = created.clone();
         move |window, cx| {
@@ -192,6 +269,14 @@ fn open_window(root: Option<PathBuf>, file: Option<PathBuf>, cx: &mut App) {
         recent::remember(root, cx);
         menus::refresh(cx);
     }
+    let open: Vec<Option<PathBuf>> = cx
+        .global::<Windows>()
+        .0
+        .iter()
+        .filter(|window| window.workbench.upgrade().is_some())
+        .map(|window| window.root.clone())
+        .collect();
+    remember_windows(&open);
     if let Some(replaced) = replaced {
         let _ = replaced.update(cx, |_, window, _| window.remove_window());
     }

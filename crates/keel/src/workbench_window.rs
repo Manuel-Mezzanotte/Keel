@@ -5,6 +5,7 @@ mod disk;
 mod editing;
 pub(crate) mod explorer;
 mod navigation;
+mod restore;
 mod shell;
 mod tabs;
 
@@ -99,6 +100,8 @@ pub struct Opening {
     root: Option<PathBuf>,
     file: Option<PathBuf>,
     document: Option<Document>,
+    /// Where the session and the backups live; none keeps nothing.
+    data_dir: Option<PathBuf>,
 }
 
 impl Opening {
@@ -107,7 +110,15 @@ impl Opening {
             root,
             file,
             document: None,
+            data_dir: None,
         }
+    }
+
+    /// Keeps the window's session and unsaved changes in `data_dir`, and
+    /// brings them back.
+    pub fn with_data_dir(mut self, data_dir: PathBuf) -> Self {
+        self.data_dir = Some(data_dir);
+        self
     }
 }
 
@@ -122,6 +133,7 @@ impl From<Option<Document>> for Opening {
             root,
             file: None,
             document,
+            data_dir: None,
         }
     }
 }
@@ -241,6 +253,13 @@ pub struct Workbench {
     groups: Vec<Group>,
     /// Files closed lately, for Reopen Closed Editor.
     closed: Vec<String>,
+    /// Where the session and the backups are kept, if anywhere.
+    data_dir: Option<PathBuf>,
+    /// True while the session comes back, so it is not written meanwhile.
+    restoring: bool,
+    session_task: Task<()>,
+    backup_task: Task<()>,
+    autosave_task: Task<()>,
     /// Word wrap in every editor, from `editor.wordWrap` and Alt+Z.
     word_wrap: bool,
     /// The editors' font size, from `editor.fontSize` and the zoom keys.
@@ -306,6 +325,11 @@ impl Workbench {
             }
         }));
         subscriptions.push(cx.observe_window_activation(window, |this, window, cx| {
+            // Leaving Keel keeps everything, and may save files.
+            if !window.is_window_active() {
+                this.auto_save_on(true, window, cx);
+                this.persist_now();
+            }
             // Files may have changed in another app, such as Claude Code.
             if window.is_window_active() {
                 this.project.refresh_branch();
@@ -323,7 +347,11 @@ impl Workbench {
             let this = this.clone();
             move |window, cx| {
                 this.update(cx, |this, cx| {
-                    this.confirm(AfterConfirm::CloseWindow, window, cx)
+                    let close = this.confirm(AfterConfirm::CloseWindow, window, cx);
+                    if close {
+                        this.before_close(cx);
+                    }
+                    close
                 })
                 .unwrap_or(true)
             }
@@ -346,6 +374,11 @@ impl Workbench {
             language,
             groups: Vec::new(),
             closed: Vec::new(),
+            data_dir: None,
+            restoring: false,
+            session_task: Task::ready(()),
+            backup_task: Task::ready(()),
+            autosave_task: Task::ready(()),
             word_wrap,
             font_size,
             project,
@@ -379,6 +412,8 @@ impl Workbench {
         workbench.build_tree();
         workbench.index_files(cx);
         workbench.watch_project(window, cx);
+        workbench.data_dir = opening.data_dir.clone();
+        workbench.restore(window, cx);
         if let Some(setup) = extensions {
             workbench.start_extensions(setup, window, cx);
         }
@@ -619,6 +654,7 @@ impl Workbench {
             .iter()
             .position(|pane| pane.editor.read(cx).focus_handle(cx).is_focused(window));
         if let Some(index) = focused.filter(|index| *index != self.active) {
+            self.auto_save_on(false, window, cx);
             self.active = index;
             self.reveal_active_in_tree();
             self.publish_editors(window, cx);
@@ -672,6 +708,10 @@ impl Workbench {
         document.synced_text = text.clone();
         let modified = document.modified;
         self.notify_host("documents/changed", params);
+        self.backups_changed(cx);
+        if modified {
+            self.auto_save_after_change(window, cx);
+        }
         // Editing a file keeps its preview tab.
         if modified {
             for tab in self
@@ -732,6 +772,8 @@ impl Workbench {
 
     /// Sends the visible editors and the active one to extensions.
     fn publish_editors(&mut self, _window: &mut Window, cx: &mut Context<Self>) {
+        // Tabs changed: keep the session a moment later.
+        self.session_changed(cx);
         if self.extensions.is_none() {
             return;
         }
@@ -878,6 +920,7 @@ impl Workbench {
                     return;
                 }
                 // The untitled buffer becomes the saved file, in the same tab.
+                this.forget_backup(&uri);
                 this.documents.remove(&uri);
                 this.notify_host("documents/closed", json!({ "uri": uri }));
                 let new_uri = this.add_file_document(document);
@@ -896,11 +939,32 @@ impl Workbench {
 
     fn close_window(&mut self, _: &CloseWindow, window: &mut Window, cx: &mut Context<Self>) {
         if self.confirm(AfterConfirm::CloseWindow, window, cx) {
+            self.before_close(cx);
             window.remove_window();
         }
     }
 
+    /// Keeps the session before a window closes; unsaved changes the user
+    /// chose not to save are dropped.
+    fn before_close(&mut self, cx: &mut Context<Self>) {
+        self.save_session_now();
+        if self.discard_changes {
+            self.discard_backups();
+        } else {
+            self.write_backups_now();
+        }
+        crate::windows::window_closing(cx.entity_id(), cx);
+    }
+
+    /// Quits. With `files.hotExit` on, as by default in VS Code, nothing is
+    /// asked: unsaved changes are kept and come back with their windows.
     fn quit(&mut self, _: &Quit, window: &mut Window, cx: &mut Context<Self>) {
+        let hot_exit = self.settings.string("files.hotExit") != Some("off");
+        if hot_exit && self.data_dir.is_some() {
+            self.persist_now();
+            crate::windows::quit_keeping_everything(cx.entity_id(), cx);
+            return;
+        }
         if self.confirm(AfterConfirm::QuitApp, window, cx) {
             cx.quit();
         }
@@ -961,7 +1025,10 @@ impl Workbench {
             return;
         }
         match after {
-            AfterConfirm::CloseWindow => window.remove_window(),
+            AfterConfirm::CloseWindow => {
+                self.before_close(cx);
+                window.remove_window();
+            }
             AfterConfirm::QuitApp => cx.quit(),
         }
     }

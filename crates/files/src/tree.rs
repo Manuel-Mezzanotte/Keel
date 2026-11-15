@@ -91,6 +91,18 @@ impl FileTree {
         }
     }
 
+    /// The open folders, below the project itself, for restoring them.
+    pub fn expanded_folders(&self) -> Vec<PathBuf> {
+        let mut folders: Vec<PathBuf> = self
+            .expanded
+            .iter()
+            .filter(|folder| **folder != self.root)
+            .cloned()
+            .collect();
+        folders.sort();
+        folders
+    }
+
     pub fn is_expanded(&self, folder: &Path) -> bool {
         self.expanded.contains(folder)
     }

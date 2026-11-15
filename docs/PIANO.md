@@ -331,7 +331,7 @@ Il confronto non è alla pari: Cursor aveva anche albero dei file, terminale, se
 | 2.3 | Schede: più file per gruppo, anteprima, fissate, chiudi le altre, riapri l'ultima chiusa; editor affiancati e gruppi | fatta |
 | 2.4 | Apertura veloce (Cmd+P) e vai alla riga (Ctrl+G) | fatta |
 | 2.5 | Scrittura: commenta, sposta e duplica righe, piega i blocchi, guide di rientro, parentesi e tag chiusi da soli, a capo, zoom, breadcrumb, sticky scroll e minimappa | fatta; sticky scroll, minimappa e pieghe da tastiera rimandate alla fase 12 |
-| 2.6 | Cambi dall'esterno e niente perso: ricarica i file cambiati fuori da Keel, salvataggio automatico, modifiche non salvate conservate, ripristino di schede e disposizione | da fare |
+| 2.6 | Cambi dall'esterno e niente perso: ricarica i file cambiati fuori da Keel, salvataggio automatico, modifiche non salvate conservate, ripristino di schede e disposizione | fatta |
 | 2.7 | Altri file (immagini, binari, file molto grandi), misure e resoconto | da fare |
 
 **Note sulla 2.1**
@@ -482,6 +482,29 @@ Il confronto non è alla pari: Cursor aveva anche albero dei file, terminale, se
   - sticky scroll e minimappa: l'editor di gpui-component non li ha, vanno disegnati da Keel;
   - pieghe da tastiera: gpui-component le apre e chiude solo dal margine;
   - i comandi sulle righe con più cursori: oggi lavorano sul cursore principale.
+
+**Note sulla 2.6**
+- **Cambi dall'esterno:**
+  - Keel controlla la cartella del progetto con FSEvents, il sistema di macOS;
+  - quando un file cambia fuori, per esempio scritto da Claude Code, l'albero, Vai al file e il branch si aggiornano in un attimo;
+  - un file aperto senza modifiche si ricarica da solo, col cursore al suo posto;
+  - se avevi modifiche non salvate, Keel le tiene, avvisa nella barra di stato, e al salvataggio chiede: sovrascrivere, usare la versione sul disco o annullare.
+- **Niente si perde:**
+  - le modifiche non salvate si copiano in `backups/`, nella cartella dati di Keel, un secondo dopo che smetti di scrivere: tornano dopo un crash;
+  - Cmd+Q non chiede niente, come in VS Code (`files.hotExit`): tiene tutto, e alla prossima apertura ritrovi finestre, schede e modifiche;
+  - chiudere una finestra chiede ancora se salvare, e «Non salvare» butta via le copie.
+- **Ripristino:**
+  - ogni progetto ricorda gruppi, schede (anche quelle fissate), la scheda attiva, la disposizione e le cartelle aperte nell'albero, in `sessions/`;
+  - aprendo Keel senza percorso tornano i progetti aperti all'uscita (`window.restoreWindows`, `none` per spegnerlo).
+- **Salvataggio automatico** con `files.autoSave`, come in VS Code:
+  - `afterDelay`, dopo `files.autoSaveDelay` (1000 ms);
+  - `onFocusChange`;
+  - `onWindowChange`.
+
+  Spento di serie. Un file cambiato anche sul disco non si salva da solo: aspetta un salvataggio con la domanda.
+- **Prove con Keel vero:**
+  - 50 riscritture di un file aperto e 200 file nuovi creati mentre Keel gira: nessun errore, 130 MB;
+  - avviato senza percorso, Keel riapre il progetto lasciato aperto.
 
 **Cosa si fa**
 - **Progetti:** apri cartella, progetti recenti, schermata iniziale, una finestra per progetto, comando `keel .` dal terminale (come `code .`).
@@ -660,6 +683,13 @@ Il confronto non è alla pari: Cursor aveva anche albero dei file, terminale, se
 - **Rifinitura del design:** animazioni, schermate vuote, coerenza di temi e icone.
 - **Accessibilità** di base, per quanto GPUI lo permette.
 - **Revisione** di tutti i testi in italiano e in inglese.
+- **Rimasti dalla fase 2:**
+  - sticky scroll;
+  - minimappa;
+  - pieghe da tastiera;
+  - comandi sulle righe con più cursori;
+  - trascinare le schede;
+  - aprire più file insieme da `keel`.
 
 **Fatto quando**
 - Usi Keel per qualche settimana al posto di Cursor senza dover tornare indietro.

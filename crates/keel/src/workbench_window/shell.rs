@@ -170,26 +170,31 @@ impl Workbench {
 
     pub(super) fn toggle_sidebar(&mut self, cx: &mut Context<Self>) {
         self.layout.sidebar = !self.layout.sidebar;
+        self.session_changed(cx);
         cx.notify();
     }
 
     pub(super) fn toggle_panel(&mut self, cx: &mut Context<Self>) {
         self.layout.panel = !self.layout.panel;
+        self.session_changed(cx);
         cx.notify();
     }
 
     pub(super) fn toggle_agent(&mut self, cx: &mut Context<Self>) {
         self.layout.agent = !self.layout.agent;
+        self.session_changed(cx);
         cx.notify();
     }
 
     pub(super) fn show_side_view(&mut self, view: SideView, cx: &mut Context<Self>) {
         self.layout.show_side_view(view);
+        self.session_changed(cx);
         cx.notify();
     }
 
     pub(super) fn toggle_panel_view(&mut self, view: PanelView, cx: &mut Context<Self>) {
         self.layout.toggle_panel_view(view);
+        self.session_changed(cx);
         cx.notify();
     }
 

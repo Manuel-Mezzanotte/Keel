@@ -11,6 +11,20 @@ pub enum SideView {
 }
 
 impl SideView {
+    /// The name kept in the session file.
+    pub fn id(self) -> &'static str {
+        match self {
+            SideView::Explorer => "explorer",
+            SideView::Search => "search",
+            SideView::SourceControl => "scm",
+            SideView::Extensions => "extensions",
+        }
+    }
+
+    pub fn from_id(id: &str) -> Option<Self> {
+        Self::ALL.into_iter().find(|view| view.id() == id)
+    }
+
     pub const ALL: [SideView; 4] = [
         SideView::Explorer,
         SideView::Search,
@@ -29,6 +43,20 @@ pub enum PanelView {
 }
 
 impl PanelView {
+    /// The name kept in the session file.
+    pub fn id(self) -> &'static str {
+        match self {
+            PanelView::Problems => "problems",
+            PanelView::Output => "output",
+            PanelView::Terminal => "terminal",
+            PanelView::Ports => "ports",
+        }
+    }
+
+    pub fn from_id(id: &str) -> Option<Self> {
+        Self::ALL.into_iter().find(|view| view.id() == id)
+    }
+
     pub const ALL: [PanelView; 4] = [
         PanelView::Problems,
         PanelView::Output,

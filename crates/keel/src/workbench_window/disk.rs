@@ -201,6 +201,7 @@ impl Workbench {
             Ok(()) => {
                 document.modified = false;
                 self.notify_host("documents/saved", json!({ "uri": uri }));
+                self.forget_backup(uri);
                 self.refresh_title(window);
                 cx.notify();
                 if let Some(after) = after {
