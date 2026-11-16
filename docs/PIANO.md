@@ -121,7 +121,7 @@ Da confermare con le misure della fase 0. Si misura con lo stesso script su Keel
 | 3 | Ricerca | piccola | fatta; restano le tue prove a mano |
 | 4 | Terminale e pannello in basso | media | fatta; restano le tue prove a mano |
 | 5 | Git: modifiche e commit | media | fatta; restano le tue prove a mano |
-| 6 | Linguaggi principali: web e Rust | grande | da fare |
+| 6 | Linguaggi principali: web e Rust | grande | in corso |
 | 7 | Anteprima Markdown e PDF | media | da fare |
 | 8 | Grafico e storico git | media | da fare |
 | 9 | Estensioni | grande | da fare |
@@ -873,6 +873,28 @@ Con albero, schede, ricerca dei file e controllo della cartella, Keel è cresciu
 ### Fase 6 — Linguaggi principali: web e Rust
 
 **Obiettivo.** Gli aiuti dei linguaggi come in Cursor per il tuo lavoro di ogni giorno. **Da qui Keel è usabile tutti i giorni per i progetti web**, con Cursor di riserva.
+
+**Sottofasi**
+
+| Sottofase | Cosa | Stato |
+|---|---|---|
+| 6.1 | Colori della sintassi per JavaScript, HTML, CSS, JSON, Markdown, YAML, TOML, Rust e `.env` (oggi solo TypeScript) | fatta |
+| 6.2 | Motore LSP (crate `lsp`): processo, messaggi, documenti aperti, richieste del server, riavvio dopo un crash, registro nell'Output; trova o installa i server | da fare |
+| 6.3 | Errori e avvisi: sottolineature, pannello Problemi, numeri nella barra di stato, F8 per passare al successivo | da fare |
+| 6.4 | Scrivere: completamenti con snippet, info al passaggio del mouse, firma delle funzioni, snippet nel formato di VS Code | da fare |
+| 6.5 | Navigare: definizione, implementazione e tipo, riferimenti, rinomina, struttura del file (Cmd+Maiusc+O), simboli del progetto (Cmd+T) | da fare |
+| 6.6 | Correggere e formattare: azioni rapide (Cmd+.), formattazione anche al salvataggio, Prettier del progetto, correzioni di ESLint | da fare |
+| 6.7 | I server: TypeScript (`vtsls`), HTML, CSS, JSON, ESLint, Emmet, Tailwind, Prisma, Markdown, YAML, TOML e `rust-analyzer`; prove sui due gestionali e su Keel | da fare |
+| 6.8 | Misure e resoconto | da fare |
+
+**Note sulla 6.1**
+- **Colori per:** JavaScript e JSX (con la grammatica di TSX), JSON, HTML (con JavaScript e CSS dentro), CSS, SCSS e Less, Markdown (con i blocchi di codice colorati nel loro linguaggio), YAML, TOML, Rust, script della shell e file `.env`.
+- **Il linguaggio si sceglie anche dal nome del file:**
+  - `tsconfig.json` e le impostazioni di VS Code sono JSON con commenti;
+  - `.env`, `.env.local` e simili sono file `.env`;
+  - `Cargo.lock` è TOML.
+- **Prisma** non ha una grammatica in gpui-component: per ora resta senza colori. Lo segue comunque il suo language server nella 6.7.
+- **Velocità:** un file Rust di 24.000 righe si analizza in 119 ms, in background; la prima schermata si colora in meno di un millisecondo.
 
 **Cosa si fa**
 - **Client LSP completo** (LSP è il protocollo con cui l'editor parla con i language server):

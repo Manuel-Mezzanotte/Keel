@@ -12,7 +12,20 @@ publish = false
 # UI framework. gpui-component is built on the `gpui-pre` snapshot of Zed's
 # GPUI, so the app must use the very same crate and version.
 gpui = { package = "gpui-pre", version = "=0.3.12" }
-gpui-component = { version = "=0.9.1", features = ["tree-sitter-typescript", "tree-sitter-tsx"] }
+# Grammars for the languages of phase 6: web and Rust. JSON is always built in.
+gpui-component = { version = "=0.9.1", features = [
+    "tree-sitter-typescript",
+    "tree-sitter-tsx",
+    "tree-sitter-javascript",
+    "tree-sitter-html",
+    "tree-sitter-css",
+    "tree-sitter-markdown",
+    "tree-sitter-markdown-inline",
+    "tree-sitter-yaml",
+    "tree-sitter-toml",
+    "tree-sitter-rust",
+    "tree-sitter-bash",
+] }
 # The macOS platform for GPUI; `font-kit` is needed to draw any text.
 gpui_platform = { package = "gpui-pre-platform", version = "=0.3.12", features = ["font-kit"] }
 # Icons used by gpui-component (search panel, folding chevrons...).
