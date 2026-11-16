@@ -30,6 +30,30 @@ pub fn has_comments(text: &str) -> bool {
     false
 }
 
+/// The first character from `index` that is not blank or in a comment.
+fn next_meaningful(characters: &[char], mut index: usize) -> Option<char> {
+    loop {
+        match (characters.get(index)?, characters.get(index + 1)) {
+            (character, _) if character.is_whitespace() => index += 1,
+            ('/', Some('/')) => {
+                while index < characters.len() && characters[index] != '\n' {
+                    index += 1;
+                }
+            }
+            ('/', Some('*')) => {
+                index += 2;
+                while index < characters.len()
+                    && !(characters[index] == '*' && characters.get(index + 1) == Some(&'/'))
+                {
+                    index += 1;
+                }
+                index += 2;
+            }
+            (character, _) => return Some(*character),
+        }
+    }
+}
+
 /// Replaces comments with spaces (keeping line numbers for error messages)
 /// and removes commas that come right before `}` or `]`.
 fn strip(text: &str) -> String {
@@ -77,10 +101,7 @@ fn strip(text: &str) -> String {
                 index += 2;
             }
             (',', _) => {
-                let rest = characters[index + 1..].iter().collect::<String>();
-                let following = strip(&rest);
-                let next_meaningful = following.trim_start().chars().next();
-                if !matches!(next_meaningful, Some('}' | ']')) {
+                if !matches!(next_meaningful(&characters, index + 1), Some('}' | ']')) {
                     output.push(',');
                 }
                 index += 1;
@@ -98,6 +119,23 @@ fn strip(text: &str) -> String {
 mod tests {
     use super::*;
     use serde_json::json;
+
+    #[test]
+    fn many_commas_are_read_quickly() {
+        let entries: Vec<String> = (0..20_000)
+            .map(|n| format!("\"key{n}\": [{n}, {n},]"))
+            .collect();
+        let text = format!("{{ {}, // end\n }}", entries.join(",\n"));
+        let started = std::time::Instant::now();
+        let value = parse(&text).unwrap();
+        assert_eq!(value.as_object().unwrap().len(), 20_000);
+        assert_eq!(value["key7"], json!([7, 7]));
+        assert!(
+            started.elapsed().as_secs_f32() < 1.0,
+            "{:?}",
+            started.elapsed()
+        );
+    }
 
     #[test]
     fn plain_json() {
