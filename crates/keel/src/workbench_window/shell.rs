@@ -363,10 +363,7 @@ impl Workbench {
         let content: AnyElement = match self.layout.side_view {
             SideView::Explorer if self.project.root.is_some() => self.render_explorer(colors, cx),
             SideView::Explorer => self.render_open_editors(colors, cx).into_any_element(),
-            SideView::Search => div()
-                .child(heading(strings.view_search, colors))
-                .child(note(strings.coming_in_phase(3), colors))
-                .into_any_element(),
+            SideView::Search => self.render_search(colors, cx),
             SideView::SourceControl => div()
                 .child(heading(strings.view_source_control, colors))
                 .when_some(self.project.branch.clone(), |view, branch| {
@@ -401,7 +398,8 @@ impl Workbench {
                     .flex_1()
                     .min_h_0()
                     .when(
-                        self.layout.side_view != SideView::Explorer || self.project.root.is_none(),
+                        !matches!(self.layout.side_view, SideView::Explorer | SideView::Search)
+                            || self.project.root.is_none(),
                         |content| content.overflow_y_scroll(),
                     )
                     .child(content),
@@ -1267,9 +1265,7 @@ impl Render for Workbench {
                 this.show_side_view(SideView::Explorer, cx)
             }))
             .on_action(
-                cx.listener(|this, _: &ShowSearch, _, cx| {
-                    this.show_side_view(SideView::Search, cx)
-                }),
+                cx.listener(|this, _: &ShowSearch, window, cx| this.focus_search(window, cx)),
             )
             .on_action(cx.listener(|this, _: &ShowSourceControl, _, cx| {
                 this.show_side_view(SideView::SourceControl, cx)

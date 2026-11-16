@@ -22,7 +22,9 @@ gpui_kit_assets::icon_assets!(
         FileImage,
         RefreshCw,
         ChevronsDownUp,
-        Pin
+        Pin,
+        WholeWord,
+        Regex
     ]
 );
 
@@ -80,6 +82,10 @@ mod tests {
             IconName::RefreshCw,
             IconName::ChevronsDownUp,
             IconName::Pin,
+            IconName::WholeWord,
+            IconName::Regex,
+            IconName::CaseSensitive,
+            IconName::Ellipsis,
             IconName::ChevronRight,
             IconName::ChevronDown,
             IconName::FolderOpen,

@@ -572,9 +572,21 @@ Con albero, schede, ricerca dei file e controllo della cartella, Keel è cresciu
 | Sottofase | Cosa | Stato |
 |---|---|---|
 | 3.1 | Motore di ricerca: maiuscole, parola intera, regex, cartelle da includere ed escludere, `.gitignore`, file binari saltati; sostituzione con i gruppi della regex | fatta |
-| 3.2 | Vista Cerca nella barra laterale (Cmd+Shift+F): campi e interruttori, risultati per file, clic che porta alla riga | da fare |
+| 3.2 | Vista Cerca nella barra laterale (Cmd+Shift+F): campi e interruttori, risultati per file, clic che porta alla riga | fatta |
 | 3.3 | Sostituisci in tutti i file con l'anteprima, per file o tutto insieme | da fare |
 | 3.4 | Cerca e sostituisci nel file (Cmd+F), misure e resoconto | da fare |
+
+**Note sulla 3.2**
+- **Cmd+Shift+F** apre la vista Cerca nella barra laterale e mette nel campo il testo selezionato nell'editor.
+- **Quando parte:** la ricerca parte da sola dopo una breve pausa nella scrittura, oppure subito con Invio; una ricerca nuova ferma quella ancora in corso.
+- **Accanto al campo**, tre interruttori come in VS Code: maiuscole/minuscole, parola intera, espressione regolare.
+- **Il pulsante «…»** mostra i campi dei file da includere ed escludere.
+- **Risultati:**
+  - raggruppati per file, con nome, cartella e numero di risultati;
+  - un clic sul file lo chiude o lo apre;
+  - le righe hanno il testo trovato evidenziato;
+  - un clic su una riga apre il file in anteprima con il testo trovato selezionato.
+- **Riepilogo** sopra la lista, per esempio «7.310 risultati in 327 file». Una regex sbagliata mostra l'errore.
 
 **Note sulla 3.1**
 - Il motore sta nel crate `files` (`search.rs`): percorre il progetto su più thread con il crate `ignore`, come ripgrep, e cerca con il crate `regex`.

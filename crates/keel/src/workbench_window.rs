@@ -7,6 +7,7 @@ pub(crate) mod explorer;
 mod navigation;
 mod other_files;
 mod restore;
+mod search_view;
 mod shell;
 mod tabs;
 
@@ -267,6 +268,8 @@ pub struct Workbench {
     groups: Vec<Group>,
     /// Files closed lately, for Reopen Closed Editor.
     closed: Vec<String>,
+    /// The Search view's fields, switches and results.
+    search: search_view::SearchView,
     /// Very large files the user agreed to open.
     large_files_ok: other_files::LargeFilesOk,
     /// Where the session and the backups are kept, if anywhere.
@@ -391,6 +394,7 @@ impl Workbench {
             groups: Vec::new(),
             closed: Vec::new(),
             large_files_ok: Default::default(),
+            search: Self::create_search_view(window, cx, language.strings()),
             data_dir: None,
             restoring: false,
             session_task: Task::ready(()),

@@ -179,6 +179,16 @@ pub struct Strings {
     pub use_disk_version: &'static str,
     pub large_file_detail: &'static str,
     pub open_anyway: &'static str,
+    pub search_placeholder: &'static str,
+    pub include_placeholder: &'static str,
+    pub exclude_placeholder: &'static str,
+    pub match_case: &'static str,
+    pub whole_word: &'static str,
+    pub use_regex: &'static str,
+    pub folders_toggle: &'static str,
+    pub searching: &'static str,
+    pub no_results: &'static str,
+    pub results_limited: &'static str,
     pub overwrite_detail: &'static str,
     pub command_toggle_sidebar: &'static str,
     pub command_toggle_panel: &'static str,
@@ -199,6 +209,7 @@ pub struct Strings {
     go_to_line: &'static str,
     changed_on_disk: &'static str,
     not_text: &'static str,
+    results: [&'static str; 4],
     large_file: &'static str,
     overwrite_question: &'static str,
     move_question: &'static str,
@@ -304,6 +315,22 @@ impl Strings {
         self.go_to_line
             .replace("{current}", &current.to_string())
             .replace("{total}", &total.to_string())
+    }
+
+    /// "7.310 risultati in 327 file", with the right singulars.
+    pub fn results_summary(
+        &self,
+        count: &str,
+        files: &str,
+        one_result: bool,
+        one_file: bool,
+    ) -> String {
+        let text = match (one_result, one_file) {
+            (true, _) => self.results[0].to_owned(),
+            (false, true) => self.results[1].replace(" files", " file"),
+            (false, false) => self.results[1].to_owned(),
+        };
+        text.replace("{count}", count).replace("{files}", files)
     }
 
     pub fn not_text(&self, name: &str) -> String {
@@ -488,6 +515,16 @@ pub const ITALIAN: Strings = Strings {
     use_disk_version: "Usa la versione sul disco",
     large_file_detail: "Aprirlo può rallentare Keel per qualche momento.",
     open_anyway: "Apri comunque",
+    search_placeholder: "Cerca",
+    include_placeholder: "File da includere (es. src, *.ts)",
+    exclude_placeholder: "File da escludere",
+    match_case: "Maiuscole/minuscole",
+    whole_word: "Parola intera",
+    use_regex: "Espressione regolare",
+    folders_toggle: "File da includere ed escludere",
+    searching: "Ricerca…",
+    no_results: "Nessun risultato",
+    results_limited: " · mostrati i primi 20.000: restringi la ricerca",
     overwrite_detail: "Se usi la versione sul disco, le modifiche fatte in Keel si perdono.",
     command_toggle_sidebar: "Vista: Mostra o nascondi la barra laterale",
     command_toggle_panel: "Vista: Mostra o nascondi il pannello",
@@ -508,6 +545,12 @@ pub const ITALIAN: Strings = Strings {
     go_to_line: "Riga attuale {current} di {total}. Scrivi la riga, anche con :colonna",
     changed_on_disk: "«{name}» è cambiato sul disco; quando salvi, Keel ti chiede quale versione tenere",
     not_text: "«{name}» non è un file di testo: Keel non lo apre",
+    results: [
+        "{count} risultato in {files} file",
+        "{count} risultati in {files} file",
+        "{count} risultato",
+        "{count} risultati",
+    ],
     large_file: "«{name}» è grande ({size}). Vuoi aprirlo?",
     overwrite_question: "«{name}» è cambiato sul disco dopo che Keel l'ha letto. Vuoi sovrascriverlo con le tue modifiche?",
     move_question: "Vuoi spostare «{name}» in «{folder}»?",
@@ -649,6 +692,16 @@ pub const ENGLISH: Strings = Strings {
     use_disk_version: "Use the Version on Disk",
     large_file_detail: "Opening it may slow Keel down for a moment.",
     open_anyway: "Open Anyway",
+    search_placeholder: "Search",
+    include_placeholder: "Files to include (e.g. src, *.ts)",
+    exclude_placeholder: "Files to exclude",
+    match_case: "Match Case",
+    whole_word: "Match Whole Word",
+    use_regex: "Use Regular Expression",
+    folders_toggle: "Files to include and exclude",
+    searching: "Searching…",
+    no_results: "No results",
+    results_limited: " · showing the first 20,000: narrow the search",
     overwrite_detail: "If you use the version on disk, the changes made in Keel are lost.",
     command_toggle_sidebar: "View: Toggle Sidebar",
     command_toggle_panel: "View: Toggle Panel",
@@ -669,6 +722,12 @@ pub const ENGLISH: Strings = Strings {
     go_to_line: "Current line {current} of {total}. Type a line, with :column if you like",
     changed_on_disk: "\"{name}\" changed on disk; when you save, Keel asks which version to keep",
     not_text: "\"{name}\" is not a text file, so Keel does not open it",
+    results: [
+        "{count} result in {files} file",
+        "{count} results in {files} files",
+        "{count} result",
+        "{count} results",
+    ],
     large_file: "\"{name}\" is large ({size}). Do you want to open it?",
     overwrite_question: "\"{name}\" changed on disk after Keel read it. Do you want to overwrite it with your changes?",
     move_question: "Do you want to move \"{name}\" into \"{folder}\"?",
