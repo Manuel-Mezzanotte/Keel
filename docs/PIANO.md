@@ -4,7 +4,7 @@ Keel è il tuo IDE personale: scritto in Rust, veloce e leggero, bello come Curs
 
 Si lavora **una fase alla volta**. All'inizio di ogni fase ne dettagliamo i passi; alla fine la provi tu, e si passa alla successiva solo quando ti convince. La pubblicazione dell'app non è in questo piano: ci si pensa alla fine, dopo i tuoi test.
 
-*Scritto il 14 novembre 2026, aggiornato il 15 novembre. Stato: fase 0 fatta, fase 1 in corso.*
+*Scritto il 14 novembre 2026, aggiornato il 16 novembre. Stato: fasi 0–6 fatte, restano le tue prove a mano.*
 
 ---
 
@@ -121,7 +121,7 @@ Da confermare con le misure della fase 0. Si misura con lo stesso script su Keel
 | 3 | Ricerca | piccola | fatta; restano le tue prove a mano |
 | 4 | Terminale e pannello in basso | media | fatta; restano le tue prove a mano |
 | 5 | Git: modifiche e commit | media | fatta; restano le tue prove a mano |
-| 6 | Linguaggi principali: web e Rust | grande | in corso |
+| 6 | Linguaggi principali: web e Rust | grande | fatta; restano le tue prove a mano |
 | 7 | Anteprima Markdown e PDF | media | da fare |
 | 8 | Grafico e storico git | media | da fare |
 | 9 | Estensioni | grande | da fare |
@@ -885,7 +885,45 @@ Con albero, schede, ricerca dei file e controllo della cartella, Keel è cresciu
 | 6.5 | Navigare: definizione, implementazione e tipo, riferimenti, rinomina, struttura del file (Cmd+Maiusc+O), simboli del progetto (Cmd+T) | fatta |
 | 6.6 | Correggere e formattare: azioni rapide (Cmd+.), formattazione anche al salvataggio, Prettier del progetto, correzioni di ESLint | fatta |
 | 6.7 | I server: TypeScript (`vtsls`), HTML, CSS, JSON, ESLint, Emmet, Tailwind, Prisma, Markdown, YAML, TOML e `rust-analyzer`; prove sui due gestionali e su Keel | fatta |
-| 6.8 | Misure e resoconto | da fare |
+| 6.8 | Misure e resoconto | fatta |
+
+**Resoconto della fase 6**
+- **Il criterio era:** su GestionaleHospitality e GestionaleSalon Keel mostra gli stessi errori di Cursor, completa, formatta al salvataggio, rinomina e trova i riferimenti; su Keel stesso `rust-analyzer` funziona.
+  - **Gli stessi errori:** provato con un errore aggiunto in memoria su un file di ciascun progetto. TypeScript dà lo stesso errore di `tsc`, ESLint lo stesso avviso di `eslint` (vedi la 6.7).
+  - **Completamenti, rinomina, riferimenti, formattazione:** funzionano coi server veri (tempi nella 6.7) e nei test automatici, che fanno il giro completo nella finestra con un server finto.
+  - **rust-analyzer** funziona su Keel: errori, info, definizioni, struttura e formattazione.
+  - **Resta la tua prova a mano.**
+- **Misure** con Keel ottimizzato, aprendo un file dal comando `keel`:
+
+  | | Keel | Server | Primo fotogramma | CPU di Keel a riposo |
+  |---|---|---|---|---|
+  | Hospitality, `sidebar.tsx` (TypeScript, ESLint, Tailwind, Emmet) | 140 MB | 1,18 GB in 7 processi | 567 ms | 0,1% |
+  | Keel, `text.rs` (rust-analyzer) | 98 MB | 2,2 GB mentre indicizza, poi circa 600 MB | 431 ms | 0,1% |
+
+  - **I server pesano più di Keel.** Sono gli stessi programmi che usa Cursor: il solo server di TypeScript prende 587 MB su Hospitality, e quello di Cursor in questo momento ne prende 1,2 GB su un altro tuo progetto. Keel aggiunge 140 MB; la sola finestra di Cursor ne prende più di 600.
+  - Con la cartella dati nuova i server si installano da soli la prima volta: da 20 a 30 secondi per quelli di npm. Le misure sono state fatte dopo.
+  - **Chiudendo Keel i server si fermano tutti**, anche quelli che avviano altri processi, come il `tsserver` di TypeScript.
+- **Rimandati:**
+  - i suggerimenti in linea, che l'editor di gpui-component non sa disegnare (fase 12);
+  - la lampadina delle azioni rapide accanto alla riga;
+  - il riquadro dei riferimenti dentro l'editor: per ora c'è un elenco.
+- **Test:** 273 automatici, tutti verdi, più 11 da lanciare a mano: misure e server veri (`cargo test -p lsp --test real_servers -- --ignored`).
+
+**Le tue prove a mano della fase 6**
+
+Apri Keel su GestionaleHospitality. La prima volta i server si installano da soli: nella barra di stato compare «Installo il server…», e la prima volta TypeScript ci mette qualche secondo.
+1. Apri un file `.tsx` e scrivi un errore, per esempio `const x: number = "a";`. Si sottolinea in rosso. Nella barra di stato compaiono gli errori e gli avvisi; un clic apre Problemi. F8 va al problema successivo.
+2. Scrivi `use` dentro un componente: compare il menu dei completamenti. Scegli `useState` da un file che non lo importa ancora: la riga di `import` si aggiunge da sola in cima.
+3. Scrivi il nome di una funzione e `(`: sopra il cursore compare la firma, con il parametro in grassetto. Scrivi `,` e il grassetto passa al parametro dopo.
+4. Passa col mouse su un nome: compare il tipo. Cmd+clic, o F12, apre la definizione, anche in un altro file. Maiusc+F12 elenca i riferimenti.
+5. F2 su una variabile usata in più file: rinominala e controlla i file, anche quelli chiusi (con la vista git).
+6. Cmd+. sopra un errore: compaiono le correzioni. Maiusc+Alt+O ordina gli import.
+7. Maiusc+Alt+F formatta il file. Per formattare al salvataggio aggiungi `"editor.formatOnSave": true` alle impostazioni e salva con Cmd+S.
+8. Cmd+Maiusc+O elenca i simboli del file; Cmd+T cerca i simboli del progetto.
+9. Apri `prisma/schema.prisma`, `globals.css`, `package.json` e `compose.yaml`: errori e completamenti anche lì.
+10. Apri Keel su sé stesso e un file `.rs`: nella barra di stato si vede l'indicizzazione di rust-analyzer, poi errori, info e F12 funzionano.
+11. Snippet: copia i tuoi snippet di Cursor nella cartella `snippets` di Keel e prova un prefisso; Tab passa al segnaposto dopo.
+12. Nell'Output, canale «Linguaggi», ci sono i messaggi dei server. «Linguaggi: Riavvia i language server» dalla tavolozza li riavvia.
 
 **Note sulla 6.7**
 - **Ogni server è stato provato su un file vero.** In memoria, senza toccare il disco, ho aggiunto un errore e confrontato con gli strumenti a riga di comando dei progetti (tempi della prima volta, con il server appena partito):
