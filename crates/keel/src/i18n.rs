@@ -323,6 +323,8 @@ pub struct Strings {
     overwrite_question: &'static str,
     move_question: &'static str,
     trash_question: &'static str,
+    /// Unused while every part of the window is built; kept for the next.
+    #[allow(dead_code)]
     coming_in_phase: &'static str,
     line_column: &'static str,
     spaces: &'static str,
@@ -335,6 +337,9 @@ pub struct Strings {
     pub lsp_restarting: &'static str,
     pub lsp_restarted: &'static str,
     pub command_restart_language_servers: &'static str,
+    pub problems_none: &'static str,
+    pub command_next_problem: &'static str,
+    pub command_previous_problem: &'static str,
 }
 
 impl Strings {
@@ -378,6 +383,8 @@ impl Strings {
             "git.cleanAll" => self.command_git_discard_all,
             "git.push" => self.command_git_push,
             "keel.restartLanguageServers" => self.command_restart_language_servers,
+            "editor.action.marker.nextInFiles" => self.command_next_problem,
+            "editor.action.marker.prevInFiles" => self.command_previous_problem,
             "git.pull" => self.command_git_pull,
             "git.fetch" => self.command_git_fetch,
             "git.sync" => self.command_git_sync,
@@ -561,6 +568,7 @@ impl Strings {
     }
 
     /// "Coming in phase 3", for the parts of the window not built yet.
+    #[allow(dead_code)]
     pub fn coming_in_phase(&self, phase: u8) -> String {
         self.coming_in_phase.replace("{phase}", &phase.to_string())
     }
@@ -875,6 +883,9 @@ pub const ITALIAN: Strings = Strings {
     lsp_restarting: "si è fermato: lo riavvio",
     lsp_restarted: "Language server riavviati",
     command_restart_language_servers: "Linguaggi: Riavvia i language server",
+    problems_none: "Nessun problema rilevato finora.",
+    command_next_problem: "Vai al problema successivo",
+    command_previous_problem: "Vai al problema precedente",
 };
 
 pub const ENGLISH: Strings = Strings {
@@ -1169,6 +1180,9 @@ pub const ENGLISH: Strings = Strings {
     lsp_restarting: "stopped: starting it again",
     lsp_restarted: "Language servers restarted",
     command_restart_language_servers: "Languages: Restart Language Servers",
+    problems_none: "No problems have been detected so far.",
+    command_next_problem: "Go to Next Problem",
+    command_previous_problem: "Go to Previous Problem",
 };
 
 #[cfg(test)]

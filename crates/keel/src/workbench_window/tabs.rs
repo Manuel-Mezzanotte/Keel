@@ -155,6 +155,7 @@ impl Workbench {
         );
         // The block bar follows the cursor.
         let cursor = cx.observe(&editor, |this, _, cx| this.update_hunk_bar(cx));
+        self.underline_editor(uri, &editor, cx);
         Some(Pane {
             editor_id,
             uri: uri.to_owned(),

@@ -815,11 +815,6 @@ impl Workbench {
         servers::settings_for(spec, &lsp::nested_settings(&self.settings.merged()))
     }
 
-    /// Diagnostics of `uri` changed: the editor and the Problems view follow.
-    pub(super) fn diagnostics_changed(&mut self, _uri: &str, cx: &mut Context<Self>) {
-        cx.notify();
-    }
-
     pub(super) fn language_server_actions(
         &self,
         root: gpui::Div,

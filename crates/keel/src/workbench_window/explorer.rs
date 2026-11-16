@@ -895,12 +895,26 @@ impl Workbench {
                 None => div().into_any_element(),
             }
         } else {
+            // Errors in red and warnings in yellow, as in VS Code.
+            let mark = self.problems.marks.get(&path).copied();
+            let theme = cx.theme();
+            let color = match mark {
+                Some((true, _)) => theme.danger,
+                Some((false, _)) => theme.warning,
+                None if ignored => colors.faint,
+                None => colors.text,
+            };
             div()
                 .flex_1()
                 .min_w_0()
-                .truncate()
-                .text_color(if ignored { colors.faint } else { colors.text })
-                .child(name.clone())
+                .flex()
+                .items_center()
+                .gap_1()
+                .text_color(color)
+                .child(div().flex_1().min_w_0().truncate().child(name.clone()))
+                .when_some(mark.filter(|(_, count)| *count > 0), |label, (_, count)| {
+                    label.child(div().flex_none().text_xs().child(count.to_string()))
+                })
                 .into_any_element()
         };
         let drop_folder = if is_dir {

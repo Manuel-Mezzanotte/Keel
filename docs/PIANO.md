@@ -880,12 +880,25 @@ Con albero, schede, ricerca dei file e controllo della cartella, Keel è cresciu
 |---|---|---|
 | 6.1 | Colori della sintassi per JavaScript, HTML, CSS, JSON, Markdown, YAML, TOML, Rust e `.env` (oggi solo TypeScript) | fatta |
 | 6.2 | Motore LSP (crate `lsp`): processo, messaggi, documenti aperti, richieste del server, riavvio dopo un crash, registro nell'Output; trova o installa i server | fatta |
-| 6.3 | Errori e avvisi: sottolineature, pannello Problemi, numeri nella barra di stato, F8 per passare al successivo | da fare |
+| 6.3 | Errori e avvisi: sottolineature, pannello Problemi, numeri nella barra di stato, F8 per passare al successivo | fatta |
 | 6.4 | Scrivere: completamenti con snippet, info al passaggio del mouse, firma delle funzioni, snippet nel formato di VS Code | da fare |
 | 6.5 | Navigare: definizione, implementazione e tipo, riferimenti, rinomina, struttura del file (Cmd+Maiusc+O), simboli del progetto (Cmd+T) | da fare |
 | 6.6 | Correggere e formattare: azioni rapide (Cmd+.), formattazione anche al salvataggio, Prettier del progetto, correzioni di ESLint | da fare |
 | 6.7 | I server: TypeScript (`vtsls`), HTML, CSS, JSON, ESLint, Emmet, Tailwind, Prisma, Markdown, YAML, TOML e `rust-analyzer`; prove sui due gestionali e su Keel | da fare |
 | 6.8 | Misure e resoconto | da fare |
+
+**Note sulla 6.3**
+- **Sottolineature:** rosse per gli errori, gialle per gli avvisi, blu per le informazioni. Passandoci sopra col mouse compare il messaggio.
+- **Le sottolineature seguono il testo.** gpui-component le cancella a ogni tasto, finché il server non risponde: lampeggerebbero mentre scrivi. Keel invece le sposta insieme al testo, come VS Code, e le sostituisce quando arrivano quelle nuove.
+- **I suggerimenti** (per esempio una variabile non usata) restano fuori dalle sottolineature, dal pannello e dai numeri, come in VS Code.
+- **Pannello Problemi** (Cmd+Maiusc+M):
+  - i file con i loro problemi, dal più grave, ciascuno con la fonte, il codice e la posizione;
+  - un clic apre il file sul punto;
+  - un clic sul file lo chiude o lo riapre;
+  - il numero dei problemi compare anche sulla scheda del pannello.
+- **Barra di stato:** subito dopo il branch, il numero di errori e di avvisi. Un clic apre il pannello Problemi.
+- **F8 e Maiusc+F8** portano al problema dopo o prima del cursore, anche negli altri file, e ne mostrano il messaggio nella barra di stato.
+- **Esplora risorse:** i file con errori sono rossi, quelli con soli avvisi gialli, con il numero dei problemi accanto. Le cartelle che li contengono prendono il colore del più grave.
 
 **Note sulla 6.2**
 - **Il crate `lsp`** parla con i server: avvia il processo, manda e riceve i messaggi, annulla le richieste che non servono più e risponde da solo alle domande di routine (impostazioni, cartelle del progetto).

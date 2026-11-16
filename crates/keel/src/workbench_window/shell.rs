@@ -1019,11 +1019,31 @@ impl Workbench {
                         cx.notify();
                     }))
                     .child(panel_view_title(view, strings).to_uppercase())
+                    .when(
+                        view == PanelView::Problems && !self.problems.files.is_empty(),
+                        |tab| {
+                            let count = self
+                                .problems
+                                .files
+                                .iter()
+                                .map(|(_, problems)| problems.len())
+                                .sum::<usize>();
+                            tab.child(
+                                div()
+                                    .ml_1p5()
+                                    .px_1p5()
+                                    .rounded(px(8.))
+                                    .bg(colors.hover)
+                                    .text_color(colors.muted)
+                                    .child(count.to_string()),
+                            )
+                        },
+                    )
             })
             .collect::<Vec<_>>();
         let content: AnyElement = match self.layout.panel_view {
             PanelView::Output => self.render_output(colors, cx),
-            PanelView::Problems => note(strings.coming_in_phase(6), colors).into_any_element(),
+            PanelView::Problems => self.render_problems(colors, cx),
             PanelView::Terminal => match self.render_terminals(colors) {
                 Some(terminal) => terminal,
                 None => note(strings.no_terminal.to_owned(), colors).into_any_element(),
@@ -1262,45 +1282,52 @@ impl Workbench {
             .gap_4()
             .text_xs()
             .text_color(colors.muted)
-            .child(div().flex().items_center().gap_4().min_w_0().children(
-                left.into_iter().enumerate().map(|(index, text)| {
-                    let is_branch = branch && index == 0;
-                    div()
-                        .id(("status-left", index))
-                        .flex()
-                        .items_center()
-                        .gap_1()
-                        .truncate()
-                        .when(is_branch, |item| {
-                            item.text_color(colors.text)
-                                .child(Icon::new(IconName::GitBranch).xsmall())
-                        })
-                        .child(text)
-                        .when(is_branch && has_repo, |item| {
-                            item.cursor_pointer()
-                                .hover(|item| item.text_color(colors.accent))
-                                .on_click(
-                                    cx.listener(|this, _, window, cx| {
-                                        this.choose_branch(window, cx)
-                                    }),
-                                )
-                        })
-                        .when_some(sync.clone().filter(|_| is_branch), |item, sync| {
-                            item.child(
-                                div()
-                                    .id("status-sync")
-                                    .ml_2()
-                                    .cursor_pointer()
+            .child(div().flex().items_center().gap_4().min_w_0().children({
+                let mut items: Vec<AnyElement> = left
+                    .into_iter()
+                    .enumerate()
+                    .map(|(index, text)| {
+                        let is_branch = branch && index == 0;
+                        div()
+                            .id(("status-left", index))
+                            .flex()
+                            .items_center()
+                            .gap_1()
+                            .truncate()
+                            .when(is_branch, |item| {
+                                item.text_color(colors.text)
+                                    .child(Icon::new(IconName::GitBranch).xsmall())
+                            })
+                            .child(text)
+                            .when(is_branch && has_repo, |item| {
+                                item.cursor_pointer()
                                     .hover(|item| item.text_color(colors.accent))
                                     .on_click(cx.listener(|this, _, window, cx| {
-                                        window.dispatch_action(Box::new(super::GitSync), cx);
-                                        let _ = this;
+                                        this.choose_branch(window, cx)
                                     }))
-                                    .child(sync),
-                            )
-                        })
-                }),
-            ))
+                            })
+                            .when_some(sync.clone().filter(|_| is_branch), |item, sync| {
+                                item.child(
+                                    div()
+                                        .id("status-sync")
+                                        .ml_2()
+                                        .cursor_pointer()
+                                        .hover(|item| item.text_color(colors.accent))
+                                        .on_click(cx.listener(|this, _, window, cx| {
+                                            window.dispatch_action(Box::new(super::GitSync), cx);
+                                            let _ = this;
+                                        }))
+                                        .child(sync),
+                                )
+                            })
+                            .into_any_element()
+                    })
+                    .collect();
+                // Errors and warnings come right after the branch, as in VS Code.
+                let at = usize::from(branch).min(items.len());
+                items.insert(at, self.render_problem_counts(colors, cx));
+                items
+            }))
             .child(
                 div()
                     .flex_none()
@@ -1357,6 +1384,7 @@ impl Render for Workbench {
         let root = self.source_control_actions(root, cx);
         let root = self.git_gutter_actions(root, cx);
         let root = self.language_server_actions(root, cx);
+        let root = self.problem_actions(root, cx);
         let root = self.editing_actions(root, cx);
         self.explorer_actions(root, cx)
             .size_full()

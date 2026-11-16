@@ -12,6 +12,7 @@ mod navigation;
 mod npm_scripts;
 mod other_files;
 mod panel_views;
+mod problems;
 mod restore;
 mod search_view;
 mod shell;
@@ -38,6 +39,7 @@ pub(crate) use claude_code::{OpenClaudeCode, OpenClaudeCodeInPanel};
 pub(crate) use git_gutter::{NextChange, PreviousChange, RevertChange, StageChange};
 pub(crate) use language_servers::RestartLanguageServers;
 pub(crate) use npm_scripts::RunNpmScript;
+pub(crate) use problems::{NextProblem, PreviousProblem};
 pub(crate) use shell::window_options;
 pub(crate) use source_control::{
     CheckoutBranch, Commit, CommitAmend, CreateBranch, DiscardAll, GitFetch, GitPull, GitPush,
@@ -379,6 +381,8 @@ pub struct Workbench {
     npm_scripts: Option<npm_scripts::NpmScripts>,
     /// The language servers of the open files.
     languages: language_servers::Languages,
+    /// Their errors and warnings, as the Problems view lists them.
+    problems: problems::ProblemsView,
     _subscriptions: Vec<Subscription>,
 }
 
@@ -516,6 +520,7 @@ impl Workbench {
             hunk_bar: None,
             first_frame_drawn: false,
             languages: language_servers::Languages::new(cx),
+            problems: Default::default(),
             _subscriptions: subscriptions,
         };
         workbench.build_tree();
@@ -812,9 +817,19 @@ impl Workbench {
             "text": text,
             "isDirty": document.modified,
         });
-        document.synced_text = text.clone();
+        let old = std::mem::replace(&mut document.synced_text, text.clone());
         let modified = document.modified;
         self.notify_host("documents/changed", params);
+        // The underlines move with the text until the servers say more.
+        if self.languages.diagnostics.contains_key(uri) {
+            self.shift_problems(uri, &old, &text);
+            let panes: Vec<usize> = (0..self.panes.len())
+                .filter(|pane| self.panes[*pane].uri == uri)
+                .collect();
+            for pane in panes {
+                self.underline_problems(pane, cx);
+            }
+        }
         self.backups_changed(cx);
         if modified {
             self.auto_save_after_change(window, cx);

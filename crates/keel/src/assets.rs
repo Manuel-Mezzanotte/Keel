@@ -28,7 +28,10 @@ gpui_kit_assets::icon_assets!(
         ReplaceAll,
         Columns2,
         Play,
-        Trash
+        Trash,
+        CircleX,
+        TriangleAlert,
+        Info
     ]
 );
 

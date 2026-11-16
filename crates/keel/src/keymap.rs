@@ -6,7 +6,6 @@ use std::path::Path;
 use gpui::{Action, App, KeyBinding};
 use serde_json::Value;
 
-use crate::workbench_window::RestartLanguageServers;
 use crate::workbench_window::explorer;
 use crate::workbench_window::{
     CheckoutBranch, Commit, CommitAmend, CreateBranch, DiscardAll, GitFetch, GitPull, GitPush,
@@ -34,6 +33,7 @@ use crate::workbench_window::{
 };
 use crate::workbench_window::{GoToLine, QuickOpen};
 use crate::workbench_window::{NextChange, PreviousChange, RevertChange, StageChange};
+use crate::workbench_window::{NextProblem, PreviousProblem, RestartLanguageServers};
 
 /// A Keel command: its VS Code name, the action it runs and its default key.
 pub struct KeelCommand {
@@ -225,6 +225,18 @@ pub const COMMANDS: &[KeelCommand] = &[
         id: "git.cleanAll",
         action: || Box::new(DiscardAll),
         default_key: None,
+        context: None,
+    },
+    KeelCommand {
+        id: "editor.action.marker.nextInFiles",
+        action: || Box::new(NextProblem),
+        default_key: Some("f8"),
+        context: None,
+    },
+    KeelCommand {
+        id: "editor.action.marker.prevInFiles",
+        action: || Box::new(PreviousProblem),
+        default_key: Some("shift+f8"),
         context: None,
     },
     KeelCommand {
@@ -778,7 +790,7 @@ mod tests {
         let (bindings, warnings) =
             read_user_bindings(Path::new("/nonexistent/keel/keybindings.json"));
         assert!(bindings.is_empty() && warnings.is_empty());
-        assert_eq!(keel_bindings(&[]).len(), 53);
+        assert_eq!(keel_bindings(&[]).len(), 55);
     }
 
     #[test]
