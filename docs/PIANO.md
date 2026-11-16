@@ -118,7 +118,7 @@ Da confermare con le misure della fase 0. Si misura con lo stesso script su Keel
 | 0 | Prototipo e prova a tempo | 2–3 settimane | fatta; restano le tue prove a mano |
 | 1 | Fondamenta e design | media | fatta; restano le tue prove a mano |
 | 2 | Editor e file | grande | fatta; restano le tue prove a mano |
-| 3 | Ricerca | piccola | in corso |
+| 3 | Ricerca | piccola | fatta; restano le tue prove a mano |
 | 4 | Terminale e pannello in basso | media | da fare |
 | 5 | Git: modifiche e commit | media | da fare |
 | 6 | Linguaggi principali: web e Rust | grande | da fare |
@@ -574,7 +574,27 @@ Con albero, schede, ricerca dei file e controllo della cartella, Keel è cresciu
 | 3.1 | Motore di ricerca: maiuscole, parola intera, regex, cartelle da includere ed escludere, `.gitignore`, file binari saltati; sostituzione con i gruppi della regex | fatta |
 | 3.2 | Vista Cerca nella barra laterale (Cmd+Shift+F): campi e interruttori, risultati per file, clic che porta alla riga | fatta |
 | 3.3 | Sostituisci in tutti i file con l'anteprima, per file o tutto insieme | fatta |
-| 3.4 | Cerca e sostituisci nel file (Cmd+F), misure e resoconto | da fare |
+| 3.4 | Cerca e sostituisci nel file (Cmd+F), misure e resoconto | fatta |
+
+**Note sulla 3.4**
+- **Cmd+F** apre il pannello di ricerca dell'editor di gpui-component:
+  - maiuscole/minuscole;
+  - successivo e precedente;
+  - Sostituisci (Cmd+Alt+F, come in VS Code) e Sostituisci tutto, che si annullano con Cmd+Z.
+- **Manca:** regex e parola intera dentro il singolo file, perché il pannello non le ha. Per ora si usa la vista Cerca con il file in «File da includere». Rifarle nel pannello va nella fase 12.
+
+**Resoconto della fase 3**
+- **Il criterio era** trovare una parola in GestionaleHospitality in meno di un secondo. Il motore ci mette 14–26 ms anche con migliaia di risultati, perché lavora su più thread come ripgrep.
+- **La sostituzione su più file** si controlla prima nell'anteprima, chiede conferma e nei file aperti si annulla con Cmd+Z.
+- **L'apertura veloce migliorata** (recenti in cima, ricerca nel percorso) era già arrivata con la 2.4.
+- **Test:** 176 automatici, tutti verdi.
+
+**Le tue prove a mano della fase 3**
+1. In GestionaleHospitality, Cmd+Shift+F e una parola: i risultati devono arrivare mentre scrivi.
+2. Prova gli interruttori (Aa, parola intera, `.*`) e «…» con `src` da includere.
+3. Clic su un risultato: il file si apre col testo selezionato.
+4. Apri Sostituisci, scrivi un testo nuovo e guarda l'anteprima, poi «Sostituisci nel file» su un file solo. Con Cmd+Z si torna indietro se il file era aperto.
+5. Cmd+F e Cmd+Alt+F dentro un file.
 
 **Note sulla 3.3**
 - **La freccia** a sinistra del campo di ricerca mostra il campo Sostituisci, come in VS Code.
@@ -770,7 +790,8 @@ Con albero, schede, ricerca dei file e controllo della cartella, Keel è cresciu
   - pieghe da tastiera;
   - comandi sulle righe con più cursori;
   - trascinare le schede;
-  - aprire più file insieme da `keel`.
+  - aprire più file insieme da `keel`;
+  - regex e parola intera nella ricerca dentro il file (Cmd+F).
 
 **Fatto quando**
 - Usi Keel per qualche settimana al posto di Cursor senza dover tornare indietro.

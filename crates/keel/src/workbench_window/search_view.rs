@@ -874,6 +874,22 @@ mod tests {
     }
 
     #[gpui::test]
+    fn cmd_f_searches_inside_the_file_without_touching_it(cx: &mut TestAppContext) {
+        let (_folder, _root, view, cx) = project(cx);
+        let before = view.read_with(cx, |view, cx| {
+            view.panes[view.active].editor.read(cx).value().to_string()
+        });
+        // The editor's own search field takes the typing.
+        cx.simulate_keystrokes("cmd-f");
+        cx.simulate_input("Total");
+        cx.simulate_keystrokes("escape");
+        let after = view.read_with(cx, |view, cx| {
+            view.panes[view.active].editor.read(cx).value().to_string()
+        });
+        assert_eq!(after, before);
+    }
+
+    #[gpui::test]
     fn replace_all_asks_then_changes_open_and_closed_files(cx: &mut TestAppContext) {
         let (_folder, root, view, cx) = project(cx);
         cx.executor().allow_parking();
