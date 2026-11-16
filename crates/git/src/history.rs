@@ -528,4 +528,41 @@ mod tests {
         assert!(repo.is_valid_branch_name("feature/x"));
         assert!(!repo.is_valid_branch_name("con spazio"));
     }
+
+    /// Times the graph on a real repository: `KEEL_TEST_REPO=folder
+    /// [KEEL_TEST_BLAME=file] cargo test -p git --release timing_graph --
+    /// --ignored --nocapture`.
+    #[test]
+    #[ignore]
+    fn timing_graph() {
+        let folder = std::env::var("KEEL_TEST_REPO").expect("KEEL_TEST_REPO");
+        let repo = Repo::discover(std::path::Path::new(&folder)).unwrap();
+        for max in [500, 5000] {
+            let started = std::time::Instant::now();
+            let commits = repo
+                .log(&LogOptions {
+                    branches: Vec::new(),
+                    max,
+                })
+                .unwrap();
+            let read = started.elapsed();
+            let started = std::time::Instant::now();
+            let rows = crate::graph::layout(&commits, 12);
+            println!(
+                "{} commits read in {read:?}, laid out in {:?}, {} lanes at most",
+                commits.len(),
+                started.elapsed(),
+                rows.iter().map(|row| row.width).max().unwrap_or(0)
+            );
+        }
+        if let Ok(file) = std::env::var("KEEL_TEST_BLAME") {
+            let started = std::time::Instant::now();
+            let lines = repo.blame(&file, None).unwrap();
+            println!(
+                "blame of {file}: {} lines in {:?}",
+                lines.len(),
+                started.elapsed()
+            );
+        }
+    }
 }

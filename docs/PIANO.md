@@ -4,7 +4,7 @@ Keel è il tuo IDE personale: scritto in Rust, veloce e leggero, bello come Curs
 
 Si lavora **una fase alla volta**. All'inizio di ogni fase ne dettagliamo i passi; alla fine la provi tu, e si passa alla successiva solo quando ti convince. La pubblicazione dell'app non è in questo piano: ci si pensa alla fine, dopo i tuoi test.
 
-*Scritto il 14 novembre 2026, aggiornato il 16 novembre. Stato: fasi 0–7 fatte, restano le tue prove a mano.*
+*Scritto il 14 novembre 2026, aggiornato il 16 novembre. Stato: fasi 0–8 fatte, restano le tue prove a mano.*
 
 ---
 
@@ -123,7 +123,7 @@ Da confermare con le misure della fase 0. Si misura con lo stesso script su Keel
 | 5 | Git: modifiche e commit | media | fatta; restano le tue prove a mano |
 | 6 | Linguaggi principali: web e Rust | grande | fatta; restano le tue prove a mano |
 | 7 | Anteprima Markdown e PDF | media | fatta; restano le tue prove a mano |
-| 8 | Grafico e storico git | media | in corso |
+| 8 | Grafico e storico git | media | fatta; restano le tue prove a mano |
 | 9 | Estensioni | grande | da fare |
 | 10 | IA: Claude Code | media | da fare |
 | 11 | Altri linguaggi | media | da fare |
@@ -1195,7 +1195,33 @@ Apri Keel su GestionaleHospitality. La prima volta i server si installano da sol
 | 8.2 | Scheda «Git Graph»: grafico con linee colorate, descrizione, data, autore e hash; filtro per branch; ricerca; altri commit a richiesta | fatta |
 | 8.3 | Dettaglio di un commit (file cambiati, differenze) e azioni dal menu: checkout, crea branch o tag, copia l'hash, cherry-pick, revert, merge, elimina branch, con conferma | fatta |
 | 8.4 | Storico di un file e autore di ogni riga nell'editor, attivabile | fatta |
-| 8.5 | Misure e resoconto | da fare |
+| 8.5 | Misure e resoconto | fatta |
+
+**Resoconto della fase 8**
+- **Il criterio era:** fai tutto quello che fai oggi con Git Graph. In Keel ci sono il grafico con i colori di Git Graph, branch, remoti e tag, la riga delle modifiche non committate, il filtro per branch, la ricerca, il dettaglio di un commit con i file e le differenze, e il menu col tasto destro con conferma prima di ogni cambiamento. **Resta la tua prova a mano.**
+- **Rispetto a Git Graph mancano:** gli stash nel grafico, il reset del branch a un commit, il push di un tag, il tag annotato e il confronto fra due commit qualsiasi. Se te ne serve qualcuno, si aggiunge.
+- **In più rispetto a Git Graph:** l'autore di ogni riga nell'editor e lo storico di un file.
+- **Misure** (versione ottimizzata):
+
+  | Repository | Lettura dello storico | Calcolo del grafico | Corsie |
+  |---|---|---|---|
+  | GestionaleHospitality, 134 commit | 12–45 ms | 0,04 ms | 1 |
+  | Keel, 67 commit | 11–24 ms | 0,04 ms | 1 |
+  | SailBrowser, 946 commit | 16 ms | 0,19 ms | 4 |
+
+  - L'autore delle righe costa 54 ms su `sidebar.tsx` (713 righe) e 73 ms su un file di Keel di 3.123 righe, sempre fuori dalla finestra.
+  - Il grafico disegna solo le righe in vista, quindi caricare 500 o 5.000 commit non cambia la fluidità.
+- **Test:** 297 automatici, tutti verdi, più 14 da lanciare a mano.
+
+**Le tue prove a mano della fase 8**
+1. Apri GestionaleHospitality, apri la vista git (Ctrl+Maiusc+G) e premi il pulsante col grafico: si apre Git Graph.
+2. Controlla linee, etichette dei branch e dei tag, date e autori. Con delle modifiche aperte, in cima c'è «Modifiche non committate».
+3. Cerca una parola di un commit: Invio passa al risultato dopo.
+4. Scegli un branch dal menu «Branch», poi torna a «Tutti i branch».
+5. Clicca un commit: sotto compaiono i dettagli e i file. Clicca un file per le differenze.
+6. Tasto destro su un commit: copia l'hash, crea un branch qui e poi eliminalo dal tasto destro sull'etichetta.
+7. In un file di codice: «Git: Mostra o nascondi l'autore delle righe» dalla tavolozza. Scorri, scrivi una riga nuova, clicca un'etichetta.
+8. Tasto destro su un file nell'Esplora risorse → «Git: Storico del file», e scegli un commit.
 
 **Note sulla 8.4**
 - **Autore di ogni riga** («Git: Mostra o nascondi l'autore delle righe», id `gitlens.toggleFileBlame` come in GitLens):
