@@ -72,6 +72,8 @@ impl Workbench {
                 .as_ref()
                 .map(files::FileTree::expanded_folders)
                 .unwrap_or_default(),
+            panel_height: Some(self.panel_height),
+            agent_width: Some(self.agent_width),
         }
     }
 
@@ -182,6 +184,12 @@ impl Workbench {
         if let Some(view) = PanelView::from_id(&state.panel_view) {
             self.layout.panel_view = view;
         }
+        if let Some(height) = state.panel_height.filter(|height| height.is_finite()) {
+            self.panel_height = height.max(90.);
+        }
+        if let Some(width) = state.agent_width.filter(|width| width.is_finite()) {
+            self.agent_width = width.max(240.);
+        }
         if let Some(tree) = &mut self.tree {
             for folder in state.expanded.iter().filter(|folder| folder.is_dir()) {
                 tree.expand(folder);
@@ -204,6 +212,12 @@ impl Workbench {
         if !self.panes.is_empty() {
             self.active = state.active_group.min(self.panes.len() - 1);
             self.focus_pane(self.active, window, cx);
+        }
+        // The panel was showing a terminal: a fresh one takes its place,
+        // without taking the keyboard from the editor.
+        if self.layout.panel && self.layout.panel_view == PanelView::Terminal {
+            let spawn = terminal_view::shell_spawn(self.terminal_folder(), cx);
+            self.add_terminal(spawn, None, false, window, cx);
         }
     }
 

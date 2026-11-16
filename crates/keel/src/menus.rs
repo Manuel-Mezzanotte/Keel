@@ -14,6 +14,10 @@ use crate::workbench_window::{
     CopyLinesDown, CopyLinesUp, MoveLinesDown, MoveLinesUp, ToggleBlockComment, ToggleLineComment,
     ToggleWordWrap, ZoomIn, ZoomOut, ZoomReset,
 };
+use crate::workbench_window::{
+    KillTerminal, NewTerminal, OpenClaudeCode, OpenClaudeCodeInPanel, RenameTerminal,
+    SplitTerminal, ToggleMaximizedPanel,
+};
 
 /// The language the menu bar was last built in.
 struct MenuLanguage(UiLanguage);
@@ -141,6 +145,20 @@ pub fn set(language: UiLanguage, cx: &mut App) {
                 MenuItem::action(strings.menu_go_to_line, GoToLine),
             ],
         ),
+        menu(
+            strings.panel_terminal,
+            vec![
+                MenuItem::action(strings.terminal_new, NewTerminal),
+                MenuItem::action(strings.terminal_split, SplitTerminal),
+                MenuItem::action(strings.menu_rename_terminal, RenameTerminal),
+                MenuItem::action(strings.terminal_kill, KillTerminal),
+                MenuItem::separator(),
+                MenuItem::action(strings.maximize_panel, ToggleMaximizedPanel),
+                MenuItem::separator(),
+                MenuItem::action(strings.command_claude_code, OpenClaudeCode),
+                MenuItem::action(strings.command_claude_code_panel, OpenClaudeCodeInPanel),
+            ],
+        ),
     ]);
 }
 
@@ -165,13 +183,29 @@ mod tests {
         cx.update(|cx| set(UiLanguage::Italian, cx));
         assert_eq!(
             menu_names(cx),
-            ["Keel", "File", "Modifica", "Selezione", "Vista", "Vai"]
+            [
+                "Keel",
+                "File",
+                "Modifica",
+                "Selezione",
+                "Vista",
+                "Vai",
+                "Terminale"
+            ]
         );
 
         cx.update(|cx| set(UiLanguage::English, cx));
         assert_eq!(
             menu_names(cx),
-            ["Keel", "File", "Edit", "Selection", "View", "Go"]
+            [
+                "Keel",
+                "File",
+                "Edit",
+                "Selection",
+                "View",
+                "Go",
+                "Terminal"
+            ]
         );
     }
 }

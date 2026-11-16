@@ -8,18 +8,16 @@ use gpui::{
 };
 use gpui_component::button::{Button, ButtonVariants as _};
 use gpui_component::menu::ContextMenuExt as _;
-use gpui_component::{Disableable as _, Icon, Selectable as _, Sizable as _, TitleBar};
+use gpui_component::{Icon, Selectable as _, Sizable as _, TitleBar};
 use gpui_kit_assets::IconName;
 
 use super::*;
 
 const TOOLBAR_HEIGHT: f32 = 52.;
 /// The space between the panels and around them.
-const GAP: f32 = 8.;
+pub(super) const GAP: f32 = 8.;
 const RADIUS: f32 = 12.;
 const SIDEBAR_WIDTH: f32 = 240.;
-const AGENT_WIDTH: f32 = 320.;
-const PANEL_HEIGHT: f32 = 220.;
 const STATUS_HEIGHT: f32 = 24.;
 /// Where the traffic lights sit, centred in the toolbar.
 const TRAFFIC_LIGHTS_X: f32 = 18.;
@@ -950,13 +948,17 @@ impl Workbench {
                 .children(panes)
                 .into_any_element()
         };
+        let panel_takes_all = self.layout.panel && self.panel_maximized;
         floating(colors.editor, colors.border)
             .flex_1()
             .min_w_0()
-            .child(content)
+            .when(!panel_takes_all, |main| main.child(content))
             .when(self.layout.panel, |main| {
                 main.child(self.render_bottom_panel(colors, cx))
             })
+            .on_drag_move::<super::terminals::PanelResize>(
+                cx.listener(|this, event, _, cx| this.resize_panel(event, cx)),
+            )
     }
 
     fn render_bottom_panel(&self, colors: Colors, cx: &mut Context<Self>) -> Div {
@@ -997,16 +999,20 @@ impl Workbench {
                 .children(self.output.iter().map(|line| div().child(line.clone())))
                 .into_any_element(),
             PanelView::Problems => note(strings.coming_in_phase(6), colors).into_any_element(),
-            PanelView::Terminal => match self.render_terminals() {
+            PanelView::Terminal => match self.render_terminals(colors) {
                 Some(terminal) => terminal,
                 None => note(strings.no_terminal.to_owned(), colors).into_any_element(),
             },
             PanelView::Ports => note(strings.coming_in_phase(4), colors).into_any_element(),
         };
         let fills = self.layout.panel_view == PanelView::Terminal;
+        let maximized = self.panel_maximized;
         div()
-            .h(px(PANEL_HEIGHT))
-            .flex_none()
+            .relative()
+            .when(maximized, |panel| panel.flex_1().min_h_0())
+            .when(!maximized, |panel| {
+                panel.h(px(self.panel_height)).flex_none()
+            })
             .flex()
             .flex_col()
             .border_t_1()
@@ -1020,31 +1026,49 @@ impl Workbench {
                     .items_center()
                     .gap_5()
                     .children(tabs)
-                    .when_some(
-                        (self.layout.panel_view == PanelView::Terminal)
-                            .then(|| self.active_terminal_name(cx))
-                            .flatten(),
-                        |header, name| {
-                            header.child(
-                                div()
-                                    .ml_auto()
-                                    .text_xs()
-                                    .text_color(colors.muted)
-                                    .child(name),
-                            )
-                        },
-                    )
+                    .map(|header| {
+                        if self.layout.panel_view == PanelView::Terminal {
+                            header.child(self.render_terminal_header(colors, cx))
+                        } else {
+                            header.child(div().ml_auto())
+                        }
+                    })
                     .child(
-                        div().ml_auto().child(
-                            Button::new("close-panel")
-                                .ghost()
-                                .xsmall()
-                                .icon(Icon::new(IconName::X))
-                                .tooltip(strings.toggle_panel)
-                                .on_click(cx.listener(|this, _, _, cx| this.toggle_panel(cx))),
-                        ),
+                        div()
+                            .flex()
+                            .items_center()
+                            .gap_1()
+                            .child(
+                                Button::new("maximize-panel")
+                                    .ghost()
+                                    .xsmall()
+                                    .icon(Icon::new(if maximized {
+                                        IconName::Minimize
+                                    } else {
+                                        IconName::Maximize
+                                    }))
+                                    .tooltip(if maximized {
+                                        strings.restore_panel
+                                    } else {
+                                        strings.maximize_panel
+                                    })
+                                    .on_click(cx.listener(|this, _, _, cx| {
+                                        this.toggle_maximized_panel(cx)
+                                    })),
+                            )
+                            .child(
+                                Button::new("close-panel")
+                                    .ghost()
+                                    .xsmall()
+                                    .icon(Icon::new(IconName::X))
+                                    .tooltip(strings.toggle_panel)
+                                    .on_click(cx.listener(|this, _, _, cx| this.toggle_panel(cx))),
+                            ),
                     ),
             )
+            .when(!maximized, |panel| {
+                panel.child(self.render_panel_resize(colors))
+            })
             .child(if fills {
                 // A terminal fills the panel and scrolls on its own.
                 div().id("panel-content").flex_1().min_h_0().child(content)
@@ -1059,87 +1083,93 @@ impl Workbench {
             })
     }
 
-    fn render_agent(&self, colors: Colors) -> Div {
+    fn render_agent(&self, colors: Colors, cx: &mut Context<Self>) -> Div {
         let strings = self.strings();
-        floating(colors.panel, colors.border)
-            .w(px(AGENT_WIDTH))
+        let terminal = self.render_agent_terminal();
+        let running = terminal.is_some();
+        let header = div()
+            .h(px(44.))
             .flex_none()
+            .px_3p5()
+            .flex()
+            .items_center()
+            .gap_2()
+            .border_b_1()
+            .border_color(colors.border)
+            .child(div().size(px(7.)).rounded_full().bg(if running {
+                cx.theme().success
+            } else {
+                colors.faint
+            }))
             .child(
                 div()
-                    .h(px(44.))
-                    .flex_none()
-                    .px_3p5()
-                    .flex()
-                    .items_center()
-                    .gap_2()
-                    .border_b_1()
-                    .border_color(colors.border)
-                    .child(div().size(px(7.)).rounded_full().bg(colors.faint))
-                    .child(
-                        div()
-                            .text_sm()
-                            .font_weight(FontWeight::SEMIBOLD)
-                            .text_color(colors.text)
-                            .child("Claude Code"),
-                    )
-                    .child(
-                        div()
-                            .ml_auto()
-                            .text_xs()
-                            .text_color(colors.muted)
-                            .child(strings.agent_not_connected),
-                    ),
+                    .text_sm()
+                    .font_weight(FontWeight::SEMIBOLD)
+                    .text_color(colors.text)
+                    .child("Claude Code"),
             )
-            .child(
-                div()
-                    .flex_1()
-                    .min_h_0()
-                    .flex()
-                    .flex_col()
-                    .items_center()
-                    .justify_center()
-                    .gap_2()
-                    .text_color(colors.faint)
-                    .child(Icon::new(IconName::Sparkles).large())
-                    .child(
-                        div()
-                            .text_sm()
-                            .text_color(colors.muted)
-                            .child(strings.coming_in_phase(10)),
-                    ),
-            )
-            .child(
-                div()
-                    .m_2p5()
-                    .h(px(76.))
-                    .flex_none()
-                    .p_2p5()
-                    .flex()
-                    .flex_col()
-                    .justify_between()
-                    .rounded(px(RADIUS))
-                    .border_1()
-                    .border_color(colors.border)
-                    .bg(colors.editor)
-                    .child(
-                        div()
-                            .text_sm()
-                            .text_color(colors.faint)
-                            .child(strings.ask_claude),
+            .child(div().ml_auto().map(|right| {
+                if running {
+                    right.child(
+                        Button::new("close-claude-code")
+                            .ghost()
+                            .xsmall()
+                            .icon(Icon::new(IconName::X))
+                            .tooltip(strings.close_claude_code)
+                            .on_click(cx.listener(|this, _, window, cx| {
+                                this.close_agent_terminal(window, cx)
+                            })),
                     )
-                    .child(
-                        div().flex().justify_end().child(
-                            Button::new("agent-send")
-                                .primary()
-                                .xsmall()
-                                .icon(Icon::new(IconName::ArrowUp))
-                                .disabled(true),
+                } else {
+                    right
+                        .text_xs()
+                        .text_color(colors.muted)
+                        .child(strings.agent_not_connected)
+                }
+            }));
+        let body = match terminal {
+            Some(terminal) => div().flex_1().min_h_0().child(terminal),
+            None => div()
+                .flex_1()
+                .min_h_0()
+                .flex()
+                .flex_col()
+                .items_center()
+                .justify_center()
+                .gap_3()
+                .px_6()
+                .text_color(colors.faint)
+                .child(Icon::new(IconName::Sparkles).large())
+                .child(
+                    Button::new("open-claude-code")
+                        .primary()
+                        .small()
+                        .label(strings.open_claude_code)
+                        .on_click(
+                            cx.listener(|this, _, window, cx| this.open_claude_code(window, cx)),
                         ),
-                    ),
+                )
+                .child(
+                    div()
+                        .text_xs()
+                        .text_center()
+                        .text_color(colors.muted)
+                        .child(strings.claude_code_hint),
+                ),
+        };
+        div()
+            .relative()
+            .w(px(self.agent_width))
+            .flex_none()
+            .h_full()
+            .child(
+                floating(colors.panel, colors.border)
+                    .size_full()
+                    .child(header)
+                    .child(body),
             )
+            .child(self.render_agent_resize(colors))
     }
-
-    /// The texts on the left and the right of the status bar.
     pub(super) fn status_texts(&self, cx: &App) -> (Vec<String>, Vec<String>) {
         let strings = self.strings();
         let (mut left, mut right) = (Vec::new(), Vec::new());
@@ -1257,12 +1287,16 @@ impl Render for Workbench {
             })
             .child(self.render_editors(colors, cx))
             .when(self.layout.agent, |body| {
-                body.child(self.render_agent(colors))
-            });
+                body.child(self.render_agent(colors, cx))
+            })
+            .on_drag_move::<super::claude_code::AgentResize>(
+                cx.listener(|this, event, _, cx| this.resize_agent(event, cx)),
+            );
         let status = self.render_status_bar(colors, cx);
 
         let root = div().track_focus(&self.focus_handle);
         let root = self.tab_actions(root, cx);
+        let root = self.terminal_actions(root, cx);
         let root = self.editing_actions(root, cx);
         self.explorer_actions(root, cx)
             .size_full()

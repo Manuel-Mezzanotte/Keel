@@ -1,6 +1,7 @@
 //! The workbench: the window with its panels and editors, and the bridge
 //! between Keel and the extension host. The layout is drawn in `shell`.
 
+mod claude_code;
 mod disk;
 mod editing;
 pub(crate) mod explorer;
@@ -27,8 +28,13 @@ pub(crate) use tabs::{
 };
 use tabs::{Group, OpenAs};
 
+pub(crate) use claude_code::{OpenClaudeCode, OpenClaudeCodeInPanel};
 pub(crate) use shell::window_options;
-pub(crate) use terminal_view::bindings as terminal_bindings;
+pub(crate) use terminal_view::{TERMINAL_CONTEXT, bindings as terminal_bindings};
+pub(crate) use terminals::{
+    FocusNextTerminal, FocusPreviousTerminal, KillTerminal, NewTerminal, RenameTerminal,
+    SplitTerminal, ToggleMaximizedPanel,
+};
 
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::ops::Range;
@@ -325,6 +331,13 @@ pub struct Workbench {
     /// The terminals of the bottom panel, and the one in front.
     terminals: Vec<terminals::TerminalTab>,
     active_terminal: usize,
+    next_terminal_group: usize,
+    /// The bottom panel's height, and whether it takes the editors' room.
+    panel_height: f32,
+    panel_maximized: bool,
+    /// Claude Code's panel on the right: its width and its terminal.
+    agent_width: f32,
+    agent_terminal: Option<claude_code::AgentTerminal>,
     _subscriptions: Vec<Subscription>,
 }
 
@@ -435,6 +448,11 @@ impl Workbench {
             indexing: Task::ready(()),
             terminals: Vec::new(),
             active_terminal: 0,
+            next_terminal_group: 0,
+            panel_height: terminals::PANEL_HEIGHT,
+            panel_maximized: false,
+            agent_width: claude_code::AGENT_WIDTH,
+            agent_terminal: None,
             first_frame_drawn: false,
             _subscriptions: subscriptions,
         };

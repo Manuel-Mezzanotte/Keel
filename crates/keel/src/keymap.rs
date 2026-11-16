@@ -22,6 +22,10 @@ use crate::workbench_window::{
     MoveLinesDown, MoveLinesUp, ToggleBlockComment, ToggleLineComment, ToggleWordWrap, ZoomIn,
     ZoomOut, ZoomReset,
 };
+use crate::workbench_window::{
+    FocusNextTerminal, FocusPreviousTerminal, KillTerminal, NewTerminal, OpenClaudeCode,
+    OpenClaudeCodeInPanel, RenameTerminal, SplitTerminal, TERMINAL_CONTEXT, ToggleMaximizedPanel,
+};
 use crate::workbench_window::{GoToLine, QuickOpen};
 
 /// A Keel command: its VS Code name, the action it runs and its default key.
@@ -130,6 +134,60 @@ pub const COMMANDS: &[KeelCommand] = &[
         id: "workbench.action.terminal.toggleTerminal",
         action: || Box::new(ToggleTerminal),
         default_key: Some("ctrl+`"),
+        context: None,
+    },
+    KeelCommand {
+        id: "workbench.action.terminal.new",
+        action: || Box::new(NewTerminal),
+        default_key: Some("ctrl+shift+`"),
+        context: None,
+    },
+    KeelCommand {
+        id: "workbench.action.terminal.split",
+        action: || Box::new(SplitTerminal),
+        default_key: Some("cmd+\\"),
+        context: Some(TERMINAL_CONTEXT),
+    },
+    KeelCommand {
+        id: "workbench.action.terminal.kill",
+        action: || Box::new(KillTerminal),
+        default_key: None,
+        context: None,
+    },
+    KeelCommand {
+        id: "workbench.action.terminal.rename",
+        action: || Box::new(RenameTerminal),
+        default_key: None,
+        context: None,
+    },
+    KeelCommand {
+        id: "workbench.action.terminal.focusNext",
+        action: || Box::new(FocusNextTerminal),
+        default_key: Some("cmd+shift+]"),
+        context: Some(TERMINAL_CONTEXT),
+    },
+    KeelCommand {
+        id: "workbench.action.terminal.focusPrevious",
+        action: || Box::new(FocusPreviousTerminal),
+        default_key: Some("cmd+shift+["),
+        context: Some(TERMINAL_CONTEXT),
+    },
+    KeelCommand {
+        id: "workbench.action.toggleMaximizedPanel",
+        action: || Box::new(ToggleMaximizedPanel),
+        default_key: None,
+        context: None,
+    },
+    KeelCommand {
+        id: "keel.claudeCode.open",
+        action: || Box::new(OpenClaudeCode),
+        default_key: Some("cmd+escape"),
+        context: None,
+    },
+    KeelCommand {
+        id: "keel.claudeCode.openInPanel",
+        action: || Box::new(OpenClaudeCodeInPanel),
+        default_key: None,
         context: None,
     },
     KeelCommand {
@@ -452,6 +510,7 @@ pub fn keel_bindings(user: &[UserBinding]) -> Vec<(&'static KeelCommand, String)
 /// `terminal.integrated.commandsToSkipShell`.
 const SKIP_SHELL: &[&str] = &[
     "workbench.action.terminal.toggleTerminal",
+    "workbench.action.terminal.new",
     "workbench.view.scm",
 ];
 
@@ -591,7 +650,7 @@ mod tests {
         let (bindings, warnings) =
             read_user_bindings(Path::new("/nonexistent/keel/keybindings.json"));
         assert!(bindings.is_empty() && warnings.is_empty());
-        assert_eq!(keel_bindings(&[]).len(), 46);
+        assert_eq!(keel_bindings(&[]).len(), 51);
     }
 
     #[test]

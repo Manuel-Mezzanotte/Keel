@@ -25,7 +25,8 @@ gpui_kit_assets::icon_assets!(
         Pin,
         WholeWord,
         Regex,
-        ReplaceAll
+        ReplaceAll,
+        Columns2
     ]
 );
 
@@ -86,6 +87,11 @@ mod tests {
             IconName::WholeWord,
             IconName::Regex,
             IconName::ReplaceAll,
+            IconName::Columns2,
+            IconName::SquareTerminal,
+            IconName::Plus,
+            IconName::Maximize,
+            IconName::Minimize,
             IconName::Replace,
             IconName::CaseSensitive,
             IconName::Ellipsis,

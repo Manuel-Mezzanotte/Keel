@@ -651,8 +651,32 @@ Con albero, schede, ricerca dei file e controllo della cartella, Keel è cresciu
 |---|---|---|
 | 4.1 | Motore del terminale (crate `terminal`): la shell nella cartella, colori, tasti, mouse, incolla, selezione, ricerca, link, porte | fatta |
 | 4.2 | Terminale nel pannello in basso: disegno, cursore, tastiera, mouse, copia e incolla, scorrimento, ridimensionamento, Cmd+clic sui link | fatta |
-| 4.3 | Più terminali (schede, divisi, rinomina, chiudi), pannello ridimensionabile, cerca nel terminale, «Apri Claude Code» | da fare |
+| 4.3 | Più terminali (schede, divisi, rinomina, chiudi), pannello ridimensionabile, cerca nel terminale, «Apri Claude Code» | fatta |
 | 4.4 | Output, Porte, script di `package.json`; misure e resoconto | da fare |
+
+**Note sulla 4.3**
+- **Più terminali:**
+  - nell'intestazione del pannello c'è una scheda per terminale, con `+` per aprirne un altro (anche Ctrl+Maiusc+`) e il pulsante per dividere (Cmd+\ dal terminale);
+  - i terminali divisi stanno uno accanto all'altro sotto la stessa scheda e partono dalla cartella di quello diviso;
+  - il menu della scheda (clic destro) ha Dividi, Rinomina e Chiudi; la X chiude tutta la scheda;
+  - Cmd+Maiusc+] e Cmd+Maiusc+[ passano alla scheda dopo e a quella prima.
+- **Il nome della scheda** è il programma in primo piano (`zsh`, `node`, `claude`), o il titolo che un programma ha messo, o quello che gli dai con Rinomina.
+- **Pannello:**
+  - si allunga trascinando il bordo in alto, e l'altezza resta salvata nella sessione;
+  - il pulsante accanto alla X lo ingrandisce su tutta l'area degli editor e lo riporta com'era;
+  - se alla chiusura il pannello mostrava il terminale, alla riapertura ne parte uno nuovo, senza togliere la tastiera all'editor.
+- **Cmd+F nel terminale** cerca nel testo, anche in quello passato:
+  - parte dalle righe più recenti;
+  - Invio va più indietro e Maiusc+Invio più avanti;
+  - ci sono gli interruttori per maiuscole/minuscole ed espressione regolare;
+  - il bordo diventa rosso quando non trova niente;
+  - Esc chiude e ridà la tastiera alla shell.
+- **Claude Code:**
+  - Cmd+Esc, come nell'estensione di Claude Code per VS Code, lo apre a destra, nel pannello che nella fase 10 diventerà il suo pannello vero;
+  - è un terminale che lancia `claude` nella cartella del progetto; quando Claude Code finisce resta la shell;
+  - il pannello si allarga a 600 punti per starci comodo, e si ridimensiona trascinando il bordo sinistro;
+  - «Claude Code: Apri nel pannello in basso» lo apre invece come scheda del terminale.
+- **Menu Terminale** nella barra di macOS, come in VS Code, con questi comandi; ci sono anche nella tavolozza dei comandi.
 
 **Note sulla 4.2**
 - **Ctrl+`** apre il terminale nella cartella del progetto e gli dà la tastiera; se il terminale ha già la tastiera, chiude il pannello, come in VS Code. Anche la scheda «Terminale» del pannello ne apre uno se non c'è.

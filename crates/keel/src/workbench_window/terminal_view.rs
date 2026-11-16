@@ -9,14 +9,19 @@ use std::sync::Arc;
 use futures::StreamExt as _;
 use gpui::prelude::FluentBuilder as _;
 use gpui::{
-    App, Bounds, ClipboardEntry, ClipboardItem, Context, EventEmitter, FocusHandle, Focusable,
-    Font, FontStyle, FontWeight, Hsla, InteractiveElement as _, IntoElement, KeyBinding,
-    KeyDownEvent, MouseButton, MouseDownEvent, MouseMoveEvent, MouseUpEvent, NoAction,
-    ParentElement as _, Pixels, Point, Render, Rgba, ScrollEvent, SharedString, StrikethroughStyle,
-    Styled as _, Task, TextAlign, TextRun, UnderlineStyle, Window, actions, canvas, div, fill,
-    outline, point, px, size,
+    App, AppContext as _, Bounds, ClipboardEntry, ClipboardItem, Context, EventEmitter,
+    FocusHandle, Focusable, Font, FontStyle, FontWeight, Hsla, InteractiveElement as _,
+    IntoElement, KeyBinding, KeyDownEvent, MouseButton, MouseDownEvent, MouseMoveEvent,
+    MouseUpEvent, NoAction, ParentElement as _, Pixels, Point, Render, Rgba, ScrollEvent,
+    SharedString, StrikethroughStyle, Styled as _, Task, TextAlign, TextRun, UnderlineStyle,
+    Window, actions, canvas, div, fill, outline, point, px, size,
 };
-use gpui_component::ActiveTheme as _;
+use gpui_component::button::{Button, ButtonVariants as _};
+use gpui_component::input::{Input, InputEvent, InputState};
+use gpui_component::{ActiveTheme as _, Icon, Selectable as _, Sizable as _};
+use gpui_kit_assets::IconName;
+
+use crate::i18n::Strings;
 use terminal::{
     CellPoint, CellView, CursorShape, Found, Key, LinkTarget, Modifiers, MouseAction, Palette, Rgb,
     SelectionKind, Side, Snapshot, Spawn, TermMode, Terminal, TerminalEvent,
@@ -27,7 +32,15 @@ pub(crate) const TERMINAL_CONTEXT: &str = "Terminal";
 
 actions!(
     terminal,
-    [Copy, Paste, SelectAll, Clear, ScrollPageUp, ScrollPageDown]
+    [
+        Copy,
+        Paste,
+        SelectAll,
+        Clear,
+        ScrollPageUp,
+        ScrollPageDown,
+        Find
+    ]
 );
 
 /// The terminal's own shortcuts, and keys taken back from the window so
@@ -40,6 +53,7 @@ pub(crate) fn bindings(window_keys_for_shell: &[String], cx: &App) -> Vec<KeyBin
         KeyBinding::new("cmd-v", Paste, context),
         KeyBinding::new("cmd-a", SelectAll, context),
         KeyBinding::new("cmd-k", Clear, context),
+        KeyBinding::new("cmd-f", Find, context),
         KeyBinding::new("shift-pageup", ScrollPageUp, context),
         KeyBinding::new("shift-pagedown", ScrollPageDown, context),
         KeyBinding::new("tab", NoAction, context),
@@ -65,6 +79,8 @@ pub(crate) enum TerminalViewEvent {
     /// The shell ended: the terminal closes, as in VS Code.
     Exited,
     TitleChanged,
+    /// The terminal took the keyboard.
+    Focused,
     /// Cmd+click on a path such as `src/main.rs:12:5`.
     OpenFile {
         path: PathBuf,
@@ -116,6 +132,8 @@ pub(crate) struct TerminalView {
     /// A drag that selects text, rather than going to the program.
     selecting: bool,
     exited: bool,
+    find: Option<FindBar>,
+    strings: &'static Strings,
     _events: Task<()>,
     _subscriptions: Vec<gpui::Subscription>,
 }
@@ -133,6 +151,19 @@ pub(crate) struct TerminalLook {
     pub font_family: SharedString,
     pub font_size: f32,
     pub option_is_meta: bool,
+    pub strings: &'static Strings,
+}
+
+/// Cmd+F in a terminal: the field and its switches.
+struct FindBar {
+    input: gpui::Entity<InputState>,
+    case_sensitive: bool,
+    regex: bool,
+    /// Whether the last search found something.
+    found: bool,
+    /// The text last searched, so only a new text starts over.
+    searched: String,
+    _subscription: gpui::Subscription,
 }
 
 /// The theme's colors for terminals: the editors' background and text,
@@ -231,6 +262,7 @@ impl TerminalView {
         let subscriptions = vec![
             cx.on_focus_in(&focus_handle, window, |this, _, cx| {
                 this.send_focus(true);
+                cx.emit(TerminalViewEvent::Focused);
                 cx.notify();
             }),
             cx.on_focus_out(&focus_handle, window, |this, _, _, cx| {
@@ -251,6 +283,8 @@ impl TerminalView {
             scroll_remainder: 0.,
             selecting: false,
             exited: false,
+            find: None,
+            strings: look.strings,
             _events: pump,
             _subscriptions: subscriptions,
         }
@@ -270,6 +304,11 @@ impl TerminalView {
         self.terminal
             .foreground_name()
             .unwrap_or_else(|| "zsh".to_owned())
+    }
+
+    /// Types a command and runs it, as if typed at the prompt.
+    pub(crate) fn run(&self, command: &str) {
+        self.terminal.write(format!("{command}\r").into_bytes());
     }
 
     /// The folder of the program in front, which follows `cd`.
@@ -306,7 +345,11 @@ impl TerminalView {
     // -----------------------------------------------------------------
     // Keys and clipboard
 
-    fn key_down(&mut self, event: &KeyDownEvent, _: &mut Window, cx: &mut Context<Self>) {
+    fn key_down(&mut self, event: &KeyDownEvent, window: &mut Window, cx: &mut Context<Self>) {
+        // Keys typed in the find field are not for the shell.
+        if !self.focus_handle.is_focused(window) {
+            return;
+        }
         let keystroke = &event.keystroke;
         let modifiers = Modifiers {
             shift: keystroke.modifiers.shift,
@@ -386,6 +429,177 @@ impl TerminalView {
         let lines = self.grid_size.get().1.max(2) as i32 - 1;
         self.terminal.scroll(if up { lines } else { -lines });
         cx.notify();
+    }
+
+    // -----------------------------------------------------------------
+    // Find
+
+    /// Cmd+F: shows the find field, with the selected text in it.
+    fn open_find(&mut self, _: &Find, window: &mut Window, cx: &mut Context<Self>) {
+        if self.find.is_none() {
+            let placeholder = self.strings.find_in_terminal;
+            let input = cx.new(|cx| InputState::new(window, cx).placeholder(placeholder));
+            let subscription = cx.subscribe_in(
+                &input,
+                window,
+                |this, _, event: &InputEvent, _, cx| match event {
+                    InputEvent::Change => this.find_again(None, cx),
+                    InputEvent::PressEnter { shift, .. } => this.find_again(Some(!*shift), cx),
+                    _ => {}
+                },
+            );
+            self.find = Some(FindBar {
+                input,
+                case_sensitive: false,
+                regex: false,
+                found: true,
+                searched: String::new(),
+                _subscription: subscription,
+            });
+        }
+        let selected = self
+            .terminal
+            .selected_text()
+            .filter(|text| !text.contains('\n'));
+        if let Some(find) = &self.find {
+            find.input.update(cx, |input, cx| {
+                if let Some(text) = selected {
+                    input.set_value(text, window, cx);
+                }
+                input.focus(window, cx);
+                input.select_all(window, cx);
+            });
+        }
+        self.find_again(None, cx);
+    }
+
+    /// Searches for what the field holds: from the newest output when the
+    /// text changed, or to the next match toward older output (`Some(true)`)
+    /// or newer output (`Some(false)`).
+    fn find_again(&mut self, older: Option<bool>, cx: &mut Context<Self>) {
+        let Some(find) = &mut self.find else {
+            return;
+        };
+        let query = find.input.read(cx).value().to_string();
+        if older.is_none() && query == find.searched {
+            return;
+        }
+        find.searched = query.clone();
+        let found = self.terminal.find(
+            &query,
+            find.regex,
+            find.case_sensitive,
+            older.unwrap_or(true),
+        );
+        find.found = found || query.is_empty();
+        cx.notify();
+    }
+
+    fn toggle_find_option(
+        &mut self,
+        option: fn(&mut FindBar) -> &mut bool,
+        cx: &mut Context<Self>,
+    ) {
+        if let Some(find) = &mut self.find {
+            let value = option(find);
+            *value = !*value;
+            find.searched.clear();
+        }
+        self.terminal.stop_finding();
+        self.find_again(None, cx);
+    }
+
+    fn close_find(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.find = None;
+        self.terminal.stop_finding();
+        self.focus_handle.focus(window, cx);
+        cx.notify();
+    }
+
+    fn render_find(&self, cx: &mut Context<Self>) -> Option<gpui::AnyElement> {
+        let find = self.find.as_ref()?;
+        let strings = self.strings;
+        let theme = cx.theme();
+        let switch = |id: &'static str, icon: IconName, on: bool, tooltip: &'static str| {
+            Button::new(id)
+                .ghost()
+                .xsmall()
+                .icon(Icon::new(icon))
+                .selected(on)
+                .tooltip(tooltip)
+        };
+        Some(
+            div()
+                .absolute()
+                .top_1()
+                .right_3()
+                .p_1()
+                .flex()
+                .items_center()
+                .gap_0p5()
+                .rounded(px(8.))
+                .border_1()
+                .border_color(if find.found {
+                    theme.border
+                } else {
+                    theme.danger
+                })
+                .bg(theme.popover)
+                .shadow_md()
+                .on_action(
+                    cx.listener(|this, _: &gpui_component::input::Escape, window, cx| {
+                        this.close_find(window, cx)
+                    }),
+                )
+                .child(div().w(px(200.)).child(Input::new(&find.input).xsmall()))
+                .child(
+                    switch(
+                        "terminal-find-case",
+                        IconName::CaseSensitive,
+                        find.case_sensitive,
+                        strings.match_case,
+                    )
+                    .on_click(cx.listener(|this, _, _, cx| {
+                        this.toggle_find_option(|find| &mut find.case_sensitive, cx)
+                    })),
+                )
+                .child(
+                    switch(
+                        "terminal-find-regex",
+                        IconName::Regex,
+                        find.regex,
+                        strings.use_regex,
+                    )
+                    .on_click(cx.listener(|this, _, _, cx| {
+                        this.toggle_find_option(|find| &mut find.regex, cx)
+                    })),
+                )
+                .child(
+                    Button::new("terminal-find-older")
+                        .ghost()
+                        .xsmall()
+                        .icon(Icon::new(IconName::ArrowUp))
+                        .tooltip(strings.find_older)
+                        .on_click(cx.listener(|this, _, _, cx| this.find_again(Some(true), cx))),
+                )
+                .child(
+                    Button::new("terminal-find-newer")
+                        .ghost()
+                        .xsmall()
+                        .icon(Icon::new(IconName::ArrowDown))
+                        .tooltip(strings.find_newer)
+                        .on_click(cx.listener(|this, _, _, cx| this.find_again(Some(false), cx))),
+                )
+                .child(
+                    Button::new("terminal-find-close")
+                        .ghost()
+                        .xsmall()
+                        .icon(Icon::new(IconName::X))
+                        .tooltip(strings.close_find)
+                        .on_click(cx.listener(|this, _, window, cx| this.close_find(window, cx))),
+                )
+                .into_any_element(),
+        )
     }
 
     // -----------------------------------------------------------------
@@ -618,8 +832,10 @@ impl Render for TerminalView {
         let terminal = self.terminal.clone();
         let metrics = self.metrics.clone();
         let grid_size = self.grid_size.clone();
+        let find = self.render_find(cx);
         div()
             .id("terminal")
+            .relative()
             .key_context(TERMINAL_CONTEXT)
             .track_focus(&self.focus_handle)
             .size_full()
@@ -632,6 +848,7 @@ impl Render for TerminalView {
             .on_action(cx.listener(Self::paste))
             .on_action(cx.listener(Self::select_all))
             .on_action(cx.listener(Self::clear))
+            .on_action(cx.listener(Self::open_find))
             .on_action(cx.listener(|this, _: &ScrollPageUp, _, cx| this.scroll_page(true, cx)))
             .on_action(cx.listener(|this, _: &ScrollPageDown, _, cx| this.scroll_page(false, cx)))
             .on_key_down(cx.listener(Self::key_down))
@@ -667,6 +884,7 @@ impl Render for TerminalView {
                 )
                 .size_full(),
             )
+            .children(find)
     }
 }
 
@@ -911,4 +1129,99 @@ fn paint_text(
         window,
         cx,
     );
+}
+
+#[cfg(test)]
+mod tests {
+    use std::time::{Duration, Instant};
+
+    use gpui::{Entity, TestAppContext, VisualTestContext};
+
+    use super::*;
+
+    fn terminal<'a>(
+        cx: &'a mut TestAppContext,
+        script: &str,
+    ) -> (Entity<TerminalView>, &'a mut VisualTestContext) {
+        cx.executor().allow_parking();
+        cx.update(|cx| {
+            gpui_component::init(cx);
+            crate::workbench_window::init(cx);
+        });
+        let script = script.to_owned();
+        let (view, cx) = cx.add_window_view(|window, cx| {
+            let mut spawn = shell_spawn(std::env::temp_dir(), cx);
+            spawn.command = Some(("/bin/sh".into(), vec!["-c".into(), script]));
+            let look = TerminalLook {
+                font_family: "Menlo".into(),
+                font_size: 12.,
+                option_is_meta: false,
+                strings: &crate::i18n::ENGLISH,
+            };
+            TerminalView::new(start(spawn).unwrap(), look, window, cx)
+        });
+        view.update_in(cx, |view, window, cx| view.focus_handle.focus(window, cx));
+        (view, cx)
+    }
+
+    fn wait_until(cx: &mut VisualTestContext, check: impl Fn(&mut VisualTestContext) -> bool) {
+        let deadline = Instant::now() + Duration::from_secs(10);
+        loop {
+            cx.run_until_parked();
+            if check(cx) {
+                return;
+            }
+            assert!(Instant::now() < deadline, "gave up waiting");
+            std::thread::sleep(Duration::from_millis(20));
+        }
+    }
+
+    fn current_match_line(
+        view: &Entity<TerminalView>,
+        cx: &mut VisualTestContext,
+    ) -> Option<String> {
+        view.read_with(cx, |view, _| {
+            let snapshot = view.terminal.snapshot();
+            (0..snapshot.lines)
+                .find(|&line| {
+                    snapshot.rows[line]
+                        .iter()
+                        .any(|cell| cell.found == Found::Current)
+                })
+                .map(|line| snapshot.line_text(line))
+        })
+    }
+
+    #[gpui::test]
+    fn cmd_f_finds_in_the_output_and_escape_goes_back_to_the_shell(cx: &mut TestAppContext) {
+        let (view, cx) = terminal(
+            cx,
+            "for i in $(seq 1 40); do echo riga$i; done; echo fine; sleep 30",
+        );
+        wait_until(cx, |cx| {
+            view.read_with(cx, |view, _| {
+                view.terminal.snapshot().text().contains("fine")
+            })
+        });
+
+        cx.simulate_keystrokes("cmd-f");
+        assert!(view.read_with(cx, |view, _| view.find.is_some()));
+        cx.simulate_input("riga2");
+        cx.run_until_parked();
+        // The newest match first, then older ones with Enter.
+        assert_eq!(current_match_line(&view, cx).as_deref(), Some("riga29"));
+        cx.simulate_keystrokes("enter");
+        cx.run_until_parked();
+        assert_eq!(current_match_line(&view, cx).as_deref(), Some("riga28"));
+        cx.simulate_keystrokes("shift-enter");
+        cx.run_until_parked();
+        assert_eq!(current_match_line(&view, cx).as_deref(), Some("riga29"));
+
+        cx.simulate_keystrokes("escape");
+        let (open, focused) = view.update_in(cx, |view, window, _| {
+            (view.find.is_some(), view.focus_handle.is_focused(window))
+        });
+        assert!(!open && focused);
+        assert_eq!(current_match_line(&view, cx), None);
+    }
 }

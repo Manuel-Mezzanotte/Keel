@@ -41,6 +41,11 @@ pub struct WindowState {
     /// The folders open in the Explorer.
     #[serde(default)]
     pub expanded: Vec<PathBuf>,
+    /// The bottom panel's height and Claude Code's width, in points.
+    #[serde(default)]
+    pub panel_height: Option<f32>,
+    #[serde(default)]
+    pub agent_width: Option<f32>,
 }
 
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
