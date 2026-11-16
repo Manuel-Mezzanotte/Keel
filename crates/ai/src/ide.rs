@@ -17,7 +17,6 @@ use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, mpsc};
 use std::thread::JoinHandle;
-use std::time::Duration;
 
 use futures::channel::{mpsc as async_mpsc, oneshot};
 use serde_json::{Value, json};
@@ -29,8 +28,29 @@ pub const AUTH_HEADER: &str = "x-claude-code-ide-authorization";
 /// The variable that tells Claude Code which port to connect to.
 pub const PORT_VARIABLE: &str = "CLAUDE_CODE_SSE_PORT";
 
-/// How often the threads look at their channels and the stop flag.
-const POLL: Duration = Duration::from_millis(25);
+/// How long a connection sleeps between looks at the stop flag; data from
+/// Claude Code or answers from the window wake it at once.
+const IDLE: i32 = 200;
+
+/// Messages for the connected Claude Code, and a byte that wakes its
+/// thread.
+#[derive(Clone)]
+struct Outgoing {
+    queue: mpsc::Sender<String>,
+    wake: Arc<std::os::unix::net::UnixStream>,
+}
+
+impl Outgoing {
+    fn send(&self, text: String) {
+        use std::io::Write as _;
+        if std::env::var_os("KEEL_IDE_TRACE").is_some() {
+            eprintln!("keel ide -> {}", text.chars().take(200).collect::<String>());
+        }
+        if self.queue.send(text).is_ok() {
+            let _ = (&*self.wake).write(&[1]);
+        }
+    }
+}
 
 /// Where editors announce themselves: `~/.claude/ide`.
 pub fn default_ide_dir() -> Option<PathBuf> {
@@ -66,7 +86,7 @@ pub struct IdeOptions {
 struct Shared {
     stop: AtomicBool,
     /// Messages for the connected Claude Code, if any.
-    outgoing: Mutex<Option<mpsc::Sender<String>>>,
+    outgoing: Mutex<Option<Outgoing>>,
     /// Which connection is current; older ones close themselves.
     current: AtomicU64,
 }
@@ -111,7 +131,6 @@ impl IdeServer {
         options: IdeOptions,
     ) -> io::Result<(Self, async_mpsc::UnboundedReceiver<IdeEvent>)> {
         let listener = TcpListener::bind("127.0.0.1:0")?;
-        listener.set_nonblocking(true)?;
         let port = listener.local_addr()?.port();
         let token = uuid::Uuid::new_v4().to_string();
         {
@@ -168,7 +187,7 @@ impl IdeServer {
     pub fn notify(&self, method: &str, params: Value) {
         let message = json!({ "jsonrpc": "2.0", "method": method, "params": params }).to_string();
         if let Some(outgoing) = self.shared.outgoing.lock().unwrap().as_ref() {
-            let _ = outgoing.send(message);
+            outgoing.send(message);
         }
     }
 
@@ -184,6 +203,8 @@ impl Drop for IdeServer {
     fn drop(&mut self) {
         self.shared.stop.store(true, Ordering::SeqCst);
         let _ = std::fs::remove_file(&self.lock_file);
+        // Wakes the thread waiting for connections.
+        let _ = TcpStream::connect(("127.0.0.1", self.port));
         if let Some(thread) = self.thread.take() {
             let _ = thread.join();
         }
@@ -197,22 +218,20 @@ fn accept_loop(
     events: async_mpsc::UnboundedSender<IdeEvent>,
 ) {
     let mut connections = Vec::new();
-    while !shared.stop.load(Ordering::SeqCst) {
-        match listener.accept() {
-            Ok((stream, _)) => {
-                let id = shared.current.fetch_add(1, Ordering::SeqCst) + 1;
-                let shared = shared.clone();
-                let token = token.clone();
-                let events = events.clone();
-                let thread = std::thread::Builder::new()
-                    .name("keel-ide-connection".to_owned())
-                    .spawn(move || serve(stream, id, &token, &shared, &events));
-                if let Ok(thread) = thread {
-                    connections.push(thread);
-                }
-            }
-            Err(error) if error.kind() == ErrorKind::WouldBlock => std::thread::sleep(POLL),
-            Err(_) => std::thread::sleep(POLL),
+    // Blocks until Claude Code connects; closing connects once to wake it.
+    while let Ok((stream, _)) = listener.accept() {
+        if shared.stop.load(Ordering::SeqCst) {
+            break;
+        }
+        let id = shared.current.fetch_add(1, Ordering::SeqCst) + 1;
+        let shared = shared.clone();
+        let token = token.clone();
+        let events = events.clone();
+        let thread = std::thread::Builder::new()
+            .name("keel-ide-connection".to_owned())
+            .spawn(move || serve(stream, id, &token, &shared, &events));
+        if let Ok(thread) = thread {
+            connections.push(thread);
         }
         connections.retain(|thread| !thread.is_finished());
     }
@@ -389,40 +408,88 @@ fn serve(
     let Ok(mut socket) = tungstenite::accept_hdr(stream, check) else {
         return;
     };
-    let _ = socket.get_ref().set_read_timeout(Some(POLL));
-    let (outgoing, queue) = mpsc::channel::<String>();
+    let Ok((wake_reader, wake_writer)) = std::os::unix::net::UnixStream::pair() else {
+        return;
+    };
+    let _ = wake_reader.set_nonblocking(true);
+    let _ = wake_writer.set_nonblocking(true);
+    let _ = socket.get_ref().set_nonblocking(true);
+    let (queue_sender, queue) = mpsc::channel::<String>();
+    let outgoing = Outgoing {
+        queue: queue_sender,
+        wake: Arc::new(wake_writer),
+    };
     *shared.outgoing.lock().unwrap() = Some(outgoing.clone());
     let _ = events.unbounded_send(IdeEvent::Connected);
+    let trace = |what: &dyn std::fmt::Display| {
+        if std::env::var_os("KEEL_IDE_TRACE").is_some() {
+            eprintln!("keel ide: {what}");
+        }
+    };
+    let would_block = |error: &tungstenite::Error| matches!(error, tungstenite::Error::Io(error) if error.kind() == ErrorKind::WouldBlock);
+    // Frames left in tungstenite's buffer when the socket was full.
+    let mut unflushed = false;
 
-    loop {
+    'connection: loop {
         if shared.stop.load(Ordering::SeqCst) || shared.current.load(Ordering::SeqCst) != id {
             let _ = socket.close(None);
             let _ = socket.flush();
             break;
         }
+        // What the window has to say.
         while let Ok(text) = queue.try_recv() {
-            if socket.send(Message::text(text)).is_err() {
-                break;
+            match socket.send(Message::text(text)) {
+                Ok(()) => {}
+                Err(error) if would_block(&error) => unflushed = true,
+                Err(error) => {
+                    trace(&error);
+                    break 'connection;
+                }
             }
         }
-        match socket.read() {
-            Ok(Message::Text(text)) => handle(&text, &outgoing, events),
-            Ok(Message::Close(frame)) => {
-                if std::env::var_os("KEEL_IDE_TRACE").is_some() {
-                    eprintln!("keel ide: closed by Claude Code {frame:?}");
+        if unflushed {
+            match socket.flush() {
+                Ok(()) => unflushed = false,
+                Err(error) if would_block(&error) => {}
+                Err(error) => {
+                    trace(&error);
+                    break;
                 }
-                break;
-            }
-            Ok(_) => {}
-            Err(tungstenite::Error::Io(error))
-                if matches!(error.kind(), ErrorKind::WouldBlock | ErrorKind::TimedOut) => {}
-            Err(error) => {
-                if std::env::var_os("KEEL_IDE_TRACE").is_some() {
-                    eprintln!("keel ide: {error}");
-                }
-                break;
             }
         }
+        // Everything Claude Code sent.
+        loop {
+            match socket.read() {
+                Ok(Message::Text(text)) => handle(&text, &outgoing, events),
+                Ok(Message::Close(frame)) => {
+                    trace(&format!("closed by Claude Code {frame:?}"));
+                    break 'connection;
+                }
+                Ok(_) => {}
+                Err(error) if would_block(&error) => break,
+                Err(error) => {
+                    trace(&error);
+                    break 'connection;
+                }
+            }
+        }
+        // Sleep until Claude Code writes, the window answers, or a while.
+        let mut fds = [
+            libc::pollfd {
+                fd: std::os::fd::AsRawFd::as_raw_fd(socket.get_ref()),
+                events: libc::POLLIN | if unflushed { libc::POLLOUT } else { 0 },
+                revents: 0,
+            },
+            libc::pollfd {
+                fd: std::os::fd::AsRawFd::as_raw_fd(&wake_reader),
+                events: libc::POLLIN,
+                revents: 0,
+            },
+        ];
+        // SAFETY: two valid descriptors, alive for the call.
+        unsafe { libc::poll(fds.as_mut_ptr(), fds.len() as libc::nfds_t, IDLE) };
+        let mut drained = [0u8; 64];
+        while std::io::Read::read(&mut &wake_reader, &mut drained).is_ok_and(|read| read > 0) {}
     }
     // Only the current connection clears the queue and says goodbye.
     if shared.current.load(Ordering::SeqCst) == id {
@@ -431,22 +498,18 @@ fn serve(
     }
 }
 
-fn respond(outgoing: &mpsc::Sender<String>, id: &Value, result: Result<Value, (i64, String)>) {
+fn respond(outgoing: &Outgoing, id: &Value, result: Result<Value, (i64, String)>) {
     let message = match result {
         Ok(result) => json!({ "jsonrpc": "2.0", "id": id, "result": result }),
         Err((code, message)) => {
             json!({ "jsonrpc": "2.0", "id": id, "error": { "code": code, "message": message } })
         }
     };
-    let _ = outgoing.send(message.to_string());
+    outgoing.send(message.to_string());
 }
 
 /// One message from Claude Code: MCP over JSON-RPC.
-fn handle(
-    text: &str,
-    outgoing: &mpsc::Sender<String>,
-    events: &async_mpsc::UnboundedSender<IdeEvent>,
-) {
+fn handle(text: &str, outgoing: &Outgoing, events: &async_mpsc::UnboundedSender<IdeEvent>) {
     if std::env::var_os("KEEL_IDE_TRACE").is_some() {
         eprintln!("keel ide <- {}", text.chars().take(400).collect::<String>());
     }
@@ -670,6 +733,39 @@ mod tests {
         assert!(!lock.exists());
     }
 
+    /// How long a tool call takes from Claude Code to the window and back:
+    /// `cargo test -p ai --release -- --ignored round_trip --nocapture`.
+    #[test]
+    #[ignore]
+    fn round_trip() {
+        let dir = tempfile::tempdir().unwrap();
+        let (server, mut events) = IdeServer::start(options(dir.path())).unwrap();
+        let token = token_of(server.lock_file());
+        std::thread::spawn(move || {
+            while let Some(event) = futures::executor::block_on(events.next()) {
+                if let IdeEvent::ToolCall { reply, .. } = event {
+                    let _ = reply.send(json_result(&json!({ "tabs": [] })));
+                }
+            }
+        });
+        let mut socket = connect(server.port(), &token).unwrap();
+        let mut times = Vec::new();
+        for id in 0..200 {
+            let started = std::time::Instant::now();
+            call(
+                &mut socket,
+                json!({ "jsonrpc": "2.0", "id": id, "method": "tools/call", "params": { "name": "getOpenEditors", "arguments": {} } }),
+            );
+            times.push(started.elapsed());
+        }
+        times.sort();
+        println!(
+            "median {:?}, slowest {:?}",
+            times[times.len() / 2],
+            times[times.len() - 1]
+        );
+    }
+
     #[test]
     fn a_new_connection_replaces_the_old_one() {
         let dir = tempfile::tempdir().unwrap();
@@ -702,6 +798,8 @@ mod tests {
 /// `cargo test -p ai -- --ignored real_claude --nocapture`.
 #[cfg(test)]
 mod real {
+    use std::time::Duration;
+
     use futures::StreamExt as _;
 
     use super::*;

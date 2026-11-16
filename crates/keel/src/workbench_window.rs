@@ -545,6 +545,12 @@ impl Workbench {
         let (agent_panel, agent_events) =
             agent_panel::AgentPanel::new(language.strings(), window, cx);
         subscriptions.push(agent_events);
+        // Quitting may not drop the windows: Claude's announcement and the
+        // adapter go away here.
+        subscriptions.push(cx.on_app_quit(|this, _| {
+            this.stop_claude();
+            async {}
+        }));
         let opening = opening.into();
         let project = Project::new(opening.root.clone());
         let word_wrap = settings
@@ -1214,6 +1220,7 @@ impl Workbench {
     /// Keeps the session before a window closes; unsaved changes the user
     /// chose not to save are dropped.
     fn before_close(&mut self, cx: &mut Context<Self>) {
+        self.stop_claude();
         self.save_session_now();
         if self.discard_changes {
             self.discard_backups();

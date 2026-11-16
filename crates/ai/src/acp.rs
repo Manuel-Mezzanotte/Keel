@@ -238,6 +238,11 @@ impl Agent {
         ))
     }
 
+    /// The agent's process, when it is a program.
+    pub fn pid(&self) -> Option<u32> {
+        self.child.lock().unwrap().as_ref().map(Child::id)
+    }
+
     fn write(&self, message: &Value) -> io::Result<()> {
         let mut writer = self.writer.lock().unwrap();
         writeln!(writer, "{message}")?;

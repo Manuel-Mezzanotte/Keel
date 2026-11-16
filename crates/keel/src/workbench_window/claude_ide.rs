@@ -75,6 +75,13 @@ impl Workbench {
         .detach();
     }
 
+    /// Removes the announcement in `~/.claude/ide` and stops the agent's
+    /// adapter: the window or Keel is closing.
+    pub(super) fn stop_claude(&mut self) {
+        self.claude_ide = None;
+        self.agent_panel.agent = None;
+    }
+
     /// The port Claude Code started in Keel's terminals connects to.
     pub(super) fn claude_ide_env(&self) -> Vec<(String, String)> {
         match &self.claude_ide {
@@ -598,8 +605,9 @@ mod tests {
                 let _ = window;
             });
         });
+        // The first one may be the cursor where the file opened.
         let changed = receive(cx, &mut socket, |message| {
-            message["method"] == "selection_changed"
+            message["method"] == "selection_changed" && message["params"]["text"] != ""
         });
         assert_eq!(changed["params"]["text"], "nights");
         assert_eq!(
@@ -778,10 +786,17 @@ mod tests {
             std::thread::sleep(Duration::from_millis(20));
         }
         send_tool(&mut socket, 4, "closeAllDiffTabs", json!({}));
-        let third = receive(cx, &mut socket, |message| message["id"] == 3);
-        assert_eq!(texts(&third)[0], "DIFF_REJECTED");
-        let closed = receive(cx, &mut socket, |message| message["id"] == 4);
-        assert_eq!(texts(&closed), ["CLOSED_1_DIFF_TABS"]);
+        // Both answers come from their own threads, in either order.
+        let mut answers: Vec<Value> = Vec::new();
+        while answers.len() < 2 {
+            let answer = receive(cx, &mut socket, |message| {
+                message["id"] == 3 || message["id"] == 4
+            });
+            answers.push(answer);
+        }
+        let answer = |id: u64| answers.iter().find(|answer| answer["id"] == id).unwrap();
+        assert_eq!(texts(answer(3))[0], "DIFF_REJECTED");
+        assert_eq!(texts(answer(4)), ["CLOSED_1_DIFF_TABS"]);
         // The file itself is untouched: Claude Code writes it.
         assert_eq!(
             std::fs::read_to_string(&path).unwrap(),
