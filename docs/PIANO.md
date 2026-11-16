@@ -119,7 +119,7 @@ Da confermare con le misure della fase 0. Si misura con lo stesso script su Keel
 | 1 | Fondamenta e design | media | fatta; restano le tue prove a mano |
 | 2 | Editor e file | grande | fatta; restano le tue prove a mano |
 | 3 | Ricerca | piccola | fatta; restano le tue prove a mano |
-| 4 | Terminale e pannello in basso | media | da fare |
+| 4 | Terminale e pannello in basso | media | in corso |
 | 5 | Git: modifiche e commit | media | da fare |
 | 6 | Linguaggi principali: web e Rust | grande | da fare |
 | 7 | Anteprima Markdown e PDF | media | da fare |
@@ -644,6 +644,29 @@ Con albero, schede, ricerca dei file e controllo della cartella, Keel è cresciu
 ### Fase 4 — Terminale e pannello in basso
 
 **Obiettivo.** Lanciare `pnpm run dev` e Claude Code senza uscire da Keel.
+
+**Sottofasi**
+
+| Sottofase | Cosa | Stato |
+|---|---|---|
+| 4.1 | Motore del terminale (crate `terminal`): la shell nella cartella, colori, tasti, mouse, incolla, selezione, ricerca, link, porte | fatta |
+| 4.2 | Terminale nel pannello in basso: disegno, cursore, tastiera, mouse, copia e incolla, scorrimento, ridimensionamento | da fare |
+| 4.3 | Più terminali (schede, divisi, rinomina, chiudi), cerca nel terminale, link cliccabili, «Apri Claude Code» | da fare |
+| 4.4 | Output, Porte, script di `package.json`; misure e resoconto | da fare |
+
+**Note sulla 4.1**
+- **La shell** è la tua, aperta come fa il Terminale di macOS: `login` con zsh come shell di accesso, quindi legge `.zprofile` e `.zshrc` e ha il PATH giusto anche se Keel parte dal Finder.
+- **Variabili:** `TERM=xterm-256color`, `COLORTERM=truecolor`, `TERM_PROGRAM=Keel`; `LANG` dalla lingua del Mac quando manca, altrimenti zsh mostra le lettere accentate come codici.
+- **Tasti come in VS Code sul Mac:**
+  - Opzione+lettera scrive il carattere di macOS (`å`);
+  - Opzione+frecce va di parola in parola;
+  - Cmd+frecce va a inizio e fine riga, Cmd+Backspace cancella la riga;
+  - Maiusc+Invio va a capo in Claude Code, come fa il suo `/terminal-setup`.
+- **Mouse e incolla:** il mouse va ai programmi che lo chiedono (Claude Code, vim, htop). Il testo incollato arriva in un pezzo solo ai programmi che lo chiedono, così un testo lungo non parte riga per riga.
+- **Appunti:** i programmi possono copiare negli appunti, ma non leggerli, così un comando non può prendere una password copiata poco prima.
+- **Link:** trova indirizzi web e percorsi come `src/app/page.tsx:12:5` o `a.ts(3,9)`.
+- **Porte:** quelle dei processi partiti dai terminali, lette con `ps` e `lsof`.
+- **La cartella del programma in primo piano** segue i `cd`, letta da macOS. Serve per i link e per i nuovi terminali.
 
 **Cosa si fa**
 - **Terminale integrato** (`alacritty_terminal`): più terminali, schede, split, rinomina e chiudi; zsh con la cartella corrente; colori del tema; ricerca; copia e incolla; link cliccabili (`file:riga` apre l'editor, gli indirizzi web il browser).
