@@ -24,7 +24,8 @@ use crate::workbench_window::{
 };
 use crate::workbench_window::{
     FocusNextTerminal, FocusPreviousTerminal, KillTerminal, NewTerminal, OpenClaudeCode,
-    OpenClaudeCodeInPanel, RenameTerminal, SplitTerminal, TERMINAL_CONTEXT, ToggleMaximizedPanel,
+    OpenClaudeCodeInPanel, RenameTerminal, RunNpmScript, SplitTerminal, TERMINAL_CONTEXT,
+    ToggleMaximizedPanel,
 };
 use crate::workbench_window::{GoToLine, QuickOpen};
 
@@ -187,6 +188,12 @@ pub const COMMANDS: &[KeelCommand] = &[
     KeelCommand {
         id: "keel.claudeCode.openInPanel",
         action: || Box::new(OpenClaudeCodeInPanel),
+        default_key: None,
+        context: None,
+    },
+    KeelCommand {
+        id: "keel.npm.runScript",
+        action: || Box::new(RunNpmScript),
         default_key: None,
         context: None,
     },

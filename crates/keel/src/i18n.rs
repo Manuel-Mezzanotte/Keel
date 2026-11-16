@@ -208,6 +208,18 @@ pub struct Strings {
     pub command_output: &'static str,
     pub command_terminal: &'static str,
     pub terminal_name: &'static str,
+    pub output_extensions: &'static str,
+    pub output_clear: &'static str,
+    pub no_ports: &'static str,
+    pub port: &'static str,
+    pub port_address: &'static str,
+    pub port_process: &'static str,
+    pub open_in_browser: &'static str,
+    port_opened: &'static str,
+    pub npm_scripts: &'static str,
+    pub no_npm_scripts: &'static str,
+    pub run_npm_script: &'static str,
+    pub command_run_npm_script: &'static str,
     pub find_in_terminal: &'static str,
     pub find_older: &'static str,
     pub find_newer: &'static str,
@@ -281,6 +293,7 @@ impl Strings {
             "workbench.action.toggleMaximizedPanel" => self.command_maximize_panel,
             "keel.claudeCode.open" => self.command_claude_code,
             "keel.claudeCode.openInPanel" => self.command_claude_code_panel,
+            "keel.npm.runScript" => self.command_run_npm_script,
             "workbench.action.files.openFileFolder" => self.command_open,
             "workbench.action.files.newUntitledFile" => self.command_new_file,
             "workbench.action.newWindow" => self.command_new_window,
@@ -344,6 +357,12 @@ impl Strings {
         self.could_not_open
             .replace("{path}", path)
             .replace("{error}", error)
+    }
+
+    pub fn port_opened(&self, port: u16, process: &str) -> String {
+        self.port_opened
+            .replace("{port}", &port.to_string())
+            .replace("{process}", process)
     }
 
     pub fn terminal_failed(&self, error: &str) -> String {
@@ -602,6 +621,18 @@ pub const ITALIAN: Strings = Strings {
     command_output: "Vista: Output",
     command_terminal: "Vista: Terminale",
     terminal_name: "Nome del terminale",
+    output_extensions: "Estensioni",
+    output_clear: "Pulisci",
+    no_ports: "Nessuna porta aperta dai programmi dei terminali",
+    port: "Porta",
+    port_address: "Indirizzo",
+    port_process: "Processo",
+    open_in_browser: "Apri nel browser",
+    port_opened: "La porta {port} è aperta ({process}): la trovi in Porte",
+    npm_scripts: "Script npm",
+    no_npm_scripts: "Il progetto non ha script in package.json",
+    run_npm_script: "Scegli lo script da eseguire",
+    command_run_npm_script: "npm: Esegui uno script…",
     find_in_terminal: "Cerca nel terminale",
     find_older: "Più indietro (Invio)",
     find_newer: "Più avanti (Maiusc+Invio)",
@@ -811,6 +842,18 @@ pub const ENGLISH: Strings = Strings {
     command_output: "View: Toggle Output",
     command_terminal: "View: Toggle Terminal",
     terminal_name: "Terminal name",
+    output_extensions: "Extensions",
+    output_clear: "Clear",
+    no_ports: "No ports opened by the terminals' programs",
+    port: "Port",
+    port_address: "Address",
+    port_process: "Process",
+    open_in_browser: "Open in Browser",
+    port_opened: "Port {port} is open ({process}): see Ports",
+    npm_scripts: "NPM Scripts",
+    no_npm_scripts: "The project has no scripts in package.json",
+    run_npm_script: "Select the script to run",
+    command_run_npm_script: "npm: Run Script…",
     find_in_terminal: "Find in terminal",
     find_older: "Previous Match (Enter)",
     find_newer: "Next Match (Shift+Enter)",

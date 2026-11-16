@@ -6,7 +6,9 @@ mod disk;
 mod editing;
 pub(crate) mod explorer;
 mod navigation;
+mod npm_scripts;
 mod other_files;
+mod panel_views;
 mod restore;
 mod search_view;
 mod shell;
@@ -29,6 +31,7 @@ pub(crate) use tabs::{
 use tabs::{Group, OpenAs};
 
 pub(crate) use claude_code::{OpenClaudeCode, OpenClaudeCodeInPanel};
+pub(crate) use npm_scripts::RunNpmScript;
 pub(crate) use shell::window_options;
 pub(crate) use terminal_view::{TERMINAL_CONTEXT, bindings as terminal_bindings};
 pub(crate) use terminals::{
@@ -297,7 +300,14 @@ pub struct Workbench {
     installed: Vec<ExtensionSummary>,
     /// Keel's messages for the Output view: problems with the settings,
     /// extension logs and errors.
-    output: Vec<String>,
+    output: Vec<(panel_views::OutputChannel, String)>,
+    /// The channel the Output view shows.
+    output_channel: panel_views::OutputChannel,
+    /// The ports the terminals' programs listen on, looked up every few
+    /// seconds while terminals are open.
+    ports: Vec<terminal::ListeningPort>,
+    watching_ports: bool,
+    ports_task: Task<()>,
     documents: HashMap<String, OpenDocument>,
     panes: Vec<Pane>,
     active: usize,
@@ -338,6 +348,8 @@ pub struct Workbench {
     /// Claude Code's panel on the right: its width and its terminal.
     agent_width: f32,
     agent_terminal: Option<claude_code::AgentTerminal>,
+    /// The scripts of the project's `package.json`.
+    npm_scripts: Option<npm_scripts::NpmScripts>,
     _subscriptions: Vec<Subscription>,
 }
 
@@ -396,7 +408,11 @@ impl Workbench {
         });
 
         let status_message = settings.warnings.first().cloned();
-        let output = settings.warnings.clone();
+        let output = settings
+            .warnings
+            .iter()
+            .map(|warning| (panel_views::OutputChannel::Keel, warning.clone()))
+            .collect();
         let language = UiLanguage::from_setting(
             settings.string("keel.language"),
             UiLanguage::system_locale().as_deref(),
@@ -425,6 +441,10 @@ impl Workbench {
             layout: Layout::default(),
             installed: Vec::new(),
             output,
+            output_channel: panel_views::OutputChannel::Keel,
+            ports: Vec::new(),
+            watching_ports: false,
+            ports_task: Task::ready(()),
             documents: HashMap::new(),
             panes: Vec::new(),
             active: 0,
@@ -453,10 +473,12 @@ impl Workbench {
             panel_maximized: false,
             agent_width: claude_code::AGENT_WIDTH,
             agent_terminal: None,
+            npm_scripts: None,
             first_frame_drawn: false,
             _subscriptions: subscriptions,
         };
         workbench.build_tree();
+        workbench.refresh_npm_scripts();
         workbench.index_files(cx);
         workbench.watch_project(window, cx);
         workbench.data_dir = opening.data_dir.clone();
@@ -572,11 +594,7 @@ impl Workbench {
 
     /// Adds a line to the Output view.
     fn log(&mut self, line: impl Into<String>) {
-        self.output.push(line.into());
-        if self.output.len() > OUTPUT_LINES {
-            let extra = self.output.len() - OUTPUT_LINES;
-            self.output.drain(..extra);
-        }
+        self.log_to(panel_views::OutputChannel::Keel, line);
     }
 
     /// Shows a problem in the status bar and keeps it in the Output view.
@@ -1494,7 +1512,7 @@ impl Workbench {
                     params["message"].as_str().unwrap_or_default()
                 );
                 eprintln!("keel: extension {line}");
-                self.log(line);
+                self.log_to(panel_views::OutputChannel::Extensions, line);
             }
             "commands/registered" => {
                 if let Some(command) = params["command"].as_str() {

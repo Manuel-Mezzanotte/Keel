@@ -201,6 +201,7 @@ impl Workbench {
         if let Some(tree) = &mut self.tree {
             tree.refresh();
         }
+        self.refresh_npm_scripts();
         self.tree_changed();
         cx.notify();
     }
@@ -776,6 +777,7 @@ impl Workbench {
                     })
                     .child(list),
             )
+            .children(self.render_npm_scripts(colors, cx))
             .into_any_element()
     }
 

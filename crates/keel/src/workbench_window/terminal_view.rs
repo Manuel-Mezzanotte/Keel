@@ -306,6 +306,11 @@ impl TerminalView {
             .unwrap_or_else(|| "zsh".to_owned())
     }
 
+    /// The process the terminal started, for finding its ports.
+    pub(crate) fn pid(&self) -> u32 {
+        self.terminal.pid()
+    }
+
     /// Types a command and runs it, as if typed at the prompt.
     pub(crate) fn run(&self, command: &str) {
         self.terminal.write(format!("{command}\r").into_bytes());

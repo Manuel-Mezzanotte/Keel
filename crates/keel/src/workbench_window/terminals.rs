@@ -155,6 +155,7 @@ impl Workbench {
         );
         self.active_terminal = index;
         self.layout.show_panel_view(PanelView::Terminal);
+        self.watch_ports(cx);
         if focus {
             self.focus_terminal(window, cx);
         }
@@ -211,6 +212,13 @@ impl Workbench {
                     self.go_to(*line, column.unwrap_or(1), window, cx);
                 }
             }
+        }
+    }
+
+    /// Gives a terminal the name its tab shows.
+    pub(super) fn name_terminal(&mut self, view: &Entity<TerminalView>, name: String) {
+        if let Some(index) = self.terminal_index(view) {
+            self.terminals[index].name = Some(name);
         }
     }
 

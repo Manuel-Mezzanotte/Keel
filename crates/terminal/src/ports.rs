@@ -149,6 +149,18 @@ mod tests {
         assert_eq!(descendants(&parents, &[10]), [10, 11, 12]);
     }
 
+    /// How long one look takes; run with `--ignored --nocapture`.
+    #[test]
+    #[ignore]
+    fn timing() {
+        let _listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let start = std::time::Instant::now();
+        for _ in 0..10 {
+            listening_ports(&[std::process::id()]);
+        }
+        eprintln!("listening_ports: {:?} each", start.elapsed() / 10);
+    }
+
     #[test]
     fn finds_a_real_port() {
         let listener = TcpListener::bind("127.0.0.1:0").unwrap();

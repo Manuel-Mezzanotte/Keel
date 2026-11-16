@@ -26,7 +26,9 @@ gpui_kit_assets::icon_assets!(
         WholeWord,
         Regex,
         ReplaceAll,
-        Columns2
+        Columns2,
+        Play,
+        Trash
     ]
 );
 

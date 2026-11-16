@@ -73,6 +73,7 @@ impl Workbench {
             _subscription: subscription,
         });
         self.agent_width = self.agent_width.max(AGENT_TERMINAL_WIDTH);
+        self.watch_ports(cx);
         true
     }
 

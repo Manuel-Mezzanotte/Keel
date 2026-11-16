@@ -963,47 +963,42 @@ impl Workbench {
 
     fn render_bottom_panel(&self, colors: Colors, cx: &mut Context<Self>) -> Div {
         let strings = self.strings();
-        let tabs = PanelView::ALL.into_iter().enumerate().map(|(index, view)| {
-            let is_active = view == self.layout.panel_view;
-            div()
-                .id(("panel-view", index))
-                .h_full()
-                .flex()
-                .items_center()
-                .text_xs()
-                .font_weight(FontWeight::SEMIBOLD)
-                .text_color(if is_active { colors.text } else { colors.faint })
-                .when(is_active, |tab| {
-                    tab.border_b_2().border_color(colors.accent)
-                })
-                .cursor_pointer()
-                .on_click(cx.listener(move |this, _, window, cx| {
-                    if view == PanelView::Terminal {
-                        this.show_terminal(window, cx);
-                        return;
-                    }
-                    this.layout.show_panel_view(view);
-                    cx.notify();
-                }))
-                .child(panel_view_title(view, strings).to_uppercase())
-        });
+        let tabs = PanelView::ALL
+            .into_iter()
+            .enumerate()
+            .map(|(index, view)| {
+                let is_active = view == self.layout.panel_view;
+                div()
+                    .id(("panel-view", index))
+                    .h_full()
+                    .flex()
+                    .items_center()
+                    .text_xs()
+                    .font_weight(FontWeight::SEMIBOLD)
+                    .text_color(if is_active { colors.text } else { colors.faint })
+                    .when(is_active, |tab| {
+                        tab.border_b_2().border_color(colors.accent)
+                    })
+                    .cursor_pointer()
+                    .on_click(cx.listener(move |this, _, window, cx| {
+                        if view == PanelView::Terminal {
+                            this.show_terminal(window, cx);
+                            return;
+                        }
+                        this.layout.show_panel_view(view);
+                        cx.notify();
+                    }))
+                    .child(panel_view_title(view, strings).to_uppercase())
+            })
+            .collect::<Vec<_>>();
         let content: AnyElement = match self.layout.panel_view {
-            PanelView::Output if self.output.is_empty() => {
-                note(strings.no_output.to_owned(), colors).into_any_element()
-            }
-            PanelView::Output => div()
-                .font_family(cx.theme().mono_font_family.clone())
-                .text_xs()
-                .text_color(colors.muted)
-                .px_2()
-                .children(self.output.iter().map(|line| div().child(line.clone())))
-                .into_any_element(),
+            PanelView::Output => self.render_output(colors, cx),
             PanelView::Problems => note(strings.coming_in_phase(6), colors).into_any_element(),
             PanelView::Terminal => match self.render_terminals(colors) {
                 Some(terminal) => terminal,
                 None => note(strings.no_terminal.to_owned(), colors).into_any_element(),
             },
-            PanelView::Ports => note(strings.coming_in_phase(4), colors).into_any_element(),
+            PanelView::Ports => self.render_ports(colors, cx),
         };
         let fills = self.layout.panel_view == PanelView::Terminal;
         let maximized = self.panel_maximized;
@@ -1026,12 +1021,12 @@ impl Workbench {
                     .items_center()
                     .gap_5()
                     .children(tabs)
-                    .map(|header| {
-                        if self.layout.panel_view == PanelView::Terminal {
+                    .map(|header| match self.layout.panel_view {
+                        PanelView::Terminal => {
                             header.child(self.render_terminal_header(colors, cx))
-                        } else {
-                            header.child(div().ml_auto())
                         }
+                        PanelView::Output => header.child(self.render_output_header(cx)),
+                        _ => header.child(div().ml_auto()),
                     })
                     .child(
                         div()
@@ -1297,6 +1292,7 @@ impl Render for Workbench {
         let root = div().track_focus(&self.focus_handle);
         let root = self.tab_actions(root, cx);
         let root = self.terminal_actions(root, cx);
+        let root = self.npm_actions(root, cx);
         let root = self.editing_actions(root, cx);
         self.explorer_actions(root, cx)
             .size_full()
@@ -1472,7 +1468,10 @@ mod tests {
 
         let (view, cx) =
             cx.add_window_view(|window, cx| Workbench::new(None, settings, None, window, cx));
-        let output = view.read_with(cx, |view, _| view.output.clone());
+        let lines = |view: &Workbench| -> Vec<String> {
+            view.output.iter().map(|(_, line)| line.clone()).collect()
+        };
+        let output = view.read_with(cx, |view, _| lines(view));
         assert_eq!(output.len(), 1);
         assert!(output[0].contains("settings.json"), "{output:?}");
 
@@ -1481,7 +1480,7 @@ mod tests {
                 view.log(format!("line {line}"));
             }
         });
-        let output = view.read_with(cx, |view, _| view.output.clone());
+        let output = view.read_with(cx, |view, _| lines(view));
         assert_eq!(output.len(), OUTPUT_LINES);
         assert_eq!(
             output.last().unwrap(),
@@ -1571,7 +1570,7 @@ mod tests {
         view.read_with(cx, |view, _| {
             assert_eq!(view.documents.len(), 1);
             assert_eq!(view.panes.len(), 1);
-            let last = view.output.last().unwrap();
+            let (_, last) = view.output.last().unwrap();
             assert!(last.starts_with("Keel could not open"), "{last}");
         });
     }
