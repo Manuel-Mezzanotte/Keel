@@ -366,6 +366,11 @@ pub struct Strings {
     pub command_markdown_preview: &'static str,
     pub command_markdown_preview_side: &'static str,
     pub image_fit: &'static str,
+    pub pdf_search_placeholder: &'static str,
+    pub pdf_thumbnails: &'static str,
+    pub pdf_page_text: &'static str,
+    pub find_previous: &'static str,
+    pub find_next: &'static str,
 }
 
 impl Strings {
@@ -606,6 +611,12 @@ impl Strings {
         self.lsp_renamed_text
             .replace("{edits}", &edits.to_string())
             .replace("{files}", &files.to_string())
+    }
+
+    pub fn pdf_page_of(&self, page: usize, count: usize) -> String {
+        self.pdf_page_text
+            .replace("{page}", &page.to_string())
+            .replace("{count}", &count.to_string())
     }
 
     pub fn preview_title(&self, name: &str) -> String {
@@ -971,6 +982,11 @@ pub const ITALIAN: Strings = Strings {
     command_markdown_preview: "Markdown: Apri l'anteprima",
     command_markdown_preview_side: "Markdown: Apri l'anteprima a lato",
     image_fit: "Adatta",
+    pdf_search_placeholder: "Cerca nel PDF",
+    pdf_thumbnails: "Miniature",
+    pdf_page_text: "Pagina {page} di {count}",
+    find_previous: "Risultato precedente (Maiusc+Invio)",
+    find_next: "Risultato successivo (Invio)",
 };
 
 pub const ENGLISH: Strings = Strings {
@@ -1294,6 +1310,11 @@ pub const ENGLISH: Strings = Strings {
     command_markdown_preview: "Markdown: Open Preview",
     command_markdown_preview_side: "Markdown: Open Preview to the Side",
     image_fit: "Fit",
+    pdf_search_placeholder: "Find in PDF",
+    pdf_thumbnails: "Thumbnails",
+    pdf_page_text: "Page {page} of {count}",
+    find_previous: "Previous Match (Shift+Enter)",
+    find_next: "Next Match (Enter)",
 };
 
 #[cfg(test)]

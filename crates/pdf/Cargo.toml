@@ -1,0 +1,22 @@
+[package]
+name = "pdf"
+description = "PDF files through macOS's PDFKit: pages drawn to pictures, text, search and selection"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[dependencies]
+anyhow.workspace = true
+futures.workspace = true
+objc2 = "0.6.5"
+objc2-foundation = { version = "0.3.2", features = ["NSString", "NSURL", "NSArray", "NSGeometry", "NSObjCRuntime"] }
+objc2-core-foundation = { version = "0.3.2", features = ["CFCGTypes"] }
+objc2-core-graphics = { version = "0.3.2", features = ["CGContext", "CGBitmapContext", "CGColorSpace", "CGImage"] }
+objc2-pdf-kit = { version = "0.3.2", default-features = false, features = ["std", "PDFDocument", "PDFPage", "PDFSelection", "objc2-core-graphics", "objc2-core-foundation"] }
+
+[dev-dependencies]
+tempfile.workspace = true
+
+[lints]
+workspace = true

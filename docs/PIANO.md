@@ -1089,8 +1089,23 @@ Apri Keel su GestionaleHospitality. La prima volta i server si installano da sol
 | 7.1 | Anteprima Markdown in una scheda, affiancata (Cmd+K V) o al posto dell'editor (Cmd+Maiusc+V), aggiornata mentre scrivi, con i colori del tema | fatta |
 | 7.2 | Scorrimento sincronizzato nei due versi; link ad altri file, a titoli e al web; immagini locali; liste di controllo da spuntare | fatta |
 | 7.3 | Immagini e SVG con zoom | fatta |
-| 7.4 | PDF in una scheda con PDFKit: pagine, zoom, miniature, ricerca, copia del testo | da fare |
+| 7.4 | PDF in una scheda con PDFKit: pagine, zoom, miniature, ricerca, copia del testo | fatta |
 | 7.5 | Misure e resoconto | da fare |
+
+**Note sulla 7.4**
+- **I PDF si aprono in una scheda,** dall'Esplora risorse, da Cmd+P o dal comando `keel`.
+- **Li disegna PDFKit di macOS** (crate `pdf`, con `objc2-pdf-kit`): ogni pagina diventa un'immagine della larghezza giusta per lo schermo Retina. PDFKit lavora in un thread suo, quindi la finestra non aspetta mai una pagina.
+- **Pagine:**
+  - una sotto l'altra, su sfondo grigio, adattate alla larghezza;
+  - si disegnano solo quelle che si vedono, e ne restano in memoria al massimo 12: le altre si ridisegnano quando tornano in vista;
+  - mentre cambia lo zoom resta l'immagine vecchia finché arriva quella nuova.
+- **Barra in alto:**
+  - miniature, in una colonna a sinistra: un clic va alla pagina;
+  - «Pagina 3 di 12», anche nella barra di stato;
+  - zoom −, «Adatta», + (anche Cmd+=, Cmd+- e Cmd+0, con gli stessi livelli delle immagini);
+  - ricerca (Cmd+F): i risultati sono evidenziati sulle pagine, Invio e Maiusc+Invio passano al successivo e al precedente, senza badare a maiuscole e accenti.
+- **Copiare il testo:** trascinando sulla pagina si seleziona il testo come in Anteprima, anche fra due pagine; Cmd+C lo copia.
+- **Non c'è ancora:** le pagine ruotate di 90° si disegnano, ma ricerca e selezione lì possono cadere nel punto sbagliato; i PDF protetti da password non si aprono; i link dentro il PDF non si seguono.
 
 **Note sulla 7.3**
 - **Zoom delle immagini e degli SVG,** come nell'anteprima di VS Code:

@@ -106,7 +106,11 @@ impl Workbench {
             let path = match &document.backing {
                 Backing::File(file) => Some(file.path().to_path_buf()),
                 Backing::Untitled => None,
-                Backing::Extension | Backing::Image(_) | Backing::Diff(_) | Backing::Preview(_) => {
+                Backing::Extension
+                | Backing::Image(_)
+                | Backing::Diff(_)
+                | Backing::Preview(_)
+                | Backing::Pdf(_) => {
                     continue;
                 }
             };
@@ -201,7 +205,7 @@ impl Workbench {
         for group in &state.groups {
             let column = self.groups.len();
             for tab in group.tabs.iter().filter(|tab| tab.path.is_file()) {
-                let Ok(uri) = self.load_document(&tab.path) else {
+                let Ok(uri) = self.load_document(&tab.path, window, cx) else {
                     continue;
                 };
                 self.push_tab(column, &uri, tab.pinned, window, cx);
@@ -277,9 +281,11 @@ impl Workbench {
         document.modified = match &document.backing {
             Backing::File(file) => file.is_modified(text),
             Backing::Untitled => !text.is_empty(),
-            Backing::Extension | Backing::Image(_) | Backing::Diff(_) | Backing::Preview(_) => {
-                false
-            }
+            Backing::Extension
+            | Backing::Image(_)
+            | Backing::Diff(_)
+            | Backing::Preview(_)
+            | Backing::Pdf(_) => false,
         };
         document.synced_text = text.to_owned();
         document.version += 1;

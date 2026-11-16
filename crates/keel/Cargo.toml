@@ -22,6 +22,7 @@ gpui-kit-assets.workspace = true
 gpui_platform.workspace = true
 git.workspace = true
 lsp.workspace = true
+pdf.workspace = true
 markdown.workspace = true
 image.workspace = true
 globset.workspace = true

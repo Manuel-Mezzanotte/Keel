@@ -81,6 +81,7 @@ language = { path = "crates/language" }
 terminal = { path = "crates/terminal" }
 git = { path = "crates/git" }
 lsp = { path = "crates/lsp" }
+pdf = { path = "crates/pdf" }
 
 # Testing
 tempfile = "3.27"

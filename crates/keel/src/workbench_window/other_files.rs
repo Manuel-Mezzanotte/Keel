@@ -112,10 +112,18 @@ fn readable_size(bytes: u64, italian: bool) -> String {
 impl Workbench {
     /// Loads a file into a document, unless it is open already. Returns its
     /// uri, or the message to show when Keel cannot open it.
-    pub(super) fn load_document(&mut self, path: &Path) -> Result<String, String> {
+    pub(super) fn load_document(
+        &mut self,
+        path: &Path,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> Result<String, String> {
         let uri = Uri::file(path).to_string();
         if self.documents.contains_key(&uri) {
             return Ok(uri);
+        }
+        if super::pdf_view::is_pdf(path) {
+            return self.load_pdf(path, window, cx);
         }
         let strings = self.strings();
         if is_image(path) {
@@ -163,7 +171,11 @@ impl Workbench {
         let size = std::fs::metadata(path)
             .map(|metadata| metadata.len())
             .unwrap_or(0);
-        if size <= LARGE_FILE || is_image(path) || self.large_files_ok.contains(path) {
+        if size <= LARGE_FILE
+            || is_image(path)
+            || super::pdf_view::is_pdf(path)
+            || self.large_files_ok.contains(path)
+        {
             return true;
         }
         let strings = self.strings();

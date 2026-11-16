@@ -16,6 +16,7 @@ mod navigation;
 mod npm_scripts;
 mod other_files;
 mod panel_views;
+mod pdf_view;
 mod problems;
 mod restore;
 mod search_view;
@@ -50,6 +51,7 @@ pub(crate) use git_gutter::{NextChange, PreviousChange, RevertChange, StageChang
 pub(crate) use language_servers::RestartLanguageServers;
 pub(crate) use markdown_preview::{ShowMarkdownPreview, ShowMarkdownPreviewToSide};
 pub(crate) use npm_scripts::RunNpmScript;
+pub(crate) use pdf_view::bindings as pdf_bindings;
 pub(crate) use problems::{NextProblem, PreviousProblem};
 pub(crate) use shell::window_options;
 pub(crate) use signature_help::TriggerParameterHints;
@@ -219,6 +221,8 @@ enum Backing {
     Diff(diff_view::DiffTab),
     /// The rendered Markdown of another document.
     Preview(markdown_preview::PreviewTab),
+    /// A PDF file, drawn by PDFKit; boxed, being much larger than the rest.
+    Pdf(Box<pdf_view::PdfTab>),
 }
 
 impl OpenDocument {
@@ -227,7 +231,7 @@ impl OpenDocument {
         match &self.backing {
             Backing::File(file) => Some(file.path()),
             Backing::Image(path) => Some(path),
-            Backing::Diff(_) | Backing::Preview(_) => None,
+            Backing::Diff(_) | Backing::Preview(_) | Backing::Pdf(_) => None,
             Backing::Untitled | Backing::Extension => None,
         }
     }
@@ -617,7 +621,7 @@ impl Workbench {
             if !self.large_file_ok(&path, open_as, window, cx) {
                 return;
             }
-            if let Err(message) = self.load_document(&path) {
+            if let Err(message) = self.load_document(&path, window, cx) {
                 self.report(message);
                 cx.notify();
                 return;
@@ -850,9 +854,11 @@ impl Workbench {
         document.modified = match &document.backing {
             Backing::File(file) => file.is_modified(&text),
             Backing::Untitled => !text.is_empty(),
-            Backing::Extension | Backing::Image(_) | Backing::Diff(_) | Backing::Preview(_) => {
-                false
-            }
+            Backing::Extension
+            | Backing::Image(_)
+            | Backing::Diff(_)
+            | Backing::Preview(_)
+            | Backing::Pdf(_) => false,
         };
         let params = json!({
             "uri": uri,
@@ -956,7 +962,12 @@ impl Workbench {
                     self.documents
                         .get(&pane.uri)
                         .map(|document| &document.backing),
-                    Some(Backing::Image(_) | Backing::Diff(_) | Backing::Preview(_))
+                    Some(
+                        Backing::Image(_)
+                            | Backing::Diff(_)
+                            | Backing::Preview(_)
+                            | Backing::Pdf(_)
+                    )
                 )
             })
             .map(|(index, pane)| {
@@ -1048,7 +1059,7 @@ impl Workbench {
         match &document.backing {
             Backing::File(_) => self.save_with_participants(uri, after, window, cx),
             Backing::Untitled => self.save_as(uri.to_owned(), text, after, window, cx),
-            Backing::Image(_) | Backing::Diff(_) | Backing::Preview(_) => {}
+            Backing::Image(_) | Backing::Diff(_) | Backing::Preview(_) | Backing::Pdf(_) => {}
             Backing::Extension => {
                 if let Some(extensions) = &self.extensions {
                     let write = extensions
@@ -2310,7 +2321,12 @@ impl Workbench {
                     self.documents
                         .get(&pane.uri)
                         .map(|document| &document.backing),
-                    Some(Backing::Image(_) | Backing::Diff(_) | Backing::Preview(_))
+                    Some(
+                        Backing::Image(_)
+                            | Backing::Diff(_)
+                            | Backing::Preview(_)
+                            | Backing::Pdf(_)
+                    )
                 )
             })
             .map(|pane| pane.uri.clone())

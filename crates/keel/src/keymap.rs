@@ -774,6 +774,7 @@ pub fn bind(user: &[UserBinding], cx: &mut App) -> Vec<String> {
     }
     key_bindings.extend(explorer::tree_bindings());
     key_bindings.extend(crate::workbench_window::source_control_bindings());
+    key_bindings.extend(crate::workbench_window::pdf_bindings());
     key_bindings.extend(crate::workbench_window::terminal_bindings(
         &window_keys_for_shell(user),
         cx,

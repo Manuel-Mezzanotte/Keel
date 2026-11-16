@@ -904,7 +904,7 @@ impl Workbench {
         )
     }
 
-    fn render_editors(&self, colors: Colors, cx: &mut Context<Self>) -> Div {
+    fn render_editors(&self, colors: Colors, window: &mut Window, cx: &mut Context<Self>) -> Div {
         let panes = self.panes.iter().enumerate().map(|(index, pane)| {
             let tabs: Vec<AnyElement> = self.groups[index]
                 .tabs
@@ -961,6 +961,10 @@ impl Workbench {
                             .flex_1()
                             .min_h_0()
                             .child(self.render_diff(tab, colors, cx)),
+                        Some(Backing::Pdf(tab)) => div()
+                            .flex_1()
+                            .min_h_0()
+                            .child(self.render_pdf(&pane.uri, tab, colors, window, cx)),
                         Some(Backing::Preview(tab)) => div()
                             .flex_1()
                             .min_h_0()
@@ -1264,9 +1268,15 @@ impl Workbench {
                 self.documents
                     .get(&pane.uri)
                     .map(|document| &document.backing),
-                Some(Backing::Image(_) | Backing::Diff(_) | Backing::Preview(_))
+                Some(Backing::Image(_) | Backing::Diff(_) | Backing::Preview(_) | Backing::Pdf(_))
             )
         });
+        if let Some(uri) = self.active_pdf()
+            && let Some(Backing::Pdf(tab)) =
+                self.documents.get(&uri).map(|document| &document.backing)
+        {
+            right.push(strings.pdf_page_of(tab.current_page() + 1, tab.page_count()));
+        }
         // An image: its size and its zoom, as VS Code shows them.
         if let Some((size, zoom)) = self.image_status() {
             right.push(size);
@@ -1388,7 +1398,7 @@ impl Render for Workbench {
             .when(self.layout.sidebar, |body| {
                 body.child(self.render_sidebar(colors, cx))
             })
-            .child(self.render_editors(colors, cx))
+            .child(self.render_editors(colors, window, cx))
             .when(self.layout.agent, |body| {
                 body.child(self.render_agent(colors, cx))
             })
@@ -1410,6 +1420,7 @@ impl Render for Workbench {
         let root = self.code_navigation_actions(root, cx);
         let root = self.code_action_actions(root, cx);
         let root = self.markdown_preview_actions(root, cx);
+        let root = self.pdf_actions(root, cx);
         let root = self.editing_actions(root, cx);
         self.explorer_actions(root, cx)
             .size_full()

@@ -486,7 +486,7 @@ impl Workbench {
         if removed.is_some_and(|document| {
             !matches!(
                 document.backing,
-                Backing::Image(_) | Backing::Diff(_) | Backing::Preview(_)
+                Backing::Image(_) | Backing::Diff(_) | Backing::Preview(_) | Backing::Pdf(_)
             )
         }) {
             self.notify_host("documents/closed", json!({ "uri": uri }));
