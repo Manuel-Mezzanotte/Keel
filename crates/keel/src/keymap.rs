@@ -448,6 +448,31 @@ pub fn keel_bindings(user: &[UserBinding]) -> Vec<(&'static KeelCommand, String)
     bindings
 }
 
+/// Commands whose keys still work in a terminal, as in VS Code's
+/// `terminal.integrated.commandsToSkipShell`.
+const SKIP_SHELL: &[&str] = &[
+    "workbench.action.terminal.toggleTerminal",
+    "workbench.view.scm",
+];
+
+/// Keys of Keel's commands that a terminal keeps for the shell: those
+/// without Cmd, such as Ctrl+R for the history and Ctrl+G, and the chords
+/// that start with Cmd+K, so Cmd+K clears the terminal at once.
+pub fn window_keys_for_shell(user: &[UserBinding]) -> Vec<String> {
+    let mut keys: Vec<String> = keel_bindings(user)
+        .into_iter()
+        .filter(|(command, keystrokes)| {
+            command.context.is_none()
+                && !SKIP_SHELL.contains(&command.id)
+                && (!keystrokes.contains("cmd-") || keystrokes.starts_with("cmd-k "))
+        })
+        .map(|(_, keystrokes)| keystrokes)
+        .collect();
+    keys.sort();
+    keys.dedup();
+    keys
+}
+
 /// Binds Keel's commands. Keys follow the physical layout of non-US
 /// keyboards, such as the Italian one, the way macOS apps do.
 pub fn bind(user: &[UserBinding], cx: &mut App) -> Vec<String> {
@@ -464,6 +489,10 @@ pub fn bind(user: &[UserBinding], cx: &mut App) -> Vec<String> {
         }
     }
     key_bindings.extend(explorer::tree_bindings());
+    key_bindings.extend(crate::workbench_window::terminal_bindings(
+        &window_keys_for_shell(user),
+        cx,
+    ));
     // Cmd+Enter inserts a line below, as in VS Code, rather than the
     // editor's own secondary Enter.
     let enter = gpui_component::input::Enter {
@@ -501,6 +530,17 @@ mod tests {
         let (bindings, warnings) = read_user_bindings(&file);
         assert!(warnings.is_empty(), "{warnings:?}");
         bindings
+    }
+
+    #[test]
+    fn terminals_keep_the_shells_keys() {
+        let keys = window_keys_for_shell(&[]);
+        for key in ["ctrl-r", "ctrl-g", "alt-z", "cmd-k cmd-t"] {
+            assert!(keys.contains(&key.to_owned()), "{key} in {keys:?}");
+        }
+        for key in ["ctrl-`", "cmd-p", "cmd-s", "ctrl-shift-g"] {
+            assert!(!keys.contains(&key.to_owned()), "{key} in {keys:?}");
+        }
     }
 
     #[test]

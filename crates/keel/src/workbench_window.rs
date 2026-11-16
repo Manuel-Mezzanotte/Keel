@@ -10,6 +10,8 @@ mod restore;
 mod search_view;
 mod shell;
 mod tabs;
+mod terminal_view;
+mod terminals;
 
 pub(crate) use editing::{
     CopyLinesDown, CopyLinesUp, DeleteLines, EDITOR_CONTEXT, InsertLineAfter, InsertLineBefore,
@@ -26,6 +28,7 @@ pub(crate) use tabs::{
 use tabs::{Group, OpenAs};
 
 pub(crate) use shell::window_options;
+pub(crate) use terminal_view::bindings as terminal_bindings;
 
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::ops::Range;
@@ -319,6 +322,9 @@ pub struct Workbench {
     /// The project's files for Quick Open, listed in the background.
     file_index: Option<std::sync::Arc<Vec<String>>>,
     indexing: Task<()>,
+    /// The terminals of the bottom panel, and the one in front.
+    terminals: Vec<terminals::TerminalTab>,
+    active_terminal: usize,
     _subscriptions: Vec<Subscription>,
 }
 
@@ -427,6 +433,8 @@ impl Workbench {
             watching: Task::ready(()),
             file_index: None,
             indexing: Task::ready(()),
+            terminals: Vec::new(),
+            active_terminal: 0,
             first_frame_drawn: false,
             _subscriptions: subscriptions,
         };

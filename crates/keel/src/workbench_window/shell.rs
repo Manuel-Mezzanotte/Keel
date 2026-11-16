@@ -975,7 +975,11 @@ impl Workbench {
                     tab.border_b_2().border_color(colors.accent)
                 })
                 .cursor_pointer()
-                .on_click(cx.listener(move |this, _, _, cx| {
+                .on_click(cx.listener(move |this, _, window, cx| {
+                    if view == PanelView::Terminal {
+                        this.show_terminal(window, cx);
+                        return;
+                    }
                     this.layout.show_panel_view(view);
                     cx.notify();
                 }))
@@ -993,10 +997,13 @@ impl Workbench {
                 .children(self.output.iter().map(|line| div().child(line.clone())))
                 .into_any_element(),
             PanelView::Problems => note(strings.coming_in_phase(6), colors).into_any_element(),
-            PanelView::Terminal | PanelView::Ports => {
-                note(strings.coming_in_phase(4), colors).into_any_element()
-            }
+            PanelView::Terminal => match self.render_terminals() {
+                Some(terminal) => terminal,
+                None => note(strings.no_terminal.to_owned(), colors).into_any_element(),
+            },
+            PanelView::Ports => note(strings.coming_in_phase(4), colors).into_any_element(),
         };
+        let fills = self.layout.panel_view == PanelView::Terminal;
         div()
             .h(px(PANEL_HEIGHT))
             .flex_none()
@@ -1013,6 +1020,20 @@ impl Workbench {
                     .items_center()
                     .gap_5()
                     .children(tabs)
+                    .when_some(
+                        (self.layout.panel_view == PanelView::Terminal)
+                            .then(|| self.active_terminal_name(cx))
+                            .flatten(),
+                        |header, name| {
+                            header.child(
+                                div()
+                                    .ml_auto()
+                                    .text_xs()
+                                    .text_color(colors.muted)
+                                    .child(name),
+                            )
+                        },
+                    )
                     .child(
                         div().ml_auto().child(
                             Button::new("close-panel")
@@ -1024,15 +1045,18 @@ impl Workbench {
                         ),
                     ),
             )
-            .child(
+            .child(if fills {
+                // A terminal fills the panel and scrolls on its own.
+                div().id("panel-content").flex_1().min_h_0().child(content)
+            } else {
                 div()
                     .id("panel-content")
                     .flex_1()
                     .min_h_0()
                     .px_1p5()
                     .overflow_y_scroll()
-                    .child(content),
-            )
+                    .child(content)
+            })
     }
 
     fn render_agent(&self, colors: Colors) -> Div {
@@ -1279,9 +1303,11 @@ impl Render for Workbench {
             .on_action(cx.listener(|this, _: &ToggleOutput, _, cx| {
                 this.toggle_panel_view(PanelView::Output, cx)
             }))
-            .on_action(cx.listener(|this, _: &ToggleTerminal, _, cx| {
-                this.toggle_panel_view(PanelView::Terminal, cx)
-            }))
+            .on_action(
+                cx.listener(|this, _: &ToggleTerminal, window, cx| {
+                    this.toggle_terminal(window, cx)
+                }),
+            )
             .on_action(cx.listener(|this, _: &NewFile, window, cx| this.new_file(window, cx)))
             .on_action(cx.listener(|this, _: &QuickOpen, window, cx| this.quick_open(window, cx)))
             .on_action(cx.listener(|this, _: &GoToLine, window, cx| this.ask_line(window, cx)))

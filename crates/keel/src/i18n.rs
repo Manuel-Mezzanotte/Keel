@@ -95,6 +95,8 @@ pub struct Strings {
     pub panel_problems: &'static str,
     pub panel_output: &'static str,
     pub panel_terminal: &'static str,
+    terminal_failed: &'static str,
+    pub no_terminal: &'static str,
     pub panel_ports: &'static str,
     pub no_output: &'static str,
     pub agent_not_connected: &'static str,
@@ -312,6 +314,10 @@ impl Strings {
             .replace("{error}", error)
     }
 
+    pub fn terminal_failed(&self, error: &str) -> String {
+        self.terminal_failed.replace("{error}", error)
+    }
+
     pub fn could_not_change(&self, name: &str, error: &str) -> String {
         self.could_not_change
             .replace("{name}", name)
@@ -451,6 +457,8 @@ pub const ITALIAN: Strings = Strings {
     panel_problems: "Problemi",
     panel_output: "Output",
     panel_terminal: "Terminale",
+    terminal_failed: "Il terminale non è partito: {error}",
+    no_terminal: "Nessun terminale aperto",
     panel_ports: "Porte",
     no_output: "Nessun messaggio",
     agent_not_connected: "Non collegato",
@@ -635,6 +643,8 @@ pub const ENGLISH: Strings = Strings {
     panel_problems: "Problems",
     panel_output: "Output",
     panel_terminal: "Terminal",
+    terminal_failed: "The terminal did not start: {error}",
+    no_terminal: "No terminal open",
     panel_ports: "Ports",
     no_output: "No messages",
     agent_not_connected: "Not connected",

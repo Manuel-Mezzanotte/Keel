@@ -650,9 +650,31 @@ Con albero, schede, ricerca dei file e controllo della cartella, Keel è cresciu
 | Sottofase | Cosa | Stato |
 |---|---|---|
 | 4.1 | Motore del terminale (crate `terminal`): la shell nella cartella, colori, tasti, mouse, incolla, selezione, ricerca, link, porte | fatta |
-| 4.2 | Terminale nel pannello in basso: disegno, cursore, tastiera, mouse, copia e incolla, scorrimento, ridimensionamento | da fare |
-| 4.3 | Più terminali (schede, divisi, rinomina, chiudi), cerca nel terminale, link cliccabili, «Apri Claude Code» | da fare |
+| 4.2 | Terminale nel pannello in basso: disegno, cursore, tastiera, mouse, copia e incolla, scorrimento, ridimensionamento, Cmd+clic sui link | fatta |
+| 4.3 | Più terminali (schede, divisi, rinomina, chiudi), pannello ridimensionabile, cerca nel terminale, «Apri Claude Code» | da fare |
 | 4.4 | Output, Porte, script di `package.json`; misure e resoconto | da fare |
+
+**Note sulla 4.2**
+- **Ctrl+`** apre il terminale nella cartella del progetto e gli dà la tastiera; se il terminale ha già la tastiera, chiude il pannello, come in VS Code. Anche la scheda «Terminale» del pannello ne apre uno se non c'è.
+- **Disegno:**
+  - le celle sono disegnate con la scheda video, con il carattere monospaziato del tema (o `terminal.integrated.fontFamily`), 12 punti come VS Code (o `terminal.integrated.fontSize`);
+  - i colori seguono il tema, chiaro o scuro;
+  - il cursore è vuoto quando il terminale non ha la tastiera;
+  - le lettere larghe, come gli emoji, restano allineate alla griglia.
+- **Tasti che restano alla shell:**
+  - Tab non sposta più la tastiera altrove;
+  - Ctrl+R cerca nella cronologia della shell e Ctrl+G non apre «Vai alla riga»;
+  - Cmd+K pulisce il terminale subito, senza aspettare gli accordi come Cmd+K Cmd+T;
+  - Ctrl+` e Ctrl+Maiusc+G funzionano anche dal terminale, come in VS Code.
+- **Copia e incolla:**
+  - Cmd+C copia la selezione, Cmd+A seleziona tutto;
+  - Cmd+V incolla il testo; se negli appunti c'è solo un'immagine, Keel manda Ctrl+V, che è il modo in cui Claude Code legge le immagini.
+- **Mouse:**
+  - trascinare seleziona, doppio clic prende la parola e triplo clic la riga;
+  - con i programmi che usano il mouse, come Claude Code, il mouse va a loro, e Maiusc lo tiene per selezionare.
+- **Scorrimento:** la rotella scorre le righe passate, fino a 10.000; nei programmi a schermo intero, come `less`, manda le frecce. Maiusc+Pag su e Maiusc+Pag giù scorrono di una pagina.
+- **Link:** Cmd+clic su un indirizzo lo apre nel browser; Cmd+clic su un percorso come `src/app/page.tsx:12:5` apre il file alla riga, cercandolo dalla cartella in cui si trova il terminale.
+- **Fine della shell:** con `exit` il terminale si chiude, e con l'ultimo si chiude il pannello.
 
 **Note sulla 4.1**
 - **La shell** è la tua, aperta come fa il Terminale di macOS: `login` con zsh come shell di accesso, quindi legge `.zprofile` e `.zshrc` e ha il PATH giusto anche se Keel parte dal Finder.
