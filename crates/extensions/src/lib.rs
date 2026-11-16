@@ -3,6 +3,7 @@
 
 mod host;
 mod manifest;
+pub mod marketplace;
 mod vsix;
 
 pub use host::{ExtensionHost, HostEvent};

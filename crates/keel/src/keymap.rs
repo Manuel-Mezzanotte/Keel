@@ -8,6 +8,10 @@ use serde_json::Value;
 
 use crate::workbench_window::explorer;
 use crate::workbench_window::{
+    CheckExtensionUpdates, InstallFromVsix, RestartExtensions, ShowFileHistory, ToggleBlame,
+    UpdateAllExtensions,
+};
+use crate::workbench_window::{
     CheckoutBranch, Commit, CommitAmend, CreateBranch, DiscardAll, GitFetch, GitPull, GitPush,
     GitRefresh, GitStash, GitStashPop, GitSync, StageAll, UnstageAll,
 };
@@ -37,7 +41,6 @@ use crate::workbench_window::{
     GoToTypeDefinition, RenameSymbol, RevealDefinition,
 };
 use crate::workbench_window::{GoToLine, QuickOpen};
-use crate::workbench_window::{InstallFromVsix, RestartExtensions, ShowFileHistory, ToggleBlame};
 use crate::workbench_window::{NextChange, PreviousChange, RevertChange, StageChange};
 use crate::workbench_window::{
     NextProblem, PreviousProblem, RestartLanguageServers, TriggerParameterHints,
@@ -257,6 +260,18 @@ pub const COMMANDS: &[KeelCommand] = &[
     KeelCommand {
         id: "workbench.action.restartExtensionHost",
         action: || Box::new(RestartExtensions),
+        default_key: None,
+        context: None,
+    },
+    KeelCommand {
+        id: "workbench.extensions.action.checkForUpdates",
+        action: || Box::new(CheckExtensionUpdates),
+        default_key: None,
+        context: None,
+    },
+    KeelCommand {
+        id: "workbench.extensions.action.updateAllExtensions",
+        action: || Box::new(UpdateAllExtensions),
         default_key: None,
         context: None,
     },

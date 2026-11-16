@@ -52,7 +52,9 @@ pub(crate) use code_navigation::{
     GoToImplementation, GoToReferences, GoToSymbolInFile, GoToSymbolInWorkspace,
     GoToTypeDefinition, RenameSymbol, RevealDefinition,
 };
-pub(crate) use extensions_view::{InstallFromVsix, RestartExtensions};
+pub(crate) use extensions_view::{
+    CheckExtensionUpdates, InstallFromVsix, RestartExtensions, UpdateAllExtensions,
+};
 pub(crate) use git_graph::ShowGitGraph;
 pub(crate) use git_gutter::{NextChange, PreviousChange, RevertChange, StageChange};
 pub(crate) use language_servers::RestartLanguageServers;
@@ -214,6 +216,8 @@ pub struct ExtensionSetup {
     pub events: UnboundedReceiver<HostEvent>,
     pub installed: Vec<InstalledExtension>,
     pub data_dir: PathBuf,
+    /// Where to search and update extensions; none in most tests.
+    pub marketplace: Option<extensions::marketplace::Marketplace>,
 }
 
 /// How a document's text is stored.
@@ -357,6 +361,8 @@ pub struct Workbench {
     extension_state: crate::extension_state::ExtensionState,
     /// Keel's data folder, where extensions are installed.
     extension_data: Option<PathBuf>,
+    /// The Open VSX search and the updates found.
+    store: extensions_view::ExtensionStore,
     /// Keel's messages for the Output view: problems with the settings,
     /// extension logs and errors.
     output: Vec<(panel_views::OutputChannel, String)>,
@@ -506,6 +512,9 @@ impl Workbench {
             settings.string("keel.language"),
             UiLanguage::system_locale().as_deref(),
         );
+        let (store, store_events) =
+            extensions_view::ExtensionStore::new(language.strings(), window, cx);
+        subscriptions.push(store_events);
         let opening = opening.into();
         let project = Project::new(opening.root.clone());
         let word_wrap = settings
@@ -537,6 +546,7 @@ impl Workbench {
             installed: Vec::new(),
             extension_state: Default::default(),
             extension_data: None,
+            store,
             output,
             output_channel: panel_views::OutputChannel::Keel,
             ports: Vec::new(),
@@ -1402,12 +1412,16 @@ impl Workbench {
             mut events,
             installed,
             data_dir,
+            marketplace,
         } = setup;
         let host = Rc::new(host);
         let mut titles = Vec::new();
         let mut bindings = Vec::new();
         // Every one is listed; only those turned on for this project run.
         self.extension_data = Some(data_dir.clone());
+        if self.store.client.is_none() {
+            self.store.client = marketplace;
+        }
         self.extension_state = crate::extension_state::ExtensionState::load(&data_dir);
         self.installed = installed.clone();
         let installed: Vec<InstalledExtension> = installed
@@ -1482,6 +1496,15 @@ impl Workbench {
             }
         }
         self.publish_editors(window, cx);
+        // Once per window, as VS Code does at startup.
+        let auto_check = self
+            .settings
+            .get("extensions.autoCheckUpdates")
+            .and_then(Value::as_bool)
+            .unwrap_or(true);
+        if auto_check && !self.store.checked_updates {
+            self.check_extension_updates(false, window, cx);
+        }
 
         let loads: Vec<_> = installed
             .iter()
@@ -3056,6 +3079,7 @@ mod extension_tests {
             events,
             installed: vec![installed],
             data_dir: data.path().to_path_buf(),
+            marketplace: None,
         };
         let document = Document::open(&path).unwrap();
         // Dialogs need gpui-component's Root around the workbench, as in Keel.

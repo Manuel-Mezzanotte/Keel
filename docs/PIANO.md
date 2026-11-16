@@ -1286,11 +1286,26 @@ Apri Keel su GestionaleHospitality. La prima volta i server si installano da sol
 | Sottofase | Cosa | Stato |
 |---|---|---|
 | 9.1 | Vista Estensioni: installate con icona e descrizione, attiva e disattiva (anche solo per il progetto), disinstalla, scheda dei dettagli con il README; installa da VSIX; host delle estensioni che si riavvia senza riaprire la finestra | fatta |
-| 9.2 | Open VSX: ricerca dentro la vista, installazione, aggiornamenti | da fare |
+| 9.2 | Open VSX: ricerca dentro la vista, installazione, aggiornamenti | fatta |
 | 9.3 | Temi colore e temi di icone dai VSIX (Dracula, Material Icon Theme), configurazioni di linguaggio | da fare |
 | 9.4 | Isolamento (un'estensione bloccata o in crash non ferma Keel e si riavvia) e ponte `vscode` allargato per Peacock, gitignore e markdownlint | da fare |
 | 9.5 | Importa da Cursor l'elenco delle estensioni | da fare |
 | 9.6 | Misure e resoconto | da fare |
+
+**Note sulla 9.2**
+- **In cima alla vista Estensioni** c'è la casella «Cerca estensioni in Open VSX».
+  - Mentre scrivi, dopo una breve pausa, compaiono i risultati di Open VSX al posto delle installate. Ogni risultato ha icona, nome, versione, descrizione, editore e numero di download.
+  - Svuotando la casella tornano le installate.
+- **Il pulsante di ogni risultato** dice «Installa», «Aggiorna» se ne hai una versione più vecchia, oppure «Installata».
+- **L'installazione:**
+  - Keel scarica la versione per il Mac con chip Apple quando esiste, altrimenti quella per tutti;
+  - controlla il pacchetto con lo SHA-256 pubblicato da Open VSX;
+  - lo installa come un VSIX e riavvia le estensioni;
+  - il file scaricato si cancella subito.
+- **Gli aggiornamenti** si controllano una volta all'apertura della finestra, come in VS Code. Si spengono con `"extensions.autoCheckUpdates": false`.
+  - Le estensioni con una versione nuova hanno il pulsante «Aggiorna» nell'elenco.
+  - Il menu «…» ha «Controlla aggiornamenti estensioni» e, quando ce ne sono, «Aggiorna tutte le estensioni». Si trovano anche nella tavolozza.
+  - Le estensioni che non stanno su Open VSX, come VSAuto Ghost locale, si saltano.
 
 **Note sulla 9.1**
 - **La vista Estensioni** elenca tutte le estensioni installate, in ordine di nome, con icona, versione, descrizione ed editore. Quelle spente hanno la scritta «Disattivata».

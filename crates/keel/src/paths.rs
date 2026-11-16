@@ -59,6 +59,11 @@ pub fn extensions_dir(data: &Path) -> PathBuf {
     data.join("extensions")
 }
 
+/// Where packages and icons from Open VSX are kept while installing.
+pub fn open_vsx_cache_dir(data: &Path) -> PathBuf {
+    data.join("cache").join("open-vsx")
+}
+
 /// Where an extension keeps its global and workspace storage.
 pub fn extension_storage_dir(data: &Path, id: &str) -> PathBuf {
     data.join("extension-storage").join(id)

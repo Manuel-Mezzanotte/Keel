@@ -428,6 +428,17 @@ pub struct Strings {
     pub extension_icon_themes: &'static str,
     pub extension_snippets: &'static str,
     pub extension_languages: &'static str,
+    pub extensions_search_placeholder: &'static str,
+    pub extensions_searching: &'static str,
+    pub extensions_none_found: &'static str,
+    pub extensions_check_updates: &'static str,
+    pub extensions_update_all: &'static str,
+    pub extensions_up_to_date: &'static str,
+    pub extension_updates_found_text: &'static str,
+    pub extension_install: &'static str,
+    pub extension_update: &'static str,
+    pub extension_installing: &'static str,
+    pub extension_installed_badge: &'static str,
 }
 
 impl Strings {
@@ -484,6 +495,8 @@ impl Strings {
             "gitlens.toggleFileBlame" => self.command_toggle_blame,
             "workbench.extensions.action.installVSIX" => self.extensions_install_vsix,
             "workbench.action.restartExtensionHost" => self.extensions_restart,
+            "workbench.extensions.action.checkForUpdates" => self.extensions_check_updates,
+            "workbench.extensions.action.updateAllExtensions" => self.extensions_update_all,
             "keel.showFileHistory" => self.command_file_history,
             "markdown.showPreviewToSide" => self.command_markdown_preview_side,
             "editor.action.organizeImports" => self.command_organize_imports,
@@ -678,6 +691,11 @@ impl Strings {
     pub fn pdf_page_of(&self, page: usize, count: usize) -> String {
         self.pdf_page_text
             .replace("{page}", &page.to_string())
+            .replace("{count}", &count.to_string())
+    }
+
+    pub fn extension_updates_found(&self, count: usize) -> String {
+        self.extension_updates_found_text
             .replace("{count}", &count.to_string())
     }
 
@@ -1169,6 +1187,17 @@ pub const ITALIAN: Strings = Strings {
     extension_icon_themes: "temi di icone",
     extension_snippets: "file di snippet",
     extension_languages: "linguaggi",
+    extensions_search_placeholder: "Cerca estensioni in Open VSX",
+    extensions_searching: "Ricerca in corso…",
+    extensions_none_found: "Nessuna estensione trovata.",
+    extensions_check_updates: "Controlla aggiornamenti estensioni",
+    extensions_update_all: "Aggiorna tutte le estensioni",
+    extensions_up_to_date: "Le estensioni sono aggiornate.",
+    extension_updates_found_text: "Aggiornamenti disponibili: {count}",
+    extension_install: "Installa",
+    extension_update: "Aggiorna",
+    extension_installing: "Installazione…",
+    extension_installed_badge: "Installata",
 };
 
 pub const ENGLISH: Strings = Strings {
@@ -1554,6 +1583,17 @@ pub const ENGLISH: Strings = Strings {
     extension_icon_themes: "icon themes",
     extension_snippets: "snippet files",
     extension_languages: "languages",
+    extensions_search_placeholder: "Search Extensions in Open VSX",
+    extensions_searching: "Searching…",
+    extensions_none_found: "No extensions found.",
+    extensions_check_updates: "Check for Extension Updates",
+    extensions_update_all: "Update All Extensions",
+    extensions_up_to_date: "All extensions are up to date.",
+    extension_updates_found_text: "Updates available: {count}",
+    extension_install: "Install",
+    extension_update: "Update",
+    extension_installing: "Installing…",
+    extension_installed_badge: "Installed",
 };
 
 #[cfg(test)]

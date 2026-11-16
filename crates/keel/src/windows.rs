@@ -294,6 +294,7 @@ pub(crate) fn extension_setup(data: &Path) -> Option<ExtensionSetup> {
             events,
             installed,
             data_dir: data.to_path_buf(),
+            marketplace: Some(extensions::marketplace::Marketplace::open_vsx()),
         }),
         Err(error) => {
             eprintln!("keel: extensions are off, the extension host did not start: {error:#}");
