@@ -123,7 +123,7 @@ Da confermare con le misure della fase 0. Si misura con lo stesso script su Keel
 | 5 | Git: modifiche e commit | media | fatta; restano le tue prove a mano |
 | 6 | Linguaggi principali: web e Rust | grande | fatta; restano le tue prove a mano |
 | 7 | Anteprima Markdown e PDF | media | fatta; restano le tue prove a mano |
-| 8 | Grafico e storico git | media | da fare |
+| 8 | Grafico e storico git | media | in corso |
 | 9 | Estensioni | grande | da fare |
 | 10 | IA: Claude Code | media | da fare |
 | 11 | Altri linguaggi | media | da fare |
@@ -1186,6 +1186,27 @@ Apri Keel su GestionaleHospitality. La prima volta i server si installano da sol
 ### Fase 8 — Grafico e storico git
 
 **Obiettivo.** Tutto quello che oggi fai con Git Graph, nativo in Keel.
+
+**Sottofasi**
+
+| Sottofase | Cosa | Stato |
+|---|---|---|
+| 8.1 | Motore (crate `git`): storico con branch e tag, corsie e colori del grafico, dettagli e file di un commit, azioni, storico di un file, autore di ogni riga | fatta |
+| 8.2 | Scheda «Git Graph»: grafico con linee colorate, descrizione, data, autore e hash; filtro per branch; ricerca; altri commit a richiesta | da fare |
+| 8.3 | Dettaglio di un commit (file cambiati, differenze) e azioni dal menu: checkout, crea branch o tag, copia l'hash, cherry-pick, revert, merge, elimina branch, con conferma | da fare |
+| 8.4 | Storico di un file e autore di ogni riga nell'editor, attivabile | da fare |
+| 8.5 | Misure e resoconto | da fare |
+
+**Note sulla 8.1**
+- **Lo storico** si legge con `git log` in ordine di data, figli prima dei genitori, come Git Graph. Con ogni commit vengono anche i suoi branch, i branch remoti e i tag. Si può limitare a dei branch.
+- **Le corsie del grafico** le calcola Keel:
+  - ogni commit sta nella prima corsia che lo aspetta;
+  - il primo genitore continua nella stessa corsia e con lo stesso colore;
+  - gli altri genitori di un merge prendono una corsia nuova, con un colore nuovo;
+  - le corsie finite lasciano il posto, e quelle a destra si spostano.
+- **Di un commit:** messaggio completo, autore e data, e i file cambiati rispetto al primo genitore (un merge mostra quello che ha portato). Si legge anche la differenza di ogni file, rinomine comprese.
+- **Comandi:** checkout di un commit, nuovo branch o tag su un commit (il tag annotato se ha un messaggio), elimina tag e branch, cherry-pick, revert, merge nel branch corrente. Per i merge, cherry-pick e revert seguono il primo genitore, come in Git Graph.
+- **Storico di un file,** anche attraverso le rinomine, e **autore di ogni riga** (blame), anche con le modifiche non salvate dell'editor.
 
 **Cosa si fa**
 - **Grafico** di branch e commit con linee colorate, autore, data e messaggio; filtri per branch; ricerca nei commit.

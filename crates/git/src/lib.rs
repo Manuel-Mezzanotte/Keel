@@ -2,6 +2,8 @@
 //! hooks and credentials as in the terminal. Reading the status takes about
 //! 16 ms on a project of a thousand files.
 
+pub mod graph;
+mod history;
 mod hunks;
 mod status;
 
@@ -10,6 +12,9 @@ use std::io::Write as _;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 
+pub use history::{
+    BlameLine, ChangedFile, Commit, CommitDetails, LogOptions, RefLabel, parse_blame, parse_log,
+};
 pub use hunks::{Hunk, HunkKind, apply_hunk, block_text, hunks, revert_hunk};
 pub use status::{Change, FileStatus, Status, parse as parse_status};
 
@@ -359,7 +364,7 @@ mod tests {
 
     use super::*;
 
-    fn git(folder: &Path, args: &[&str]) {
+    pub(crate) fn git(folder: &Path, args: &[&str]) {
         let status = Command::new("git")
             .arg("-C")
             .arg(folder)
@@ -372,7 +377,7 @@ mod tests {
     }
 
     /// A repository with one commit, and a name for commits made in it.
-    fn repository(folder: &Path) -> Repo {
+    pub(crate) fn repository(folder: &Path) -> Repo {
         git(folder, &["init", "-q", "-b", "main"]);
         git(folder, &["config", "user.name", "Test"]);
         git(folder, &["config", "user.email", "test@example.com"]);
