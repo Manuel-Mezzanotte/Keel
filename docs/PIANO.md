@@ -124,7 +124,7 @@ Da confermare con le misure della fase 0. Si misura con lo stesso script su Keel
 | 6 | Linguaggi principali: web e Rust | grande | fatta; restano le tue prove a mano |
 | 7 | Anteprima Markdown e PDF | media | fatta; restano le tue prove a mano |
 | 8 | Grafico e storico git | media | fatta; restano le tue prove a mano |
-| 9 | Estensioni | grande | in corso |
+| 9 | Estensioni | grande | fatta |
 | 10 | IA: Claude Code | media | fatta |
 | 11 | Altri linguaggi | media | da fare |
 | 12 | Rifinitura, prestazioni e affidabilità | grande | da fare |
