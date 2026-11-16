@@ -4,7 +4,7 @@ Keel è il tuo IDE personale: scritto in Rust, veloce e leggero, bello come Curs
 
 Si lavora **una fase alla volta**. All'inizio di ogni fase ne dettagliamo i passi; alla fine la provi tu, e si passa alla successiva solo quando ti convince. La pubblicazione dell'app non è in questo piano: ci si pensa alla fine, dopo i tuoi test.
 
-*Scritto il 14 novembre 2026, aggiornato il 16 novembre. Stato: fasi 0–6 fatte, restano le tue prove a mano.*
+*Scritto il 14 novembre 2026, aggiornato il 16 novembre. Stato: fasi 0–7 fatte, restano le tue prove a mano.*
 
 ---
 
@@ -122,7 +122,7 @@ Da confermare con le misure della fase 0. Si misura con lo stesso script su Keel
 | 4 | Terminale e pannello in basso | media | fatta; restano le tue prove a mano |
 | 5 | Git: modifiche e commit | media | fatta; restano le tue prove a mano |
 | 6 | Linguaggi principali: web e Rust | grande | fatta; restano le tue prove a mano |
-| 7 | Anteprima Markdown e PDF | media | in corso |
+| 7 | Anteprima Markdown e PDF | media | fatta; restano le tue prove a mano |
 | 8 | Grafico e storico git | media | da fare |
 | 9 | Estensioni | grande | da fare |
 | 10 | IA: Claude Code | media | da fare |
@@ -1090,7 +1090,34 @@ Apri Keel su GestionaleHospitality. La prima volta i server si installano da sol
 | 7.2 | Scorrimento sincronizzato nei due versi; link ad altri file, a titoli e al web; immagini locali; liste di controllo da spuntare | fatta |
 | 7.3 | Immagini e SVG con zoom | fatta |
 | 7.4 | PDF in una scheda con PDFKit: pagine, zoom, miniature, ricerca, copia del testo | fatta |
-| 7.5 | Misure e resoconto | da fare |
+| 7.5 | Misure e resoconto | fatta |
+
+**Resoconto della fase 7**
+- **Il criterio era:** i tuoi `.md` si leggono almeno bene come in Cursor e i PDF si aprono dentro Keel.
+  - In Cursor usi Markdown Preview Enhanced. Keel ha l'anteprima affiancata che segue il testo, lo scorrimento nei due versi, le tabelle, le liste di controllo da spuntare, il codice colorato, le immagini e i link. Mancano i diagrammi Mermaid e le formule disegnate: restano nelle fasi opzionali, con i pannelli web.
+  - I PDF si aprono in una scheda, con miniature, zoom, ricerca e copia del testo.
+  - **Resta la tua prova a mano.**
+- **Misure:**
+
+  | | Risultato |
+  |---|---|
+  | Blocchi di `docs/PIANO.md` (1.303 righe), per lo scorrimento sincronizzato | 16 ms, al primo scorrimento dopo una modifica |
+  | Specifica OpenGL 4.4, 953 pagine: apertura | 83 ms |
+  | Una pagina disegnata a 1.600 pixel | da 10 a 86 ms, nel thread del PDF |
+  | Ricerca di «texture» in tutto il documento (3.590 risultati) | 1,5 s, nel thread del PDF |
+  | Keel ottimizzato con quel PDF aperto | 190 MB, primo fotogramma in 577 ms, CPU a riposo 0,05% |
+
+- **Test:** 286 automatici, tutti verdi, più 13 da lanciare a mano (misure e server veri).
+
+**Le tue prove a mano della fase 7**
+1. Apri un tuo `.md` (per esempio `docs/PIANO.md` di Keel) e premi Cmd+K V: l'anteprima si apre a lato. Scrivi nell'editor e guarda l'anteprima cambiare.
+2. Scorri l'editor e poi l'anteprima: l'altra parte segue.
+3. Nell'anteprima clicca un link a un titolo (`#…`), uno a un altro file e uno a una pagina web.
+4. Spunta una casella di una lista di controllo: nel testo `[ ]` diventa `[x]`.
+5. Prova Cmd+Maiusc+V, che apre l'anteprima al posto dell'editor, e il pulsante in fondo alla fila delle schede.
+6. Apri un'immagine e un SVG: clic, Alt+clic, Cmd con la rotella, Cmd+0. Nella barra di stato ci sono dimensioni e zoom.
+7. Apri un PDF: scorri, apri le miniature, cambia lo zoom, cerca una parola con Cmd+F e Invio.
+8. Trascina sul testo del PDF, premi Cmd+C e incolla in un editor.
 
 **Note sulla 7.4**
 - **I PDF si aprono in una scheda,** dall'Esplora risorse, da Cmd+P o dal comando `keel`.

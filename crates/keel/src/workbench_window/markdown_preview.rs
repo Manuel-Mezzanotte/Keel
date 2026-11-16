@@ -848,4 +848,21 @@ mod tests {
             );
         });
     }
+
+    /// How long finding the blocks of Keel's plan takes, as the first scroll
+    /// after a change does. Run with `cargo test -p keel --release
+    /// timing_preview_blocks -- --ignored --nocapture`.
+    #[test]
+    #[ignore]
+    fn timing_preview_blocks() {
+        let plan = include_str!("../../../../docs/PIANO.md");
+        let started = std::time::Instant::now();
+        let blocks = block_spans(plan);
+        println!(
+            "{} lines, {} blocks found in {:?}",
+            plan.lines().count(),
+            blocks.len(),
+            started.elapsed()
+        );
+    }
 }

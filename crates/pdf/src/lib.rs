@@ -464,4 +464,36 @@ mod tests {
         std::fs::write(&path, "non sono un PDF").unwrap();
         assert!(PdfFile::open(&path).is_err());
     }
+
+    /// Times a real PDF: `KEEL_TEST_PDF=file.pdf cargo test -p pdf --release
+    /// timing -- --ignored --nocapture`.
+    #[test]
+    #[ignore]
+    fn timing_a_real_pdf() {
+        let path = std::env::var("KEEL_TEST_PDF").expect("KEEL_TEST_PDF");
+        let started = std::time::Instant::now();
+        let pdf = PdfFile::open(Path::new(&path)).unwrap();
+        println!(
+            "{} pages opened in {:?}",
+            pdf.pages().len(),
+            started.elapsed()
+        );
+        for page in [0, pdf.pages().len() / 2] {
+            let started = std::time::Instant::now();
+            let picture = block_on(pdf.draw(page, 1600)).unwrap().unwrap();
+            println!(
+                "page {page} drawn {}×{} in {:?}",
+                picture.width,
+                picture.height,
+                started.elapsed()
+            );
+        }
+        let started = std::time::Instant::now();
+        let found = block_on(pdf.find("texture")).unwrap();
+        println!(
+            "\"texture\" found {} times in {:?}",
+            found.len(),
+            started.elapsed()
+        );
+    }
 }
