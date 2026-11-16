@@ -3,7 +3,7 @@
 
 use std::ops::Range;
 
-use editor::line_edits::{self, LineEdit, comment_syntax};
+use editor::line_edits::{self, LineEdit};
 
 use super::*;
 
@@ -146,18 +146,22 @@ impl Workbench {
     /// The handlers of the editing commands, for the window's root.
     pub(super) fn editing_actions(&self, root: gpui::Div, cx: &mut Context<Self>) -> gpui::Div {
         root.on_action(cx.listener(|this, _: &ToggleLineComment, window, cx| {
+            let languages = this.extension_languages.clone();
             this.edit_lines(
-                |text, selection, language| {
-                    line_edits::toggle_line_comment(text, selection, comment_syntax(language))
+                move |text, selection, language| {
+                    let syntax = Workbench::comment_syntax_for(&languages, language);
+                    line_edits::toggle_line_comment(text, selection, syntax)
                 },
                 window,
                 cx,
             )
         }))
         .on_action(cx.listener(|this, _: &ToggleBlockComment, window, cx| {
+            let languages = this.extension_languages.clone();
             this.edit_lines(
-                |text, selection, language| {
-                    line_edits::toggle_block_comment(text, selection, comment_syntax(language))
+                move |text, selection, language| {
+                    let syntax = Workbench::comment_syntax_for(&languages, language);
+                    line_edits::toggle_block_comment(text, selection, syntax)
                 },
                 window,
                 cx,

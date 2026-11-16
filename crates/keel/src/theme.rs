@@ -86,9 +86,13 @@ pub fn apply(choice: &ThemeChoice, window: Option<&mut Window>, cx: &mut App) {
     }
 }
 
-/// Whether a theme is dark, for picking which preferred-theme setting to change.
-pub fn is_dark(name: &str) -> bool {
-    name != "Chiaro"
+/// Whether a theme is dark, for picking which preferred-theme setting to
+/// change. Extension themes say it themselves.
+pub fn is_dark(name: &str, cx: &App) -> bool {
+    ThemeRegistry::global(cx)
+        .themes()
+        .get(&SharedString::from(name.to_owned()))
+        .map_or(name != "Chiaro", |theme| theme.mode.is_dark())
 }
 
 #[cfg(test)]

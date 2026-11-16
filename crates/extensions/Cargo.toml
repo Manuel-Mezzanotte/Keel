@@ -13,11 +13,13 @@ deno_error.workspace = true
 futures.workspace = true
 serde.workspace = true
 serde_json.workspace = true
+settings.workspace = true
 sha2.workspace = true
 tokio.workspace = true
 zip.workspace = true
 
 [dev-dependencies]
+gpui-component.workspace = true
 tempfile.workspace = true
 tokio = { workspace = true, features = ["rt", "time", "macros"] }
 

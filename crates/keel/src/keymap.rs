@@ -8,8 +8,8 @@ use serde_json::Value;
 
 use crate::workbench_window::explorer;
 use crate::workbench_window::{
-    CheckExtensionUpdates, InstallFromVsix, RestartExtensions, ShowFileHistory, ToggleBlame,
-    UpdateAllExtensions,
+    CheckExtensionUpdates, InstallFromVsix, RestartExtensions, SelectIconTheme, ShowFileHistory,
+    ToggleBlame, UpdateAllExtensions,
 };
 use crate::workbench_window::{
     CheckoutBranch, Commit, CommitAmend, CreateBranch, DiscardAll, GitFetch, GitPull, GitPush,
@@ -254,6 +254,12 @@ pub const COMMANDS: &[KeelCommand] = &[
     KeelCommand {
         id: "workbench.extensions.action.installVSIX",
         action: || Box::new(InstallFromVsix),
+        default_key: None,
+        context: None,
+    },
+    KeelCommand {
+        id: "workbench.action.selectIconTheme",
+        action: || Box::new(SelectIconTheme),
         default_key: None,
         context: None,
     },

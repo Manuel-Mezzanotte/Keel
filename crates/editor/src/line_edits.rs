@@ -15,18 +15,18 @@ pub struct LineEdit {
 
 /// How a language writes comments.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct CommentSyntax {
-    pub line: Option<&'static str>,
-    pub block: Option<(&'static str, &'static str)>,
+pub struct CommentSyntax<'a> {
+    pub line: Option<&'a str>,
+    pub block: Option<(&'a str, &'a str)>,
 }
 
 /// The comment syntax of a VS Code language identifier.
-pub fn comment_syntax(language_id: &str) -> CommentSyntax {
-    const C_STYLE: CommentSyntax = CommentSyntax {
+pub fn comment_syntax(language_id: &str) -> CommentSyntax<'static> {
+    const C_STYLE: CommentSyntax<'static> = CommentSyntax {
         line: Some("//"),
         block: Some(("/*", "*/")),
     };
-    const HASH: CommentSyntax = CommentSyntax {
+    const HASH: CommentSyntax<'static> = CommentSyntax {
         line: Some("#"),
         block: None,
     };
@@ -89,7 +89,7 @@ fn shift(offset: usize, range: &Range<usize>, inserted: usize) -> usize {
 pub fn toggle_line_comment(
     text: &str,
     selection: Range<usize>,
-    syntax: CommentSyntax,
+    syntax: CommentSyntax<'_>,
 ) -> Option<LineEdit> {
     let lines_range = covered_lines(text, &selection);
     let block = &text[lines_range.clone()];
@@ -176,7 +176,7 @@ pub fn toggle_line_comment(
 pub fn toggle_block_comment(
     text: &str,
     selection: Range<usize>,
-    syntax: CommentSyntax,
+    syntax: CommentSyntax<'_>,
 ) -> Option<LineEdit> {
     let (open, close) = syntax.block?;
     if selection.is_empty() {
@@ -417,7 +417,7 @@ mod tests {
         result
     }
 
-    fn ts() -> CommentSyntax {
+    fn ts() -> CommentSyntax<'static> {
         comment_syntax("typescript")
     }
 

@@ -1408,6 +1408,7 @@ impl Render for Workbench {
         let root = self.commit_view_actions(root, cx);
         let root = self.blame_actions(root, cx);
         let root = self.extensions_view_actions(root, cx);
+        let root = self.contributions_actions(root, cx);
         let root = self.editing_actions(root, cx);
         self.explorer_actions(root, cx)
             .size_full()

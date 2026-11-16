@@ -439,6 +439,9 @@ pub struct Strings {
     pub extension_update: &'static str,
     pub extension_installing: &'static str,
     pub extension_installed_badge: &'static str,
+    pub command_icon_theme: &'static str,
+    pub choose_icon_theme: &'static str,
+    pub icon_theme_none: &'static str,
 }
 
 impl Strings {
@@ -450,6 +453,7 @@ impl Strings {
             "workbench.action.closeWindow" => self.command_close_window,
             "workbench.action.quit" => self.command_quit,
             "workbench.action.selectTheme" => self.command_theme,
+            "workbench.action.selectIconTheme" => self.command_icon_theme,
             "keel.selectLanguage" => self.command_language,
             "workbench.action.toggleSidebarVisibility" => self.command_toggle_sidebar,
             "workbench.action.togglePanel" => self.command_toggle_panel,
@@ -1198,6 +1202,9 @@ pub const ITALIAN: Strings = Strings {
     extension_update: "Aggiorna",
     extension_installing: "Installazione…",
     extension_installed_badge: "Installata",
+    command_icon_theme: "Preferenze: Tema icona file",
+    choose_icon_theme: "Scegli il tema delle icone dei file",
+    icon_theme_none: "Icone di Keel",
 };
 
 pub const ENGLISH: Strings = Strings {
@@ -1594,6 +1601,9 @@ pub const ENGLISH: Strings = Strings {
     extension_update: "Update",
     extension_installing: "Installing…",
     extension_installed_badge: "Installed",
+    command_icon_theme: "Preferences: File Icon Theme",
+    choose_icon_theme: "Select File Icon Theme",
+    icon_theme_none: "Keel's icons",
 };
 
 #[cfg(test)]

@@ -6,6 +6,7 @@ mod claude_code;
 mod code_actions;
 mod code_navigation;
 mod commit_view;
+mod contributions;
 mod diff_view;
 mod disk;
 mod editing;
@@ -52,6 +53,7 @@ pub(crate) use code_navigation::{
     GoToImplementation, GoToReferences, GoToSymbolInFile, GoToSymbolInWorkspace,
     GoToTypeDefinition, RenameSymbol, RevealDefinition,
 };
+pub(crate) use contributions::SelectIconTheme;
 pub(crate) use extensions_view::{
     CheckExtensionUpdates, InstallFromVsix, RestartExtensions, UpdateAllExtensions,
 };
@@ -363,6 +365,10 @@ pub struct Workbench {
     extension_data: Option<PathBuf>,
     /// The Open VSX search and the updates found.
     store: extensions_view::ExtensionStore,
+    /// The file icon theme of `workbench.iconTheme`; none uses Keel's icons.
+    icon_theme: Option<Rc<extensions::icon_theme::IconTheme>>,
+    /// Languages the running extensions add.
+    extension_languages: Rc<extensions::languages::LanguageRegistry>,
     /// Keel's messages for the Output view: problems with the settings,
     /// extension logs and errors.
     output: Vec<(panel_views::OutputChannel, String)>,
@@ -547,6 +553,8 @@ impl Workbench {
             extension_state: Default::default(),
             extension_data: None,
             store,
+            icon_theme: None,
+            extension_languages: Default::default(),
             output,
             output_channel: panel_views::OutputChannel::Keel,
             ports: Vec::new(),
@@ -749,7 +757,7 @@ impl Workbench {
             std::path::absolute(document.path()).unwrap_or_else(|_| document.path().to_path_buf());
         let uri = Uri::file(&path).to_string();
         let text = document.saved_text().to_owned();
-        let language_id = language::vscode_id_for_path(&path).to_owned();
+        let language_id = self.language_id_for(&path);
         self.add_document(uri, Backing::File(document), language_id, text)
     }
 
@@ -1341,9 +1349,10 @@ impl Workbench {
     }
 
     fn choose_theme(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        let items = crate::theme::NAMES
+        let names = self.theme_names();
+        let items = names
             .iter()
-            .map(|name| PickItem::new(*name))
+            .map(|name| PickItem::new(name.clone()))
             .collect();
         let title = Some(self.strings().choose_theme.to_owned());
         let chosen = quick_pick::show(title, None, items, window, cx);
@@ -1352,7 +1361,7 @@ impl Workbench {
                 return;
             };
             this.update_in(cx, |this, window, cx| {
-                this.set_theme(crate::theme::NAMES[index], window, cx)
+                this.set_theme(&names[index], window, cx)
             })
             .ok();
         })
@@ -1364,7 +1373,7 @@ impl Workbench {
     fn set_theme(&mut self, name: &str, window: &mut Window, cx: &mut Context<Self>) {
         let mut choice = crate::theme::ThemeChoice::from_settings(&self.settings);
         let key = if choice.follow_system {
-            if crate::theme::is_dark(name) {
+            if crate::theme::is_dark(name, cx) {
                 choice.dark = name.to_owned();
                 "workbench.preferredDarkColorTheme"
             } else {
@@ -1428,6 +1437,8 @@ impl Workbench {
             .into_iter()
             .filter(|extension| self.extension_enabled(&extension.id()))
             .collect();
+        // Themes, icons and languages, before files are told to extensions.
+        self.apply_contributions(&installed, window, cx);
         for extension in &installed {
             for command in &extension.manifest.commands {
                 let title = if command.title.is_empty() {
@@ -2166,8 +2177,7 @@ impl Workbench {
             );
             return;
         };
-        let language_id =
-            language::vscode_id_for_path(std::path::Path::new(&parsed.path)).to_owned();
+        let language_id = self.language_id_for(std::path::Path::new(&parsed.path));
         cx.spawn_in(window, async move |this, cx| {
             let result = read.await;
             this.update_in(cx, |this, window, cx| match result {

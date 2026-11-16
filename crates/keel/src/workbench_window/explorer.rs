@@ -6,7 +6,7 @@ use std::path::{Path, PathBuf};
 
 use files::{FileTree, Row};
 use gpui::{
-    AnyElement, ClickEvent, ClipboardItem, Div, Render, StatefulInteractiveElement as _,
+    AnyElement, ClickEvent, ClipboardItem, Div, Render, StatefulInteractiveElement as _, img,
     uniform_list,
 };
 use gpui_component::button::{Button, ButtonVariants as _};
@@ -600,7 +600,7 @@ impl Workbench {
                 | Backing::ExtensionDetails(_) => {}
             }
             document.uri = new_uri.clone();
-            document.language_id = language::vscode_id_for_path(&target).to_owned();
+            document.language_id = self.language_id_for(&target);
             self.notify_host("documents/closed", json!({ "uri": old_uri }));
             self.notify_host(
                 "documents/opened",
@@ -878,7 +878,9 @@ impl Workbench {
         } else {
             div().w(px(12.)).into_any_element()
         };
-        let icon = if is_dir {
+        let icon = if let Some(picture) = self.themed_icon(&path, is_dir, expanded, cx) {
+            img(picture).size(px(16.)).flex_none().into_any_element()
+        } else if is_dir {
             Icon::new(if expanded {
                 IconName::FolderOpen
             } else {
@@ -886,11 +888,13 @@ impl Workbench {
             })
             .small()
             .text_color(colors.accent)
+            .into_any_element()
         } else {
             let (icon, color) = file_icon(&name);
             Icon::new(icon)
                 .small()
                 .text_color(color.map_or(colors.muted, |color| gpui::rgb(color).into()))
+                .into_any_element()
         };
         let label = if renaming {
             match &self.tree_edit {

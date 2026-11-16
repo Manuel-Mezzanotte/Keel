@@ -1287,10 +1287,32 @@ Apri Keel su GestionaleHospitality. La prima volta i server si installano da sol
 |---|---|---|
 | 9.1 | Vista Estensioni: installate con icona e descrizione, attiva e disattiva (anche solo per il progetto), disinstalla, scheda dei dettagli con il README; installa da VSIX; host delle estensioni che si riavvia senza riaprire la finestra | fatta |
 | 9.2 | Open VSX: ricerca dentro la vista, installazione, aggiornamenti | fatta |
-| 9.3 | Temi colore e temi di icone dai VSIX (Dracula, Material Icon Theme), configurazioni di linguaggio | da fare |
+| 9.3 | Temi colore e temi di icone dai VSIX (Dracula, Material Icon Theme), configurazioni di linguaggio | fatta |
 | 9.4 | Isolamento (un'estensione bloccata o in crash non ferma Keel e si riavvia) e ponte `vscode` allargato per Peacock, gitignore e markdownlint | da fare |
 | 9.5 | Importa da Cursor l'elenco delle estensioni | da fare |
 | 9.6 | Misure e resoconto | da fare |
+
+**Note sulla 9.3**
+- **Temi colore delle estensioni**, come Dracula:
+  - compaiono in «Preferenze: Tema colori» dopo i tre di Keel, con il nome che hanno in VS Code;
+  - Keel traduce i colori di VS Code in quelli dei suoi pannelli, liste, schede e pulsanti, e i colori del codice nei nomi che usa il suo editor;
+  - i colori che un tema non dà li ricava dai suoi due colori principali, sfondo e testo, così nulla prende i colori di un altro tema;
+  - funzionano anche i temi con commenti e quelli che ne includono un altro, come i temi di VS Code.
+- **Temi di icone**, come Material Icon Theme:
+  - si scelgono con «Preferenze: Tema icona file», che salva `workbench.iconTheme` come VS Code;
+  - la prima voce, «Icone di Keel», torna alle icone di sempre;
+  - l'icona di un file si cerca per nome intero, poi per estensione dalla più lunga (`app.test.ts` prova `test.ts` e poi `ts`), poi per linguaggio;
+  - le cartelle hanno l'icona per nome, aperte o chiuse;
+  - con un tema chiaro valgono le varianti chiare del tema di icone;
+  - per ora le icone cambiano nell'Esplora risorse; le schede restano senza icona come prima.
+- **Linguaggi delle estensioni:**
+  - un file che Keel non conosce prende il linguaggio dall'estensione che lo dichiara, per nome o per estensione;
+  - così le estensioni e i language server di quel linguaggio lo ricevono;
+  - «Commenta riga» e «Commenta blocco» usano i commenti della sua `language-configuration.json`.
+  - Le grammatiche TextMate non si usano: i colori del codice vengono dalle grammatiche tree-sitter di Keel.
+- **Spegnendo un'estensione** i suoi temi spariscono dal selettore e le sue icone e i suoi linguaggi non valgono più.
+  - Un tema già registrato resta in memoria finché Keel non si chiude: una versione nuova dello stesso tema si vede dopo aver riaperto Keel.
+- **Correzione trovata strada facendo:** il lettore dei file JSON con commenti, usato anche per `settings.json`, per ogni virgola rileggeva tutto il resto del testo, quindi il tempo cresceva in modo esponenziale. Ora legge una volta sola: 20.000 voci in meno di un secondo.
 
 **Note sulla 9.2**
 - **In cima alla vista Estensioni** c'è la casella «Cerca estensioni in Open VSX».
