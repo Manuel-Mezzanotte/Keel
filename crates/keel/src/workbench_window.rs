@@ -11,6 +11,7 @@ mod diff_view;
 mod disk;
 mod editing;
 pub(crate) mod explorer;
+mod extension_features;
 mod extensions_view;
 mod git_graph;
 mod git_gutter;
@@ -321,6 +322,8 @@ struct Extensions {
     bindings: Vec<Binding>,
     decoration_types: HashMap<String, Value>,
     completion_providers: Vec<(u64, Value, Vec<String>)>,
+    /// Code action providers: id and document selector.
+    code_action_providers: Vec<(u64, Value)>,
     file_systems: HashSet<String>,
     content_providers: HashSet<String>,
     quick_diff: bool,
@@ -1456,9 +1459,15 @@ impl Workbench {
         }
         apply_user_bindings(&mut bindings, &user_bindings);
         // Extensions read the user's and the project's settings from the start.
+        let mut workspace = self.settings.layer(settings::Source::VsCodeProject);
+        workspace.extend(self.settings.layer(settings::Source::Project));
         let _ = host.notify(
             "configuration/changed",
-            json!({ "values": self.settings.merged() }),
+            json!({
+                "values": self.settings.merged(),
+                "user": self.settings.layer(settings::Source::User),
+                "workspace": workspace,
+            }),
         );
         let _ = host.notify("env/changed", json!({ "language": self.language.code() }));
         let folders: Vec<String> = self
@@ -1475,6 +1484,7 @@ impl Workbench {
             bindings,
             decoration_types: HashMap::new(),
             completion_providers: Vec::new(),
+            code_action_providers: Vec::new(),
             file_systems: HashSet::new(),
             content_providers: HashSet::new(),
             quick_diff: false,
@@ -1810,6 +1820,26 @@ impl Workbench {
                     self.install_completions(index, cx);
                 }
             }
+            "codeActions/registered" => {
+                let id = params["id"].as_u64().unwrap_or_default();
+                extensions
+                    .code_action_providers
+                    .push((id, params["selector"].clone()));
+                for index in 0..self.panes.len() {
+                    self.install_completions(index, cx);
+                }
+            }
+            "codeActions/unregistered" => {
+                let id = params["id"].as_u64().unwrap_or_default();
+                extensions
+                    .code_action_providers
+                    .retain(|(other, _)| *other != id);
+            }
+            "diagnostics/set" => self.set_extension_diagnostics(&params, cx),
+            "diagnostics/clear" => {
+                let owner = params["owner"].as_str().map(str::to_owned);
+                self.clear_extension_diagnostics(Some(owner.as_deref().unwrap_or_default()), cx);
+            }
             "completion/unregistered" => {
                 let id = params["id"].as_u64().unwrap_or_default();
                 extensions
@@ -1988,13 +2018,20 @@ impl Workbench {
             "configuration/update" => {
                 let key = params["key"].as_str().unwrap_or_default().to_owned();
                 let value = (!params["value"].is_null()).then(|| params["value"].clone());
-                let result = self
-                    .settings
-                    .update_user(&key, value)
-                    .map(|_| Value::Null)
+                // The project's settings when one is open, as in VS Code.
+                let project = params["target"] != "global" && self.settings.has_project();
+                let saved = if project {
+                    self.settings.update_project(&key, value)
+                } else {
+                    self.settings.update_user(&key, value)
+                };
+                let result = saved
+                    // What wins now, which a project's `.keel` file may decide.
+                    .map(|()| json!({ "value": self.settings.get(&key).cloned().unwrap_or(Value::Null) }))
                     .map_err(|error| error.to_string());
                 if result.is_ok() {
                     self.language_settings_changed();
+                    cx.notify();
                 }
                 self.reply(id, result);
             }

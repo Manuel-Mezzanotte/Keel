@@ -321,11 +321,13 @@ impl Workbench {
         } else {
             px(TRAFFIC_LIGHTS_WIDTH)
         };
+        let custom = self.custom_colors(cx);
         TitleBar::new()
             .h(px(TOOLBAR_HEIGHT))
             .pl(left)
             .pr(px(12.))
-            .bg(colors.desk)
+            .bg(custom.title_background.unwrap_or(colors.desk))
+            .when_some(custom.title_foreground, |bar, color| bar.text_color(color))
             .border_color(gpui::transparent_black())
             .child(project)
             .child(
@@ -1285,6 +1287,7 @@ impl Workbench {
         let branch = self.project.branch.is_some();
         let sync = self.sync_text();
         let has_repo = self.scm.repo.is_some();
+        let custom = self.custom_colors(cx);
         div()
             .h(px(STATUS_HEIGHT))
             .flex_none()
@@ -1294,7 +1297,8 @@ impl Workbench {
             .justify_between()
             .gap_4()
             .text_xs()
-            .text_color(colors.muted)
+            .text_color(custom.status_foreground.unwrap_or(colors.muted))
+            .when_some(custom.status_background, |bar, color| bar.bg(color))
             .child(div().flex().items_center().gap_4().min_w_0().children({
                 let mut items: Vec<AnyElement> = left
                     .into_iter()

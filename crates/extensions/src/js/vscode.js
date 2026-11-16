@@ -116,6 +116,11 @@
     return value instanceof Position ? value : new Position(value.line, value.character);
   }
 
+  // Defined below; a function declaration so it can be used anywhere.
+  function toRange(value) {
+    return value instanceof Range ? value : new Range(toPosition(value.start), toPosition(value.end));
+  }
+
   class Range {
     constructor(startLine, startCharacter, endLine, endCharacter) {
       let start;
@@ -419,6 +424,9 @@
   const extensions = new Map();
   const configurationDefaults = new Map();
   const configurationValues = new Map();
+  // The user's and the project's own values, for `inspect`.
+  let userValues = {};
+  let workspaceValues = {};
 
   function createMemento() {
     const values = new Map();
@@ -502,12 +510,25 @@
     return extension.activating;
   }
 
+  // `onLanguage:<id>`: started when a document of that language is open,
+  // or opens later. Failures are reported by `activate`.
+  function activateForLanguages(languages) {
+    for (const extension of extensions.values()) {
+      if (extension.active || extension.activating) continue;
+      const events = extension.packageJson?.activationEvents ?? [];
+      if (events.some((event) => event.startsWith("onLanguage:") && languages.has(event.slice(11)))) {
+        activate(extension.id).catch(() => {});
+      }
+    }
+  }
+
   host.onCall("extensions/load", (params) => {
     const extension = { ...params, active: false, exports: undefined };
     extensions.set(params.id, extension);
     for (const [key, value] of Object.entries(params.configurationDefaults ?? {})) {
       configurationDefaults.set(key, value);
     }
+    queueMicrotask(() => activateForLanguages(new Set(state.documents.map((document) => document.languageId))));
     return true;
   });
 
@@ -539,9 +560,12 @@
 
   const commands = new Map();
 
+  // An extension still activating is skipped: one started by "*" that runs
+  // a command (such as `setContext`) while it activates must not wait for
+  // itself.
   function extensionActivatedBy(command) {
     for (const extension of extensions.values()) {
-      if (extension.active) continue;
+      if (extension.active || extension.activating) continue;
       const events = extension.packageJson?.activationEvents ?? [];
       if (events.includes("*") || events.includes(`onCommand:${command}`)) return extension;
     }
@@ -603,16 +627,33 @@
         const full = prefix + key;
         return {
           key: full,
-          defaultValue: configurationDefaults.get(full),
-          globalValue: configurationValues.get(full),
+          defaultValue: structuredCopy(configurationDefaults.get(full)),
+          globalValue: structuredCopy(userValues[full]),
+          workspaceValue: structuredCopy(workspaceValues[full]),
+          workspaceFolderValue: undefined,
         };
       },
-      async update(key, value) {
+      // As in VS Code: `true` or Global is the user's settings; `false`,
+      // Workspace, WorkspaceFolder or nothing is the project's when one is open.
+      async update(key, value, target) {
         const full = prefix + key;
-        if (value === undefined) configurationValues.delete(full);
+        const global = target === true || target === ConfigurationTarget.Global;
+        const scope = global ? "global" : "workspace";
+        const own = global ? userValues : workspaceValues;
+        if (value === undefined) delete own[full];
+        else own[full] = structuredCopy(value);
+        const before = JSON.stringify(configurationValues.get(full));
+        const saved = await host.call("configuration/update", { key: full, value: value ?? null, target: scope });
+        if (saved && typeof saved === "object" && "value" in saved) {
+          if (saved.value === null) configurationValues.delete(full);
+          else configurationValues.set(full, saved.value);
+        } else if (value === undefined) configurationValues.delete(full);
         else configurationValues.set(full, value);
-        await host.call("configuration/update", { key: full, value: value ?? null });
-        configurationChanged.fire({ affectsConfiguration: (name) => full === name || full.startsWith(`${name}.`) });
+        // As in VS Code, only a real change is announced: extensions such
+        // as Peacock save again when told, which would never end.
+        if (JSON.stringify(configurationValues.get(full)) !== before) {
+          configurationChanged.fire({ affectsConfiguration: (name) => full === name || full.startsWith(`${name}.`) });
+        }
       },
     };
   }
@@ -621,7 +662,9 @@
     return value === undefined ? undefined : JSON.parse(JSON.stringify(value));
   }
 
-  host.onNotify("configuration/changed", ({ values }) => {
+  host.onNotify("configuration/changed", ({ values, user, workspace }) => {
+    if (user) userValues = user;
+    if (workspace) workspaceValues = workspace;
     const changed = Object.keys(values);
     for (const [key, value] of Object.entries(values)) {
       if (value === null) configurationValues.delete(key);
@@ -936,6 +979,7 @@
     documentsByUri.set(data.uri, document);
     state.documents.push(document);
     documentOpened.fire(document);
+    activateForLanguages(new Set([document.languageId]));
   });
 
   host.onNotify("documents/changed", (data) => {
@@ -1028,8 +1072,11 @@
     selectionChanged.fire({ textEditor: editor, selections: editor._selections, kind });
   });
 
+  const foldersChanged = new EventEmitter();
   host.onNotify("workspace/foldersChanged", ({ folders }) => {
+    const before = state.workspaceFolders ?? [];
     state.workspaceFolders = folders.map((folder, index) => ({ uri: Uri.parse(folder), name: folder.split("/").pop(), index }));
+    foldersChanged.fire({ added: state.workspaceFolders, removed: before });
   });
 
   // ---------------------------------------------------------------------
@@ -1218,6 +1265,26 @@
       const value = pathOrUri instanceof Uri ? pathOrUri.fsPath : String(pathOrUri);
       return value;
     },
+    getWorkspaceFolder(uri) {
+      const path = toUri(uri).path;
+      return (state.workspaceFolders ?? []).find((folder) => path === folder.uri.path || path.startsWith(`${folder.uri.path}/`));
+    },
+    onDidChangeWorkspaceFolders: foldersChanged.event,
+    // Keel trusts the folders it opens, as VS Code once trusted.
+    isTrusted: true,
+    onDidGrantWorkspaceTrust: new EventEmitter().event,
+    // Files are watched by Keel itself; extensions' watchers stay quiet.
+    createFileSystemWatcher() {
+      return {
+        onDidCreate: new EventEmitter().event,
+        onDidChange: new EventEmitter().event,
+        onDidDelete: new EventEmitter().event,
+        ignoreCreateEvents: false,
+        ignoreChangeEvents: false,
+        ignoreDeleteEvents: false,
+        dispose() {},
+      };
+    },
   };
 
   // ---------------------------------------------------------------------
@@ -1236,6 +1303,16 @@
         host.notify("completion/unregistered", { id: entry.id });
       });
     },
+    createDiagnosticCollection,
+    registerCodeActionsProvider,
+    // Formatting comes from Keel's servers and Prettier; extensions' ones
+    // are accepted and not asked yet.
+    registerDocumentFormattingEditProvider: () => new Disposable(() => {}),
+    registerDocumentRangeFormattingEditProvider: () => new Disposable(() => {}),
+    registerHoverProvider: () => new Disposable(() => {}),
+    registerDefinitionProvider: () => new Disposable(() => {}),
+    getDiagnostics: () => [],
+    onDidChangeDiagnostics: new EventEmitter().event,
     async setTextDocumentLanguage(document, languageId) {
       await host.call("languages/setTextDocumentLanguage", { uri: document.uri.toString(), languageId });
       return document;
@@ -1416,6 +1493,253 @@
   // ---------------------------------------------------------------------
   // The module
 
+  // ---------------------------------------------------------------------
+  // Problems and fixes
+
+  const DiagnosticSeverity = { Error: 0, Warning: 1, Information: 2, Hint: 3 };
+  const DiagnosticTag = { Unnecessary: 1, Deprecated: 2 };
+
+  class Diagnostic {
+    constructor(range, message, severity = DiagnosticSeverity.Error) {
+      this.range = range;
+      this.message = message;
+      this.severity = severity;
+    }
+  }
+
+  class Location {
+    constructor(uri, rangeOrPosition) {
+      this.uri = uri;
+      this.range = rangeOrPosition instanceof Position ? new Range(rangeOrPosition, rangeOrPosition) : rangeOrPosition;
+    }
+  }
+
+  class DiagnosticRelatedInformation {
+    constructor(location, message) {
+      this.location = location;
+      this.message = message;
+    }
+  }
+
+  class CodeActionKind {
+    constructor(value) {
+      this.value = value;
+    }
+    append(part) {
+      return new CodeActionKind(this.value ? `${this.value}.${part}` : part);
+    }
+    contains(other) {
+      return this.value === "" || other.value === this.value || other.value.startsWith(`${this.value}.`);
+    }
+    intersects(other) {
+      return this.contains(other) || other.contains(this);
+    }
+  }
+  CodeActionKind.Empty = new CodeActionKind("");
+  CodeActionKind.QuickFix = new CodeActionKind("quickfix");
+  CodeActionKind.Refactor = new CodeActionKind("refactor");
+  CodeActionKind.RefactorExtract = new CodeActionKind("refactor.extract");
+  CodeActionKind.RefactorInline = new CodeActionKind("refactor.inline");
+  CodeActionKind.RefactorRewrite = new CodeActionKind("refactor.rewrite");
+  CodeActionKind.Source = new CodeActionKind("source");
+  CodeActionKind.SourceOrganizeImports = new CodeActionKind("source.organizeImports");
+  CodeActionKind.SourceFixAll = new CodeActionKind("source.fixAll");
+  CodeActionKind.Notebook = new CodeActionKind("notebook");
+
+  const CodeActionTriggerKind = { Invoke: 1, Automatic: 2 };
+
+  class CodeAction {
+    constructor(title, kind) {
+      this.title = title;
+      this.kind = kind;
+    }
+  }
+
+  class RelativePattern {
+    constructor(base, pattern) {
+      this.baseUri = typeof base === "string" ? Uri.file(base) : base.uri ?? base;
+      this.base = this.baseUri.fsPath;
+      this.pattern = pattern;
+    }
+  }
+
+  // Tasks: providers are accepted, but Keel does not run extension tasks.
+  const TaskScope = { Global: 1, Workspace: 2 };
+  const TaskRevealKind = { Always: 1, Silent: 2, Never: 3 };
+  const TaskPanelKind = { Shared: 1, Dedicated: 2, New: 3 };
+  class TaskGroup {
+    constructor(id, label) {
+      this.id = id;
+      this.label = label;
+    }
+  }
+  TaskGroup.Build = new TaskGroup("build", "Build");
+  TaskGroup.Test = new TaskGroup("test", "Test");
+  TaskGroup.Clean = new TaskGroup("clean", "Clean");
+  TaskGroup.Rebuild = new TaskGroup("rebuild", "Rebuild");
+  class Task {
+    constructor(definition, scope, name, source, execution, problemMatchers) {
+      Object.assign(this, { definition, scope, name, source, execution, problemMatchers });
+    }
+  }
+  class ShellExecution {
+    constructor(commandLine, args, options) {
+      Object.assign(this, { commandLine, args, options });
+    }
+  }
+  class ProcessExecution {
+    constructor(process, args, options) {
+      Object.assign(this, { process, args, options });
+    }
+  }
+  class CustomExecution {
+    constructor(callback) {
+      this.callback = callback;
+    }
+  }
+  const tasksApi = {
+    registerTaskProvider: () => new Disposable(() => {}),
+    fetchTasks: async () => [],
+    executeTask: async () => {
+      throw new Error("Keel does not run tasks of extensions yet");
+    },
+    taskExecutions: [],
+    onDidStartTask: new EventEmitter().event,
+    onDidEndTask: new EventEmitter().event,
+    onDidStartTaskProcess: new EventEmitter().event,
+    onDidEndTaskProcess: new EventEmitter().event,
+  };
+
+  // Diagnostics reach Keel's Problems view under the collection's name.
+  function plainDiagnostic(diagnostic) {
+    const code = diagnostic.code && typeof diagnostic.code === "object" ? diagnostic.code.value : diagnostic.code;
+    return {
+      range: plain(diagnostic.range),
+      message: String(diagnostic.message ?? ""),
+      severity: (diagnostic.severity ?? DiagnosticSeverity.Error) + 1,
+      source: diagnostic.source ?? undefined,
+      code: code ?? undefined,
+      tags: diagnostic.tags ?? undefined,
+    };
+  }
+
+  let nextCollectionId = 1;
+  function createDiagnosticCollection(name) {
+    const owner = name || `extension-${nextCollectionId++}`;
+    const entries = new Map();
+    const publish = (uri) =>
+      host.notify("diagnostics/set", {
+        owner,
+        uri,
+        diagnostics: (entries.get(uri)?.diagnostics ?? []).map(plainDiagnostic),
+      });
+    const collection = {
+      name: owner,
+      set(uriOrEntries, diagnostics) {
+        if (Array.isArray(uriOrEntries)) {
+          for (const [uri, list] of uriOrEntries) collection.set(uri, list);
+          return;
+        }
+        const key = toUri(uriOrEntries).toString();
+        if (!diagnostics || diagnostics.length === 0) entries.delete(key);
+        else entries.set(key, { uri: toUri(uriOrEntries), diagnostics: [...diagnostics] });
+        publish(key);
+      },
+      delete(uri) {
+        const key = toUri(uri).toString();
+        entries.delete(key);
+        publish(key);
+      },
+      clear() {
+        entries.clear();
+        host.notify("diagnostics/clear", { owner });
+      },
+      forEach(callback) {
+        for (const { uri, diagnostics } of entries.values()) callback(uri, diagnostics, collection);
+      },
+      get: (uri) => entries.get(toUri(uri).toString())?.diagnostics,
+      has: (uri) => entries.has(toUri(uri).toString()),
+      dispose() {
+        collection.clear();
+      },
+      [Symbol.iterator]() {
+        return [...entries.values()].map(({ uri, diagnostics }) => [uri, diagnostics])[Symbol.iterator]();
+      },
+    };
+    return collection;
+  }
+
+  // Code action providers, asked by Keel through "codeActions/provide".
+  const codeActionProviders = [];
+  // The actions offered last, kept here so their edits and commands run
+  // with the extension's own objects.
+  let offeredActions = new Map();
+  let nextActionHandle = 1;
+
+  function registerCodeActionsProvider(selector, provider, metadata) {
+    const entry = { id: nextProviderId++, selector: plain(selector), provider, metadata };
+    codeActionProviders.push(entry);
+    host.notify("codeActions/registered", { id: entry.id, selector: entry.selector });
+    return new Disposable(() => {
+      codeActionProviders.splice(codeActionProviders.indexOf(entry), 1);
+      host.notify("codeActions/unregistered", { id: entry.id });
+    });
+  }
+
+  function toDiagnostic(raw) {
+    const diagnostic = new Diagnostic(toRange(raw.range), raw.message, Math.max(0, (raw.severity ?? 1) - 1));
+    diagnostic.source = raw.source ?? undefined;
+    diagnostic.code = raw.code ?? undefined;
+    return diagnostic;
+  }
+
+  host.onCall("codeActions/provide", async ({ uri, range, diagnostics, only }) => {
+    const document = documentsByUri.get(uri);
+    if (!document) return [];
+    offeredActions = new Map();
+    const context = {
+      diagnostics: (diagnostics ?? []).map(toDiagnostic),
+      only: only ? new CodeActionKind(only) : undefined,
+      triggerKind: CodeActionTriggerKind.Invoke,
+    };
+    const found = [];
+    for (const entry of codeActionProviders) {
+      if (!selectorMatches(entry.selector, document)) continue;
+      try {
+        const actions = await entry.provider.provideCodeActions(document, toRange(range), context, noCancellation);
+        for (const action of actions ?? []) {
+          if (action.disabled) continue;
+          const handle = nextActionHandle++;
+          offeredActions.set(handle, { action, entry });
+          found.push({
+            handle,
+            title: action.title,
+            kind: action.kind?.value ?? null,
+            isPreferred: !!action.isPreferred,
+          });
+        }
+      } catch (error) {
+        console.error("a code action provider failed:", error);
+      }
+    }
+    return found;
+  });
+
+  host.onCall("codeActions/run", async ({ handle }) => {
+    const offered = offeredActions.get(handle);
+    if (!offered) return false;
+    let { action, entry } = offered;
+    if (!action.edit && !action.command && entry.provider.resolveCodeAction) {
+      action = (await entry.provider.resolveCodeAction(action, noCancellation)) ?? action;
+    }
+    if (action.edit) await workspaceApi.applyEdit(action.edit);
+    // A plain command object (`{ command, title }`), or a command id for
+    // the older form where the action itself is a command.
+    const command = action.command && typeof action.command === "object" ? action.command : action.command ? action : null;
+    if (command?.command) await executeCommand(command.command, ...(command.arguments ?? []));
+    return true;
+  });
+
   const vscode = {
     version: "1.95.0",
     Disposable,
@@ -1448,6 +1772,24 @@
     CompletionTriggerKind,
     TextDocumentChangeReason,
     ProgressLocation,
+    Diagnostic,
+    DiagnosticSeverity,
+    DiagnosticTag,
+    DiagnosticRelatedInformation,
+    Location,
+    CodeAction,
+    CodeActionKind,
+    CodeActionTriggerKind,
+    RelativePattern,
+    Task,
+    TaskScope,
+    TaskGroup,
+    TaskRevealKind,
+    TaskPanelKind,
+    ShellExecution,
+    ProcessExecution,
+    CustomExecution,
+    tasks: tasksApi,
     commands: commandsApi,
     window: windowApi,
     workspace: workspaceApi,

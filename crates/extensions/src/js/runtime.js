@@ -129,17 +129,46 @@
   // ---------------------------------------------------------------------
   // Timers
 
+  // An extension's error must not stop the host and the other extensions:
+  // errors in timers and promises nobody handles go to the log instead.
+  function reportError(error) {
+    host.notify("log", { level: "error", message: `An extension failed: ${describe(error)}` });
+  }
+  core.setUnhandledPromiseRejectionHandler((_promise, reason) => {
+    reportError(reason);
+    return true;
+  });
+  const guarded = (callback, args) => () => {
+    try {
+      callback(...args);
+    } catch (error) {
+      reportError(error);
+    }
+  };
+
   globalThis.setTimeout = (callback, delay, ...args) =>
-    core.createTimer(() => callback(...args), delay, undefined, false, true);
+    core.createTimer(guarded(callback, args), delay, undefined, false, true);
   globalThis.setInterval = (callback, delay, ...args) =>
-    core.createTimer(() => callback(...args), delay, undefined, true, true);
+    core.createTimer(guarded(callback, args), delay, undefined, true, true);
   globalThis.clearTimeout = (timer) => {
     if (timer) core.cancelTimer(timer);
   };
   globalThis.clearInterval = globalThis.clearTimeout;
   globalThis.setImmediate = (callback, ...args) => globalThis.setTimeout(callback, 0, ...args);
   globalThis.clearImmediate = globalThis.clearTimeout;
-  globalThis.queueMicrotask ??= (callback) => Promise.resolve().then(callback);
+  const nativeQueueMicrotask = globalThis.queueMicrotask;
+  // Guarded like timers below: an error here would stop the whole host.
+  globalThis.queueMicrotask = (callback) => {
+    const run = () => {
+      try {
+        callback();
+      } catch (error) {
+        host.notify("log", { level: "error", message: `An extension failed: ${describe(error)}` });
+      }
+    };
+    if (nativeQueueMicrotask) nativeQueueMicrotask(run);
+    else Promise.resolve().then(run);
+  };
 
   // ---------------------------------------------------------------------
   // Buffer: just enough for UTF-8 text and bytes
@@ -171,6 +200,20 @@
     }
     static isBuffer(value) {
       return value instanceof Buffer;
+    }
+    static concat(list, totalLength) {
+      const size = totalLength ?? list.reduce((sum, part) => sum + part.length, 0);
+      const joined = new Buffer(size);
+      let at = 0;
+      for (const part of list) {
+        if (at >= size) break;
+        joined.set(part.subarray(0, size - at), at);
+        at += part.length;
+      }
+      return joined;
+    }
+    static isEncoding(encoding) {
+      return /^utf-?8$/i.test(String(encoding));
     }
     toString(encoding) {
       checkEncoding(encoding);
@@ -366,6 +409,11 @@
     requireFile,
     messageLoop,
     builtin: (name) => builtins.get(name)(),
+    // node.js adds `fs`, `os`, `events`... Each is built once, when first required.
+    registerBuiltin: (name, factory) => {
+      let made;
+      builtins.set(name, () => (made ??= factory()));
+    },
     vscode: undefined,
   };
 })(globalThis);

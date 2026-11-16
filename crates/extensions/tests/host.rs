@@ -37,7 +37,10 @@ async fn drive<T>(
                 }
                 seen.push(event);
             }
-            _ = &mut deadline => panic!("the extension host did not answer in time"),
+            _ = &mut deadline => {
+                let last: Vec<_> = seen.iter().rev().take(8).collect();
+                panic!("the extension host did not answer in time; last events: {last:#?}")
+            }
         }
     }
 }
@@ -652,4 +655,145 @@ fn a_stuck_extension_does_not_hold_the_window() {
     );
     let result = runtime.block_on(activation);
     assert!(result.is_err());
+}
+
+/// Loads the real extensions unpacked in `$KEEL_REAL_EXTENSIONS` (each as
+/// `name/extension`), activates them, runs `$KEEL_PROBE_COMMANDS` (comma
+/// separated) and prints what they told and asked Keel:
+/// `KEEL_REAL_EXTENSIONS=... cargo test -p extensions --test host -- --ignored probe --nocapture`.
+#[test]
+#[ignore]
+fn probe_real_extensions() {
+    let folder = PathBuf::from(std::env::var("KEEL_REAL_EXTENSIONS").unwrap());
+    let only = std::env::var("KEEL_PROBE_ONLY").ok();
+    let commands: Vec<String> = std::env::var("KEEL_PROBE_COMMANDS")
+        .unwrap_or_default()
+        .split(',')
+        .filter(|command| !command.is_empty())
+        .map(str::to_owned)
+        .collect();
+    let storage = tempfile::tempdir().unwrap();
+    let runtime = tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()
+        .unwrap();
+    let (host, mut events) = ExtensionHost::start().unwrap();
+    let project = tempfile::tempdir().unwrap();
+    fs::write(
+        project.path().join("README.md"),
+        "# Title\n\nSome  text   \n* item\n",
+    )
+    .unwrap();
+    println!("project: {}", project.path().display());
+    host.notify(
+        "workspace/foldersChanged",
+        json!({ "folders": [format!("file://{}", project.path().display())] }),
+    )
+    .unwrap();
+    let mut seen = Vec::new();
+    let answer = |method: &str, params: &Value| -> Value {
+        match method {
+            "window/showQuickPick" => json!(0),
+            "window/showInputBox" => json!("#ff0000"),
+            "workspace/folders" => json!([]),
+            _ => {
+                let _ = params;
+                Value::Null
+            }
+        }
+    };
+    for entry in fs::read_dir(&folder).unwrap().flatten() {
+        if only
+            .as_deref()
+            .is_some_and(|only| entry.file_name().to_string_lossy() != only)
+        {
+            continue;
+        }
+        let Ok(extension) = InstalledExtension::load(entry.path().join("extension")) else {
+            continue;
+        };
+        println!("== {}", extension.id());
+        runtime.block_on(async {
+            let loaded = drive(
+                &host,
+                &mut events,
+                &mut seen,
+                answer,
+                host.load_extension(&extension, storage.path()),
+            )
+            .await;
+            println!("load: {loaded:?}");
+            let activated = drive(
+                &host,
+                &mut events,
+                &mut seen,
+                answer,
+                host.activate(&extension.id()),
+            )
+            .await;
+            println!("activate: {activated:?}");
+            // Let timers and promises started by `activate` run.
+            drive(
+                &host,
+                &mut events,
+                &mut seen,
+                answer,
+                tokio::time::sleep(Duration::from_millis(500)),
+            )
+            .await;
+        });
+    }
+    // A Markdown file with problems, as an editor would open it.
+    let readme = project.path().join("README.md");
+    host.notify(
+        "documents/opened",
+        json!({
+            "uri": format!("file://{}", readme.display()),
+            "languageId": "markdown",
+            "version": 1,
+            "text": fs::read_to_string(&readme).unwrap(),
+            "isDirty": false,
+        }),
+    )
+    .unwrap();
+    runtime.block_on(async {
+        drive(
+            &host,
+            &mut events,
+            &mut seen,
+            answer,
+            tokio::time::sleep(Duration::from_millis(1500)),
+        )
+        .await
+    });
+    for command in &commands {
+        let result = runtime.block_on(drive(
+            &host,
+            &mut events,
+            &mut seen,
+            answer,
+            host.execute_command(command, Vec::new()),
+        ));
+        println!(
+            "command {command}: {}",
+            format!("{result:?}").chars().take(200).collect::<String>()
+        );
+        runtime.block_on(async {
+            drive(
+                &host,
+                &mut events,
+                &mut seen,
+                answer,
+                tokio::time::sleep(Duration::from_millis(500)),
+            )
+            .await
+        });
+    }
+    for event in &seen {
+        let text = match event {
+            HostEvent::Notify { method, params } => format!("notify {method} {params}"),
+            HostEvent::Call { method, params, .. } => format!("call {method} {params}"),
+        };
+        println!("{}", text.chars().take(300).collect::<String>());
+    }
 }

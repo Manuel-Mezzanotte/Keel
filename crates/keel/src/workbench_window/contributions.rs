@@ -14,6 +14,21 @@ use super::*;
 
 actions!(keel, [SelectIconTheme]);
 
+/// The colors of `workbench.colorCustomizations` Keel uses, as Peacock sets
+/// them: the title bar and the status bar.
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub(super) struct CustomColors {
+    pub(super) title_background: Option<gpui::Hsla>,
+    pub(super) title_foreground: Option<gpui::Hsla>,
+    pub(super) status_background: Option<gpui::Hsla>,
+    pub(super) status_foreground: Option<gpui::Hsla>,
+}
+
+/// `#RGB`, `#RGBA`, `#RRGGBB` or `#RRGGBBAA`.
+fn parse_color(value: &Value) -> Option<gpui::Hsla> {
+    gpui::Rgba::try_from(value.as_str()?).ok().map(Into::into)
+}
+
 impl Workbench {
     /// Registers the themes and languages of the running extensions and
     /// loads the icon theme of `workbench.iconTheme`.
@@ -89,6 +104,37 @@ impl Workbench {
             .string("workbench.iconTheme")
             .map(str::to_owned);
         self.load_icon_theme(running, wanted);
+    }
+
+    /// `workbench.colorCustomizations`, with the overrides for the current
+    /// theme (`"[Dracula Theme]": {...}`) on top.
+    pub(super) fn custom_colors(&self, cx: &App) -> CustomColors {
+        let Some(all) = self
+            .settings
+            .get("workbench.colorCustomizations")
+            .and_then(Value::as_object)
+        else {
+            return CustomColors::default();
+        };
+        let theme = gpui_component::Theme::global(cx);
+        let current = if theme.mode.is_dark() {
+            &theme.dark_theme.name
+        } else {
+            &theme.light_theme.name
+        };
+        let scoped = all.get(&format!("[{current}]")).and_then(Value::as_object);
+        let color = |key: &str| {
+            scoped
+                .and_then(|scoped| scoped.get(key))
+                .or_else(|| all.get(key))
+                .and_then(parse_color)
+        };
+        CustomColors {
+            title_background: color("titleBar.activeBackground"),
+            title_foreground: color("titleBar.activeForeground"),
+            status_background: color("statusBar.background"),
+            status_foreground: color("statusBar.foreground"),
+        }
     }
 
     /// The VS Code language of a file: Keel's own first, then the
@@ -364,5 +410,72 @@ mod tests {
         });
         let saved = std::fs::read_to_string(config.path().join("settings.json")).unwrap();
         assert!(saved.contains("Ghost Night"), "{saved}");
+    }
+
+    #[gpui::test]
+    fn peacock_colors_go_to_the_project_and_the_bars(cx: &mut TestAppContext) {
+        cx.executor().allow_parking();
+        cx.update(|cx| {
+            gpui_component::init(cx);
+            language::register_grammars();
+            crate::theme::init(cx);
+            init(cx);
+        });
+        let data = tempfile::tempdir().unwrap();
+        let root = crate::paths::extensions_dir(data.path()).join("keel-tests.peacock-1.0.0");
+        std::fs::create_dir_all(&root).unwrap();
+        std::fs::write(
+            root.join("package.json"),
+            r#"{ "name": "peacock", "publisher": "keel-tests", "version": "1.0.0",
+                 "main": "./extension.js", "activationEvents": ["*"] }"#,
+        )
+        .unwrap();
+        // As Peacock does: no target, so the project's settings.
+        std::fs::write(
+            root.join("extension.js"),
+            r##"const vscode = require("vscode");
+                exports.activate = async () => {
+                  await vscode.workspace.getConfiguration().update("workbench.colorCustomizations", {
+                    "titleBar.activeBackground": "#42b883",
+                    "titleBar.activeForeground": "#15202b",
+                    "statusBar.background": "#42b883",
+                  });
+                  await vscode.workspace.getConfiguration("peacock").update("color", "#42b883");
+                };"##,
+        )
+        .unwrap();
+        let project = tempfile::tempdir().unwrap();
+        std::fs::create_dir_all(project.path().join(".git")).unwrap();
+        let path = project.path().join("notes.md");
+        std::fs::write(&path, "# Notes\n").unwrap();
+        let config = tempfile::tempdir().unwrap();
+        let settings = Settings::load(config.path().join("settings.json"), Some(project.path()));
+        let mut setup = crate::windows::extension_setup(data.path()).unwrap();
+        setup.marketplace = None;
+        let document = Document::open(&path).unwrap();
+        let (view, cx) = cx.add_window_view(|window, cx| {
+            Workbench::new(Some(document), settings, Some(setup), window, cx)
+        });
+        let saved = project.path().join(".vscode/settings.json");
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
+        while !std::fs::read_to_string(&saved).is_ok_and(|text| text.contains("peacock.color")) {
+            assert!(
+                std::time::Instant::now() < deadline,
+                "the project's settings were not written"
+            );
+            cx.run_until_parked();
+            std::thread::sleep(std::time::Duration::from_millis(20));
+        }
+        assert!(
+            !config.path().join("settings.json").exists(),
+            "the user's settings stay as they were"
+        );
+        view.read_with(cx, |view, cx| {
+            let colors = view.custom_colors(cx);
+            assert_eq!(colors.title_background, parse_color(&json!("#42b883")));
+            assert_eq!(colors.title_foreground, parse_color(&json!("#15202b")));
+            assert_eq!(colors.status_background, parse_color(&json!("#42b883")));
+            assert_eq!(colors.status_foreground, None);
+        });
     }
 }

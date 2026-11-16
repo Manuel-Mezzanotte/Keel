@@ -462,6 +462,7 @@ impl Workbench {
         if !file && extension.is_none() {
             return;
         }
+        let extension_actions = self.extension_code_actions(index);
         let features = Rc::new(LanguageFeatures {
             workbench: cx.weak_entity(),
             offered: Default::default(),
@@ -478,6 +479,9 @@ impl Workbench {
             if file {
                 lsp.hover_provider = Some(features.clone());
                 lsp.code_action_providers = vec![features.clone()];
+                if let Some(actions) = extension_actions {
+                    lsp.code_action_providers.push(actions);
+                }
             }
             lsp.set_completion_highlighter(Rc::new(highlight_characters));
             cx.notify();

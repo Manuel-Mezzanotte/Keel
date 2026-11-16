@@ -218,6 +218,7 @@ impl Workbench {
         };
         // Dropping the host stops it, even with an extension stuck.
         self.extensions = None;
+        self.clear_extension_diagnostics(None, cx);
         for pane in &mut self.panes {
             for collection in pane.decorations.values() {
                 collection.set(Vec::new(), cx);

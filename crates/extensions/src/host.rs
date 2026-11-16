@@ -26,6 +26,7 @@ use crate::vsix::InstalledExtension;
 
 const RUNTIME_JS: &str = include_str!("js/runtime.js");
 const VSCODE_JS: &str = include_str!("js/vscode.js");
+const NODE_JS: &str = include_str!("js/node.js");
 
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "camelCase")]
@@ -141,6 +142,7 @@ impl ExtensionHost {
                         });
                         let setup = [
                             ("keel:runtime.js", RUNTIME_JS),
+                            ("keel:node.js", NODE_JS),
                             ("keel:vscode.js", VSCODE_JS),
                             ("keel:start.js", "globalThis.__keel.messageLoop();"),
                         ]
@@ -532,5 +534,16 @@ extension!(
         op_keel_fs_create_directory,
         op_keel_fs_delete,
         op_keel_fs_rename,
+        crate::node::op_keel_node_stat,
+        crate::node::op_keel_node_realpath,
+        crate::node::op_keel_node_mkdir,
+        crate::node::op_keel_node_remove,
+        crate::node::op_keel_node_read,
+        crate::node::op_keel_node_write,
+        crate::node::op_keel_node_readdir,
+        crate::node::op_keel_node_move,
+        crate::node::op_keel_node_os,
+        crate::node::op_keel_node_http,
+        crate::node::op_keel_node_exists,
     ],
 );

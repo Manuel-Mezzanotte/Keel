@@ -7,6 +7,7 @@ pub mod icon_theme;
 pub mod languages;
 mod manifest;
 pub mod marketplace;
+mod node;
 mod vsix;
 
 pub use host::{ExtensionHost, HostEvent};

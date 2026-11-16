@@ -106,6 +106,7 @@ impl Workbench {
             // Off until restarted by hand.
             self.watchdog.generation += 1;
             self.extensions = None;
+            self.clear_extension_diagnostics(None, cx);
             self.log(format!("{} ({what})", strings.extensions_gave_up));
             self.report(strings.extensions_gave_up.to_owned());
             cx.notify();

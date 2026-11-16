@@ -229,6 +229,15 @@ impl LanguageState {
             .unwrap_or_default()
     }
 
+    /// Every problem reported about `uri`, by servers and extensions.
+    pub(super) fn all_diagnostics(&self, uri: &str) -> Vec<Diagnostic> {
+        self.diagnostics
+            .borrow()
+            .get(uri)
+            .map(|by_owner| by_owner.values().flatten().cloned().collect())
+            .unwrap_or_default()
+    }
+
     pub(super) fn mirror_diagnostics(
         &self,
         uri: &str,

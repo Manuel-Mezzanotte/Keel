@@ -1288,9 +1288,31 @@ Apri Keel su GestionaleHospitality. La prima volta i server si installano da sol
 | 9.1 | Vista Estensioni: installate con icona e descrizione, attiva e disattiva (anche solo per il progetto), disinstalla, scheda dei dettagli con il README; installa da VSIX; host delle estensioni che si riavvia senza riaprire la finestra | fatta |
 | 9.2 | Open VSX: ricerca dentro la vista, installazione, aggiornamenti | fatta |
 | 9.3 | Temi colore e temi di icone dai VSIX (Dracula, Material Icon Theme), configurazioni di linguaggio | fatta |
-| 9.4 | Isolamento (un'estensione bloccata o in crash non ferma Keel e si riavvia) e ponte `vscode` allargato per Peacock, gitignore e markdownlint | da fare |
+| 9.4 | Isolamento (un'estensione bloccata o in crash non ferma Keel e si riavvia) e ponte `vscode` allargato per Peacock, gitignore e markdownlint | fatta |
 | 9.5 | Importa da Cursor l'elenco delle estensioni | da fare |
 | 9.6 | Misure e resoconto | da fare |
+
+**Note sulla 9.4**
+- **Estensione bloccata:** ogni 5 secondi la finestra chiede all'host delle estensioni se risponde.
+  - Se per 10 secondi non risponde, o se si è fermato, Keel lo riavvia da solo.
+  - L'Output dice cosa stava facendo, per esempio `commands/execute stuck.loop`.
+  - Dopo 3 riavvii in 10 minuti le estensioni restano spente finché non le riavvii dal menu «…» della vista Estensioni.
+- **Errore di un'estensione:** un errore non gestito dentro una promessa, un timer o un `queueMicrotask` va nell'Output e non ferma più l'host con le altre estensioni.
+- **Peacock:**
+  - si attiva anche con un progetto aperto (prima restava in attesa di sé stesso);
+  - salva i colori nel `.vscode/settings.json` del progetto, come in VS Code e Cursor, che quindi li vede anche lui;
+  - Keel colora con `workbench.colorCustomizations` la barra del titolo e la barra di stato;
+  - le varianti per tema (`"[Dracula Theme]": {...}`) valgono col tema giusto;
+  - un salvataggio con lo stesso valore non annuncia più un cambio, come in VS Code: prima Peacock salvava all'infinito.
+- **gitignore:** «Add gitignore» scarica l'elenco dei modelli da GitHub, te lo fa scegliere e scrive `.gitignore`. Le richieste web passano da curl e possono andare solo a indirizzi `http` e `https`.
+- **markdownlint:**
+  - si attiva quando apri un file Markdown: ora Keel attiva le estensioni con `onLanguage:`, prima no;
+  - i suoi avvisi compaiono nel pannello Problemi, sottolineati nel testo e nelle icone dell'Esplora risorse, col nome «markdownlint»;
+  - Cmd+. offre le sue correzioni insieme a quelle dei language server.
+- **Moduli di Node per le estensioni:** `fs`, `os`, `events`, `util`, `url`, `stream`, `http`, `https` e pochi altri, ridotti a quello che usano queste estensioni.
+  - Non possono avviare programmi (`child_process`) né aprire connessioni dirette (`net`, `tls`): ricevono un errore chiaro.
+  - `process.env` mostra solo HOME, USER, LANG, TMPDIR, SHELL e PATH, non le chiavi segrete della shell.
+- **Non ancora:** i task delle estensioni (markdownlint «Lint workspace») e la formattazione offerta dalle estensioni. Le estensioni le registrano senza errori, ma Keel per ora non le usa.
 
 **Note sulla 9.3**
 - **Temi colore delle estensioni**, come Dracula:

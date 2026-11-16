@@ -25,6 +25,8 @@ pub enum Source {
 
 pub struct Settings {
     user_file: PathBuf,
+    /// The project folder, whose `.vscode/settings.json` extensions write.
+    project_root: Option<PathBuf>,
     layers: Vec<(Source, Map<String, Value>)>,
     /// Problems found while reading the files, for the user to see.
     pub warnings: Vec<String>,
@@ -60,6 +62,7 @@ impl Settings {
         }
         Self {
             user_file,
+            project_root: project_root.map(Path::to_path_buf),
             layers,
             warnings,
         }
@@ -104,12 +107,51 @@ impl Settings {
     /// Sets or removes (`None`) a value in the user's file. A file with
     /// comments is left alone, since rewriting it would lose them.
     pub fn update_user(&mut self, key: &str, value: Option<Value>) -> Result<()> {
-        let existing = match fs::read_to_string(&self.user_file) {
+        let file = self.user_file.clone();
+        self.update_file(Source::User, &file, key, value)
+    }
+
+    /// Sets or removes a value in the project's `.vscode/settings.json`, as
+    /// VS Code does for workspace settings, so Cursor sees it too.
+    pub fn update_project(&mut self, key: &str, value: Option<Value>) -> Result<()> {
+        let Some(root) = self.project_root.clone() else {
+            bail!("no project is open, so {key} cannot be saved for it");
+        };
+        self.update_file(
+            Source::VsCodeProject,
+            &root.join(".vscode/settings.json"),
+            key,
+            value,
+        )
+    }
+
+    /// Whether a project is open, with settings of its own.
+    pub fn has_project(&self) -> bool {
+        self.project_root.is_some()
+    }
+
+    /// The values of one layer, such as the user's file.
+    pub fn layer(&self, source: Source) -> Map<String, Value> {
+        self.layers
+            .iter()
+            .filter(|(layer, _)| *layer == source)
+            .flat_map(|(_, values)| values.clone())
+            .collect()
+    }
+
+    fn update_file(
+        &mut self,
+        source: Source,
+        file: &Path,
+        key: &str,
+        value: Option<Value>,
+    ) -> Result<()> {
+        let existing = match fs::read_to_string(file) {
             Ok(text) => {
                 if has_comments(&text) {
                     bail!(
                         "{} has comments; change {key} there by hand",
-                        self.user_file.display()
+                        file.display()
                     );
                 }
                 text
@@ -118,28 +160,25 @@ impl Settings {
             Err(error) => return Err(error.into()),
         };
         let mut values = match parse_jsonc(&existing)
-            .with_context(|| format!("{} is not valid JSON", self.user_file.display()))?
+            .with_context(|| format!("{} is not valid JSON", file.display()))?
         {
             Value::Object(values) => values,
-            _ => bail!("{} must contain an object", self.user_file.display()),
+            _ => bail!("{} must contain an object", file.display()),
         };
         match value {
             Some(value) => values.insert(key.to_owned(), value),
             None => values.remove(key),
         };
-        if let Some(parent) = self.user_file.parent() {
+        if let Some(parent) = file.parent() {
             fs::create_dir_all(parent)?;
         }
         let text = serde_json::to_string_pretty(&Value::Object(values.clone()))? + "\n";
-        let temporary = self.user_file.with_extension("json.keel-save");
+        let temporary = file.with_extension("json.keel-save");
         fs::write(&temporary, text)?;
-        fs::rename(&temporary, &self.user_file)?;
-        if let Some((_, layer)) = self
-            .layers
-            .iter_mut()
-            .find(|(source, _)| *source == Source::User)
-        {
-            *layer = values;
+        fs::rename(&temporary, file)?;
+        match self.layers.iter_mut().find(|(layer, _)| *layer == source) {
+            Some((_, layer)) => *layer = values,
+            None => self.layers.push((source, values)),
         }
         Ok(())
     }
@@ -261,6 +300,39 @@ mod tests {
 
         settings.update_user("vsauto.askOnStart", None).unwrap();
         assert_eq!(settings.get("vsauto.askOnStart"), None);
+    }
+
+    #[test]
+    fn updates_can_go_to_the_project_file() {
+        let folder = tempfile::tempdir().unwrap();
+        let user = folder.path().join("user/settings.json");
+        let project = folder.path().join("project");
+        fs::create_dir_all(&project).unwrap();
+        let mut settings = Settings::load(&user, Some(&project));
+        settings
+            .update_project("peacock.color", Some(json!("#42b883")))
+            .unwrap();
+        assert_eq!(settings.string("peacock.color"), Some("#42b883"));
+        assert_eq!(
+            settings.source_of("peacock.color"),
+            Some(Source::VsCodeProject)
+        );
+        assert_eq!(
+            settings.layer(Source::VsCodeProject)["peacock.color"],
+            json!("#42b883")
+        );
+        assert!(settings.layer(Source::User).is_empty());
+        let saved = fs::read_to_string(project.join(".vscode/settings.json")).unwrap();
+        assert!(saved.contains("#42b883"), "{saved}");
+        settings.update_project("peacock.color", None).unwrap();
+        assert_eq!(settings.get("peacock.color"), None);
+
+        let mut alone = Settings::load(&user, None);
+        assert!(
+            alone
+                .update_project("peacock.color", Some(json!("#000000")))
+                .is_err()
+        );
     }
 
     #[test]
