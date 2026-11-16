@@ -125,7 +125,7 @@ Da confermare con le misure della fase 0. Si misura con lo stesso script su Keel
 | 7 | Anteprima Markdown e PDF | media | fatta; restano le tue prove a mano |
 | 8 | Grafico e storico git | media | fatta; restano le tue prove a mano |
 | 9 | Estensioni | grande | in corso |
-| 10 | IA: Claude Code | media | da fare |
+| 10 | IA: Claude Code | media | fatta |
 | 11 | Altri linguaggi | media | da fare |
 | 12 | Rifinitura, prestazioni e affidabilità | grande | da fare |
 
@@ -1452,7 +1452,33 @@ Apri Keel su GestionaleHospitality. La prima volta i server si installano da sol
 | 10.3 | Crate `ai` per ACP: avvio dell'adattatore `claude-agent-acp` (installato da Keel con versione bloccata), sessioni, permessi, file letti e scritti attraverso Keel | fatta |
 | 10.4 | Pannello agente a destra, accanto a Claude Code nel terminale: conversazione, ragionamento, strumenti, piano, permessi, interrompi, riferimenti a file e selezione | fatta |
 | 10.5 | Modifiche dell'agente file per file da accettare o rifiutare; cronologia delle conversazioni | fatta |
-| 10.6 | Misure e resoconto | da fare |
+| 10.6 | Misure e resoconto | fatta |
+
+**Resoconto della fase 10**
+- **Il criterio era:** lavori con Claude Code dal terminale e dal pannello, e ogni modifica la vedi e la controlli in Keel.
+  - **Dal terminale:** Claude Code si collega alla finestra come a VS Code e Cursor. Vede file, selezione e Problemi, e le modifiche che propone si accettano o si rifiutano in una scheda di Keel. Provato col vero Claude Code 2.1.303.
+  - **Dal pannello:** l'agente ACP con conversazione, strumenti, piano, permessi, modalità e cronologia. Le sue modifiche sono elencate file per file, da accettare o rifiutare.
+  - **Resta la tua prova a mano:** i test automatici usano un agente finto e la prova con quello vero non ha mandato messaggi, per non consumare il tuo uso di Claude.
+- **Correzioni trovate strada facendo:**
+  - Claude Code vuole il sottoprotocollo WebSocket `mcp`;
+  - la prima versione del collegamento rispondeva in 26 ms per un giro di controllo: ora risponde in 0,09 ms e a riposo non lavora;
+  - chiudendo Keel l'annuncio in `~/.claude/ide` sparisce e l'adattatore si ferma.
+- **Misure** (versione ottimizzata):
+  - Keel con il collegamento per Claude Code: 120–137 MB (127 MB nella fase 9); primo disegno 330–475 ms;
+  - una chiamata di Claude Code a Keel, andata e ritorno: 0,09 ms di mediana, 0,17 ms la più lenta su 200;
+  - l'adattatore ACP: installazione 2 minuti e 18 secondi una volta sola; avvio 0,2–0,46 s; sessione aperta in 0,9–3,7 s;
+  - a riposo l'adattatore pesa 461 MB (node 126 MB più il programma `claude` 335 MB), come Claude Code nel terminale.
+- **Non ancora:** i comandi `/` di Claude nel campo del pannello, le immagini incollate nel pannello, la riapertura automatica dell'ultima conversazione.
+- **Test:** 334 automatici, tutti verdi (cinque volte di fila), più 22 da lanciare a mano.
+
+**Le tue prove a mano della fase 10**
+1. Apri un progetto in Keel e premi Cmd+Esc: Claude Code parte a destra. Scrivi `/ide`: deve dire che è collegato a «Keel».
+2. Seleziona qualche riga in un file e chiedi a Claude nel terminale «cosa ho selezionato?». Poi prova Cmd+Alt+K su una selezione.
+3. Chiedi a Claude nel terminale una piccola modifica a un file: deve aprirsi la scheda con le differenze. Prova «Rifiuta», poi rifallo e «Accetta».
+4. Passa a «Agente» in cima al riquadro di destra. La prima volta aspetta l'installazione, circa 2 minuti, poi scrivi un messaggio.
+5. Chiedi all'agente una modifica: guarda la richiesta di permesso con la differenza, consentila, poi usa «Modifiche di Claude» per aprire le differenze e rifiutarla.
+6. Prova «@» con una selezione, il menu della modalità (per esempio «Piano») e «Interrompi» durante una risposta lunga.
+7. Apri l'orologio in alto a destra e riprendi una conversazione passata, anche una iniziata nel terminale.
 
 **Note sulla 10.5**
 - **Prima che Claude cambi un file**, Keel ne tiene una copia: appena vede arrivare la modifica, anche quando la modalità non chiede permessi.

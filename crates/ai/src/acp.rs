@@ -663,13 +663,37 @@ mod tests {
             "session/list: {}",
             format!("{listed:?}").chars().take(600).collect::<String>()
         );
-        println!(
-            "commands: {:?}",
-            thread
-                .commands
-                .iter()
-                .map(|(name, _)| name)
-                .collect::<Vec<_>>()
-        );
+        println!("commands: {}", thread.commands.len());
+        // The memory of the adapter and of the programs it started.
+        let pid = agent.pid().unwrap();
+        let output = Command::new("/bin/ps")
+            .args(["-A", "-o", "pid=,ppid=,rss=,comm="])
+            .output()
+            .unwrap();
+        let table: Vec<(u32, u32, u64, String)> = String::from_utf8_lossy(&output.stdout)
+            .lines()
+            .filter_map(|line| {
+                let mut parts = line.split_whitespace();
+                Some((
+                    parts.next()?.parse().ok()?,
+                    parts.next()?.parse().ok()?,
+                    parts.next()?.parse().ok()?,
+                    parts.collect::<Vec<_>>().join(" "),
+                ))
+            })
+            .collect();
+        let mut family = vec![pid];
+        let mut index = 0;
+        while index < family.len() {
+            let parent = family[index];
+            family.extend(table.iter().filter(|row| row.1 == parent).map(|row| row.0));
+            index += 1;
+        }
+        let mut total = 0;
+        for row in table.iter().filter(|row| family.contains(&row.0)) {
+            total += row.2;
+            println!("process {} {} MB {}", row.0, row.2 / 1024, row.3.rsplit('/').next().unwrap_or_default());
+        }
+        println!("total {} MB", total / 1024);
     }
 }
