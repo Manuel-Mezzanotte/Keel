@@ -11,6 +11,7 @@ pub(crate) mod explorer;
 mod git_gutter;
 mod language_features;
 mod language_servers;
+mod markdown_preview;
 mod navigation;
 mod npm_scripts;
 mod other_files;
@@ -47,6 +48,7 @@ pub(crate) use code_navigation::{
 };
 pub(crate) use git_gutter::{NextChange, PreviousChange, RevertChange, StageChange};
 pub(crate) use language_servers::RestartLanguageServers;
+pub(crate) use markdown_preview::{ShowMarkdownPreview, ShowMarkdownPreviewToSide};
 pub(crate) use npm_scripts::RunNpmScript;
 pub(crate) use problems::{NextProblem, PreviousProblem};
 pub(crate) use shell::window_options;
@@ -215,6 +217,8 @@ enum Backing {
     Image(PathBuf),
     /// A file's differences, drawn by gpui-component's diff view.
     Diff(diff_view::DiffTab),
+    /// The rendered Markdown of another document.
+    Preview(markdown_preview::PreviewTab),
 }
 
 impl OpenDocument {
@@ -223,7 +227,7 @@ impl OpenDocument {
         match &self.backing {
             Backing::File(file) => Some(file.path()),
             Backing::Image(path) => Some(path),
-            Backing::Diff(_) => None,
+            Backing::Diff(_) | Backing::Preview(_) => None,
             Backing::Untitled | Backing::Extension => None,
         }
     }
@@ -241,8 +245,10 @@ struct OpenDocument {
 
 impl OpenDocument {
     fn name(&self) -> String {
-        if let Backing::Diff(tab) = &self.backing {
-            return tab.title.clone();
+        match &self.backing {
+            Backing::Diff(tab) => return tab.title.clone(),
+            Backing::Preview(tab) => return tab.title.clone(),
+            _ => {}
         }
         Uri::parse(&self.uri)
             .map(|uri| uri.file_name().to_owned())
@@ -833,7 +839,9 @@ impl Workbench {
         document.modified = match &document.backing {
             Backing::File(file) => file.is_modified(&text),
             Backing::Untitled => !text.is_empty(),
-            Backing::Extension | Backing::Image(_) | Backing::Diff(_) => false,
+            Backing::Extension | Backing::Image(_) | Backing::Diff(_) | Backing::Preview(_) => {
+                false
+            }
         };
         let params = json!({
             "uri": uri,
@@ -844,6 +852,7 @@ impl Workbench {
         let old = std::mem::replace(&mut document.synced_text, text.clone());
         let modified = document.modified;
         self.notify_host("documents/changed", params);
+        self.update_previews(uri, &text, cx);
         // A completion picked from the menu is finished here, and the
         // signature follows typing.
         self.after_text_change(index, &old, &text, window, cx);
@@ -936,7 +945,7 @@ impl Workbench {
                     self.documents
                         .get(&pane.uri)
                         .map(|document| &document.backing),
-                    Some(Backing::Image(_) | Backing::Diff(_))
+                    Some(Backing::Image(_) | Backing::Diff(_) | Backing::Preview(_))
                 )
             })
             .map(|(index, pane)| {
@@ -1028,7 +1037,7 @@ impl Workbench {
         match &document.backing {
             Backing::File(_) => self.save_with_participants(uri, after, window, cx),
             Backing::Untitled => self.save_as(uri.to_owned(), text, after, window, cx),
-            Backing::Image(_) | Backing::Diff(_) => {}
+            Backing::Image(_) | Backing::Diff(_) | Backing::Preview(_) => {}
             Backing::Extension => {
                 if let Some(extensions) = &self.extensions {
                     let write = extensions
@@ -2290,7 +2299,7 @@ impl Workbench {
                     self.documents
                         .get(&pane.uri)
                         .map(|document| &document.backing),
-                    Some(Backing::Image(_) | Backing::Diff(_))
+                    Some(Backing::Image(_) | Backing::Diff(_) | Backing::Preview(_))
                 )
             })
             .map(|pane| pane.uri.clone())

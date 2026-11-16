@@ -923,15 +923,25 @@ impl Workbench {
                 })
                 .child(
                     div()
-                        .id(("tab-strip", index))
                         .h(px(38.))
                         .flex_none()
-                        .px_2()
+                        .pr_2()
                         .flex()
                         .items_center()
-                        .gap_0p5()
-                        .overflow_x_scroll()
-                        .children(tabs),
+                        .child(
+                            div()
+                                .id(("tab-strip", index))
+                                .h_full()
+                                .flex_1()
+                                .min_w_0()
+                                .px_2()
+                                .flex()
+                                .items_center()
+                                .gap_0p5()
+                                .overflow_x_scroll()
+                                .children(tabs),
+                        )
+                        .children(self.render_preview_button(index, cx)),
                 )
                 .when_some(
                     self.render_breadcrumbs(index, colors, cx),
@@ -951,6 +961,10 @@ impl Workbench {
                             .flex_1()
                             .min_h_0()
                             .child(self.render_diff(tab, colors, cx)),
+                        Some(Backing::Preview(tab)) => div()
+                            .flex_1()
+                            .min_h_0()
+                            .child(self.render_markdown_preview(tab, colors, cx)),
                         _ => div()
                             .flex_1()
                             .min_h_0()
@@ -1250,7 +1264,7 @@ impl Workbench {
                 self.documents
                     .get(&pane.uri)
                     .map(|document| &document.backing),
-                Some(Backing::Image(_) | Backing::Diff(_))
+                Some(Backing::Image(_) | Backing::Diff(_) | Backing::Preview(_))
             )
         });
         if let Some(pane) = self.panes.get(self.active).filter(|_| !image) {
@@ -1390,6 +1404,7 @@ impl Render for Workbench {
         let root = self.signature_actions(root, cx);
         let root = self.code_navigation_actions(root, cx);
         let root = self.code_action_actions(root, cx);
+        let root = self.markdown_preview_actions(root, cx);
         let root = self.editing_actions(root, cx);
         self.explorer_actions(root, cx)
             .size_full()

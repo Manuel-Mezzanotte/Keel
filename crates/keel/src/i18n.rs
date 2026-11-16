@@ -362,6 +362,9 @@ pub struct Strings {
     pub format_timed_out: &'static str,
     pub command_format_document: &'static str,
     pub command_organize_imports: &'static str,
+    pub preview_title_text: &'static str,
+    pub command_markdown_preview: &'static str,
+    pub command_markdown_preview_side: &'static str,
 }
 
 impl Strings {
@@ -413,6 +416,8 @@ impl Strings {
             "editor.action.goToReferences" => self.command_go_to_references,
             "editor.action.rename" => self.command_rename_symbol,
             "editor.action.formatDocument" => self.command_format_document,
+            "markdown.showPreview" => self.command_markdown_preview,
+            "markdown.showPreviewToSide" => self.command_markdown_preview_side,
             "editor.action.organizeImports" => self.command_organize_imports,
             "workbench.action.gotoSymbol" => self.command_symbol_in_file,
             "workbench.action.showAllSymbols" => self.command_symbol_in_workspace,
@@ -600,6 +605,10 @@ impl Strings {
         self.lsp_renamed_text
             .replace("{edits}", &edits.to_string())
             .replace("{files}", &files.to_string())
+    }
+
+    pub fn preview_title(&self, name: &str) -> String {
+        self.preview_title_text.replace("{name}", name)
     }
 
     pub fn lsp_installing(&self, name: &str) -> String {
@@ -957,6 +966,9 @@ pub const ITALIAN: Strings = Strings {
     format_timed_out: "Le correzioni e la formattazione al salvataggio non hanno finito in 3 secondi: il file è salvato così.",
     command_format_document: "Formatta il documento",
     command_organize_imports: "Organizza gli import",
+    preview_title_text: "Anteprima {name}",
+    command_markdown_preview: "Markdown: Apri l'anteprima",
+    command_markdown_preview_side: "Markdown: Apri l'anteprima a lato",
 };
 
 pub const ENGLISH: Strings = Strings {
@@ -1276,6 +1288,9 @@ pub const ENGLISH: Strings = Strings {
     format_timed_out: "Fixes and formatting on save did not finish within 3 seconds: the file was saved as it was.",
     command_format_document: "Format Document",
     command_organize_imports: "Organize Imports",
+    preview_title_text: "Preview {name}",
+    command_markdown_preview: "Markdown: Open Preview",
+    command_markdown_preview_side: "Markdown: Open Preview to the Side",
 };
 
 #[cfg(test)]

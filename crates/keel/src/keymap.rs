@@ -41,6 +41,7 @@ use crate::workbench_window::{NextChange, PreviousChange, RevertChange, StageCha
 use crate::workbench_window::{
     NextProblem, PreviousProblem, RestartLanguageServers, TriggerParameterHints,
 };
+use crate::workbench_window::{ShowMarkdownPreview, ShowMarkdownPreviewToSide};
 
 /// A Keel command: its VS Code name, the action it runs and its default key.
 pub struct KeelCommand {
@@ -244,6 +245,18 @@ pub const COMMANDS: &[KeelCommand] = &[
         id: "editor.action.triggerParameterHints",
         action: || Box::new(TriggerParameterHints),
         default_key: Some("cmd+shift+space"),
+        context: Some(EDITOR_CONTEXT),
+    },
+    KeelCommand {
+        id: "markdown.showPreview",
+        action: || Box::new(ShowMarkdownPreview),
+        default_key: Some("cmd+shift+v"),
+        context: Some(EDITOR_CONTEXT),
+    },
+    KeelCommand {
+        id: "markdown.showPreviewToSide",
+        action: || Box::new(ShowMarkdownPreviewToSide),
+        default_key: Some("cmd+k v"),
         context: Some(EDITOR_CONTEXT),
     },
     KeelCommand {
@@ -863,7 +876,7 @@ mod tests {
         let (bindings, warnings) =
             read_user_bindings(Path::new("/nonexistent/keel/keybindings.json"));
         assert!(bindings.is_empty() && warnings.is_empty());
-        assert_eq!(keel_bindings(&[]).len(), 65);
+        assert_eq!(keel_bindings(&[]).len(), 67);
     }
 
     #[test]

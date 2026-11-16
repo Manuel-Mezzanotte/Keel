@@ -122,7 +122,7 @@ Da confermare con le misure della fase 0. Si misura con lo stesso script su Keel
 | 4 | Terminale e pannello in basso | media | fatta; restano le tue prove a mano |
 | 5 | Git: modifiche e commit | media | fatta; restano le tue prove a mano |
 | 6 | Linguaggi principali: web e Rust | grande | fatta; restano le tue prove a mano |
-| 7 | Anteprima Markdown e PDF | media | da fare |
+| 7 | Anteprima Markdown e PDF | media | in corso |
 | 8 | Grafico e storico git | media | da fare |
 | 9 | Estensioni | grande | da fare |
 | 10 | IA: Claude Code | media | da fare |
@@ -1081,6 +1081,31 @@ Apri Keel su GestionaleHospitality. La prima volta i server si installano da sol
 ### Fase 7 — Anteprima Markdown e PDF
 
 **Obiettivo.** Leggere i Markdown e i PDF dentro Keel.
+
+**Sottofasi**
+
+| Sottofase | Cosa | Stato |
+|---|---|---|
+| 7.1 | Anteprima Markdown in una scheda, affiancata (Cmd+K V) o al posto dell'editor (Cmd+Maiusc+V), aggiornata mentre scrivi, con i colori del tema | fatta |
+| 7.2 | Scorrimento sincronizzato nei due versi; link ad altri file, a titoli e al web; immagini locali; liste di controllo da spuntare | da fare |
+| 7.3 | Immagini e SVG con zoom | da fare |
+| 7.4 | PDF in una scheda con PDFKit: pagine, zoom, miniature, ricerca, copia del testo | da fare |
+| 7.5 | Misure e resoconto | da fare |
+
+**Note sulla 7.1**
+- **Aprire l'anteprima:**
+  - Cmd+K V la apre in un gruppo a lato, come in VS Code;
+  - Cmd+Maiusc+V la apre nello stesso gruppo, al posto dell'editor;
+  - sui file Markdown c'è anche un pulsante in fondo alla fila delle schede;
+  - i due comandi sono anche nella tavolozza.
+- **Si aggiorna a ogni tasto,** anche col file non salvato.
+- **La disegna gpui-component,** con i colori del tema e nello stile di GitHub:
+  - titoli, tabelle, liste di controllo, testo barrato, link, citazioni;
+  - blocchi di codice colorati con le grammatiche di Keel;
+  - il testo si può selezionare e copiare.
+
+  Il testo sta in una colonna di 880 punti al massimo, centrata, come su GitHub.
+- **Provato su `docs/PIANO.md`:** si legge senza errori, tabelle comprese.
 
 **Cosa si fa**
 - **Anteprima Markdown** affiancata e aggiornata mentre scrivi:

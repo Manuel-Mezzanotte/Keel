@@ -483,7 +483,10 @@ impl Workbench {
         let removed = self.documents.remove(uri);
         // Extensions never knew about images.
         if removed.is_some_and(|document| {
-            !matches!(document.backing, Backing::Image(_) | Backing::Diff(_))
+            !matches!(
+                document.backing,
+                Backing::Image(_) | Backing::Diff(_) | Backing::Preview(_)
+            )
         }) {
             self.notify_host("documents/closed", json!({ "uri": uri }));
         }
@@ -625,7 +628,12 @@ impl Workbench {
         self.activate_tab(group, next, true, window, cx);
     }
 
-    fn focus_group(&mut self, group: usize, window: &mut Window, cx: &mut Context<Self>) {
+    pub(super) fn focus_group(
+        &mut self,
+        group: usize,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
         if group < self.panes.len() {
             self.focus_pane(group, window, cx);
             self.publish_editors(window, cx);
