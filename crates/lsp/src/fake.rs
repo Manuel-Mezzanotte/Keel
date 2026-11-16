@@ -4,6 +4,11 @@
 //! answers hovers with the document's length, asks for its `fake` settings
 //! after starting, and has two extra methods: `fake/slow`, which only ends
 //! when cancelled, and `fake/crash`, which stops the server.
+//!
+//! Completions offer `console`, a `log($1)$0` snippet and `useState`, whose
+//! automatic import comes with `completionItem/resolve`. The signature is
+//! always `saluta(nome: string, volte: number)`, with the parameter counted
+//! from the commas before the cursor.
 
 use std::collections::HashMap;
 use std::io::{self, BufReader, Read, Write};
@@ -37,7 +42,8 @@ pub fn run(input: impl Read, output: impl Write + Send + 'static) -> i32 {
                     "capabilities": {
                         "textDocumentSync": { "openClose": true, "change": 2, "save": true },
                         "hoverProvider": true,
-                        "completionProvider": { "triggerCharacters": ["."] },
+                        "completionProvider": { "triggerCharacters": ["."], "resolveProvider": true },
+                        "signatureHelpProvider": { "triggerCharacters": ["(", ","] },
                     },
                     "serverInfo": { "name": "fake", "version": "1" },
                 },
@@ -91,6 +97,50 @@ pub fn run(input: impl Read, output: impl Write + Send + 'static) -> i32 {
                     "id": id,
                     "result": { "contents": { "kind": "markdown", "value": format!("{length} bytes") } },
                 }));
+            }
+            "textDocument/completion" => send(json!({
+                "jsonrpc": "2.0",
+                "id": id,
+                "result": { "isIncomplete": false, "items": [
+                    { "label": "console", "kind": 6 },
+                    { "label": "log", "kind": 2, "insertText": "log($1)$0", "insertTextFormat": 2 },
+                    { "label": "useState", "kind": 3, "detail": "Auto import from 'react'", "data": { "import": "react" } },
+                ] },
+            })),
+            "completionItem/resolve" => {
+                let mut item = params.clone();
+                if let Some(module) = params["data"]["import"].as_str() {
+                    item["additionalTextEdits"] = json!([{
+                        "range": { "start": { "line": 0, "character": 0 }, "end": { "line": 0, "character": 0 } },
+                        "newText": format!("import {{ {} }} from '{module}';\n", params["label"].as_str().unwrap_or_default()),
+                    }]);
+                }
+                send(json!({ "jsonrpc": "2.0", "id": id, "result": item }));
+            }
+            "textDocument/signatureHelp" => {
+                let uri = params["textDocument"]["uri"].as_str().unwrap_or_default();
+                let position = &params["position"];
+                let text = documents.get(uri).cloned().unwrap_or_default();
+                let offset = workbench::position::offset_of(
+                    &text,
+                    workbench::position::Position::new(
+                        position["line"].as_u64().unwrap_or_default() as u32,
+                        position["character"].as_u64().unwrap_or_default() as u32,
+                    ),
+                );
+                let before = &text[..offset];
+                let result = match before.rfind('(') {
+                    Some(open) if !before[open..].contains(')') => json!({
+                        "signatures": [{
+                            "label": "saluta(nome: string, volte: number)",
+                            "parameters": [{ "label": "nome: string" }, { "label": "volte: number" }],
+                        }],
+                        "activeSignature": 0,
+                        "activeParameter": before[open..].matches(',').count(),
+                    }),
+                    _ => Value::Null,
+                };
+                send(json!({ "jsonrpc": "2.0", "id": id, "result": result }));
             }
             "fake/slow" => slow.extend(id),
             "$/cancelRequest" => {

@@ -962,7 +962,8 @@ impl Workbench {
                                     .bordered(false)
                                     .text_size(px(self.font_size)),
                             )
-                            .children(self.render_hunk_bar(index, colors, cx)),
+                            .children(self.render_hunk_bar(index, colors, cx))
+                            .children(self.render_signature_help(index, colors, cx)),
                     },
                 )
         });
@@ -1385,6 +1386,8 @@ impl Render for Workbench {
         let root = self.git_gutter_actions(root, cx);
         let root = self.language_server_actions(root, cx);
         let root = self.problem_actions(root, cx);
+        let root = self.snippet_actions(root, cx);
+        let root = self.signature_actions(root, cx);
         let root = self.editing_actions(root, cx);
         self.explorer_actions(root, cx)
             .size_full()

@@ -340,6 +340,8 @@ pub struct Strings {
     pub problems_none: &'static str,
     pub command_next_problem: &'static str,
     pub command_previous_problem: &'static str,
+    pub command_trigger_parameter_hints: &'static str,
+    pub command_trigger_suggest: &'static str,
 }
 
 impl Strings {
@@ -384,6 +386,8 @@ impl Strings {
             "git.push" => self.command_git_push,
             "keel.restartLanguageServers" => self.command_restart_language_servers,
             "editor.action.marker.nextInFiles" => self.command_next_problem,
+            "editor.action.triggerParameterHints" => self.command_trigger_parameter_hints,
+            "editor.action.triggerSuggest" => self.command_trigger_suggest,
             "editor.action.marker.prevInFiles" => self.command_previous_problem,
             "git.pull" => self.command_git_pull,
             "git.fetch" => self.command_git_fetch,
@@ -886,6 +890,8 @@ pub const ITALIAN: Strings = Strings {
     problems_none: "Nessun problema rilevato finora.",
     command_next_problem: "Vai al problema successivo",
     command_previous_problem: "Vai al problema precedente",
+    command_trigger_parameter_hints: "Mostra i parametri",
+    command_trigger_suggest: "Mostra i suggerimenti",
 };
 
 pub const ENGLISH: Strings = Strings {
@@ -1183,6 +1189,8 @@ pub const ENGLISH: Strings = Strings {
     problems_none: "No problems have been detected so far.",
     command_next_problem: "Go to Next Problem",
     command_previous_problem: "Go to Previous Problem",
+    command_trigger_parameter_hints: "Trigger Parameter Hints",
+    command_trigger_suggest: "Trigger Suggest",
 };
 
 #[cfg(test)]

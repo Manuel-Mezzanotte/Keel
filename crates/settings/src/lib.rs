@@ -4,7 +4,7 @@
 //! From lowest to highest priority: Keel's defaults, the user's file, the
 //! project's `.vscode/settings.json`, the project's `.keel/settings.json`.
 
-mod jsonc;
+pub mod jsonc;
 
 use std::fs;
 use std::path::{Path, PathBuf};

@@ -3,8 +3,10 @@
 //! the Output view, and restarting them when they stop.
 //!
 //! The documents reach this module through the same notifications the
-//! extension host gets (`documents/opened`, `changed`, `saved`, `closed`),
-//! queued and handled one after another.
+//! extension host gets (`documents/opened`, `changed`, `saved`, `closed`).
+//! Changes go to the servers at once, so a request made right after a
+//! keystroke, such as a completion, always sees the new text; starting
+//! servers, which needs the window, is queued.
 
 use std::cell::RefCell;
 use std::collections::{BTreeMap, HashMap, HashSet};
@@ -45,17 +47,6 @@ pub(super) enum LspInput {
     Opened {
         uri: String,
         language_id: String,
-        text: String,
-    },
-    Changed {
-        uri: String,
-        text: String,
-    },
-    Saved {
-        uri: String,
-    },
-    Closed {
-        uri: String,
     },
     Server {
         id: &'static str,
@@ -125,11 +116,20 @@ impl RunningServer {
     }
 }
 
+/// What the editors' providers share with the window: the servers that
+/// are running and the documents they know. Providers read it while the
+/// window itself may be busy, so it lives apart.
+#[derive(Default)]
+pub(super) struct LanguageState {
+    running: RefCell<HashMap<&'static str, Rc<RunningServer>>>,
+    documents: RefCell<HashMap<String, SyncedDocument>>,
+}
+
 /// The language servers of a window.
 pub(super) struct Languages {
     sender: UnboundedSender<LspInput>,
     servers: HashMap<&'static str, Slot>,
-    documents: HashMap<String, SyncedDocument>,
+    pub(super) state: Rc<LanguageState>,
     /// The latest diagnostics of each file, by server.
     pub(super) diagnostics: BTreeMap<String, BTreeMap<&'static str, Vec<Diagnostic>>>,
     /// Work in progress the servers report, such as indexing.
@@ -141,6 +141,109 @@ pub(super) struct Languages {
     #[cfg(test)]
     pub(super) fake: bool,
     _driver: Task<()>,
+}
+
+impl LanguageState {
+    /// Tells the servers that know `uri` its text is now `text`, if it
+    /// changed, as one small edit. Requests call this first with the text
+    /// they are about.
+    pub(super) fn sync(&self, uri: &str, text: &str) {
+        let mut documents = self.documents.borrow_mut();
+        let Some(document) = documents.get_mut(uri) else {
+            return;
+        };
+        let Some(change) = lsp::text::content_change(&document.text, text) else {
+            return;
+        };
+        document.version += 1;
+        document.text = text.to_owned();
+        let version = document.version;
+        let Ok(parsed) = uri.parse::<lsp_types::Uri>() else {
+            return;
+        };
+        for running in self.servers_for(uri) {
+            let change = match running.sync_kind() {
+                TextDocumentSyncKind::INCREMENTAL => change.clone(),
+                TextDocumentSyncKind::FULL => TextDocumentContentChangeEvent {
+                    range: None,
+                    range_length: None,
+                    text: text.to_owned(),
+                },
+                _ => continue,
+            };
+            running
+                .server
+                .notify::<DidChangeTextDocument>(DidChangeTextDocumentParams {
+                    text_document: VersionedTextDocumentIdentifier::new(parsed.clone(), version),
+                    content_changes: vec![change],
+                });
+        }
+    }
+
+    pub(super) fn saved(&self, uri: &str) {
+        let text = self
+            .documents
+            .borrow()
+            .get(uri)
+            .map(|document| document.text.clone());
+        for running in self.servers_for(uri) {
+            let Some(include_text) = running.save_options() else {
+                continue;
+            };
+            let Ok(parsed) = uri.parse() else { continue };
+            running
+                .server
+                .notify::<DidSaveTextDocument>(DidSaveTextDocumentParams {
+                    text_document: TextDocumentIdentifier::new(parsed),
+                    text: if include_text { text.clone() } else { None },
+                });
+        }
+    }
+
+    pub(super) fn closed(&self, uri: &str) {
+        for running in self.servers_for(uri) {
+            running.open.borrow_mut().remove(uri);
+            let Ok(parsed) = uri.parse() else { continue };
+            running
+                .server
+                .notify::<DidCloseTextDocument>(DidCloseTextDocumentParams {
+                    text_document: TextDocumentIdentifier::new(parsed),
+                });
+        }
+        self.documents.borrow_mut().remove(uri);
+    }
+
+    /// Tells `running` about `uri`, once.
+    pub(super) fn open_in_server(&self, running: &RunningServer, uri: &str) {
+        let documents = self.documents.borrow();
+        let Some(document) = documents.get(uri) else {
+            return;
+        };
+        if !running.open.borrow_mut().insert(uri.to_owned()) {
+            return;
+        }
+        let Ok(parsed) = uri.parse() else { return };
+        running
+            .server
+            .notify::<DidOpenTextDocument>(DidOpenTextDocumentParams {
+                text_document: TextDocumentItem::new(
+                    parsed,
+                    document.language_id.clone(),
+                    document.version,
+                    document.text.clone(),
+                ),
+            });
+    }
+
+    /// The running servers that know `uri`.
+    pub(super) fn servers_for(&self, uri: &str) -> Vec<Rc<RunningServer>> {
+        self.running
+            .borrow()
+            .values()
+            .filter(|running| running.open.borrow().contains(uri))
+            .cloned()
+            .collect()
+    }
 }
 
 impl Languages {
@@ -159,7 +262,7 @@ impl Languages {
         Self {
             sender,
             servers: HashMap::new(),
-            documents: HashMap::new(),
+            state: Rc::default(),
             diagnostics: BTreeMap::new(),
             progress: BTreeMap::new(),
             restarts: HashMap::new(),
@@ -170,45 +273,59 @@ impl Languages {
         }
     }
 
-    /// Queues what an extension-host notification says about a document.
+    /// Follows what an extension-host notification says about a document.
     /// Only files on disk go to language servers.
     pub(super) fn document_event(&self, method: &str, params: &Value) {
         let uri = params["uri"].as_str().unwrap_or_default();
         if !uri.starts_with("file:") {
             return;
         }
-        let uri = uri.to_owned();
-        let input = match method {
-            "documents/opened" => LspInput::Opened {
-                uri,
-                language_id: params["languageId"].as_str().unwrap_or_default().to_owned(),
-                text: params["text"].as_str().unwrap_or_default().to_owned(),
-            },
-            "documents/changed" => match params["text"].as_str() {
-                Some(text) => LspInput::Changed {
-                    uri,
-                    text: text.to_owned(),
-                },
-                None => return,
-            },
-            "documents/saved" => LspInput::Saved { uri },
-            "documents/closed" => LspInput::Closed { uri },
-            _ => return,
-        };
-        let _ = self.sender.unbounded_send(input);
+        match method {
+            "documents/opened" => {
+                let language_id = params["languageId"].as_str().unwrap_or_default().to_owned();
+                let text = params["text"].as_str().unwrap_or_default().to_owned();
+                self.state.documents.borrow_mut().insert(
+                    uri.to_owned(),
+                    SyncedDocument {
+                        language_id: language_id.clone(),
+                        version: 1,
+                        text,
+                    },
+                );
+                let _ = self.sender.unbounded_send(LspInput::Opened {
+                    uri: uri.to_owned(),
+                    language_id,
+                });
+            }
+            "documents/changed" => {
+                if let Some(text) = params["text"].as_str() {
+                    self.sync(uri, text);
+                }
+            }
+            "documents/saved" => self.saved(uri),
+            "documents/closed" => self.closed(uri),
+            _ => {}
+        }
     }
 
-    /// The running servers that know `uri`.
+    pub(super) fn sync(&self, uri: &str, text: &str) {
+        self.state.sync(uri, text);
+    }
+
+    fn saved(&self, uri: &str) {
+        self.state.saved(uri);
+    }
+
+    fn closed(&self, uri: &str) {
+        self.state.closed(uri);
+    }
+
+    pub(super) fn open_in_server(&self, running: &RunningServer, uri: &str) {
+        self.state.open_in_server(running, uri);
+    }
+
     pub(super) fn servers_for(&self, uri: &str) -> Vec<Rc<RunningServer>> {
-        self.servers
-            .values()
-            .filter_map(|slot| match slot {
-                Slot::Running(running) if running.open.borrow().contains(uri) => {
-                    Some(running.clone())
-                }
-                _ => None,
-            })
-            .collect()
+        self.state.servers_for(uri)
     }
 
     /// What the servers are busy with, for the status bar.
@@ -233,19 +350,10 @@ impl Languages {
 impl Workbench {
     pub(super) fn lsp_input(&mut self, input: LspInput, cx: &mut Context<Self>) {
         match input {
-            LspInput::Opened {
-                uri,
-                language_id,
-                text,
-            } => {
-                self.languages.documents.insert(
-                    uri.clone(),
-                    SyncedDocument {
-                        language_id: language_id.clone(),
-                        version: 1,
-                        text,
-                    },
-                );
+            LspInput::Opened { uri, language_id } => {
+                if !self.languages.state.documents.borrow().contains_key(&uri) {
+                    return;
+                }
                 let Some(root) = self.server_root(&uri) else {
                     return;
                 };
@@ -256,44 +364,12 @@ impl Workbench {
                     match self.languages.servers.get(spec.id) {
                         Some(Slot::Running(running)) => {
                             let running = running.clone();
-                            self.open_in_server(&running, &uri);
+                            self.languages.open_in_server(&running, &uri);
                         }
                         Some(_) => {}
                         None => self.start_server(spec, root.clone(), cx),
                     }
                 }
-            }
-            LspInput::Changed { uri, text } => self.document_changed(&uri, text),
-            LspInput::Saved { uri } => {
-                let text = self
-                    .languages
-                    .documents
-                    .get(&uri)
-                    .map(|document| document.text.clone());
-                for running in self.languages.servers_for(&uri) {
-                    let Some(include_text) = running.save_options() else {
-                        continue;
-                    };
-                    let Ok(parsed) = uri.parse() else { continue };
-                    running
-                        .server
-                        .notify::<DidSaveTextDocument>(DidSaveTextDocumentParams {
-                            text_document: TextDocumentIdentifier::new(parsed),
-                            text: if include_text { text.clone() } else { None },
-                        });
-                }
-            }
-            LspInput::Closed { uri } => {
-                for running in self.languages.servers_for(&uri) {
-                    running.open.borrow_mut().remove(&uri);
-                    let Ok(parsed) = uri.parse() else { continue };
-                    running
-                        .server
-                        .notify::<DidCloseTextDocument>(DidCloseTextDocumentParams {
-                            text_document: TextDocumentIdentifier::new(parsed),
-                        });
-                }
-                self.languages.documents.remove(&uri);
             }
             LspInput::Server {
                 id,
@@ -470,15 +546,22 @@ impl Workbench {
         self.languages
             .servers
             .insert(spec.id, Slot::Running(running.clone()));
+        self.languages
+            .state
+            .running
+            .borrow_mut()
+            .insert(spec.id, running.clone());
         let uris: Vec<String> = self
             .languages
+            .state
             .documents
+            .borrow()
             .iter()
             .filter(|(_, document)| spec.serves(&document.language_id))
             .map(|(uri, _)| uri.clone())
             .collect();
         for uri in uris {
-            self.open_in_server(&running, &uri);
+            self.languages.open_in_server(&running, &uri);
         }
         if self
             .status_message
@@ -509,58 +592,6 @@ impl Workbench {
         );
         self.status_message = Some(message);
         cx.notify();
-    }
-
-    fn open_in_server(&self, running: &RunningServer, uri: &str) {
-        let Some(document) = self.languages.documents.get(uri) else {
-            return;
-        };
-        if !running.open.borrow_mut().insert(uri.to_owned()) {
-            return;
-        }
-        let Ok(parsed) = uri.parse() else { return };
-        running
-            .server
-            .notify::<DidOpenTextDocument>(DidOpenTextDocumentParams {
-                text_document: TextDocumentItem::new(
-                    parsed,
-                    document.language_id.clone(),
-                    document.version,
-                    document.text.clone(),
-                ),
-            });
-    }
-
-    fn document_changed(&mut self, uri: &str, text: String) {
-        let Some(document) = self.languages.documents.get_mut(uri) else {
-            return;
-        };
-        let Some(change) = lsp::text::content_change(&document.text, &text) else {
-            return;
-        };
-        document.version += 1;
-        let version = document.version;
-        document.text = text;
-        let Ok(parsed) = uri.parse::<lsp_types::Uri>() else {
-            return;
-        };
-        for running in self.languages.servers_for(uri) {
-            let change = match running.sync_kind() {
-                TextDocumentSyncKind::INCREMENTAL => change.clone(),
-                TextDocumentSyncKind::FULL => TextDocumentContentChangeEvent {
-                    range: None,
-                    range_length: None,
-                    text: self.languages.documents[uri].text.clone(),
-                },
-                _ => continue,
-            };
-            running
-                .server
-                .notify::<DidChangeTextDocument>(DidChangeTextDocumentParams {
-                    text_document: VersionedTextDocumentIdentifier::new(parsed.clone(), version),
-                    content_changes: vec![change],
-                });
-        }
     }
 
     fn server_event(
@@ -710,6 +741,7 @@ impl Workbench {
         cx: &mut Context<Self>,
     ) {
         self.languages.servers.remove(spec.id);
+        self.languages.state.running.borrow_mut().remove(spec.id);
         self.languages.progress.retain(|(id, _), _| *id != spec.id);
         // Its diagnostics are gone with it.
         let uris: Vec<String> = self
@@ -753,7 +785,9 @@ impl Workbench {
     fn restart_for_open_documents(&mut self, spec: &'static ServerSpec, cx: &mut Context<Self>) {
         let uri = self
             .languages
+            .state
             .documents
+            .borrow()
             .iter()
             .find(|(_, document)| spec.serves(&document.language_id))
             .map(|(uri, _)| uri.clone());
@@ -780,6 +814,7 @@ impl Workbench {
             }
         }
         self.languages.servers.clear();
+        self.languages.state.running.borrow_mut().clear();
         self.languages.restarts.clear();
         self.languages.progress.clear();
         let uris: Vec<String> = self.languages.diagnostics.keys().cloned().collect();
@@ -789,7 +824,9 @@ impl Workbench {
         }
         let documents: Vec<(String, String)> = self
             .languages
+            .state
             .documents
+            .borrow()
             .iter()
             .map(|(uri, document)| (uri.clone(), document.language_id.clone()))
             .collect();

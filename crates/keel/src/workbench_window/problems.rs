@@ -125,6 +125,21 @@ impl<'a> LineIndex<'a> {
         start + line.len()
     }
 
+    /// The editor's position (column in characters) of a byte offset.
+    pub(super) fn editor_position_of(&self, offset: usize) -> EditorPosition {
+        let offset = offset.min(self.text.len());
+        let line = match self.starts.binary_search(&offset) {
+            Ok(line) => line,
+            Err(next) => next - 1,
+        };
+        let start = self.starts[line];
+        let mut end = offset;
+        while !self.text.is_char_boundary(end) {
+            end -= 1;
+        }
+        EditorPosition::new(line as u32, self.text[start..end].chars().count() as u32)
+    }
+
     /// The editor's position (column in characters) of an LSP position.
     pub(super) fn editor_position(&self, position: lsp_types::Position) -> EditorPosition {
         let line = self.line(position.line);
@@ -782,6 +797,11 @@ mod tests {
         assert_eq!(&text[lines.offset(x)..lines.offset(x) + 1], "x");
         assert_eq!(lines.offset(Position::new(1, 99)), text.len() - 1);
         assert_eq!(lines.offset(Position::new(9, 0)), text.len());
+        // And back from bytes: "x" is the 9th character of line 1.
+        assert_eq!(
+            lines.editor_position_of(text.find('x').unwrap()),
+            EditorPosition::new(1, 8)
+        );
     }
 
     fn window(

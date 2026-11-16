@@ -7,6 +7,7 @@ mod disk;
 mod editing;
 pub(crate) mod explorer;
 mod git_gutter;
+mod language_features;
 mod language_servers;
 mod navigation;
 mod npm_scripts;
@@ -16,6 +17,7 @@ mod problems;
 mod restore;
 mod search_view;
 mod shell;
+mod signature_help;
 mod source_control;
 mod tabs;
 mod terminal_view;
@@ -41,6 +43,7 @@ pub(crate) use language_servers::RestartLanguageServers;
 pub(crate) use npm_scripts::RunNpmScript;
 pub(crate) use problems::{NextProblem, PreviousProblem};
 pub(crate) use shell::window_options;
+pub(crate) use signature_help::TriggerParameterHints;
 pub(crate) use source_control::{
     CheckoutBranch, Commit, CommitAmend, CreateBranch, DiscardAll, GitFetch, GitPull, GitPush,
     GitRefresh, GitStash, GitStashPop, GitSync, StageAll, UnstageAll,
@@ -52,6 +55,7 @@ pub(crate) use terminals::{
     SplitTerminal, ToggleMaximizedPanel,
 };
 
+use std::cell::RefCell;
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::ops::Range;
 use std::path::{Path, PathBuf};
@@ -247,6 +251,8 @@ struct Pane {
     gutter: Option<GutterDecorationCollection>,
     /// The blocks that differ from the staged version, for the margin.
     hunks: Vec<git::Hunk>,
+    /// The completions offered last, to finish the one picked.
+    completions: Rc<RefCell<language_features::CompletionSession>>,
     _subscriptions: Vec<Subscription>,
 }
 
@@ -383,6 +389,12 @@ pub struct Workbench {
     languages: language_servers::Languages,
     /// Their errors and warnings, as the Problems view lists them.
     problems: problems::ProblemsView,
+    /// A snippet being filled in, and the snippet files read so far.
+    snippet: Option<language_features::ActiveSnippet>,
+    snippet_files: Rc<RefCell<language_features::SnippetFiles>>,
+    /// The signature shown above the cursor.
+    signature: Option<signature_help::SignatureState>,
+    signature_task: Task<()>,
     _subscriptions: Vec<Subscription>,
 }
 
@@ -521,6 +533,10 @@ impl Workbench {
             first_frame_drawn: false,
             languages: language_servers::Languages::new(cx),
             problems: Default::default(),
+            snippet: None,
+            snippet_files: Default::default(),
+            signature: None,
+            signature_task: Task::ready(()),
             _subscriptions: subscriptions,
         };
         workbench.build_tree();
@@ -534,6 +550,7 @@ impl Workbench {
         workbench.index_files(cx);
         workbench.watch_project(window, cx);
         workbench.data_dir = opening.data_dir.clone();
+        workbench.snippet_files.borrow_mut().data_dir = workbench.data_dir.clone();
         workbench.restore(window, cx);
         if let Some(setup) = extensions {
             workbench.start_extensions(setup, window, cx);
@@ -820,6 +837,10 @@ impl Workbench {
         let old = std::mem::replace(&mut document.synced_text, text.clone());
         let modified = document.modified;
         self.notify_host("documents/changed", params);
+        // A completion picked from the menu is finished here, and the
+        // signature follows typing.
+        self.after_text_change(index, &old, &text, window, cx);
+        self.signature_after_change(index, &old, &text, window, cx);
         // The underlines move with the text until the servers say more.
         if self.languages.diagnostics.contains_key(uri) {
             self.shift_problems(uri, &old, &text);
@@ -1497,8 +1518,32 @@ impl Workbench {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> bool {
-        // Typing `>` in JSX or HTML closes the tag, as in VS Code.
         let keystroke = &event.keystroke;
+        if self.active_editor_focused(window, cx) {
+            self.track_completion_keys(keystroke, cx);
+            let menu_open = self
+                .active_editor()
+                .is_some_and(|editor| editor.read(cx).completion_menu_state().open);
+            let modifiers = keystroke.modifiers;
+            // Tab moves through a snippet's places, unless the menu wants it.
+            if keystroke.key == "tab"
+                && !menu_open
+                && !modifiers.platform
+                && !modifiers.control
+                && !modifiers.alt
+                && self.snippet.is_some()
+                && self.move_in_snippet(!modifiers.shift, window, cx)
+            {
+                return true;
+            }
+            if keystroke.key == "escape" && !modifiers.modified() {
+                self.close_signature_help(cx);
+                if !menu_open {
+                    self.snippet = None;
+                }
+            }
+        }
+        // Typing `>` in JSX or HTML closes the tag, as in VS Code.
         if keystroke.key_char.as_deref() == Some(">")
             && !keystroke.modifiers.platform
             && !keystroke.modifiers.control
@@ -2181,39 +2226,37 @@ impl Workbench {
         }
     }
 
-    /// Gives a pane's editor the completion providers that match its document.
+    /// Gives a pane's editor its completions: from the language servers,
+    /// snippets, and the extensions that provide them for its document.
     fn install_completions(&mut self, index: usize, cx: &mut Context<Self>) {
-        let Some(extensions) = &self.extensions else {
-            return;
-        };
-        let pane = &self.panes[index];
-        let Some(document) = self.documents.get(&pane.uri) else {
-            return;
-        };
+        let extension = self.extension_completions(index);
+        self.install_language_features(index, extension, cx);
+    }
+
+    /// The extensions' completion provider for pane `index`, if any matches.
+    fn extension_completions(&self, index: usize) -> Option<ExtensionCompletions> {
+        let extensions = self.extensions.as_ref()?;
+        let pane = self.panes.get(index)?;
+        let document = self.documents.get(&pane.uri)?;
         let scheme = Uri::parse(&document.uri)
             .map(|uri| uri.scheme)
             .unwrap_or_default();
-        let triggers: Vec<String> = extensions
+        let matching: Vec<&(u64, Value, Vec<String>)> = extensions
             .completion_providers
             .iter()
             .filter(|(_, selector, _)| selector_matches(selector, &scheme, &document.language_id))
-            .flat_map(|(_, _, triggers)| triggers.clone())
             .collect();
-        let matches = extensions
-            .completion_providers
-            .iter()
-            .any(|(_, selector, _)| selector_matches(selector, &scheme, &document.language_id));
-        if !matches {
-            return;
+        if matching.is_empty() {
+            return None;
         }
-        let provider = ExtensionCompletions {
+        Some(ExtensionCompletions {
             host: extensions.host.clone(),
             uri: pane.uri.clone(),
-            triggers,
-        };
-        pane.editor.update(cx, |editor, _| {
-            editor.lsp_mut().completion_provider = Some(Rc::new(provider));
-        });
+            triggers: matching
+                .iter()
+                .flat_map(|(_, _, triggers)| triggers.clone())
+                .collect(),
+        })
     }
 
     /// Recomputes the green "added lines" bars shortly after the last change.

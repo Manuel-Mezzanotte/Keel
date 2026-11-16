@@ -153,8 +153,11 @@ impl Workbench {
                 }
             },
         );
-        // The block bar follows the cursor.
-        let cursor = cx.observe(&editor, |this, _, cx| this.update_hunk_bar(cx));
+        // The block bar and the signature follow the cursor.
+        let cursor = cx.observe_in(&editor, window, |this, _, window, cx| {
+            this.update_hunk_bar(cx);
+            this.signature_after_cursor_move(window, cx);
+        });
         self.underline_editor(uri, &editor, cx);
         Some(Pane {
             editor_id,
@@ -163,6 +166,7 @@ impl Workbench {
             decorations: HashMap::new(),
             gutter: None,
             hunks: Vec::new(),
+            completions: Default::default(),
             _subscriptions: vec![subscription, cursor],
         })
     }

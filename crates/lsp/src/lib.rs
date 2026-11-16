@@ -11,6 +11,7 @@ mod client;
 pub mod fake;
 pub mod rpc;
 pub mod servers;
+pub mod snippet;
 pub mod text;
 
 pub use client::{LanguageServer, Response, ResponseError, ServerCommand, ServerEvent, section_of};

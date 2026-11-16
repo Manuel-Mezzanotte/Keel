@@ -881,11 +881,28 @@ Con albero, schede, ricerca dei file e controllo della cartella, Keel è cresciu
 | 6.1 | Colori della sintassi per JavaScript, HTML, CSS, JSON, Markdown, YAML, TOML, Rust e `.env` (oggi solo TypeScript) | fatta |
 | 6.2 | Motore LSP (crate `lsp`): processo, messaggi, documenti aperti, richieste del server, riavvio dopo un crash, registro nell'Output; trova o installa i server | fatta |
 | 6.3 | Errori e avvisi: sottolineature, pannello Problemi, numeri nella barra di stato, F8 per passare al successivo | fatta |
-| 6.4 | Scrivere: completamenti con snippet, info al passaggio del mouse, firma delle funzioni, snippet nel formato di VS Code | da fare |
+| 6.4 | Scrivere: completamenti con snippet, info al passaggio del mouse, firma delle funzioni, snippet nel formato di VS Code | fatta |
 | 6.5 | Navigare: definizione, implementazione e tipo, riferimenti, rinomina, struttura del file (Cmd+Maiusc+O), simboli del progetto (Cmd+T) | da fare |
 | 6.6 | Correggere e formattare: azioni rapide (Cmd+.), formattazione anche al salvataggio, Prettier del progetto, correzioni di ESLint | da fare |
 | 6.7 | I server: TypeScript (`vtsls`), HTML, CSS, JSON, ESLint, Emmet, Tailwind, Prisma, Markdown, YAML, TOML e `rust-analyzer`; prove sui due gestionali e su Keel | da fare |
 | 6.8 | Misure e resoconto | da fare |
+
+**Note sulla 6.4**
+- **Completamenti** dai server, dalle estensioni e dagli snippet, in un solo menu:
+  - compaiono mentre scrivi una parola e dopo i caratteri del server, come `.`; Ctrl+Spazio li chiede a mano;
+  - le lettere scritte devono comparire in ordine nel nome (`ust` trova `useState`), e prima vengono i nomi che cominciano così;
+  - le lettere trovate sono evidenziate.
+- **Import automatici:** scegliendo un nome da un altro modulo, Keel aggiunge la riga di `import` in cima. Se il server la dà solo su richiesta, come TypeScript, la chiede subito dopo. Il cursore resta dov'era.
+- **Come Keel capisce cosa hai scelto.** gpui-component inserisce da solo la voce del menu, ma non dice quale. Keel la riconosce dal testo inserito. Se più voci inseriscono lo stesso testo (per esempio `Button` da due moduli), segue le frecce che hai premuto nel menu; scegliendo col mouse fra voci uguali vale la prima.
+- **Snippet:**
+  - i completamenti con segnaposto (`console.log($1)`) mettono il cursore al primo posto, con il testo predefinito selezionato;
+  - Tab passa al posto dopo, Maiusc+Tab torna indietro, Esc esce;
+  - variabili come `TM_FILENAME` e `CURRENT_YEAR` si riempiono da sole.
+- **I tuoi snippet:** si leggono nel formato di VS Code dalla cartella `snippets` di Keel: `typescript.json` per un linguaggio, oppure `*.code-snippets` con `scope`. Si possono copiare da quella di Cursor. Valgono anche gli snippet delle estensioni installate.
+- **Info al passaggio del mouse:** tipo e documentazione dal server. Sopra un errore compare il suo messaggio.
+- **Firma delle funzioni:** dopo `(` o `,` compare sopra il cursore la firma, con il parametro che stai scrivendo in grassetto, e segue il cursore. Dopo il completamento di una funzione compare da sola; Cmd+Maiusc+Spazio la chiede a mano, Esc la chiude.
+- **Velocità:** 2.000 voci di un server si preparano in 1,6 ms. A ogni tasto il server riceve prima la modifica e poi la richiesta, quindi lavora sempre sul testo giusto.
+- **Rimandati:** i suggerimenti in linea (i tipi scritti in grigio dentro il codice) vogliono del testo «virtuale» che l'editor di gpui-component non sa disegnare. Restano per la fase 12. Il tipo si legge intanto passando col mouse.
 
 **Note sulla 6.3**
 - **Sottolineature:** rosse per gli errori, gialle per gli avvisi, blu per le informazioni. Passandoci sopra col mouse compare il messaggio.
