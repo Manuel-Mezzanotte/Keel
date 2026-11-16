@@ -154,9 +154,10 @@ impl Workbench {
             },
         );
         // The block bar and the signature follow the cursor.
-        let cursor = cx.observe_in(&editor, window, |this, _, window, cx| {
+        let cursor = cx.observe_in(&editor, window, |this, editor, window, cx| {
             this.update_hunk_bar(cx);
             this.signature_after_cursor_move(window, cx);
+            this.sync_preview_from_editor(&editor, cx);
         });
         self.underline_editor(uri, &editor, cx);
         Some(Pane {

@@ -405,6 +405,10 @@ pub struct Workbench {
     /// A snippet being filled in, and the snippet files read so far.
     snippet: Option<language_features::ActiveSnippet>,
     snippet_files: Rc<RefCell<language_features::SnippetFiles>>,
+    /// Which of editor and preview scrolled the other last, and the top
+    /// row each preview was last scrolled to.
+    preview_sync: Option<(markdown_preview::SyncSide, std::time::Instant)>,
+    preview_tops: HashMap<String, usize>,
     /// The signature shown above the cursor.
     signature: Option<signature_help::SignatureState>,
     signature_task: Task<()>,
@@ -550,6 +554,8 @@ impl Workbench {
             snippet_files: Default::default(),
             signature: None,
             signature_task: Task::ready(()),
+            preview_sync: None,
+            preview_tops: HashMap::new(),
             _subscriptions: subscriptions,
         };
         workbench.build_tree();

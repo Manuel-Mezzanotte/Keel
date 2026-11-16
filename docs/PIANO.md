@@ -1087,10 +1087,22 @@ Apri Keel su GestionaleHospitality. La prima volta i server si installano da sol
 | Sottofase | Cosa | Stato |
 |---|---|---|
 | 7.1 | Anteprima Markdown in una scheda, affiancata (Cmd+K V) o al posto dell'editor (Cmd+Maiusc+V), aggiornata mentre scrivi, con i colori del tema | fatta |
-| 7.2 | Scorrimento sincronizzato nei due versi; link ad altri file, a titoli e al web; immagini locali; liste di controllo da spuntare | da fare |
+| 7.2 | Scorrimento sincronizzato nei due versi; link ad altri file, a titoli e al web; immagini locali; liste di controllo da spuntare | fatta |
 | 7.3 | Immagini e SVG con zoom | da fare |
 | 7.4 | PDF in una scheda con PDFKit: pagine, zoom, miniature, ricerca, copia del testo | da fare |
 | 7.5 | Misure e resoconto | da fare |
+
+**Note sulla 7.2**
+- **Scorrimento sincronizzato nei due versi,** come in VS Code: scorrendo l'editor, l'anteprima mostra in cima il blocco della prima riga visibile; scorrendo l'anteprima, l'editor va alla riga del blocco in cima.
+  - L'anteprima è una lista con una riga per ogni blocco del Markdown (titolo, paragrafo, lista, tabella…). Keel trova dove comincia ogni blocco con lo stesso parser che usa gpui-component.
+  - Per un quarto di secondo dopo uno scorrimento, il lato che è stato spostato non sposta l'altro: così i due non si rincorrono.
+- **Link:**
+  - una pagina web si apre nel browser;
+  - `#titolo` porta al titolo, con le ancore di GitHub (`## Le tue prove` diventa `#le-tue-prove`);
+  - un file del progetto, anche con spazi (`Il%20piano.md`), si apre in Keel nel gruppo dell'editor, non sopra l'anteprima.
+- **Immagini:** quelle con percorso relativo si cercano nella cartella del file Markdown; quelle sul web si scaricano.
+- **Liste di controllo:** un clic sulla casella mette o toglie la `x` nel testo, e si annulla con Cmd+Z nell'editor.
+- **Un difetto della 7.1 corretto qui:** l'elemento della vista Markdown, se non glielo si dice, non scorre da solo, quindi i file lunghi restavano tagliati.
 
 **Note sulla 7.1**
 - **Aprire l'anteprima:**
@@ -1099,7 +1111,7 @@ Apri Keel su GestionaleHospitality. La prima volta i server si installano da sol
   - sui file Markdown c'è anche un pulsante in fondo alla fila delle schede;
   - i due comandi sono anche nella tavolozza.
 - **Si aggiorna a ogni tasto,** anche col file non salvato.
-- **La disegna gpui-component,** con i colori del tema e nello stile di GitHub:
+- **La disegna gpui-component,** con i colori del tema e nello stile di GitHub; solo le righe visibili vengono disegnate, quindi anche i file lunghi scorrono leggeri:
   - titoli, tabelle, liste di controllo, testo barrato, link, citazioni;
   - blocchi di codice colorati con le grammatiche di Keel;
   - il testo si può selezionare e copiare.

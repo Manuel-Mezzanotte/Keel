@@ -3791,6 +3791,7 @@ dependencies = [
  "language",
  "lsp",
  "lsp-types",
+ "markdown",
  "serde",
  "serde_json",
  "settings",
