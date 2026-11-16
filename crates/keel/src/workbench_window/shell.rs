@@ -977,10 +977,14 @@ impl Workbench {
                             .flex_1()
                             .min_h_0()
                             .relative()
+                            .flex()
                             .key_context(super::EDITOR_CONTEXT)
+                            .children(self.render_blame_column(index, cx))
                             .child(
                                 Editor::new(&pane.editor)
-                                    .size_full()
+                                    .flex_1()
+                                    .min_w_0()
+                                    .h_full()
                                     .bordered(false)
                                     .text_size(px(self.font_size)),
                             )
@@ -1263,6 +1267,10 @@ impl Workbench {
         if let Some(message) = &self.status_message {
             left.push(message.clone());
         }
+        // Who wrote the line under the cursor, while the column is on.
+        if let Some(blame) = self.current_line_blame(cx) {
+            left.push(blame);
+        }
         // A server at work, such as rust-analyzer indexing.
         if let Some(progress) = self.languages.progress_text() {
             left.push(progress.to_owned());
@@ -1433,6 +1441,7 @@ impl Render for Workbench {
         let root = self.pdf_actions(root, cx);
         let root = self.git_graph_actions(root, cx);
         let root = self.commit_view_actions(root, cx);
+        let root = self.blame_actions(root, cx);
         let root = self.editing_actions(root, cx);
         self.explorer_actions(root, cx)
             .size_full()

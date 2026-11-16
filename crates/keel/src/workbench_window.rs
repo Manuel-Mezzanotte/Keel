@@ -1,6 +1,7 @@
 //! The workbench: the window with its panels and editors, and the bridge
 //! between Keel and the extension host. The layout is drawn in `shell`.
 
+mod blame;
 mod claude_code;
 mod code_actions;
 mod code_navigation;
@@ -43,6 +44,7 @@ pub(crate) use tabs::{
 };
 use tabs::{Group, OpenAs};
 
+pub(crate) use blame::{ShowFileHistory, ToggleBlame};
 pub(crate) use claude_code::{OpenClaudeCode, OpenClaudeCodeInPanel};
 pub(crate) use code_actions::{FormatDocument, OrganizeImports};
 pub(crate) use code_navigation::{
@@ -419,6 +421,8 @@ pub struct Workbench {
     /// row each preview was last scrolled to.
     preview_sync: Option<(markdown_preview::SyncSide, std::time::Instant)>,
     preview_tops: HashMap<String, usize>,
+    /// The files whose authors' column is on.
+    blame: blame::BlameMap,
     /// The commit chosen in Git Graph, shown under it.
     commit_view: Option<commit_view::CommitView>,
     /// The zoom of each image tab (fit when missing) and the images' sizes.
@@ -573,6 +577,7 @@ impl Workbench {
             preview_tops: HashMap::new(),
             image_zoom: HashMap::new(),
             commit_view: None,
+            blame: HashMap::new(),
             image_sizes: RefCell::new(HashMap::new()),
             _subscriptions: subscriptions,
         };
@@ -880,6 +885,7 @@ impl Workbench {
         let modified = document.modified;
         self.notify_host("documents/changed", params);
         self.update_previews(uri, &text, cx);
+        self.refresh_blame(uri, true, cx);
         // A completion picked from the menu is finished here, and the
         // signature follows typing.
         self.after_text_change(index, &old, &text, window, cx);

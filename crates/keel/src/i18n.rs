@@ -405,6 +405,11 @@ pub struct Strings {
     pub graph_merge_question_text: &'static str,
     pub graph_delete_branch_question_text: &'static str,
     pub graph_delete_tag_question_text: &'static str,
+    pub command_toggle_blame: &'static str,
+    pub command_file_history: &'static str,
+    pub blame_not_in_git: &'static str,
+    pub blame_uncommitted: &'static str,
+    pub file_history_title_text: &'static str,
 }
 
 impl Strings {
@@ -458,6 +463,8 @@ impl Strings {
             "editor.action.formatDocument" => self.command_format_document,
             "markdown.showPreview" => self.command_markdown_preview,
             "git-graph.view" => self.command_git_graph,
+            "gitlens.toggleFileBlame" => self.command_toggle_blame,
+            "keel.showFileHistory" => self.command_file_history,
             "markdown.showPreviewToSide" => self.command_markdown_preview_side,
             "editor.action.organizeImports" => self.command_organize_imports,
             "workbench.action.gotoSymbol" => self.command_symbol_in_file,
@@ -652,6 +659,10 @@ impl Strings {
         self.pdf_page_text
             .replace("{page}", &page.to_string())
             .replace("{count}", &count.to_string())
+    }
+
+    pub fn file_history_title(&self, name: &str) -> String {
+        self.file_history_title_text.replace("{name}", name)
     }
 
     pub fn graph_load_more(&self, count: usize) -> String {
@@ -1102,6 +1113,11 @@ pub const ITALIAN: Strings = Strings {
     graph_merge_question_text: "Vuoi fare il merge di «{name}» nel branch corrente?",
     graph_delete_branch_question_text: "Vuoi eliminare il branch «{name}»?",
     graph_delete_tag_question_text: "Vuoi eliminare il tag «{name}»?",
+    command_toggle_blame: "Git: Mostra o nascondi l'autore delle righe",
+    command_file_history: "Git: Storico del file",
+    blame_not_in_git: "Questo file non è in un repository git.",
+    blame_uncommitted: "Non ancora committato",
+    file_history_title_text: "Storico di {name}",
 };
 
 pub const ENGLISH: Strings = Strings {
@@ -1464,6 +1480,11 @@ pub const ENGLISH: Strings = Strings {
     graph_merge_question_text: "Do you want to merge \"{name}\" into the current branch?",
     graph_delete_branch_question_text: "Do you want to delete branch \"{name}\"?",
     graph_delete_tag_question_text: "Do you want to delete tag \"{name}\"?",
+    command_toggle_blame: "Git: Toggle File Blame",
+    command_file_history: "Git: File History",
+    blame_not_in_git: "This file is not in a git repository.",
+    blame_uncommitted: "Not committed yet",
+    file_history_title_text: "History of {name}",
 };
 
 #[cfg(test)]

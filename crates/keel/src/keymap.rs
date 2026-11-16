@@ -41,6 +41,7 @@ use crate::workbench_window::{NextChange, PreviousChange, RevertChange, StageCha
 use crate::workbench_window::{
     NextProblem, PreviousProblem, RestartLanguageServers, TriggerParameterHints,
 };
+use crate::workbench_window::{ShowFileHistory, ToggleBlame};
 use crate::workbench_window::{ShowMarkdownPreview, ShowMarkdownPreviewToSide};
 
 /// A Keel command: its VS Code name, the action it runs and its default key.
@@ -246,6 +247,18 @@ pub const COMMANDS: &[KeelCommand] = &[
         action: || Box::new(TriggerParameterHints),
         default_key: Some("cmd+shift+space"),
         context: Some(EDITOR_CONTEXT),
+    },
+    KeelCommand {
+        id: "gitlens.toggleFileBlame",
+        action: || Box::new(ToggleBlame),
+        default_key: None,
+        context: None,
+    },
+    KeelCommand {
+        id: "keel.showFileHistory",
+        action: || Box::new(ShowFileHistory),
+        default_key: None,
+        context: None,
     },
     KeelCommand {
         id: "git-graph.view",

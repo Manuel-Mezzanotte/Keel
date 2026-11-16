@@ -1016,6 +1016,11 @@ impl Workbench {
     fn git_status_changed(&mut self, cx: &mut Context<Self>) {
         self.refresh_open_diffs(cx);
         self.git_graph_changed(cx);
+        // A commit or a checkout changes who wrote the lines.
+        let blamed: Vec<String> = self.blame.keys().cloned().collect();
+        for uri in blamed {
+            self.refresh_blame(&uri, false, cx);
+        }
         self.forget_git_baselines(cx);
     }
 }

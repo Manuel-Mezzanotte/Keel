@@ -1194,8 +1194,18 @@ Apri Keel su GestionaleHospitality. La prima volta i server si installano da sol
 | 8.1 | Motore (crate `git`): storico con branch e tag, corsie e colori del grafico, dettagli e file di un commit, azioni, storico di un file, autore di ogni riga | fatta |
 | 8.2 | Scheda «Git Graph»: grafico con linee colorate, descrizione, data, autore e hash; filtro per branch; ricerca; altri commit a richiesta | fatta |
 | 8.3 | Dettaglio di un commit (file cambiati, differenze) e azioni dal menu: checkout, crea branch o tag, copia l'hash, cherry-pick, revert, merge, elimina branch, con conferma | fatta |
-| 8.4 | Storico di un file e autore di ogni riga nell'editor, attivabile | da fare |
+| 8.4 | Storico di un file e autore di ogni riga nell'editor, attivabile | fatta |
 | 8.5 | Misure e resoconto | da fare |
+
+**Note sulla 8.4**
+- **Autore di ogni riga** («Git: Mostra o nascondi l'autore delle righe», id `gitlens.toggleFileBlame` come in GitLens):
+  - a sinistra dell'editor compare una colonna con data e autore, una sola volta dove comincia ogni commit, divisa da una linea sottile; segue l'editor quando scorre;
+  - un clic su un'etichetta apre Git Graph sul commit;
+  - nella barra di stato c'è autore, data e messaggio della riga del cursore;
+  - conta anche le modifiche non salvate: una riga nuova è «Non ancora committato». Si aggiorna mezzo secondo dopo che smetti di scrivere, e dopo un commit o un checkout.
+
+  GitLens scrive l'autore a fine riga, ma l'editor di gpui-component non sa disegnare testo dentro le righe: per questo è una colonna.
+- **Storico di un file** («Git: Storico del file», o tasto destro su un file nell'Esplora risorse): l'elenco dei commit che l'hanno cambiato, anche prima di una rinomina, con hash, autore e data. Si filtra scrivendo, e quello scelto apre le sue modifiche al file.
 
 **Note sulla 8.3**
 - **Un clic su un commit** apre sotto il grafico il suo dettaglio:

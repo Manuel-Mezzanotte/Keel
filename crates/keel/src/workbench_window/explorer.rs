@@ -982,6 +982,16 @@ impl Workbench {
                 } else {
                     menu
                 };
+                let menu = if is_dir {
+                    menu
+                } else {
+                    menu.menu(
+                        strings.command_file_history,
+                        Box::new(super::blame::ShowFileHistoryOf {
+                            path: menu_path.clone(),
+                        }),
+                    )
+                };
                 menu.menu(
                     strings.explorer_reveal,
                     Box::new(RevealInFinder {
