@@ -573,8 +573,18 @@ Con albero, schede, ricerca dei file e controllo della cartella, Keel è cresciu
 |---|---|---|
 | 3.1 | Motore di ricerca: maiuscole, parola intera, regex, cartelle da includere ed escludere, `.gitignore`, file binari saltati; sostituzione con i gruppi della regex | fatta |
 | 3.2 | Vista Cerca nella barra laterale (Cmd+Shift+F): campi e interruttori, risultati per file, clic che porta alla riga | fatta |
-| 3.3 | Sostituisci in tutti i file con l'anteprima, per file o tutto insieme | da fare |
+| 3.3 | Sostituisci in tutti i file con l'anteprima, per file o tutto insieme | fatta |
 | 3.4 | Cerca e sostituisci nel file (Cmd+F), misure e resoconto | da fare |
+
+**Note sulla 3.3**
+- **La freccia** a sinistra del campo di ricerca mostra il campo Sostituisci, come in VS Code.
+- **Anteprima:** ogni riga mostra il testo trovato barrato in rosso e, accanto, quello nuovo in verde, aggiornati mentre scrivi. Con una regex l'anteprima usa anche `$1`.
+- **Sostituisci nel file** compare su ogni file dei risultati.
+- **Sostituisci tutto** chiede prima, con quante occorrenze e quanti file.
+- **File aperti e chiusi:**
+  - i file aperti cambiano nell'editor: si annulla con Cmd+Z e il salvataggio resta tuo;
+  - i file chiusi vengono scritti subito, in un passo solo.
+- Alla fine la barra di stato dice quante sostituzioni ha fatto, e la ricerca riparte.
 
 **Note sulla 3.2**
 - **Cmd+Shift+F** apre la vista Cerca nella barra laterale e mette nel campo il testo selezionato nell'editor.

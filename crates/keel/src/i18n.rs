@@ -189,6 +189,11 @@ pub struct Strings {
     pub searching: &'static str,
     pub no_results: &'static str,
     pub results_limited: &'static str,
+    pub replace_placeholder: &'static str,
+    pub toggle_replace: &'static str,
+    pub replace_all: &'static str,
+    pub replace_in_file: &'static str,
+    pub replace_detail: &'static str,
     pub overwrite_detail: &'static str,
     pub command_toggle_sidebar: &'static str,
     pub command_toggle_panel: &'static str,
@@ -209,6 +214,8 @@ pub struct Strings {
     go_to_line: &'static str,
     changed_on_disk: &'static str,
     not_text: &'static str,
+    replace_question: &'static str,
+    replaced_summary: &'static str,
     results: [&'static str; 4],
     large_file: &'static str,
     overwrite_question: &'static str,
@@ -331,6 +338,19 @@ impl Strings {
             (false, false) => self.results[1].to_owned(),
         };
         text.replace("{count}", count).replace("{files}", files)
+    }
+
+    pub fn replace_question(&self, count: &str, files: &str, text: &str) -> String {
+        self.replace_question
+            .replace("{count}", count)
+            .replace("{files}", files)
+            .replace("{text}", text)
+    }
+
+    pub fn replaced_summary(&self, count: &str, files: &str) -> String {
+        self.replaced_summary
+            .replace("{count}", count)
+            .replace("{files}", files)
     }
 
     pub fn not_text(&self, name: &str) -> String {
@@ -525,6 +545,11 @@ pub const ITALIAN: Strings = Strings {
     searching: "Ricerca…",
     no_results: "Nessun risultato",
     results_limited: " · mostrati i primi 20.000: restringi la ricerca",
+    replace_placeholder: "Sostituisci",
+    toggle_replace: "Mostra o nascondi Sostituisci",
+    replace_all: "Sostituisci tutto",
+    replace_in_file: "Sostituisci nel file",
+    replace_detail: "I file aperti cambiano nell'editor e restano da salvare; gli altri vengono scritti subito.",
     overwrite_detail: "Se usi la versione sul disco, le modifiche fatte in Keel si perdono.",
     command_toggle_sidebar: "Vista: Mostra o nascondi la barra laterale",
     command_toggle_panel: "Vista: Mostra o nascondi il pannello",
@@ -545,6 +570,8 @@ pub const ITALIAN: Strings = Strings {
     go_to_line: "Riga attuale {current} di {total}. Scrivi la riga, anche con :colonna",
     changed_on_disk: "«{name}» è cambiato sul disco; quando salvi, Keel ti chiede quale versione tenere",
     not_text: "«{name}» non è un file di testo: Keel non lo apre",
+    replace_question: "Sostituire {count} occorrenze in {files} file con «{text}»?",
+    replaced_summary: "Sostituite {count} occorrenze in {files} file",
     results: [
         "{count} risultato in {files} file",
         "{count} risultati in {files} file",
@@ -702,6 +729,11 @@ pub const ENGLISH: Strings = Strings {
     searching: "Searching…",
     no_results: "No results",
     results_limited: " · showing the first 20,000: narrow the search",
+    replace_placeholder: "Replace",
+    toggle_replace: "Toggle Replace",
+    replace_all: "Replace All",
+    replace_in_file: "Replace in File",
+    replace_detail: "Open files change in their editor and wait to be saved; the others are written at once.",
     overwrite_detail: "If you use the version on disk, the changes made in Keel are lost.",
     command_toggle_sidebar: "View: Toggle Sidebar",
     command_toggle_panel: "View: Toggle Panel",
@@ -722,6 +754,8 @@ pub const ENGLISH: Strings = Strings {
     go_to_line: "Current line {current} of {total}. Type a line, with :column if you like",
     changed_on_disk: "\"{name}\" changed on disk; when you save, Keel asks which version to keep",
     not_text: "\"{name}\" is not a text file, so Keel does not open it",
+    replace_question: "Replace {count} matches in {files} files with \"{text}\"?",
+    replaced_summary: "Replaced {count} matches in {files} files",
     results: [
         "{count} result in {files} file",
         "{count} results in {files} files",

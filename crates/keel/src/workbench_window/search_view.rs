@@ -35,6 +35,8 @@ enum ResultRow {
 
 pub(super) struct SearchView {
     query: Entity<InputState>,
+    replace: Entity<InputState>,
+    show_replace: bool,
     include: Entity<InputState>,
     exclude: Entity<InputState>,
     case_sensitive: bool,
@@ -102,11 +104,13 @@ impl Workbench {
     ) -> SearchView {
         let query =
             cx.new(|cx| InputState::new(window, cx).placeholder(strings.search_placeholder));
+        let replace =
+            cx.new(|cx| InputState::new(window, cx).placeholder(strings.replace_placeholder));
         let include =
             cx.new(|cx| InputState::new(window, cx).placeholder(strings.include_placeholder));
         let exclude =
             cx.new(|cx| InputState::new(window, cx).placeholder(strings.exclude_placeholder));
-        let subscriptions = [&query, &include, &exclude]
+        let mut subscriptions: Vec<Subscription> = [&query, &include, &exclude]
             .into_iter()
             .map(|input| {
                 cx.subscribe_in(
@@ -120,8 +124,18 @@ impl Workbench {
                 )
             })
             .collect();
+        // The preview follows the replacement as it is typed.
+        subscriptions.push(
+            cx.subscribe_in(&replace, window, |_, _, event: &InputEvent, _, cx| {
+                if matches!(event, InputEvent::Change) {
+                    cx.notify();
+                }
+            }),
+        );
         SearchView {
             query,
+            replace,
+            show_replace: false,
             include,
             exclude,
             case_sensitive: false,
@@ -221,6 +235,113 @@ impl Workbench {
     ) {
         let value = option(&mut self.search);
         *value = !*value;
+        self.run_search(cx);
+    }
+
+    /// The replacement typed, when the replace field is shown.
+    fn replacement(&self, cx: &App) -> Option<String> {
+        self.search
+            .show_replace
+            .then(|| self.search.replace.read(cx).value().to_string())
+    }
+
+    /// Replaces the matches of every file, or of one file, after asking
+    /// when it is every file. Open files change in their editor, where
+    /// Cmd+Z undoes it and the save stays yours; the others are written.
+    fn replace_matches(
+        &mut self,
+        only: Option<String>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let Some(replacement) = self.replacement(cx) else {
+            return;
+        };
+        let files: Vec<String> = self
+            .search
+            .results
+            .files
+            .iter()
+            .filter(|file| only.as_ref().is_none_or(|only| *only == file.path))
+            .map(|file| file.path.clone())
+            .collect();
+        if files.is_empty() {
+            return;
+        }
+        if only.is_some() {
+            self.apply_replacement(&files, &replacement, window, cx);
+            return;
+        }
+        let strings = self.strings();
+        let count = grouped(self.search.results.count(), self.language);
+        let file_count = grouped(files.len(), self.language);
+        let answer = window.prompt(
+            PromptLevel::Warning,
+            &strings.replace_question(&count, &file_count, &replacement),
+            Some(strings.replace_detail),
+            &[strings.replace_all, strings.cancel],
+            cx,
+        );
+        cx.spawn_in(window, async move |this, cx| {
+            if answer.await != Ok(0) {
+                return;
+            }
+            this.update_in(cx, |this, window, cx| {
+                this.apply_replacement(&files, &replacement, window, cx)
+            })
+            .ok();
+        })
+        .detach();
+    }
+
+    fn apply_replacement(
+        &mut self,
+        files: &[String],
+        replacement: &str,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let Some(root) = self.project.root.clone() else {
+            return;
+        };
+        let query = self.search.query(cx);
+        let (mut replaced, mut changed) = (0, 0);
+        for relative in files {
+            let path = root.join(relative);
+            let uri = Uri::file(&path).to_string();
+            let open_text = self
+                .documents
+                .get(&uri)
+                .filter(|document| matches!(document.backing, Backing::File(_)))
+                .map(|document| document.synced_text.clone());
+            let result = match open_text {
+                Some(text) => {
+                    files::search::replace_all(&text, &query, replacement).map(|(text, count)| {
+                        if count > 0 {
+                            self.set_document_text(&uri, &text, window, cx);
+                        }
+                        count
+                    })
+                }
+                None => files::search::replace_in_file(&path, &query, replacement),
+            };
+            match result {
+                Ok(0) => {}
+                Ok(count) => {
+                    replaced += count;
+                    changed += 1;
+                }
+                Err(error) => {
+                    let message = self.strings().could_not_change(relative, &error);
+                    self.report(message);
+                }
+            }
+        }
+        let strings = self.strings();
+        self.status_message = Some(strings.replaced_summary(
+            &grouped(replaced, self.language),
+            &grouped(changed, self.language),
+        ));
         self.run_search(cx);
     }
 
@@ -382,7 +503,50 @@ impl Workbench {
             .flex_col()
             .gap_1p5()
             .child(heading(strings.view_search, colors))
-            .child(Input::new(&view.query).small().suffix(switches))
+            .child(
+                div()
+                    .flex()
+                    .items_start()
+                    .gap_0p5()
+                    .child(
+                        Button::new("search-toggle-replace")
+                            .ghost()
+                            .xsmall()
+                            .icon(Icon::new(if view.show_replace {
+                                IconName::ChevronDown
+                            } else {
+                                IconName::ChevronRight
+                            }))
+                            .tooltip(strings.toggle_replace)
+                            .on_click(cx.listener(|this, _, _, cx| {
+                                this.search.show_replace = !this.search.show_replace;
+                                cx.notify();
+                            })),
+                    )
+                    .child(
+                        div()
+                            .flex_1()
+                            .min_w_0()
+                            .flex()
+                            .flex_col()
+                            .gap_1()
+                            .child(Input::new(&view.query).small().suffix(switches))
+                            .when(view.show_replace, |fields| {
+                                fields.child(
+                                    Input::new(&view.replace).small().suffix(
+                                        Button::new("search-replace-all")
+                                            .ghost()
+                                            .xsmall()
+                                            .icon(Icon::new(IconName::ReplaceAll))
+                                            .tooltip(strings.replace_all)
+                                            .on_click(cx.listener(|this, _, window, cx| {
+                                                this.replace_matches(None, window, cx)
+                                            })),
+                                    ),
+                                )
+                            }),
+                    ),
+            )
             .child(
                 div().flex().justify_end().child(
                     Button::new("search-folders")
@@ -488,6 +652,19 @@ impl Workbench {
                     .text_color(colors.faint)
                     .child(folder),
             )
+            .when(self.search.show_replace, |row| {
+                let path = found.path.clone();
+                row.child(
+                    Button::new(("search-replace-file", index))
+                        .ghost()
+                        .xsmall()
+                        .icon(Icon::new(IconName::Replace))
+                        .tooltip(self.strings().replace_in_file)
+                        .on_click(cx.listener(move |this, _, window, cx| {
+                            this.replace_matches(Some(path.clone()), window, cx)
+                        })),
+                )
+            })
             .child(
                 div()
                     .flex_none()
@@ -518,13 +695,24 @@ impl Workbench {
             font_weight: Some(FontWeight::SEMIBOLD),
             ..Default::default()
         };
-        let highlights: Vec<(Range<usize>, HighlightStyle)> = matched
+        let ranges: Vec<Range<usize>> = matched
             .ranges
             .iter()
             .filter(|range| range.start >= cut)
-            .map(|range| (range.start - cut..range.end - cut, highlight))
+            .map(|range| range.start - cut..range.end - cut)
             .collect();
-        let text = StyledText::new(trimmed.to_owned()).with_highlights(highlights);
+        let text = match self.replacement(cx) {
+            Some(replacement) => replacement_preview(
+                trimmed,
+                &ranges,
+                &self.search.query(cx),
+                &replacement,
+                cx.theme().danger,
+                cx.theme().success,
+            ),
+            None => StyledText::new(trimmed.to_owned())
+                .with_highlights(ranges.into_iter().map(|range| (range, highlight))),
+        };
         div()
             .id(("search-line", index))
             .h(px(ROW_HEIGHT))
@@ -543,6 +731,51 @@ impl Workbench {
             .child(div().min_w_0().truncate().whitespace_nowrap().child(text))
             .into_any_element()
     }
+}
+
+/// A line as it reads before and after the replacement: each match struck
+/// through in red, followed by its replacement in green.
+fn replacement_preview(
+    line: &str,
+    ranges: &[Range<usize>],
+    query: &Query,
+    replacement: &str,
+    removed: Hsla,
+    added: Hsla,
+) -> StyledText {
+    let mut text = String::new();
+    let mut highlights = Vec::new();
+    let mut from = 0;
+    for range in ranges {
+        text.push_str(&line[from..range.start]);
+        let old = &line[range.clone()];
+        let start = text.len();
+        text.push_str(old);
+        highlights.push((
+            start..text.len(),
+            HighlightStyle {
+                background_color: Some(removed.opacity(0.22)),
+                strikethrough: Some(gpui::StrikethroughStyle {
+                    thickness: px(1.),
+                    color: Some(removed),
+                }),
+                ..Default::default()
+            },
+        ));
+        let new = files::search::preview_replacement(old, query, replacement);
+        let start = text.len();
+        text.push_str(&new);
+        highlights.push((
+            start..text.len(),
+            HighlightStyle {
+                background_color: Some(added.opacity(0.22)),
+                ..Default::default()
+            },
+        ));
+        from = range.end;
+    }
+    text.push_str(&line[from..]);
+    StyledText::new(text).with_highlights(highlights)
 }
 
 #[cfg(test)]
@@ -638,5 +871,51 @@ mod tests {
         });
         assert_eq!(title, "card.tsx — Hospitality");
         assert_eq!(selected, "total");
+    }
+
+    #[gpui::test]
+    fn replace_all_asks_then_changes_open_and_closed_files(cx: &mut TestAppContext) {
+        let (_folder, root, view, cx) = project(cx);
+        cx.executor().allow_parking();
+        // app.ts is open in the editor; card.tsx is not.
+        view.update_in(cx, |view, window, cx| {
+            view.focus_search(window, cx);
+            view.search.show_replace = true;
+            let query = view.search.query.clone();
+            query.update(cx, |query, cx| query.set_value("total", window, cx));
+            let replace = view.search.replace.clone();
+            replace.update(cx, |replace, cx| replace.set_value("sum", window, cx));
+            view.run_search(cx);
+        });
+        cx.executor().advance_clock(TYPING_PAUSE * 2);
+        cx.run_until_parked();
+
+        view.update_in(cx, |view, window, cx| {
+            view.replace_matches(None, window, cx)
+        });
+        assert!(cx.has_pending_prompt());
+        cx.simulate_prompt_answer("Replace All");
+        cx.executor().advance_clock(TYPING_PAUSE * 2);
+        cx.run_until_parked();
+
+        assert_eq!(
+            fs::read_to_string(root.join("src/card.tsx")).unwrap(),
+            "const sum = 1;\nconst x = sum + 1;\n"
+        );
+        // The open file changed in its editor and waits to be saved.
+        assert_eq!(
+            fs::read_to_string(root.join("src/app.ts")).unwrap(),
+            "// no match here\nlet Total = 2;\n"
+        );
+        let (text, unsaved, status) = view.read_with(cx, |view, cx| {
+            (
+                view.panes[view.active].editor.read(cx).value().to_string(),
+                view.has_unsaved_changes(),
+                view.status_message.clone().unwrap_or_default(),
+            )
+        });
+        assert_eq!(text, "// no match here\nlet sum = 2;\n");
+        assert!(unsaved);
+        assert_eq!(status, "Replaced 3 matches in 2 files");
     }
 }

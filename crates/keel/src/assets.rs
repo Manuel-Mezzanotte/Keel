@@ -24,7 +24,8 @@ gpui_kit_assets::icon_assets!(
         ChevronsDownUp,
         Pin,
         WholeWord,
-        Regex
+        Regex,
+        ReplaceAll
     ]
 );
 
@@ -84,6 +85,8 @@ mod tests {
             IconName::Pin,
             IconName::WholeWord,
             IconName::Regex,
+            IconName::ReplaceAll,
+            IconName::Replace,
             IconName::CaseSensitive,
             IconName::Ellipsis,
             IconName::ChevronRight,

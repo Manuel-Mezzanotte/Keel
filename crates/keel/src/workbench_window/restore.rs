@@ -248,7 +248,7 @@ impl Workbench {
     }
 
     /// Puts text into a document and every editor showing it, as if typed.
-    fn set_document_text(
+    pub(super) fn set_document_text(
         &mut self,
         uri: &str,
         text: &str,
