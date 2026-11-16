@@ -819,3 +819,53 @@ mod tests {
         assert_eq!(lang_for(None), "en_US.UTF-8");
     }
 }
+
+/// How fast the emulator takes output and how long a snapshot of the
+/// screen takes; run with `cargo test --release -p terminal timing --
+/// --ignored --nocapture`.
+#[cfg(test)]
+mod timing {
+    use std::time::{Duration, Instant};
+
+    use super::*;
+
+    #[test]
+    #[ignore]
+    fn throughput_and_snapshot() {
+        let lines = 500_000;
+        let mut spawn = Spawn::shell(
+            std::env::temp_dir(),
+            Size {
+                columns: 200,
+                lines: 50,
+                cell_width: 8,
+                cell_height: 16,
+            },
+            Palette::dark(Rgb::hex(0xdddddd), Rgb::hex(0x101010)),
+            "en_US.UTF-8",
+        );
+        spawn.command = Some((
+            "/bin/sh".into(),
+            vec![
+                "-c".into(),
+                format!("seq 1 {lines} | sed 's/$/ \x1b[32mok\x1b[0m lorem ipsum dolor sit amet/'; echo fine; sleep 5"),
+            ],
+        ));
+        let start = Instant::now();
+        let terminal = Terminal::spawn(spawn, |_| {}).unwrap();
+        loop {
+            if terminal.snapshot().text().contains("fine") {
+                break;
+            }
+            assert!(start.elapsed() < Duration::from_secs(60));
+            std::thread::sleep(Duration::from_millis(5));
+        }
+        eprintln!("{lines} lines through the emulator in {:?}", start.elapsed());
+
+        let start = Instant::now();
+        for _ in 0..100 {
+            std::hint::black_box(terminal.snapshot());
+        }
+        eprintln!("snapshot of 200x50: {:?} each", start.elapsed() / 100);
+    }
+}

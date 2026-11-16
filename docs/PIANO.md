@@ -119,7 +119,7 @@ Da confermare con le misure della fase 0. Si misura con lo stesso script su Keel
 | 1 | Fondamenta e design | media | fatta; restano le tue prove a mano |
 | 2 | Editor e file | grande | fatta; restano le tue prove a mano |
 | 3 | Ricerca | piccola | fatta; restano le tue prove a mano |
-| 4 | Terminale e pannello in basso | media | in corso |
+| 4 | Terminale e pannello in basso | media | fatta; restano le tue prove a mano |
 | 5 | Git: modifiche e commit | media | da fare |
 | 6 | Linguaggi principali: web e Rust | grande | da fare |
 | 7 | Anteprima Markdown e PDF | media | da fare |
@@ -652,7 +652,45 @@ Con albero, schede, ricerca dei file e controllo della cartella, Keel è cresciu
 | 4.1 | Motore del terminale (crate `terminal`): la shell nella cartella, colori, tasti, mouse, incolla, selezione, ricerca, link, porte | fatta |
 | 4.2 | Terminale nel pannello in basso: disegno, cursore, tastiera, mouse, copia e incolla, scorrimento, ridimensionamento, Cmd+clic sui link | fatta |
 | 4.3 | Più terminali (schede, divisi, rinomina, chiudi), pannello ridimensionabile, cerca nel terminale, «Apri Claude Code» | fatta |
-| 4.4 | Output, Porte, script di `package.json`; misure e resoconto | da fare |
+| 4.4 | Output, Porte, script di `package.json`; misure e resoconto | fatta |
+
+**Note sulla 4.4**
+- **Porte:**
+  - elenca le porte TCP su cui ascoltano i programmi partiti dai terminali di Keel, compreso quello di Claude Code;
+  - guarda ogni 3 secondi, finché c'è un terminale aperto; ogni controllo costa circa 25–35 ms, fuori dalla finestra;
+  - un clic sulla riga, o sul globo, apre `http://localhost:porta` nel browser;
+  - una porta nuova si annuncia nella barra di stato, come la notifica di VS Code.
+- **Output:** due canali, «Keel» e «Estensioni», con un pulsante per svuotare quello mostrato. I language server avranno il loro nella fase 6.
+- **Problemi** resta vuoto fino alla fase 6.
+- **Script npm:**
+  - sotto l'albero dell'Esplora risorse c'è l'elenco degli script di `package.json`, nell'ordine del file e con il comando accanto;
+  - un clic apre una scheda del terminale col nome dello script e lo lancia;
+  - il gestore di pacchetti viene da `packageManager` o dal file di lock (`pnpm-lock.yaml` → pnpm, `yarn.lock` → yarn, `bun.lock` → bun, altrimenti npm);
+  - c'è anche il comando «npm: Esegui uno script…».
+
+**Resoconto della fase 4**
+- **Il criterio era:**
+  - `pnpm run dev` e Claude Code devono girare dentro Keel come nel Terminale di macOS: questo lo verifichi tu con le prove sotto;
+  - la porta 3000 deve comparire in Porte e aprirsi con un clic: un test apre un server vero in un terminale e controlla che la porta compaia in Porte e nella barra di stato.
+- **La shell è quella del Terminale di macOS:** la stessa shell di accesso, le stesse variabili per colori e lingua, e i tasti che manda VS Code sul Mac.
+- **Misure** su GestionaleHospitality, versione ottimizzata:
+  - con un terminale aperto, Keel usa 134 MB invece di 131 (`login` e `zsh` sono altri 16 MB, come in ogni terminale);
+  - a riposo la CPU sta fra 0 e 0,6%;
+  - il primo fotogramma arriva in 295 ms con il terminale riaperto dalla sessione;
+  - 500.000 righe colorate attraversano il terminale in 0,82 s;
+  - preparare uno schermo di 200×50 celle per il disegno prende 0,1 ms, mentre un fotogramma ne ha 16.
+- **Test:** 204 automatici, tutti verdi.
+
+**Le tue prove a mano della fase 4**
+1. In GestionaleHospitality premi Ctrl+`: si apre zsh nella cartella del progetto, con i tuoi colori e il tuo prompt.
+2. Lancia `pnpm run dev`, oppure clicca `dev` negli script npm sotto l'Esplora risorse. In Porte compare la 3000, e un clic la apre nel browser.
+3. Prova Tab, Ctrl+R, Ctrl+C, le frecce, Opzione+frecce, Cmd+frecce e Cmd+K.
+4. Seleziona col mouse e copia con Cmd+C. Incolla con Cmd+V un testo di molte righe.
+5. Cmd+F cerca nel testo del terminale; Invio va più indietro.
+6. Cmd+clic su un errore come `src/app/page.tsx:12:5` apre il file alla riga.
+7. Apri un secondo terminale con `+`, poi dividilo; rinominalo dal clic destro sulla scheda e chiudilo con la X. Allunga il pannello trascinando il bordo in alto e prova a ingrandirlo.
+8. Premi Cmd+Esc: a destra parte Claude Code. Prova a scrivere, Maiusc+Invio per andare a capo, il mouse, l'incolla di un testo lungo e Ctrl+V con un'immagine copiata. Prova anche a ridimensionare il pannello.
+9. Chiudi e riapri Keel con il terminale aperto: il pannello torna con un terminale nuovo.
 
 **Note sulla 4.3**
 - **Più terminali:**
