@@ -989,6 +989,7 @@ impl Workbench {
     /// Called when the status changed: open differences follow.
     fn git_status_changed(&mut self, cx: &mut Context<Self>) {
         self.refresh_open_diffs(cx);
+        self.forget_git_baselines(cx);
     }
 }
 

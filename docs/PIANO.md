@@ -777,8 +777,23 @@ Con albero, schede, ricerca dei file e controllo della cartella, Keel è cresciu
 | 5.1 | Motore git (crate `git`): stato, differenze, stage e unstage anche di un blocco, scarta, commit e amend, branch, push, pull, fetch, sync, stash | fatta |
 | 5.2 | Vista Controllo del codice sorgente: messaggio e Commit, file in stage, modifiche e conflitti, numero sull'icona, branch nella barra di stato | fatta |
 | 5.3 | Differenze in una scheda, affiancate o in linea; conflitti di merge risolti con un clic | fatta |
-| 5.4 | Margine dell'editor (aggiunte, modifiche, cancellazioni) con stage e annulla del blocco; push, pull, sync, branch e stash dai comandi | da fare |
+| 5.4 | Margine dell'editor (aggiunte, modifiche, cancellazioni) con stage e annulla del blocco; push, pull, sync, branch e stash dai comandi | fatta |
 | 5.5 | Misure e resoconto | da fare |
+
+**Note sulla 5.4**
+- **Il margine dell'editor** confronta il testo, anche non salvato, con la versione in stage, come VS Code:
+  - verde per le righe aggiunte;
+  - azzurro per quelle cambiate;
+  - rosso dove sono state tolte delle righe.
+
+  I file che git non conosce non hanno segni. Se un'estensione offre il suo confronto (come VSAuto Ghost), vale il suo.
+- **Il clic sul margine** di gpui-component non si può intercettare, quindi l'anteprima di VS Code è diventata una piccola barra. Compare in alto a destra dell'editor quando il cursore è in un blocco cambiato, con tre pulsanti:
+  - **Differenze** apre la scheda delle modifiche già sul blocco;
+  - **Metti in stage** mette in stage solo quel blocco;
+  - **Annulla** rimette il blocco com'era, e si torna indietro con Cmd+Z.
+- **Alt+F5 e Maiusc+Alt+F5** vanno al blocco dopo e a quello prima, come in VS Code.
+- **Nella tavolozza** ci sono anche «Git: Metti in stage il blocco» e «Git: Annulla il blocco».
+- **Push, pull, fetch, sincronizza, branch e stash** sono arrivati con la 5.2, nel menu della vista e nella tavolozza.
 
 **Note sulla 5.3**
 - **Un clic su un file** della vista apre le sue differenze in una scheda di anteprima, come in VS Code:

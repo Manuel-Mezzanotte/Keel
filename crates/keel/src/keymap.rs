@@ -32,6 +32,7 @@ use crate::workbench_window::{
     ToggleMaximizedPanel,
 };
 use crate::workbench_window::{GoToLine, QuickOpen};
+use crate::workbench_window::{NextChange, PreviousChange, RevertChange, StageChange};
 
 /// A Keel command: its VS Code name, the action it runs and its default key.
 pub struct KeelCommand {
@@ -278,6 +279,30 @@ pub const COMMANDS: &[KeelCommand] = &[
         action: || Box::new(CreateBranch),
         default_key: None,
         context: None,
+    },
+    KeelCommand {
+        id: "git.stageSelectedRanges",
+        action: || Box::new(StageChange),
+        default_key: None,
+        context: None,
+    },
+    KeelCommand {
+        id: "git.revertSelectedRanges",
+        action: || Box::new(RevertChange),
+        default_key: None,
+        context: None,
+    },
+    KeelCommand {
+        id: "workbench.action.editor.nextChange",
+        action: || Box::new(NextChange),
+        default_key: Some("alt+f5"),
+        context: Some(EDITOR_CONTEXT),
+    },
+    KeelCommand {
+        id: "workbench.action.editor.previousChange",
+        action: || Box::new(PreviousChange),
+        default_key: Some("shift+alt+f5"),
+        context: Some(EDITOR_CONTEXT),
     },
     KeelCommand {
         id: "keel.npm.runScript",
@@ -746,7 +771,7 @@ mod tests {
         let (bindings, warnings) =
             read_user_bindings(Path::new("/nonexistent/keel/keybindings.json"));
         assert!(bindings.is_empty() && warnings.is_empty());
-        assert_eq!(keel_bindings(&[]).len(), 51);
+        assert_eq!(keel_bindings(&[]).len(), 53);
     }
 
     #[test]

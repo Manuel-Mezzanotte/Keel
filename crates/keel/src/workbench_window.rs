@@ -6,6 +6,7 @@ mod diff_view;
 mod disk;
 mod editing;
 pub(crate) mod explorer;
+mod git_gutter;
 mod navigation;
 mod npm_scripts;
 mod other_files;
@@ -33,6 +34,7 @@ pub(crate) use tabs::{
 use tabs::{Group, OpenAs};
 
 pub(crate) use claude_code::{OpenClaudeCode, OpenClaudeCodeInPanel};
+pub(crate) use git_gutter::{NextChange, PreviousChange, RevertChange, StageChange};
 pub(crate) use npm_scripts::RunNpmScript;
 pub(crate) use shell::window_options;
 pub(crate) use source_control::{
@@ -239,6 +241,8 @@ struct Pane {
     editor: Entity<EditorState>,
     decorations: HashMap<String, TextDecorationCollection>,
     gutter: Option<GutterDecorationCollection>,
+    /// The blocks that differ from the staged version, for the margin.
+    hunks: Vec<git::Hunk>,
     _subscriptions: Vec<Subscription>,
 }
 
@@ -361,6 +365,10 @@ pub struct Workbench {
     /// Claude Code's panel on the right: its width and its terminal.
     agent_width: f32,
     agent_terminal: Option<claude_code::AgentTerminal>,
+    /// The staged text of files, for the margin, by path in the repository.
+    git_baselines: HashMap<String, Option<String>>,
+    /// The changed block under the cursor: pane and lines.
+    hunk_bar: Option<(usize, usize, usize)>,
     /// Differences side by side, from `diffEditor.renderSideBySide`.
     diff_split: bool,
     /// The project's git repository and the Source Control view.
@@ -500,6 +508,8 @@ impl Workbench {
             npm_scripts: None,
             scm,
             diff_split: true,
+            git_baselines: HashMap::new(),
+            hunk_bar: None,
             first_frame_drawn: false,
             _subscriptions: subscriptions,
         };
@@ -2187,12 +2197,15 @@ impl Workbench {
 
     /// Recomputes the green "added lines" bars shortly after the last change.
     fn schedule_gutter_refresh(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        let Some(extensions) = &self.extensions else {
+        // Without an extension's quick diff, the margin shows git's changes.
+        let Some(extensions) = self
+            .extensions
+            .as_ref()
+            .filter(|extensions| extensions.quick_diff)
+        else {
+            self.schedule_git_gutter(cx);
             return;
         };
-        if !extensions.quick_diff {
-            return;
-        }
         let host = extensions.host.clone();
         let content_providers = extensions.content_providers.clone();
         let uris: Vec<String> = self

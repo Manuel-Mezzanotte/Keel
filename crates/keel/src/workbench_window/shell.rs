@@ -947,13 +947,15 @@ impl Workbench {
                         _ => div()
                             .flex_1()
                             .min_h_0()
+                            .relative()
                             .key_context(super::EDITOR_CONTEXT)
                             .child(
                                 Editor::new(&pane.editor)
                                     .size_full()
                                     .bordered(false)
                                     .text_size(px(self.font_size)),
-                            ),
+                            )
+                            .children(self.render_hunk_bar(index, colors, cx)),
                     },
                 )
         });
@@ -1342,6 +1344,7 @@ impl Render for Workbench {
         let root = self.terminal_actions(root, cx);
         let root = self.npm_actions(root, cx);
         let root = self.source_control_actions(root, cx);
+        let root = self.git_gutter_actions(root, cx);
         let root = self.editing_actions(root, cx);
         self.explorer_actions(root, cx)
             .size_full()

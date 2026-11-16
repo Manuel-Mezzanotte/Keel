@@ -153,13 +153,16 @@ impl Workbench {
                 }
             },
         );
+        // The block bar follows the cursor.
+        let cursor = cx.observe(&editor, |this, _, cx| this.update_hunk_bar(cx));
         Some(Pane {
             editor_id,
             uri: uri.to_owned(),
             editor,
             decorations: HashMap::new(),
             gutter: None,
-            _subscriptions: vec![subscription],
+            hunks: Vec::new(),
+            _subscriptions: vec![subscription, cursor],
         })
     }
 
