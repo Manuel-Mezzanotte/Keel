@@ -120,7 +120,7 @@ Da confermare con le misure della fase 0. Si misura con lo stesso script su Keel
 | 2 | Editor e file | grande | fatta; restano le tue prove a mano |
 | 3 | Ricerca | piccola | fatta; restano le tue prove a mano |
 | 4 | Terminale e pannello in basso | media | fatta; restano le tue prove a mano |
-| 5 | Git: modifiche e commit | media | da fare |
+| 5 | Git: modifiche e commit | media | in corso |
 | 6 | Linguaggi principali: web e Rust | grande | da fare |
 | 7 | Anteprima Markdown e PDF | media | da fare |
 | 8 | Grafico e storico git | media | da fare |
@@ -769,6 +769,24 @@ Con albero, schede, ricerca dei file e controllo della cartella, Keel è cresciu
 ### Fase 5 — Git: modifiche e commit
 
 **Obiettivo.** Controllare le modifiche e fare i commit senza uscire da Keel.
+
+**Sottofasi**
+
+| Sottofase | Cosa | Stato |
+|---|---|---|
+| 5.1 | Motore git (crate `git`): stato, differenze, stage e unstage anche di un blocco, scarta, commit e amend, branch, push, pull, fetch, sync, stash | fatta |
+| 5.2 | Vista Controllo del codice sorgente: messaggio e Commit, file in stage, modifiche e conflitti, numero sull'icona, branch nella barra di stato | da fare |
+| 5.3 | Differenze in una scheda, affiancate o in linea; conflitti di merge risolti con un clic | da fare |
+| 5.4 | Margine dell'editor (aggiunte, modifiche, cancellazioni) con stage e annulla del blocco; push, pull, sync, branch e stash dai comandi | da fare |
+| 5.5 | Misure e resoconto | da fare |
+
+**Note sulla 5.1**
+- **Git passa dal comando `git`**, invece che da `gix` come diceva lo stack: così Keel usa lo stesso programma, le stesse impostazioni, gli stessi hook e le stesse credenziali del terminale, con una dipendenza grossa in meno.
+- **Velocità:** `git status` prende circa 16 ms su GestionaleHospitality.
+- **Lo stato si legge senza bloccare l'indice**, così non disturba i comandi git lanciati nel terminale.
+- **I blocchi cambiati** si trovano con `imara-diff`, lo stesso algoritmo «histogram» di git.
+- **Stage di un blocco solo:** Keel scrive nell'indice il file con quel blocco cambiato e lascia stare il file sul disco.
+- **Push:** un branch senza upstream si pubblica sul remote `origin` (o sul primo che c'è) e da lì in poi lo segue. Se servisse una password, il push fallisce con un messaggio invece di restare in attesa; il Portachiavi di macOS risponde come sempre.
 
 **Cosa si fa**
 - **Controllo sorgente:** file modificati, in stage e non tracciati; clic su un file per vedere le differenze, affiancate o in linea.

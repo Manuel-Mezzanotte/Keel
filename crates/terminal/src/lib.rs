@@ -848,7 +848,9 @@ mod timing {
             "/bin/sh".into(),
             vec![
                 "-c".into(),
-                format!("seq 1 {lines} | sed 's/$/ \x1b[32mok\x1b[0m lorem ipsum dolor sit amet/'; echo fine; sleep 5"),
+                format!(
+                    "seq 1 {lines} | sed 's/$/ \x1b[32mok\x1b[0m lorem ipsum dolor sit amet/'; echo fine; sleep 5"
+                ),
             ],
         ));
         let start = Instant::now();
@@ -860,7 +862,10 @@ mod timing {
             assert!(start.elapsed() < Duration::from_secs(60));
             std::thread::sleep(Duration::from_millis(5));
         }
-        eprintln!("{lines} lines through the emulator in {:?}", start.elapsed());
+        eprintln!(
+            "{lines} lines through the emulator in {:?}",
+            start.elapsed()
+        );
 
         let start = Instant::now();
         for _ in 0..100 {
