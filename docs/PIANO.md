@@ -1330,7 +1330,7 @@ Apri Keel su GestionaleHospitality. La prima volta i server si installano da sol
 2. Installa «Material Icon Theme», poi «Preferenze: Tema icona file» e sceglilo. Controlla le icone nell'Esplora risorse; torna a «Icone di Keel» se non ti piace.
 3. Menu «…» della vista → «Importa da Cursor…». Guarda i tre gruppi e premi «Installa le disponibili», oppure installa solo quelle che vuoi.
 4. In un progetto: «Peacock: Change to a Favorite Color». La barra del titolo e quella di stato si colorano, e il colore finisce in `.vscode/settings.json` del progetto (lo vede anche Cursor).
-5. Apri un file Markdown con spazi in fondo a una riga: markdownlint lo segnala nel pannello Problemi. Mettiti sulla riga e premi Cmd+.: «Fix this violation» lo corregge.
+5. Apri un file Markdown con spazi in fondo a una riga: markdownlint lo segnala nel pannello Problemi. Mettiti sulla riga e premi Cmd+.: «Fix this violation of MD009…» lo corregge.
 6. In un progetto senza `.gitignore`: «Add gitignore», scegli «Node» e controlla il file creato.
 7. Sull'ingranaggio di un'estensione: «Disattiva per questo progetto», poi «Attiva». Il suo tema o le sue icone spariscono e tornano senza riaprire la finestra.
 8. Disinstalla un'estensione: la conferma e poi la cartella nel Cestino.
