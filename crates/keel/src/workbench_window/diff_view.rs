@@ -23,6 +23,9 @@ pub(super) enum DiffSource {
     /// What a commit changed in the file, from Git Graph: the commit's
     /// hash, and where a renamed file came from.
     Commit(String, Option<String>),
+    /// An edit Claude Code proposes, by the name of its tab; the patch is
+    /// made from the file and the proposed text.
+    Proposed(String),
 }
 
 /// A tab with differences.
@@ -35,12 +38,13 @@ pub(super) struct DiffTab {
 }
 
 /// The uri of a differences tab, distinct for each file and source.
-fn diff_uri(path: &str, source: &DiffSource) -> String {
+pub(super) fn diff_uri(path: &str, source: &DiffSource) -> String {
     let kind = match source {
         DiffSource::Changes => "changes",
         DiffSource::Staged => "staged",
         DiffSource::Conflict => "conflict",
         DiffSource::Commit(hash, _) => hash.as_str(),
+        DiffSource::Proposed(name) => return format!("keel-claude-diff:{name}"),
     };
     format!("keel-diff:{kind}/{path}")
 }
@@ -66,6 +70,7 @@ impl Workbench {
                     .map_err(|error| error.to_string())?;
                 DiffFile::parse(&patch).map_err(|error| error.message().to_string())?
             }
+            DiffSource::Proposed(_) => return Err("not a git difference".to_owned()),
             DiffSource::Changes | DiffSource::Staged => {
                 let patch = repo
                     .diff(path, *source == DiffSource::Staged)
@@ -112,6 +117,7 @@ impl Workbench {
                 DiffSource::Staged => format!("{name} ({})", strings.diff_index),
                 DiffSource::Conflict => format!("{name} ({})", strings.diff_conflict),
                 DiffSource::Commit(hash, _) => format!("{name} ({})", &hash[..hash.len().min(8)]),
+                DiffSource::Proposed(tab_name) => tab_name.clone(),
             };
             self.documents.insert(
                 uri.clone(),
@@ -143,7 +149,10 @@ impl Workbench {
                 // Conflicts keep the choices made so far until saved.
                 // Conflicts keep their choices; a commit never changes.
                 Backing::Diff(tab)
-                    if !matches!(tab.source, DiffSource::Conflict | DiffSource::Commit(..)) =>
+                    if !matches!(
+                        tab.source,
+                        DiffSource::Conflict | DiffSource::Commit(..) | DiffSource::Proposed(_)
+                    ) =>
                 {
                     Some((tab.path.clone(), tab.source.clone(), tab.state.clone()))
                 }
@@ -157,7 +166,7 @@ impl Workbench {
         }
     }
 
-    fn set_diff_split(&mut self, split: bool, cx: &mut Context<Self>) {
+    pub(super) fn set_diff_split(&mut self, split: bool, cx: &mut Context<Self>) {
         self.diff_split = split;
         let mode = if split {
             DiffMode::Split
@@ -221,6 +230,9 @@ impl Workbench {
         colors: Colors,
         cx: &mut Context<Self>,
     ) -> AnyElement {
+        if let DiffSource::Proposed(name) = &tab.source {
+            return self.render_claude_diff(name, tab, colors, cx);
+        }
         let strings = self.strings();
         let path = tab.path.clone();
         let source = tab.source.clone();

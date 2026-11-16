@@ -1448,11 +1448,20 @@ Apri Keel su GestionaleHospitality. La prima volta i server si installano da sol
 | Sottofase | Cosa | Stato |
 |---|---|---|
 | 10.1 | Collegamento IDE: Keel si annuncia in `~/.claude/ide/` come VS Code e Cursor; Claude Code nei terminali di Keel vede cartelle, schede aperte, selezione e Problemi, apre e salva file; Cmd+Alt+K gli passa il file e le righe | fatta |
-| 10.2 | Modifiche proposte da Claude Code nel terminale: si aprono in Keel come differenze da accettare o rifiutare | da fare |
+| 10.2 | Modifiche proposte da Claude Code nel terminale: si aprono in Keel come differenze da accettare o rifiutare | fatta |
 | 10.3 | Crate `ai` per ACP: avvio dell'adattatore `claude-agent-acp` (installato da Keel con versione bloccata), sessioni, permessi, file letti e scritti attraverso Keel | da fare |
 | 10.4 | Pannello agente a destra, accanto a Claude Code nel terminale: conversazione, ragionamento, strumenti, piano, permessi, interrompi, riferimenti a file e selezione | da fare |
 | 10.5 | Modifiche dell'agente file per file da accettare o rifiutare; cronologia delle conversazioni | da fare |
 | 10.6 | Misure e resoconto | da fare |
+
+**Note sulla 10.2**
+- **Quando Claude Code nel terminale vuole cambiare un file**, Keel apre una scheda con le differenze tra il file com'è sul disco e la proposta.
+  - Il titolo della scheda è quello che dà Claude Code; si vede affiancata o in una colonna, come le altre differenze.
+  - Un file nuovo appare tutto in verde.
+- **«Accetta» e «Rifiuta»** stanno in cima alla scheda e nella tavolozza: «Claude Code: Accetta la modifica proposta» e «Claude Code: Rifiuta la modifica proposta», gli stessi id di VS Code.
+- **Accettando,** Claude Code riceve il testo e scrive lui il file, come con VS Code; Keel lo ricarica da solo.
+- **Chiudere la scheda** vale come «Rifiuta». Una proposta con lo stesso nome prende il posto della precedente.
+- **Le richieste di Claude Code di chiudere una scheda o tutte** sono servite; quelle ancora in attesa diventano un rifiuto.
 
 **Note sulla 10.1**
 - **Ogni finestra di Keel si annuncia a Claude Code** come fanno VS Code e Cursor:
@@ -1470,8 +1479,6 @@ Apri Keel su GestionaleHospitality. La prima volta i server si installano da sol
   - si collega, si presenta e chiede l'elenco degli strumenti;
   - vuole il sottoprotocollo WebSocket `mcp`: senza conferma restava zitto.
   - Per rifare la prova: `KEEL_CLAUDE_PROJECT=<cartella fidata> KEEL_PTY_RUN=<pty_run.py> cargo test -p ai -- --ignored real_claude --nocapture`. Con `KEEL_IDE_TRACE=1` Keel stampa i messaggi ricevuti.
-- **Le modifiche proposte** (`openDiff`) arrivano con la 10.2: per ora Keel risponde che non le offre ancora.
-
 **Cosa si fa**
 - **Claude Code nel terminale, collegato a Keel.** È lo stesso collegamento che Claude Code usa con VS Code e JetBrains: un WebSocket annunciato da un file in `~/.claude/ide/`. Claude vede il file aperto e la selezione e legge i Problemi; le modifiche che propone si aprono in Keel come differenze da accettare o rifiutare.
 - **Pannello agente con ACP** (Agent Client Protocol, il protocollo aperto di Zed) e l'adattatore `@agentclientprotocol/claude-agent-acp`:

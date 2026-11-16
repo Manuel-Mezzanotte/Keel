@@ -1415,6 +1415,7 @@ impl Render for Workbench {
         let root = self.contributions_actions(root, cx);
         let root = self.cursor_import_actions(root, cx);
         let root = self.claude_ide_actions(root, cx);
+        let root = self.claude_diff_actions(root, cx);
         let root = self.editing_actions(root, cx);
         self.explorer_actions(root, cx)
             .size_full()

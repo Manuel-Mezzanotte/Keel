@@ -56,6 +56,68 @@ pub fn hunks(old: &str, new: &str) -> Vec<Hunk> {
         .collect()
 }
 
+/// The changes from `old` to `new` as a unified patch, the text `git diff`
+/// prints, with `context` unchanged lines around each block.
+pub fn unified_patch(path: &str, old: &str, new: &str, context: usize) -> String {
+    let old_lines = lines(old);
+    let new_lines = lines(new);
+    let found = hunks(old, new);
+    let mut patch = format!("diff --git a/{path} b/{path}\n--- a/{path}\n+++ b/{path}\n");
+    if found.is_empty() {
+        return patch;
+    }
+    let push = |patch: &mut String, mark: char, line: &str| {
+        patch.push(mark);
+        patch.push_str(line);
+        if !line.ends_with('\n') {
+            patch.push_str("\n\\ No newline at end of file\n");
+        }
+    };
+    // Blocks closer than twice the context share one section.
+    let mut groups: Vec<Vec<&Hunk>> = Vec::new();
+    for hunk in &found {
+        match groups.last_mut() {
+            Some(group) if hunk.old.start <= group.last().unwrap().old.end + 2 * context => {
+                group.push(hunk)
+            }
+            _ => groups.push(vec![hunk]),
+        }
+    }
+    for group in groups {
+        let first = group[0];
+        let last = group[group.len() - 1];
+        let old_start = first.old.start.saturating_sub(context);
+        let old_end = (last.old.end + context).min(old_lines.len());
+        let new_start = first.new.start - (first.old.start - old_start);
+        let new_end = last.new.end + (old_end - last.old.end);
+        let number = |start: usize, count: usize| if count == 0 { start } else { start + 1 };
+        patch.push_str(&format!(
+            "@@ -{},{} +{},{} @@\n",
+            number(old_start, old_end - old_start),
+            old_end - old_start,
+            number(new_start, new_end - new_start),
+            new_end - new_start
+        ));
+        let mut at = old_start;
+        for hunk in group {
+            for line in &old_lines[at..hunk.old.start] {
+                push(&mut patch, ' ', line);
+            }
+            for line in &old_lines[hunk.old.clone()] {
+                push(&mut patch, '-', line);
+            }
+            for line in &new_lines[hunk.new.clone()] {
+                push(&mut patch, '+', line);
+            }
+            at = hunk.old.end;
+        }
+        for line in &old_lines[at..old_end] {
+            push(&mut patch, ' ', line);
+        }
+    }
+    patch
+}
+
 /// The lines of a text with their endings, as the diff counts them.
 fn lines(text: &str) -> Vec<&str> {
     text.split_inclusive('\n').collect()
@@ -163,5 +225,28 @@ mod tests {
             .iter()
             .fold(old.to_owned(), |text, hunk| apply_hunk(&text, new, hunk));
         assert_eq!(staged, new);
+    }
+
+    #[test]
+    fn unified_patches_read_like_gits() {
+        let old = "a\nb\nc\nd\ne\nf\ng\nh\ni\nj\n";
+        let new = "a\nB\nc\nd\ne\nf\ng\nh\ni\nj\nk";
+        let patch = unified_patch("src/x.ts", old, new, 1);
+        assert_eq!(
+            patch,
+            "diff --git a/src/x.ts b/src/x.ts\n--- a/src/x.ts\n+++ b/src/x.ts\n\
+             @@ -1,3 +1,3 @@\n a\n-b\n+B\n c\n\
+             @@ -10,1 +10,2 @@\n j\n+k\n\\ No newline at end of file\n"
+        );
+        // A new file: nothing before.
+        let created = unified_patch("new.md", "", "# Title\n", 3);
+        assert!(
+            created.ends_with("@@ -0,0 +1,1 @@\n+# Title\n"),
+            "{created}"
+        );
+        assert_eq!(
+            unified_patch("same", "x\n", "x\n", 3),
+            "diff --git a/same b/same\n--- a/same\n+++ b/same\n"
+        );
     }
 }

@@ -8,8 +8,9 @@ use serde_json::Value;
 
 use crate::workbench_window::explorer;
 use crate::workbench_window::{
-    CheckExtensionUpdates, ImportFromCursor, InsertAtMention, InstallFromVsix, RestartExtensions,
-    SelectIconTheme, ShowFileHistory, ToggleBlame, UpdateAllExtensions,
+    AcceptProposedDiff, CheckExtensionUpdates, ImportFromCursor, InsertAtMention, InstallFromVsix,
+    RejectProposedDiff, RestartExtensions, SelectIconTheme, ShowFileHistory, ToggleBlame,
+    UpdateAllExtensions,
 };
 use crate::workbench_window::{
     CheckoutBranch, Commit, CommitAmend, CreateBranch, DiscardAll, GitFetch, GitPull, GitPush,
@@ -262,6 +263,18 @@ pub const COMMANDS: &[KeelCommand] = &[
         action: || Box::new(InsertAtMention),
         default_key: Some("cmd+alt+k"),
         context: Some(EDITOR_CONTEXT),
+    },
+    KeelCommand {
+        id: "claude-code.acceptProposedDiff",
+        action: || Box::new(AcceptProposedDiff),
+        default_key: None,
+        context: None,
+    },
+    KeelCommand {
+        id: "claude-code.rejectProposedDiff",
+        action: || Box::new(RejectProposedDiff),
+        default_key: None,
+        context: None,
     },
     KeelCommand {
         id: "keel.extensions.importFromCursor",

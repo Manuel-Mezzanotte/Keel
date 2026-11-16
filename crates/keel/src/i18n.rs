@@ -476,6 +476,11 @@ pub struct Strings {
     pub cursor_blocker_language_server: &'static str,
     pub command_insert_at_mention: &'static str,
     pub claude_not_connected: &'static str,
+    pub command_accept_proposed: &'static str,
+    pub command_reject_proposed: &'static str,
+    pub claude_proposed_edit: &'static str,
+    pub claude_accept: &'static str,
+    pub claude_reject: &'static str,
 }
 
 impl Strings {
@@ -490,6 +495,8 @@ impl Strings {
             "workbench.action.selectIconTheme" => self.command_icon_theme,
             "keel.extensions.importFromCursor" => self.command_import_cursor,
             "claude-code.insertAtMentioned" => self.command_insert_at_mention,
+            "claude-code.acceptProposedDiff" => self.command_accept_proposed,
+            "claude-code.rejectProposedDiff" => self.command_reject_proposed,
             "keel.selectLanguage" => self.command_language,
             "workbench.action.toggleSidebarVisibility" => self.command_toggle_sidebar,
             "workbench.action.togglePanel" => self.command_toggle_panel,
@@ -1296,6 +1303,11 @@ pub const ITALIAN: Strings = Strings {
     cursor_blocker_language_server: "avvia un language server",
     command_insert_at_mention: "Claude Code: Inserisci il riferimento al file",
     claude_not_connected: "Claude Code non è collegato a questa finestra: avvialo in un terminale di Keel.",
+    command_accept_proposed: "Claude Code: Accetta la modifica proposta",
+    command_reject_proposed: "Claude Code: Rifiuta la modifica proposta",
+    claude_proposed_edit: "Proposta di Claude Code",
+    claude_accept: "Accetta",
+    claude_reject: "Rifiuta",
 };
 
 pub const ENGLISH: Strings = Strings {
@@ -1729,6 +1741,11 @@ pub const ENGLISH: Strings = Strings {
     cursor_blocker_language_server: "starts a language server",
     command_insert_at_mention: "Claude Code: Insert At-Mention",
     claude_not_connected: "Claude Code is not connected to this window: start it in a Keel terminal.",
+    command_accept_proposed: "Claude Code: Accept Proposed Changes",
+    command_reject_proposed: "Claude Code: Reject Proposed Changes",
+    claude_proposed_edit: "Proposed by Claude Code",
+    claude_accept: "Accept",
+    claude_reject: "Reject",
 };
 
 #[cfg(test)]

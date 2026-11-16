@@ -482,6 +482,10 @@ impl Workbench {
             return;
         }
         let removed = self.documents.remove(uri);
+        // A proposal of Claude Code closed without an answer is rejected.
+        if uri.starts_with(super::claude_diff::PROPOSED_SCHEME) {
+            self.claude_diff_closed(uri);
+        }
         // Extensions never knew about images.
         if removed.is_some_and(|document| {
             !matches!(

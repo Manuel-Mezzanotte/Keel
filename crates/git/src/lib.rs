@@ -15,7 +15,7 @@ use std::process::{Command, Stdio};
 pub use history::{
     BlameLine, ChangedFile, Commit, CommitDetails, LogOptions, RefLabel, parse_blame, parse_log,
 };
-pub use hunks::{Hunk, HunkKind, apply_hunk, block_text, hunks, revert_hunk};
+pub use hunks::{Hunk, HunkKind, apply_hunk, block_text, hunks, revert_hunk, unified_patch};
 pub use status::{Change, FileStatus, Status, parse as parse_status};
 
 /// What git said when a command failed, ready to show.

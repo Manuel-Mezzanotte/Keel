@@ -53,6 +53,7 @@ use tabs::{Group, OpenAs};
 
 pub(crate) use blame::{ShowFileHistory, ToggleBlame};
 pub(crate) use claude_code::{OpenClaudeCode, OpenClaudeCodeInPanel};
+pub(crate) use claude_diff::{AcceptProposedDiff, RejectProposedDiff};
 pub(crate) use claude_ide::InsertAtMention;
 pub(crate) use code_actions::{FormatDocument, OrganizeImports};
 pub(crate) use code_navigation::{
@@ -378,6 +379,8 @@ pub struct Workbench {
     watchdog: host_watchdog::HostWatchdog,
     /// The connection Claude Code makes to the window, as to VS Code.
     claude_ide: Option<claude_ide::ClaudeIde>,
+    /// Edits Claude Code proposed, waiting for Accept or Reject.
+    claude_diffs: Vec<claude_diff::ProposedEdit>,
     /// The file icon theme of `workbench.iconTheme`; none uses Keel's icons.
     icon_theme: Option<Rc<extensions::icon_theme::IconTheme>>,
     /// Languages the running extensions add.
@@ -568,6 +571,7 @@ impl Workbench {
             store,
             watchdog: Default::default(),
             claude_ide: None,
+            claude_diffs: Vec::new(),
             icon_theme: None,
             extension_languages: Default::default(),
             output,

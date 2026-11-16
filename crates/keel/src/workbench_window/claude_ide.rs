@@ -649,4 +649,138 @@ mod tests {
         view.update(cx, |view, _| view.claude_ide = None);
         assert!(!lock.exists());
     }
+
+    fn send_tool(socket: &mut Socket, id: u64, name: &str, arguments: Value) {
+        let request = json!({ "jsonrpc": "2.0", "id": id, "method": "tools/call", "params": { "name": name, "arguments": arguments } });
+        socket.send(Message::text(request.to_string())).unwrap();
+    }
+
+    fn texts(answer: &Value) -> Vec<String> {
+        answer["result"]["content"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|item| item["text"].as_str().unwrap().to_owned())
+            .collect()
+    }
+
+    #[gpui::test]
+    fn proposed_edits_are_accepted_or_rejected_in_keel(cx: &mut TestAppContext) {
+        cx.executor().allow_parking();
+        cx.update(|cx| {
+            gpui_component::init(cx);
+            language::register_grammars();
+            init(cx);
+        });
+        let project = tempfile::tempdir().unwrap();
+        std::fs::create_dir_all(project.path().join(".git")).unwrap();
+        let path = project.path().join("booking.ts");
+        std::fs::write(&path, "const nights = 3;\nconst price = nights * 90;\n").unwrap();
+        let ide_dir = tempfile::tempdir().unwrap();
+        let document = Document::open(&path).unwrap();
+        let (view, cx) = cx.add_window_view(|window, cx| {
+            let mut workbench = Workbench::new(Some(document), test_settings(), None, window, cx);
+            workbench.start_claude_ide(ide_dir.path().to_path_buf(), window, cx);
+            workbench
+        });
+        let (port, lock) = view.read_with(cx, |view, _| {
+            let ide = view.claude_ide.as_ref().unwrap();
+            (ide.server.port(), ide.server.lock_file().to_path_buf())
+        });
+        let mut request = format!("ws://127.0.0.1:{port}")
+            .into_client_request()
+            .unwrap();
+        request
+            .headers_mut()
+            .insert(ide::AUTH_HEADER, token_of(&lock).parse().unwrap());
+        let (mut socket, _) = tungstenite::connect(request).unwrap();
+        if let MaybeTlsStream::Plain(stream) = socket.get_ref() {
+            stream
+                .set_read_timeout(Some(Duration::from_millis(20)))
+                .unwrap();
+        }
+        let proposed = "const nights = 3;\nconst price = nights * 95;\n";
+        let open = |name: &str| {
+            json!({
+                "old_file_path": path, "new_file_path": path,
+                "new_file_contents": proposed, "tab_name": name,
+            })
+        };
+
+        // The proposal opens as differences, and Claude Code waits.
+        send_tool(&mut socket, 1, "openDiff", open("✻ booking.ts"));
+        let deadline = Instant::now() + Duration::from_secs(10);
+        let uri = loop {
+            cx.executor().advance_clock(Duration::from_millis(100));
+            cx.run_until_parked();
+            let active = view.read_with(cx, |view, _| view.panes[view.active].uri.clone());
+            if active.starts_with(super::super::claude_diff::PROPOSED_SCHEME) {
+                break active;
+            }
+            assert!(Instant::now() < deadline, "the proposal did not open");
+            std::thread::sleep(Duration::from_millis(20));
+        };
+        view.read_with(cx, |view, cx| {
+            let Some(Backing::Diff(tab)) =
+                view.documents.get(&uri).map(|document| &document.backing)
+            else {
+                panic!("not a diff");
+            };
+            assert_eq!(tab.title, "✻ booking.ts");
+            let files = tab.state.read(cx).files();
+            assert_eq!((files[0].additions(), files[0].deletions()), (1, 1));
+        });
+
+        // Accept: Claude Code gets the text, the tab goes away.
+        view.update_in(cx, |view, window, cx| {
+            window.dispatch_action(Box::new(super::super::claude_diff::AcceptProposedDiff), cx);
+            if view.claude_diffs.iter().any(|edit| edit.uri == uri) {
+                view.answer_claude_diff_for_tests(&uri, true, window, cx);
+            }
+        });
+        let accepted = receive(cx, &mut socket, |message| message["id"] == 1);
+        assert_eq!(texts(&accepted), ["FILE_SAVED", proposed]);
+        view.read_with(cx, |view, _| {
+            assert!(!view.documents.contains_key(&uri));
+            assert!(view.claude_diffs.is_empty());
+        });
+
+        // Closing the tab is a no.
+        send_tool(&mut socket, 2, "openDiff", open("second"));
+        let deadline = Instant::now() + Duration::from_secs(10);
+        while view.read_with(cx, |view, _| view.claude_diffs.is_empty()) {
+            assert!(Instant::now() < deadline);
+            cx.executor().advance_clock(Duration::from_millis(100));
+            cx.run_until_parked();
+            std::thread::sleep(Duration::from_millis(20));
+        }
+        view.update_in(cx, |view, window, cx| {
+            let (group, tab) = view
+                .find_tab(&view.claude_diffs[0].uri.clone(), view.active)
+                .unwrap();
+            view.close_tab_now(group, tab, window, cx);
+        });
+        let rejected = receive(cx, &mut socket, |message| message["id"] == 2);
+        assert_eq!(texts(&rejected), ["DIFF_REJECTED", "second"]);
+
+        // closeAllDiffTabs rejects what still waits.
+        send_tool(&mut socket, 3, "openDiff", open("third"));
+        let deadline = Instant::now() + Duration::from_secs(10);
+        while view.read_with(cx, |view, _| view.claude_diffs.is_empty()) {
+            assert!(Instant::now() < deadline);
+            cx.executor().advance_clock(Duration::from_millis(100));
+            cx.run_until_parked();
+            std::thread::sleep(Duration::from_millis(20));
+        }
+        send_tool(&mut socket, 4, "closeAllDiffTabs", json!({}));
+        let third = receive(cx, &mut socket, |message| message["id"] == 3);
+        assert_eq!(texts(&third)[0], "DIFF_REJECTED");
+        let closed = receive(cx, &mut socket, |message| message["id"] == 4);
+        assert_eq!(texts(&closed), ["CLOSED_1_DIFF_TABS"]);
+        // The file itself is untouched: Claude Code writes it.
+        assert_eq!(
+            std::fs::read_to_string(&path).unwrap(),
+            "const nights = 3;\nconst price = nights * 90;\n"
+        );
+    }
 }
