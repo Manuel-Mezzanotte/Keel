@@ -48,12 +48,16 @@ pub(super) struct ExtensionStore {
     /// Bumped by every search, so a late answer is dropped.
     generation: u64,
     /// Lower-case ids being downloaded and installed.
-    installing: HashSet<String>,
+    pub(super) installing: HashSet<String>,
     /// Newer versions, by lower-case id.
     pub(super) updates: HashMap<String, Listing>,
     pub(super) checked_updates: bool,
     /// Icons of the results, by lower-case id.
     icons: HashMap<String, PathBuf>,
+    /// "Import from Cursor", while it is shown.
+    pub(super) cursor: Option<super::cursor_import::CursorImport>,
+    /// Cursor's extensions folder; none means `~/.cursor/extensions`.
+    pub(super) cursor_dir: Option<PathBuf>,
 }
 
 impl ExtensionStore {
@@ -81,6 +85,8 @@ impl ExtensionStore {
             updates: HashMap::new(),
             checked_updates: false,
             icons: HashMap::new(),
+            cursor: None,
+            cursor_dir: None,
         };
         (store, events)
     }
@@ -583,7 +589,7 @@ impl Workbench {
     }
 
     /// The installed version of `id`, if any.
-    fn installed_version(&self, id: &str) -> Option<&str> {
+    pub(super) fn installed_version(&self, id: &str) -> Option<&str> {
         self.installed
             .iter()
             .find(|extension| extension.id().eq_ignore_ascii_case(id))
@@ -821,12 +827,26 @@ impl Workbench {
                                 )
                             })
                             .separator()
+                            .menu(
+                                strings.extensions_import_cursor,
+                                Box::new(super::cursor_import::ImportFromCursor),
+                            )
                             .menu(strings.extensions_install_vsix, Box::new(InstallFromVsix))
                             .menu(strings.extensions_restart, Box::new(RestartExtensions))
                     }),
             );
         let mut view = div().flex().flex_col().gap_1().child(header);
         view = view.children(self.render_extension_search());
+        if let Some(report) = self
+            .store
+            .cursor
+            .as_ref()
+            .filter(|_| self.store.query.is_empty())
+        {
+            return view
+                .child(self.render_cursor_import(report, colors, cx))
+                .into_any_element();
+        }
         if !self.store.query.is_empty() && self.store.client.is_some() {
             return view
                 .child(self.render_open_vsx_results(colors, cx))

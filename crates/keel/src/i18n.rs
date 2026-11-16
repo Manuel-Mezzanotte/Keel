@@ -444,6 +444,36 @@ pub struct Strings {
     pub icon_theme_none: &'static str,
     pub extensions_restarted_text: &'static str,
     pub extensions_gave_up: &'static str,
+    pub extensions_import_cursor: &'static str,
+    pub command_import_cursor: &'static str,
+    pub cursor_heading: &'static str,
+    pub cursor_close: &'static str,
+    pub cursor_loading: &'static str,
+    pub cursor_none: &'static str,
+    pub cursor_install_all_text: &'static str,
+    pub cursor_group_install: &'static str,
+    pub cursor_group_keel: &'static str,
+    pub cursor_group_blocked: &'static str,
+    pub cursor_installed: &'static str,
+    pub cursor_local: &'static str,
+    pub cursor_partial_text: &'static str,
+    pub cursor_blocked_text: &'static str,
+    pub cursor_needs_text: &'static str,
+    pub cursor_not_on_open_vsx: &'static str,
+    pub cursor_builtin_prettier: &'static str,
+    pub cursor_builtin_git_graph: &'static str,
+    pub cursor_builtin_claude_code: &'static str,
+    pub cursor_builtin_pdf: &'static str,
+    pub cursor_builtin_markdown_preview: &'static str,
+    pub cursor_builtin_yaml: &'static str,
+    pub cursor_builtin_typescript: &'static str,
+    pub cursor_blocker_cursor_only: &'static str,
+    pub cursor_blocker_debugger: &'static str,
+    pub cursor_blocker_notebooks: &'static str,
+    pub cursor_blocker_custom_editors: &'static str,
+    pub cursor_blocker_views: &'static str,
+    pub cursor_blocker_webviews: &'static str,
+    pub cursor_blocker_language_server: &'static str,
 }
 
 impl Strings {
@@ -456,6 +486,7 @@ impl Strings {
             "workbench.action.quit" => self.command_quit,
             "workbench.action.selectTheme" => self.command_theme,
             "workbench.action.selectIconTheme" => self.command_icon_theme,
+            "keel.extensions.importFromCursor" => self.command_import_cursor,
             "keel.selectLanguage" => self.command_language,
             "workbench.action.toggleSidebarVisibility" => self.command_toggle_sidebar,
             "workbench.action.togglePanel" => self.command_toggle_panel,
@@ -707,6 +738,23 @@ impl Strings {
 
     pub fn extensions_restarted(&self, what: &str) -> String {
         self.extensions_restarted_text.replace("{what}", what)
+    }
+
+    pub fn cursor_install_all(&self, count: usize) -> String {
+        self.cursor_install_all_text
+            .replace("{count}", &count.to_string())
+    }
+
+    pub fn cursor_partial(&self, reasons: &str) -> String {
+        self.cursor_partial_text.replace("{reasons}", reasons)
+    }
+
+    pub fn cursor_blocked(&self, reasons: &str) -> String {
+        self.cursor_blocked_text.replace("{reasons}", reasons)
+    }
+
+    pub fn cursor_needs(&self, name: &str) -> String {
+        self.cursor_needs_text.replace("{name}", name)
     }
 
     pub fn extension_installed(&self, name: &str) -> String {
@@ -1213,6 +1261,36 @@ pub const ITALIAN: Strings = Strings {
     icon_theme_none: "Icone di Keel",
     extensions_restarted_text: "Un'estensione non rispondeva ({what}): estensioni riavviate.",
     extensions_gave_up: "Le estensioni si sono bloccate troppe volte e restano spente. Riavviale dal menu «…» della vista Estensioni.",
+    extensions_import_cursor: "Importa da Cursor…",
+    command_import_cursor: "Estensioni: Importa da Cursor",
+    cursor_heading: "Da Cursor",
+    cursor_close: "Chiudi",
+    cursor_loading: "Lettura delle estensioni di Cursor…",
+    cursor_none: "Cursor non ha estensioni da importare.",
+    cursor_install_all_text: "Installa le disponibili ({count})",
+    cursor_group_install: "Da installare",
+    cursor_group_keel: "Già in Keel",
+    cursor_group_blocked: "Non funzionano in Keel",
+    cursor_installed: "Già installata",
+    cursor_local: "Copiata dalla cartella di Cursor",
+    cursor_partial_text: "Senza: {reasons}",
+    cursor_blocked_text: "Non funziona: {reasons}",
+    cursor_needs_text: "Serve {name}, che non funziona in Keel",
+    cursor_not_on_open_vsx: "Non è su Open VSX",
+    cursor_builtin_prettier: "Keel usa già il Prettier del progetto",
+    cursor_builtin_git_graph: "Git Graph e gli autori delle righe sono già in Keel",
+    cursor_builtin_claude_code: "Claude Code è già nel pannello a destra",
+    cursor_builtin_pdf: "Keel apre già i PDF",
+    cursor_builtin_markdown_preview: "Keel ha già l'anteprima Markdown",
+    cursor_builtin_yaml: "Keel ha già il language server YAML",
+    cursor_builtin_typescript: "Keel usa già TypeScript con vtsls",
+    cursor_blocker_cursor_only: "fatta solo per Cursor",
+    cursor_blocker_debugger: "serve il debugger",
+    cursor_blocker_notebooks: "servono i notebook",
+    cursor_blocker_custom_editors: "editor propri",
+    cursor_blocker_views: "pannelli propri",
+    cursor_blocker_webviews: "pagine web interne",
+    cursor_blocker_language_server: "avvia un language server",
 };
 
 pub const ENGLISH: Strings = Strings {
@@ -1614,6 +1692,36 @@ pub const ENGLISH: Strings = Strings {
     icon_theme_none: "Keel's icons",
     extensions_restarted_text: "An extension stopped responding ({what}): extensions restarted.",
     extensions_gave_up: "Extensions stopped responding too many times and stay off. Restart them from the … menu of the Extensions view.",
+    extensions_import_cursor: "Import from Cursor…",
+    command_import_cursor: "Extensions: Import from Cursor",
+    cursor_heading: "From Cursor",
+    cursor_close: "Close",
+    cursor_loading: "Reading Cursor's extensions…",
+    cursor_none: "Cursor has no extensions to import.",
+    cursor_install_all_text: "Install available ({count})",
+    cursor_group_install: "To install",
+    cursor_group_keel: "Already in Keel",
+    cursor_group_blocked: "Not working in Keel",
+    cursor_installed: "Already installed",
+    cursor_local: "Copied from Cursor's folder",
+    cursor_partial_text: "Without: {reasons}",
+    cursor_blocked_text: "Does not work: {reasons}",
+    cursor_needs_text: "Needs {name}, which does not work in Keel",
+    cursor_not_on_open_vsx: "Not on Open VSX",
+    cursor_builtin_prettier: "Keel already uses the project's Prettier",
+    cursor_builtin_git_graph: "Git Graph and line authors are built into Keel",
+    cursor_builtin_claude_code: "Claude Code is already in the right panel",
+    cursor_builtin_pdf: "Keel already opens PDFs",
+    cursor_builtin_markdown_preview: "Keel already has the Markdown preview",
+    cursor_builtin_yaml: "Keel already runs the YAML language server",
+    cursor_builtin_typescript: "Keel already uses TypeScript through vtsls",
+    cursor_blocker_cursor_only: "made for Cursor only",
+    cursor_blocker_debugger: "needs the debugger",
+    cursor_blocker_notebooks: "needs notebooks",
+    cursor_blocker_custom_editors: "its own editors",
+    cursor_blocker_views: "its own panels",
+    cursor_blocker_webviews: "web pages inside the window",
+    cursor_blocker_language_server: "starts a language server",
 };
 
 #[cfg(test)]

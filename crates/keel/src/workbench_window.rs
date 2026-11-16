@@ -7,6 +7,7 @@ mod code_actions;
 mod code_navigation;
 mod commit_view;
 mod contributions;
+mod cursor_import;
 mod diff_view;
 mod disk;
 mod editing;
@@ -56,6 +57,7 @@ pub(crate) use code_navigation::{
     GoToTypeDefinition, RenameSymbol, RevealDefinition,
 };
 pub(crate) use contributions::SelectIconTheme;
+pub(crate) use cursor_import::ImportFromCursor;
 pub(crate) use extensions_view::{
     CheckExtensionUpdates, InstallFromVsix, RestartExtensions, UpdateAllExtensions,
 };

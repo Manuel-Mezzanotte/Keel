@@ -1289,8 +1289,23 @@ Apri Keel su GestionaleHospitality. La prima volta i server si installano da sol
 | 9.2 | Open VSX: ricerca dentro la vista, installazione, aggiornamenti | fatta |
 | 9.3 | Temi colore e temi di icone dai VSIX (Dracula, Material Icon Theme), configurazioni di linguaggio | fatta |
 | 9.4 | Isolamento (un'estensione bloccata o in crash non ferma Keel e si riavvia) e ponte `vscode` allargato per Peacock, gitignore e markdownlint | fatta |
-| 9.5 | Importa da Cursor l'elenco delle estensioni | da fare |
+| 9.5 | Importa da Cursor l'elenco delle estensioni | fatta |
 | 9.6 | Misure e resoconto | da fare |
+
+**Note sulla 9.5**
+- **«Importa da Cursor…»** sta nel menu «…» della vista Estensioni e nella tavolozza («Estensioni: Importa da Cursor»).
+- **Keel legge l'elenco** di `~/.cursor/extensions/extensions.json` senza toccare nulla di Cursor.
+- **Divide le estensioni in tre gruppi:**
+  - da installare: quelle su Open VSX, e quelle fatte da te come VSAuto Ghost, che vengono copiate dalla cartella di Cursor;
+  - già in Keel: quelle già installate, e quelle che Keel fa da solo (Prettier, Git Graph, Claude Code, PDF, anteprima Markdown, YAML, TypeScript);
+  - non funzionano in Keel, col motivo: fatta solo per Cursor, serve il debugger, servono i notebook, pannelli propri, avvia un language server, oppure serve un'altra estensione che non funziona, oppure non è su Open VSX.
+- **«Senza: pagine web interne» o «editor propri»:** l'estensione si installa e funziona in parte, come Peacock.
+- **Ogni estensione ha il suo pulsante «Installa»;** in cima, «Installa le disponibili (N)» le installa tutte.
+- **Con le tue 47 estensioni di Cursor** il controllo dura circa 5 secondi, perché chiede a Open VSX 8 estensioni alla volta.
+  - Da installare: 16, tra cui Dracula, Material Icon Theme, Peacock, gitignore, markdownlint e VSAuto Ghost.
+  - Già in Keel: 7.
+  - Non funzionano: 24, come Jupyter, Docker, Java, Dart e Flutter, Remote SSH.
+- **Il riconoscimento è a buon senso:** guarda il `package.json` e cerca nel codice principale le webview e i language client. Qualche estensione «da installare» può comunque non servire a nulla in Keel, per esempio le scorciatoie di Jupyter.
 
 **Note sulla 9.4**
 - **Estensione bloccata:** ogni 5 secondi la finestra chiede all'host delle estensioni se risponde.
