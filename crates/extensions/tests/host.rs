@@ -603,3 +603,44 @@ async fn user_settings_override_the_extension_defaults() {
     });
     assert_eq!(message.unwrap()["message"], "Ciao Manuel");
 }
+
+/// An extension stuck in an endless loop cannot keep Keel from closing
+/// the window: dropping the host stops it within a few seconds.
+#[test]
+fn a_stuck_extension_does_not_hold_the_window() {
+    let folder = tempfile::tempdir().unwrap();
+    let root = folder.path().join("stuck");
+    fs::create_dir_all(&root).unwrap();
+    fs::write(
+        root.join("package.json"),
+        r#"{ "name": "stuck", "publisher": "keel-tests", "version": "1.0.0", "main": "./extension.js", "activationEvents": ["*"] }"#,
+    )
+    .unwrap();
+    fs::write(
+        root.join("extension.js"),
+        "exports.activate = () => { while (true) {} };",
+    )
+    .unwrap();
+    let extension = InstalledExtension::load(&root).unwrap();
+    let (host, _events) = ExtensionHost::start().unwrap();
+    let runtime = tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()
+        .unwrap();
+    runtime
+        .block_on(host.load_extension(&extension, folder.path()))
+        .unwrap();
+    // Never answered: the loop holds the host's thread.
+    let activation = host.activate(&extension.id());
+    std::thread::sleep(Duration::from_millis(200));
+    assert!(host.is_running());
+    let started = std::time::Instant::now();
+    drop(host);
+    assert!(
+        started.elapsed() < Duration::from_secs(3),
+        "{:?}",
+        started.elapsed()
+    );
+    let result = runtime.block_on(activation);
+    assert!(result.is_err());
+}

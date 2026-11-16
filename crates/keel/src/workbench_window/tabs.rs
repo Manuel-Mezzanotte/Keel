@@ -491,6 +491,7 @@ impl Workbench {
                     | Backing::Preview(_)
                     | Backing::Pdf(_)
                     | Backing::Graph(_)
+                    | Backing::ExtensionDetails(_)
             )
         }) {
             self.notify_host("documents/closed", json!({ "uri": uri }));

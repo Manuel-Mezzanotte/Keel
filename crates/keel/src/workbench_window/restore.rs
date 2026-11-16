@@ -111,7 +111,8 @@ impl Workbench {
                 | Backing::Diff(_)
                 | Backing::Preview(_)
                 | Backing::Pdf(_)
-                | Backing::Graph(_) => {
+                | Backing::Graph(_)
+                | Backing::ExtensionDetails(_) => {
                     continue;
                 }
             };
@@ -287,7 +288,8 @@ impl Workbench {
             | Backing::Diff(_)
             | Backing::Preview(_)
             | Backing::Pdf(_)
-            | Backing::Graph(_) => false,
+            | Backing::Graph(_)
+            | Backing::ExtensionDetails(_) => false,
         };
         document.synced_text = text.to_owned();
         document.version += 1;

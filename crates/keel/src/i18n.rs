@@ -410,6 +410,24 @@ pub struct Strings {
     pub blame_not_in_git: &'static str,
     pub blame_uncommitted: &'static str,
     pub file_history_title_text: &'static str,
+    pub extensions_install_vsix: &'static str,
+    pub extensions_restart: &'static str,
+    pub extensions_failed: &'static str,
+    pub extension_installed_text: &'static str,
+    pub extension_uninstall_question_text: &'static str,
+    pub extension_tab_title_text: &'static str,
+    pub extension_enable: &'static str,
+    pub extension_disable: &'static str,
+    pub extension_disable_project: &'static str,
+    pub extension_uninstall: &'static str,
+    pub extension_disabled_badge: &'static str,
+    pub extension_missing: &'static str,
+    pub extension_commands: &'static str,
+    pub extension_keybindings: &'static str,
+    pub extension_themes: &'static str,
+    pub extension_icon_themes: &'static str,
+    pub extension_snippets: &'static str,
+    pub extension_languages: &'static str,
 }
 
 impl Strings {
@@ -464,6 +482,8 @@ impl Strings {
             "markdown.showPreview" => self.command_markdown_preview,
             "git-graph.view" => self.command_git_graph,
             "gitlens.toggleFileBlame" => self.command_toggle_blame,
+            "workbench.extensions.action.installVSIX" => self.extensions_install_vsix,
+            "workbench.action.restartExtensionHost" => self.extensions_restart,
             "keel.showFileHistory" => self.command_file_history,
             "markdown.showPreviewToSide" => self.command_markdown_preview_side,
             "editor.action.organizeImports" => self.command_organize_imports,
@@ -659,6 +679,19 @@ impl Strings {
         self.pdf_page_text
             .replace("{page}", &page.to_string())
             .replace("{count}", &count.to_string())
+    }
+
+    pub fn extension_installed(&self, name: &str) -> String {
+        self.extension_installed_text.replace("{name}", name)
+    }
+
+    pub fn extension_uninstall_question(&self, name: &str) -> String {
+        self.extension_uninstall_question_text
+            .replace("{name}", name)
+    }
+
+    pub fn extension_tab_title(&self, name: &str) -> String {
+        self.extension_tab_title_text.replace("{name}", name)
     }
 
     pub fn file_history_title(&self, name: &str) -> String {
@@ -1118,6 +1151,24 @@ pub const ITALIAN: Strings = Strings {
     blame_not_in_git: "Questo file non è in un repository git.",
     blame_uncommitted: "Non ancora committato",
     file_history_title_text: "Storico di {name}",
+    extensions_install_vsix: "Estensioni: Installa da VSIX…",
+    extensions_restart: "Riavvia le estensioni",
+    extensions_failed: "L'host delle estensioni non è ripartito.",
+    extension_installed_text: "{name} installata",
+    extension_uninstall_question_text: "Vuoi disinstallare «{name}»?",
+    extension_tab_title_text: "Estensione: {name}",
+    extension_enable: "Attiva",
+    extension_disable: "Disattiva",
+    extension_disable_project: "Disattiva per questo progetto",
+    extension_uninstall: "Disinstalla",
+    extension_disabled_badge: "Disattivata",
+    extension_missing: "Questa estensione non è più installata.",
+    extension_commands: "comandi",
+    extension_keybindings: "scorciatoie",
+    extension_themes: "temi",
+    extension_icon_themes: "temi di icone",
+    extension_snippets: "file di snippet",
+    extension_languages: "linguaggi",
 };
 
 pub const ENGLISH: Strings = Strings {
@@ -1485,6 +1536,24 @@ pub const ENGLISH: Strings = Strings {
     blame_not_in_git: "This file is not in a git repository.",
     blame_uncommitted: "Not committed yet",
     file_history_title_text: "History of {name}",
+    extensions_install_vsix: "Extensions: Install from VSIX…",
+    extensions_restart: "Restart Extension Host",
+    extensions_failed: "The extension host did not start again.",
+    extension_installed_text: "{name} installed",
+    extension_uninstall_question_text: "Do you want to uninstall \"{name}\"?",
+    extension_tab_title_text: "Extension: {name}",
+    extension_enable: "Enable",
+    extension_disable: "Disable",
+    extension_disable_project: "Disable (Workspace)",
+    extension_uninstall: "Uninstall",
+    extension_disabled_badge: "Disabled",
+    extension_missing: "This extension is no longer installed.",
+    extension_commands: "commands",
+    extension_keybindings: "keybindings",
+    extension_themes: "themes",
+    extension_icon_themes: "icon themes",
+    extension_snippets: "snippet files",
+    extension_languages: "languages",
 };
 
 #[cfg(test)]

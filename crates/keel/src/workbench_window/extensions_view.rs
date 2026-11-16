@@ -1,0 +1,786 @@
+//! The Extensions view, as in VS Code and Cursor: the installed extensions
+//! with their icon and description, turned on or off (everywhere or for
+//! this project), uninstalled, installed from a VSIX, and a tab with each
+//! one's details and README. Any change restarts the extension host in
+//! place: the window stays open.
+
+use gpui::{AnyElement, Entity, PathPromptOptions, StatefulInteractiveElement as _, img};
+use gpui_component::button::{Button, ButtonVariants as _};
+use gpui_component::menu::DropdownMenu as _;
+use gpui_component::text::{TextView, TextViewState};
+use gpui_component::{ActiveTheme as _, Icon, Sizable as _};
+use gpui_kit_assets::IconName;
+
+use super::shell::{Colors, heading, note};
+use super::*;
+use crate::extension_state::Scope;
+
+actions!(keel, [InstallFromVsix, RestartExtensions]);
+
+/// What the menu of an installed extension does.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum ExtensionCommand {
+    Enable,
+    Disable,
+    DisableInProject,
+    Uninstall,
+}
+
+#[derive(Clone, Debug, PartialEq, gpui::Action)]
+#[action(namespace = extensions, no_json)]
+pub struct ExtensionMenu {
+    pub id: String,
+    pub command: ExtensionCommand,
+}
+
+/// The tab with an extension's details.
+pub(super) struct ExtensionDetailsTab {
+    pub(super) id: String,
+    pub(super) title: String,
+    readme: Entity<TextViewState>,
+}
+
+pub(super) fn details_uri(id: &str) -> String {
+    format!("keel-extension:{id}")
+}
+
+/// What an extension calls itself.
+pub(super) fn display_name(extension: &InstalledExtension) -> String {
+    extension
+        .manifest
+        .display_name
+        .clone()
+        .unwrap_or_else(|| extension.manifest.name.clone())
+}
+
+fn description(extension: &InstalledExtension) -> String {
+    extension.manifest.raw()["description"]
+        .as_str()
+        .unwrap_or_default()
+        .to_owned()
+}
+
+/// The extension's icon from its `package.json`, if it has one.
+fn icon_path(extension: &InstalledExtension) -> Option<PathBuf> {
+    let icon = extension.manifest.raw()["icon"].as_str()?;
+    let path = extension.root.join(icon);
+    path.is_file().then_some(path)
+}
+
+/// The README shipped in the package, whatever its case.
+fn readme(extension: &InstalledExtension) -> String {
+    std::fs::read_dir(&extension.root)
+        .ok()
+        .into_iter()
+        .flatten()
+        .flatten()
+        .find(|entry| {
+            entry
+                .file_name()
+                .to_string_lossy()
+                .eq_ignore_ascii_case("README.md")
+        })
+        .and_then(|entry| std::fs::read_to_string(entry.path()).ok())
+        .unwrap_or_default()
+}
+
+/// A line about what an extension adds: commands, themes, snippets...
+fn contributions(extension: &InstalledExtension, strings: &Strings) -> String {
+    let contributes = &extension.manifest.raw()["contributes"];
+    let count = |key: &str| contributes[key].as_array().map_or(0, Vec::len);
+    let mut parts = Vec::new();
+    for (key, label) in [
+        ("commands", strings.extension_commands),
+        ("keybindings", strings.extension_keybindings),
+        ("themes", strings.extension_themes),
+        ("iconThemes", strings.extension_icon_themes),
+        ("snippets", strings.extension_snippets),
+        ("languages", strings.extension_languages),
+    ] {
+        let found = count(key);
+        if found > 0 {
+            parts.push(format!("{found} {label}"));
+        }
+    }
+    parts.join(" · ")
+}
+
+impl Workbench {
+    /// Whether `id` runs in this window.
+    pub(super) fn extension_enabled(&self, id: &str) -> bool {
+        self.extension_state
+            .is_enabled(id, self.project.root.as_deref())
+    }
+
+    /// Starts the extension host again, with the extensions installed and
+    /// turned on now. Open files and editors are told to it again.
+    pub(super) fn restart_extensions(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let Some(data) = self.extension_data.clone() else {
+            return;
+        };
+        // Dropping the host stops it, even with an extension stuck.
+        self.extensions = None;
+        for pane in &mut self.panes {
+            for collection in pane.decorations.values() {
+                collection.set(Vec::new(), cx);
+            }
+            pane.decorations.clear();
+        }
+        match crate::windows::extension_setup(&data) {
+            Some(setup) => self.start_extensions(setup, window, cx),
+            None => {
+                self.installed = crate::paths::installed_extensions(&data);
+                self.report(self.strings().extensions_failed.to_owned());
+            }
+        }
+        for index in 0..self.panes.len() {
+            self.install_completions(index, cx);
+        }
+        self.schedule_gutter_refresh(window, cx);
+        cx.notify();
+    }
+
+    /// Asks for a `.vsix` and installs it.
+    fn install_from_vsix(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let chosen = cx.prompt_for_paths(PathPromptOptions {
+            files: true,
+            directories: false,
+            multiple: false,
+            prompt: Some(self.strings().extensions_install_vsix.into()),
+        });
+        cx.spawn_in(window, async move |this, cx| {
+            let Ok(Ok(Some(paths))) = chosen.await else {
+                return;
+            };
+            let Some(path) = paths.into_iter().next() else {
+                return;
+            };
+            this.update_in(cx, |this, window, cx| this.install_vsix(&path, window, cx))
+                .ok();
+        })
+        .detach();
+    }
+
+    /// Installs a package, puts away older versions of it, and restarts
+    /// the extensions.
+    pub(super) fn install_vsix(
+        &mut self,
+        path: &Path,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let Some(data) = self.extension_data.clone() else {
+            return;
+        };
+        match crate::paths::install_extension(&data, path) {
+            Ok(installed) => {
+                let id = installed.id();
+                for old in std::fs::read_dir(crate::paths::extensions_dir(&data))
+                    .into_iter()
+                    .flatten()
+                    .flatten()
+                {
+                    let folder = old.path();
+                    let older = folder != installed.root
+                        && InstalledExtension::load(&folder)
+                            .is_ok_and(|other| other.id().eq_ignore_ascii_case(&id));
+                    if older {
+                        let _ = files::trash(&folder);
+                    }
+                }
+                self.status_message = Some(
+                    self.strings()
+                        .extension_installed(&display_name(&installed)),
+                );
+                self.restart_extensions(window, cx);
+            }
+            Err(error) => self.report(format!("{error:#}")),
+        }
+        cx.notify();
+    }
+
+    fn run_extension_menu(
+        &mut self,
+        action: &ExtensionMenu,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let Some(data) = self.extension_data.clone() else {
+            return;
+        };
+        let Some(extension) = self
+            .installed
+            .iter()
+            .find(|extension| extension.id().eq_ignore_ascii_case(&action.id))
+            .cloned()
+        else {
+            return;
+        };
+        let project = self.project.root.clone();
+        match action.command {
+            ExtensionCommand::Enable
+            | ExtensionCommand::Disable
+            | ExtensionCommand::DisableInProject => {
+                let (enabled, scope) = match action.command {
+                    ExtensionCommand::Enable => {
+                        (true, project.map_or(Scope::Everywhere, Scope::Project))
+                    }
+                    ExtensionCommand::Disable => (false, Scope::Everywhere),
+                    _ => match project {
+                        Some(project) => (false, Scope::Project(project)),
+                        None => return,
+                    },
+                };
+                self.extension_state.set(&action.id, enabled, &scope);
+                if let Err(error) = self.extension_state.save(&data) {
+                    self.report(error.to_string());
+                }
+                self.restart_extensions(window, cx);
+            }
+            ExtensionCommand::Uninstall => {
+                let strings = self.strings();
+                let answer = window.prompt(
+                    PromptLevel::Warning,
+                    &strings.extension_uninstall_question(&display_name(&extension)),
+                    Some(strings.trash_detail),
+                    &[strings.extension_uninstall, strings.cancel],
+                    cx,
+                );
+                cx.spawn_in(window, async move |this, cx| {
+                    if answer.await != Ok(0) {
+                        return;
+                    }
+                    this.update_in(cx, |this, window, cx| {
+                        // To the Trash, so it can come back.
+                        if let Err(error) = files::trash(&extension.root) {
+                            this.report(error.to_string());
+                            return;
+                        }
+                        this.extension_state.forget(&extension.id());
+                        let _ = this.extension_state.save(&data);
+                        let uri = details_uri(&extension.id());
+                        this.close_document_tabs(&uri, window, cx);
+                        this.restart_extensions(window, cx);
+                    })
+                    .ok();
+                })
+                .detach();
+            }
+        }
+    }
+
+    /// Opens the tab with an extension's details and README.
+    pub(super) fn open_extension_details(
+        &mut self,
+        id: &str,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let uri = details_uri(id);
+        if !self.documents.contains_key(&uri) {
+            let Some(extension) = self.installed.iter().find(|extension| extension.id() == id)
+            else {
+                return;
+            };
+            let text = readme(extension);
+            let readme = cx.new(|cx| {
+                TextViewState::markdown(&text, cx)
+                    .scrollable(true)
+                    .selectable(true)
+            });
+            self.documents.insert(
+                uri.clone(),
+                OpenDocument {
+                    uri: uri.clone(),
+                    backing: Backing::ExtensionDetails(Box::new(ExtensionDetailsTab {
+                        id: id.to_owned(),
+                        title: self.strings().extension_tab_title(&display_name(extension)),
+                        readme,
+                    })),
+                    language_id: "extension".to_owned(),
+                    version: 1,
+                    synced_text: String::new(),
+                    modified: false,
+                },
+            );
+        }
+        let column = self.active.min(self.panes.len().saturating_sub(1));
+        self.show_tab(&uri, column, OpenAs::Preview, true, window, cx);
+    }
+
+    /// Closes every tab showing `uri`.
+    fn close_document_tabs(&mut self, uri: &str, window: &mut Window, cx: &mut Context<Self>) {
+        while let Some((group, tab)) = self.groups.iter().enumerate().find_map(|(group, tabs)| {
+            tabs.tabs
+                .iter()
+                .position(|tab| tab.uri == uri)
+                .map(|tab| (group, tab))
+        }) {
+            self.close_tab_now(group, tab, window, cx);
+        }
+    }
+
+    /// The search of Open VSX, above the installed extensions.
+    fn render_extension_search(
+        &self,
+        _colors: Colors,
+        _cx: &mut Context<Self>,
+    ) -> Option<AnyElement> {
+        None
+    }
+
+    pub(super) fn extensions_view_actions(
+        &self,
+        root: gpui::Div,
+        cx: &mut Context<Self>,
+    ) -> gpui::Div {
+        root.on_action(
+            cx.listener(|this, _: &InstallFromVsix, window, cx| this.install_from_vsix(window, cx)),
+        )
+        .on_action(cx.listener(|this, _: &RestartExtensions, window, cx| {
+            this.restart_extensions(window, cx)
+        }))
+        .on_action(cx.listener(|this, action: &ExtensionMenu, window, cx| {
+            this.run_extension_menu(action, window, cx)
+        }))
+    }
+
+    // -----------------------------------------------------------------
+    // Drawing
+
+    fn extension_menu_items(&self, id: &str) -> Vec<(&'static str, ExtensionMenu)> {
+        let strings = self.strings();
+        let item = |command: ExtensionCommand| ExtensionMenu {
+            id: id.to_owned(),
+            command,
+        };
+        let mut items = Vec::new();
+        if self.extension_enabled(id) {
+            items.push((strings.extension_disable, item(ExtensionCommand::Disable)));
+            if self.project.root.is_some() {
+                items.push((
+                    strings.extension_disable_project,
+                    item(ExtensionCommand::DisableInProject),
+                ));
+            }
+        } else {
+            items.push((strings.extension_enable, item(ExtensionCommand::Enable)));
+        }
+        items.push((
+            strings.extension_uninstall,
+            item(ExtensionCommand::Uninstall),
+        ));
+        items
+    }
+
+    pub(super) fn render_extensions(&self, colors: Colors, cx: &mut Context<Self>) -> AnyElement {
+        let strings = self.strings();
+        let focus = self.focus_handle.clone();
+        let header = div()
+            .flex()
+            .items_center()
+            .child(
+                div()
+                    .flex_1()
+                    .min_w_0()
+                    .child(heading(strings.view_extensions, colors)),
+            )
+            .child(
+                Button::new("extensions-more")
+                    .ghost()
+                    .xsmall()
+                    .icon(Icon::new(IconName::Ellipsis))
+                    .dropdown_menu(move |menu, _, _| {
+                        menu.action_context(focus.clone())
+                            .menu(strings.extensions_install_vsix, Box::new(InstallFromVsix))
+                            .menu(strings.extensions_restart, Box::new(RestartExtensions))
+                    }),
+            );
+        let mut view = div().flex().flex_col().gap_1().child(header);
+        view = view.children(self.render_extension_search(colors, cx));
+        view = view.child(heading(strings.installed_extensions, colors));
+        if self.installed.is_empty() {
+            return view
+                .child(note(strings.no_extensions.to_owned(), colors))
+                .into_any_element();
+        }
+        let mut installed: Vec<&InstalledExtension> = self.installed.iter().collect();
+        installed.sort_by_key(|extension| display_name(extension).to_lowercase());
+        view.children(
+            installed
+                .into_iter()
+                .enumerate()
+                .map(|(index, extension)| self.render_extension_row(index, extension, colors, cx)),
+        )
+        .into_any_element()
+    }
+
+    fn render_extension_row(
+        &self,
+        index: usize,
+        extension: &InstalledExtension,
+        colors: Colors,
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
+        let id = extension.id();
+        let enabled = self.extension_enabled(&id);
+        let strings = self.strings();
+        let icon: AnyElement = match icon_path(extension) {
+            Some(path) => img(path).size(px(32.)).flex_none().into_any_element(),
+            None => div()
+                .size(px(32.))
+                .flex_none()
+                .flex()
+                .items_center()
+                .justify_center()
+                .rounded(px(6.))
+                .bg(colors.hover)
+                .child(Icon::new(IconName::Blocks).text_color(colors.muted))
+                .into_any_element(),
+        };
+        let items = self.extension_menu_items(&id);
+        let focus = self.focus_handle.clone();
+        let opened = id.clone();
+        div()
+            .id(("extension", index))
+            .px_2()
+            .py_1p5()
+            .flex()
+            .items_center()
+            .gap_2()
+            .rounded(px(6.))
+            .cursor_pointer()
+            .hover(|row| row.bg(colors.hover))
+            .when(!enabled, |row| row.opacity(0.55))
+            .on_click(cx.listener(move |this, _, window, cx| {
+                this.open_extension_details(&opened, window, cx)
+            }))
+            .child(icon)
+            .child(
+                div()
+                    .flex_1()
+                    .min_w_0()
+                    .flex()
+                    .flex_col()
+                    .child(
+                        div()
+                            .flex()
+                            .items_baseline()
+                            .gap_1p5()
+                            .child(
+                                div()
+                                    .min_w_0()
+                                    .truncate()
+                                    .text_sm()
+                                    .text_color(colors.text)
+                                    .child(display_name(extension)),
+                            )
+                            .child(
+                                div()
+                                    .flex_none()
+                                    .text_xs()
+                                    .text_color(colors.faint)
+                                    .child(extension.manifest.version.clone()),
+                            ),
+                    )
+                    .child(
+                        div()
+                            .truncate()
+                            .text_xs()
+                            .text_color(colors.muted)
+                            .child(description(extension)),
+                    )
+                    .child(
+                        div()
+                            .flex()
+                            .gap_1p5()
+                            .text_xs()
+                            .text_color(colors.faint)
+                            .child(extension.manifest.publisher.clone())
+                            .when(!enabled, |line| {
+                                line.child(strings.extension_disabled_badge)
+                            }),
+                    ),
+            )
+            .child(
+                Button::new(("extension-menu", index))
+                    .ghost()
+                    .xsmall()
+                    .icon(Icon::new(IconName::Settings))
+                    .dropdown_menu(move |menu, _, _| {
+                        let mut menu = menu.action_context(focus.clone());
+                        for (label, action) in &items {
+                            menu = menu.menu(*label, Box::new(action.clone()));
+                        }
+                        menu
+                    }),
+            )
+            .into_any_element()
+    }
+
+    pub(super) fn render_extension_details(
+        &self,
+        tab: &ExtensionDetailsTab,
+        colors: Colors,
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
+        let Some(extension) = self
+            .installed
+            .iter()
+            .find(|extension| extension.id() == tab.id)
+        else {
+            return note(self.strings().extension_missing.to_owned(), colors).into_any_element();
+        };
+        let strings = self.strings();
+        let enabled = self.extension_enabled(&tab.id);
+        let icon: AnyElement = match icon_path(extension) {
+            Some(path) => img(path).size(px(72.)).flex_none().into_any_element(),
+            None => div()
+                .size(px(72.))
+                .flex_none()
+                .flex()
+                .items_center()
+                .justify_center()
+                .rounded(px(12.))
+                .bg(colors.hover)
+                .child(
+                    Icon::new(IconName::Blocks)
+                        .size(px(32.))
+                        .text_color(colors.muted),
+                )
+                .into_any_element(),
+        };
+        let buttons = self
+            .extension_menu_items(&tab.id)
+            .into_iter()
+            .enumerate()
+            .map(|(index, (label, action))| {
+                Button::new(("extension-detail-action", index))
+                    .small()
+                    .when(index == 0, |button| button.primary())
+                    .when(index > 0, |button| button.ghost())
+                    .label(label)
+                    .on_click(cx.listener(move |this, _, window, cx| {
+                        this.run_extension_menu(&action, window, cx)
+                    }))
+            });
+        let theme = cx.theme();
+        div()
+            .size_full()
+            .flex()
+            .flex_col()
+            .child(
+                div()
+                    .flex_none()
+                    .p_6()
+                    .flex()
+                    .gap_4()
+                    .border_b_1()
+                    .border_color(colors.border)
+                    .child(icon)
+                    .child(
+                        div()
+                            .flex_1()
+                            .min_w_0()
+                            .flex()
+                            .flex_col()
+                            .gap_1()
+                            .child(
+                                div()
+                                    .flex()
+                                    .items_baseline()
+                                    .gap_2()
+                                    .child(
+                                        div()
+                                            .text_xl()
+                                            .font_weight(gpui::FontWeight::SEMIBOLD)
+                                            .text_color(colors.text)
+                                            .child(display_name(extension)),
+                                    )
+                                    .child(
+                                        div()
+                                            .text_sm()
+                                            .text_color(colors.muted)
+                                            .child(extension.manifest.version.clone()),
+                                    ),
+                            )
+                            .child(
+                                div()
+                                    .text_xs()
+                                    .text_color(colors.faint)
+                                    .font_family(theme.mono_font_family.clone())
+                                    .child(tab.id.clone()),
+                            )
+                            .child(
+                                div()
+                                    .text_sm()
+                                    .text_color(colors.muted)
+                                    .child(description(extension)),
+                            )
+                            .child(
+                                div()
+                                    .text_xs()
+                                    .text_color(colors.faint)
+                                    .child(contributions(extension, strings)),
+                            )
+                            .when(!enabled, |info| {
+                                info.child(
+                                    div()
+                                        .text_xs()
+                                        .text_color(theme.warning)
+                                        .child(strings.extension_disabled_badge),
+                                )
+                            })
+                            .child(div().pt_2().flex().gap_2().children(buttons)),
+                    ),
+            )
+            .child(
+                div().flex_1().min_h_0().flex().justify_center().child(
+                    div().h_full().w_full().max_w(px(880.)).px_8().child(
+                        TextView::new(&tab.readme)
+                            .scrollable(true)
+                            .selectable(true)
+                            .size_full(),
+                    ),
+                ),
+            )
+            .into_any_element()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::time::{Duration, Instant};
+
+    use gpui::{TestAppContext, VisualTestContext};
+
+    use super::super::tests::test_settings;
+    use super::*;
+    use crate::extension_state::ExtensionState;
+
+    const ID: &str = "manuel-local.vsauto-ghost";
+
+    fn wait_until(
+        cx: &mut VisualTestContext,
+        what: &str,
+        check: impl Fn(&mut VisualTestContext) -> bool,
+    ) {
+        let deadline = Instant::now() + Duration::from_secs(10);
+        loop {
+            cx.executor().advance_clock(Duration::from_millis(100));
+            cx.run_until_parked();
+            if check(cx) {
+                return;
+            }
+            assert!(Instant::now() < deadline, "timed out waiting for {what}");
+            std::thread::sleep(Duration::from_millis(20));
+        }
+    }
+
+    fn running_commands(view: &Entity<Workbench>, cx: &mut VisualTestContext) -> usize {
+        view.read_with(cx, |view, _| {
+            view.extensions
+                .as_ref()
+                .map_or(0, |extensions| extensions.titles.len())
+        })
+    }
+
+    #[gpui::test]
+    fn extensions_install_turn_off_and_on_without_reopening(cx: &mut TestAppContext) {
+        cx.executor().allow_parking();
+        cx.update(|cx| {
+            gpui_component::init(cx);
+            language::register_grammars();
+            init(cx);
+        });
+        let fixtures = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../fixtures");
+        let data = tempfile::tempdir().unwrap();
+        let project = tempfile::tempdir().unwrap();
+        let path = project.path().join("notes.md");
+        std::fs::write(&path, "# Notes\n").unwrap();
+        let setup = crate::windows::extension_setup(data.path()).unwrap();
+        let document = Document::open(&path).unwrap();
+        let mut workbench = None;
+        let (_root, cx) = cx.add_window_view(|window, cx| {
+            let view = cx
+                .new(|cx| Workbench::new(Some(document), test_settings(), Some(setup), window, cx));
+            workbench = Some(view.clone());
+            gpui_component::Root::new(view, window, cx)
+        });
+        let view = workbench.unwrap();
+        assert_eq!(running_commands(&view, cx), 0);
+
+        // Install from a package: listed, running, with its commands.
+        view.update_in(cx, |view, window, cx| {
+            view.install_vsix(
+                &fixtures.join("extensions/vsauto-ghost-local-0.6.1-editor-layout.vsix"),
+                window,
+                cx,
+            )
+        });
+        cx.run_until_parked();
+        view.read_with(cx, |view, _| {
+            assert_eq!(view.installed.len(), 1);
+            assert!(view.installed[0].id().eq_ignore_ascii_case(ID));
+            assert!(view.extension_enabled(ID));
+            assert!(view.extensions.as_ref().unwrap().host.is_running());
+        });
+        assert!(running_commands(&view, cx) > 0);
+
+        // Off: still listed, no longer running, and the choice is saved.
+        view.update_in(cx, |view, window, cx| {
+            let action = ExtensionMenu {
+                id: ID.to_owned(),
+                command: ExtensionCommand::Disable,
+            };
+            view.run_extension_menu(&action, window, cx)
+        });
+        cx.run_until_parked();
+        view.read_with(cx, |view, _| {
+            assert_eq!(view.installed.len(), 1);
+            assert!(!view.extension_enabled(ID));
+        });
+        assert_eq!(running_commands(&view, cx), 0);
+        assert!(!ExtensionState::load(data.path()).is_enabled(ID, None));
+
+        // On again: back without reopening the window.
+        view.update_in(cx, |view, window, cx| {
+            let action = ExtensionMenu {
+                id: ID.to_owned(),
+                command: ExtensionCommand::Enable,
+            };
+            view.run_extension_menu(&action, window, cx)
+        });
+        wait_until(cx, "the commands back", |cx| {
+            running_commands(&view, cx) > 0
+        });
+
+        // The details tab shows the README.
+        view.update_in(cx, |view, window, cx| {
+            view.open_extension_details(&view.installed[0].id(), window, cx)
+        });
+        view.read_with(cx, |view, _| {
+            let uri = details_uri(&view.installed[0].id());
+            assert!(matches!(
+                view.documents.get(&uri).map(|document| &document.backing),
+                Some(Backing::ExtensionDetails(_))
+            ));
+        });
+
+        // Uninstalling asks first; cancelling keeps everything.
+        view.update_in(cx, |view, window, cx| {
+            let action = ExtensionMenu {
+                id: ID.to_owned(),
+                command: ExtensionCommand::Uninstall,
+            };
+            view.run_extension_menu(&action, window, cx)
+        });
+        assert!(cx.has_pending_prompt());
+        cx.simulate_prompt_answer("Annulla");
+        cx.run_until_parked();
+        view.read_with(cx, |view, _| {
+            assert_eq!(view.installed.len(), 1);
+            assert!(view.installed[0].root.is_dir());
+        });
+    }
+}

@@ -4,6 +4,7 @@ mod assets;
 mod cli;
 #[cfg(test)]
 mod editor_checks;
+mod extension_state;
 mod i18n;
 mod instance;
 mod keymap;

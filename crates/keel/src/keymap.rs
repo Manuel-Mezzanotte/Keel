@@ -37,11 +37,11 @@ use crate::workbench_window::{
     GoToTypeDefinition, RenameSymbol, RevealDefinition,
 };
 use crate::workbench_window::{GoToLine, QuickOpen};
+use crate::workbench_window::{InstallFromVsix, RestartExtensions, ShowFileHistory, ToggleBlame};
 use crate::workbench_window::{NextChange, PreviousChange, RevertChange, StageChange};
 use crate::workbench_window::{
     NextProblem, PreviousProblem, RestartLanguageServers, TriggerParameterHints,
 };
-use crate::workbench_window::{ShowFileHistory, ToggleBlame};
 use crate::workbench_window::{ShowMarkdownPreview, ShowMarkdownPreviewToSide};
 
 /// A Keel command: its VS Code name, the action it runs and its default key.
@@ -247,6 +247,18 @@ pub const COMMANDS: &[KeelCommand] = &[
         action: || Box::new(TriggerParameterHints),
         default_key: Some("cmd+shift+space"),
         context: Some(EDITOR_CONTEXT),
+    },
+    KeelCommand {
+        id: "workbench.extensions.action.installVSIX",
+        action: || Box::new(InstallFromVsix),
+        default_key: None,
+        context: None,
+    },
+    KeelCommand {
+        id: "workbench.action.restartExtensionHost",
+        action: || Box::new(RestartExtensions),
+        default_key: None,
+        context: None,
     },
     KeelCommand {
         id: "gitlens.toggleFileBlame",

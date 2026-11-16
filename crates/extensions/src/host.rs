@@ -81,7 +81,14 @@ pub struct ExtensionHost {
     readable_roots: Arc<Mutex<Vec<PathBuf>>>,
     shutdown: Option<tokio::sync::oneshot::Sender<()>>,
     thread: Option<JoinHandle<()>>,
+    /// Stops JavaScript that never returns, such as an endless loop.
+    isolate: deno_core::v8::IsolateHandle,
+    /// Signals that the host's thread has finished.
+    finished: std::sync::mpsc::Receiver<()>,
 }
+
+/// How long dropping a host waits for its thread before leaving it.
+const STOP_WAIT: std::time::Duration = std::time::Duration::from_secs(2);
 
 impl ExtensionHost {
     /// Starts V8 on a new thread. The receiver gets everything extensions
@@ -92,7 +99,9 @@ impl ExtensionHost {
         let pending = Pending::default();
         let readable_roots = Arc::new(Mutex::new(Vec::new()));
         let (shutdown, shutdown_signal) = tokio::sync::oneshot::channel::<()>();
-        let (started, started_signal) = std::sync::mpsc::channel::<Result<()>>();
+        let (started, started_signal) =
+            std::sync::mpsc::channel::<Result<deno_core::v8::IsolateHandle>>();
+        let (done, finished) = std::sync::mpsc::channel::<()>();
 
         let thread = std::thread::Builder::new()
             .name("keel-extension-host".to_owned())
@@ -100,6 +109,14 @@ impl ExtensionHost {
                 let pending = pending.clone();
                 let readable_roots = readable_roots.clone();
                 move || {
+                    // Tells the window the thread is over, however it ends.
+                    struct Finished(std::sync::mpsc::Sender<()>);
+                    impl Drop for Finished {
+                        fn drop(&mut self) {
+                            let _ = self.0.send(());
+                        }
+                    }
+                    let _finished = Finished(done);
                     let runtime = match tokio::runtime::Builder::new_current_thread()
                         .enable_all()
                         .build()
@@ -133,7 +150,7 @@ impl ExtensionHost {
                                 .map_err(|error| anyhow!("{name}: {error}"))
                         });
                         let failed = setup.is_err();
-                        let _ = started.send(setup);
+                        let _ = started.send(setup.map(|()| js.v8_isolate().thread_safe_handle()));
                         if failed {
                             return;
                         }
@@ -149,7 +166,7 @@ impl ExtensionHost {
                 }
             })?;
 
-        started_signal
+        let isolate = started_signal
             .recv()
             .context("the extension host thread ended while starting")??;
 
@@ -161,6 +178,8 @@ impl ExtensionHost {
                 readable_roots,
                 shutdown: Some(shutdown),
                 thread: Some(thread),
+                isolate,
+                finished,
             },
             event_receiver,
         ))
@@ -257,13 +276,32 @@ impl ExtensionHost {
     }
 }
 
+impl ExtensionHost {
+    /// Whether the host's thread is still running.
+    pub fn is_running(&self) -> bool {
+        matches!(
+            self.finished.try_recv(),
+            Err(std::sync::mpsc::TryRecvError::Empty)
+        )
+    }
+}
+
 impl Drop for ExtensionHost {
     fn drop(&mut self) {
         if let Some(shutdown) = self.shutdown.take() {
             let _ = shutdown.send(());
         }
-        if let Some(thread) = self.thread.take() {
-            let _ = thread.join();
+        // JavaScript busy in a loop never sees the shutdown: stop it.
+        self.isolate.terminate_execution();
+        let Some(thread) = self.thread.take() else {
+            return;
+        };
+        match self.finished.recv_timeout(STOP_WAIT) {
+            Ok(()) | Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => {
+                let _ = thread.join();
+            }
+            // Still stuck: leave the thread rather than freeze Keel.
+            Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {}
         }
     }
 }

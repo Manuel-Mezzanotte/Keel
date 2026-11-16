@@ -124,7 +124,7 @@ Da confermare con le misure della fase 0. Si misura con lo stesso script su Keel
 | 6 | Linguaggi principali: web e Rust | grande | fatta; restano le tue prove a mano |
 | 7 | Anteprima Markdown e PDF | media | fatta; restano le tue prove a mano |
 | 8 | Grafico e storico git | media | fatta; restano le tue prove a mano |
-| 9 | Estensioni | grande | da fare |
+| 9 | Estensioni | grande | in corso |
 | 10 | IA: Claude Code | media | da fare |
 | 11 | Altri linguaggi | media | da fare |
 | 12 | Rifinitura, prestazioni e affidabilità | grande | da fare |
@@ -1280,6 +1280,33 @@ Apri Keel su GestionaleHospitality. La prima volta i server si installano da sol
 ### Fase 9 — Estensioni
 
 **Obiettivo.** Gestire le estensioni come in Cursor e far funzionare quelle che ti servono.
+
+**Sottofasi**
+
+| Sottofase | Cosa | Stato |
+|---|---|---|
+| 9.1 | Vista Estensioni: installate con icona e descrizione, attiva e disattiva (anche solo per il progetto), disinstalla, scheda dei dettagli con il README; installa da VSIX; host delle estensioni che si riavvia senza riaprire la finestra | fatta |
+| 9.2 | Open VSX: ricerca dentro la vista, installazione, aggiornamenti | da fare |
+| 9.3 | Temi colore e temi di icone dai VSIX (Dracula, Material Icon Theme), configurazioni di linguaggio | da fare |
+| 9.4 | Isolamento (un'estensione bloccata o in crash non ferma Keel e si riavvia) e ponte `vscode` allargato per Peacock, gitignore e markdownlint | da fare |
+| 9.5 | Importa da Cursor l'elenco delle estensioni | da fare |
+| 9.6 | Misure e resoconto | da fare |
+
+**Note sulla 9.1**
+- **La vista Estensioni** elenca tutte le estensioni installate, in ordine di nome, con icona, versione, descrizione ed editore. Quelle spente hanno la scritta «Disattivata».
+- **L'ingranaggio di ogni estensione** offre:
+  - Disattiva;
+  - Disattiva per questo progetto;
+  - Attiva;
+  - Disinstalla.
+- **Disinstalla** chiede prima conferma e manda la cartella nel Cestino, da cui si può recuperare.
+- **Le scelte** stanno in `extension-state.json` nella cartella dati di Keel. Valgono per tutte le finestre aperte dopo.
+- **Un clic su un'estensione** apre la sua scheda con il README e un riassunto di cosa porta: comandi, scorciatoie, temi, temi di icone, snippet, linguaggi.
+- **Il menu «…» in cima alla vista** ha «Installa da VSIX…» e «Riavvia le estensioni». Si trovano anche nella tavolozza dei comandi.
+  - Installando una versione nuova, quella vecchia va nel Cestino.
+- **L'host delle estensioni si riavvia da solo** dopo ogni installazione, attivazione o disattivazione, senza riaprire la finestra.
+  - I file aperti vengono ripresentati alle estensioni.
+  - Un'estensione bloccata in un ciclo infinito viene fermata entro 2 secondi, quindi non trattiene la finestra.
 
 **Cosa si fa**
 - **Vista Estensioni:** installate, attiva e disattiva (anche per progetto), disinstalla, dettagli con il README, impostazioni, aggiornamenti.

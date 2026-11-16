@@ -10,6 +10,7 @@ mod diff_view;
 mod disk;
 mod editing;
 pub(crate) mod explorer;
+mod extensions_view;
 mod git_graph;
 mod git_gutter;
 mod language_features;
@@ -51,6 +52,7 @@ pub(crate) use code_navigation::{
     GoToImplementation, GoToReferences, GoToSymbolInFile, GoToSymbolInWorkspace,
     GoToTypeDefinition, RenameSymbol, RevealDefinition,
 };
+pub(crate) use extensions_view::{InstallFromVsix, RestartExtensions};
 pub(crate) use git_graph::ShowGitGraph;
 pub(crate) use git_gutter::{NextChange, PreviousChange, RevertChange, StageChange};
 pub(crate) use language_servers::RestartLanguageServers;
@@ -230,6 +232,8 @@ enum Backing {
     Pdf(Box<pdf_view::PdfTab>),
     /// The history of the repository, as Git Graph draws it.
     Graph(Box<git_graph::GraphTab>),
+    /// An extension's details and README.
+    ExtensionDetails(Box<extensions_view::ExtensionDetailsTab>),
 }
 
 impl OpenDocument {
@@ -238,7 +242,11 @@ impl OpenDocument {
         match &self.backing {
             Backing::File(file) => Some(file.path()),
             Backing::Image(path) => Some(path),
-            Backing::Diff(_) | Backing::Preview(_) | Backing::Pdf(_) | Backing::Graph(_) => None,
+            Backing::Diff(_)
+            | Backing::Preview(_)
+            | Backing::Pdf(_)
+            | Backing::Graph(_)
+            | Backing::ExtensionDetails(_) => None,
             Backing::Untitled | Backing::Extension => None,
         }
     }
@@ -260,6 +268,7 @@ impl OpenDocument {
             Backing::Diff(tab) => return tab.title.clone(),
             Backing::Preview(tab) => return tab.title.clone(),
             Backing::Graph(_) => return "Git Graph".to_owned(),
+            Backing::ExtensionDetails(tab) => return tab.title.clone(),
             _ => {}
         }
         Uri::parse(&self.uri)
@@ -311,13 +320,6 @@ struct Extensions {
     status_items: BTreeMap<String, StatusItem>,
 }
 
-/// An installed extension, as the Extensions view lists it.
-struct ExtensionSummary {
-    name: String,
-    version: String,
-    id: String,
-}
-
 /// What to do once the user has dealt with unsaved changes.
 #[derive(Clone, Copy)]
 enum AfterConfirm {
@@ -349,7 +351,12 @@ pub struct Workbench {
     font_size: f32,
     project: Project,
     layout: Layout,
-    installed: Vec<ExtensionSummary>,
+    /// Every installed extension, on or off.
+    installed: Vec<InstalledExtension>,
+    /// Which extensions are turned off, everywhere or in a project.
+    extension_state: crate::extension_state::ExtensionState,
+    /// Keel's data folder, where extensions are installed.
+    extension_data: Option<PathBuf>,
     /// Keel's messages for the Output view: problems with the settings,
     /// extension logs and errors.
     output: Vec<(panel_views::OutputChannel, String)>,
@@ -528,6 +535,8 @@ impl Workbench {
             project,
             layout: Layout::default(),
             installed: Vec::new(),
+            extension_state: Default::default(),
+            extension_data: None,
             output,
             output_channel: panel_views::OutputChannel::Keel,
             ports: Vec::new(),
@@ -873,7 +882,8 @@ impl Workbench {
             | Backing::Diff(_)
             | Backing::Preview(_)
             | Backing::Pdf(_)
-            | Backing::Graph(_) => false,
+            | Backing::Graph(_)
+            | Backing::ExtensionDetails(_) => false,
         };
         let params = json!({
             "uri": uri,
@@ -1079,7 +1089,8 @@ impl Workbench {
             | Backing::Diff(_)
             | Backing::Preview(_)
             | Backing::Pdf(_)
-            | Backing::Graph(_) => {}
+            | Backing::Graph(_)
+            | Backing::ExtensionDetails(_) => {}
             Backing::Extension => {
                 if let Some(extensions) = &self.extensions {
                     let write = extensions
@@ -1395,17 +1406,13 @@ impl Workbench {
         let host = Rc::new(host);
         let mut titles = Vec::new();
         let mut bindings = Vec::new();
-        self.installed = installed
-            .iter()
-            .map(|extension| ExtensionSummary {
-                name: extension
-                    .manifest
-                    .display_name
-                    .clone()
-                    .unwrap_or_else(|| extension.manifest.name.clone()),
-                version: extension.manifest.version.clone(),
-                id: extension.id(),
-            })
+        // Every one is listed; only those turned on for this project run.
+        self.extension_data = Some(data_dir.clone());
+        self.extension_state = crate::extension_state::ExtensionState::load(&data_dir);
+        self.installed = installed.clone();
+        let installed: Vec<InstalledExtension> = installed
+            .into_iter()
+            .filter(|extension| self.extension_enabled(&extension.id()))
             .collect();
         for extension in &installed {
             for command in &extension.manifest.commands {
@@ -1455,6 +1462,26 @@ impl Workbench {
             }
         })
         .detach();
+
+        // Files opened before the host started, or before a restart.
+        for document in self.documents.values() {
+            if matches!(
+                document.backing,
+                Backing::File(_) | Backing::Untitled | Backing::Extension
+            ) {
+                let _ = host.notify(
+                    "documents/opened",
+                    json!({
+                        "uri": document.uri,
+                        "languageId": document.language_id,
+                        "version": document.version,
+                        "text": document.synced_text,
+                        "isDirty": document.modified,
+                    }),
+                );
+            }
+        }
+        self.publish_editors(window, cx);
 
         let loads: Vec<_> = installed
             .iter()

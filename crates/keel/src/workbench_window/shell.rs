@@ -404,7 +404,7 @@ impl Workbench {
             SideView::Explorer => self.render_open_editors(colors, cx).into_any_element(),
             SideView::Search => self.render_search(colors, cx),
             SideView::SourceControl => self.render_source_control(colors, cx),
-            SideView::Extensions => self.render_extensions(colors).into_any_element(),
+            SideView::Extensions => self.render_extensions(colors, cx),
         };
 
         floating(colors.panel, colors.border)
@@ -478,46 +478,6 @@ impl Workbench {
         div()
             .child(heading(self.strings().open_editors, colors))
             .children(rows)
-    }
-
-    fn render_extensions(&self, colors: Colors) -> Div {
-        let strings = self.strings();
-        let view = div().child(heading(strings.installed_extensions, colors));
-        if self.installed.is_empty() {
-            return view.child(note(strings.no_extensions.to_owned(), colors));
-        }
-        view.children(self.installed.iter().map(|extension| {
-            div()
-                .px_2()
-                .py_1p5()
-                .flex()
-                .flex_col()
-                .child(
-                    div()
-                        .flex()
-                        .items_baseline()
-                        .gap_2()
-                        .child(
-                            div()
-                                .text_sm()
-                                .text_color(colors.text)
-                                .child(extension.name.clone()),
-                        )
-                        .child(
-                            div()
-                                .text_xs()
-                                .text_color(colors.muted)
-                                .child(extension.version.clone()),
-                        ),
-                )
-                .child(
-                    div()
-                        .text_xs()
-                        .text_color(colors.faint)
-                        .truncate()
-                        .child(extension.id.clone()),
-                )
-        }))
     }
 
     /// What the editors' panel shows with no file open: how to start, and
@@ -961,6 +921,10 @@ impl Workbench {
                             .flex_1()
                             .min_h_0()
                             .child(self.render_diff(tab, colors, cx)),
+                        Some(Backing::ExtensionDetails(tab)) => div()
+                            .flex_1()
+                            .min_h_0()
+                            .child(self.render_extension_details(tab, colors, cx)),
                         Some(Backing::Graph(tab)) => div()
                             .flex_1()
                             .min_h_0()
@@ -1286,6 +1250,7 @@ impl Workbench {
                         | Backing::Preview(_)
                         | Backing::Pdf(_)
                         | Backing::Graph(_)
+                        | Backing::ExtensionDetails(_)
                 )
             )
         });
@@ -1442,6 +1407,7 @@ impl Render for Workbench {
         let root = self.git_graph_actions(root, cx);
         let root = self.commit_view_actions(root, cx);
         let root = self.blame_actions(root, cx);
+        let root = self.extensions_view_actions(root, cx);
         let root = self.editing_actions(root, cx);
         self.explorer_actions(root, cx)
             .size_full()

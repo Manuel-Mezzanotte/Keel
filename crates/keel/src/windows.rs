@@ -284,7 +284,7 @@ fn open_window(root: Option<PathBuf>, file: Option<PathBuf>, cx: &mut App) {
 
 /// Starts an extension host for a window, with the installed extensions.
 /// The window still opens without extensions if the host cannot start.
-fn extension_setup(data: &Path) -> Option<ExtensionSetup> {
+pub(crate) fn extension_setup(data: &Path) -> Option<ExtensionSetup> {
     let (user_bindings, _) = keymap::read_user_bindings(&paths::user_keybindings_file(data));
     let installed = paths::installed_extensions(data);
     match ExtensionHost::start() {
