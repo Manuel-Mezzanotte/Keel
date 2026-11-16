@@ -587,7 +587,7 @@ Con albero, schede, ricerca dei file e controllo della cartella, Keel è cresciu
 - **Il criterio era** trovare una parola in GestionaleHospitality in meno di un secondo. Il motore ci mette 14–26 ms anche con migliaia di risultati, perché lavora su più thread come ripgrep.
 - **La sostituzione su più file** si controlla prima nell'anteprima, chiede conferma e nei file aperti si annulla con Cmd+Z.
 - **L'apertura veloce migliorata** (recenti in cima, ricerca nel percorso) era già arrivata con la 2.4.
-- **Test:** 176 automatici, tutti verdi.
+- **Test:** 175 automatici, tutti verdi.
 
 **Le tue prove a mano della fase 3**
 1. In GestionaleHospitality, Cmd+Shift+F e una parola: i risultati devono arrivare mentre scrivi.
