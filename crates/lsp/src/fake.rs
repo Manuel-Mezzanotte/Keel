@@ -13,6 +13,10 @@
 //! A definition is the `function` of that name in any open document.
 //! `fake/applyEdit` makes the server ask the editor to insert its `text`
 //! at the start of its `uri`.
+//!
+//! Each `TODO` has a quick fix, "Replace with DONE", whose edit comes with
+//! `codeAction/resolve`; "Organize" (`source.organizeImports`) adds a
+//! `// organized` line at the top, and formatting a `// formatted` one.
 
 use std::collections::HashMap;
 use std::io::{self, BufReader, Read, Write};
@@ -49,6 +53,9 @@ pub fn run(input: impl Read, output: impl Write + Send + 'static) -> i32 {
                         "completionProvider": { "triggerCharacters": ["."], "resolveProvider": true },
                         "signatureHelpProvider": { "triggerCharacters": ["(", ","] },
                         "definitionProvider": true,
+                        "codeActionProvider": { "resolveProvider": true },
+                        "documentFormattingProvider": true,
+                        "executeCommandProvider": { "commands": ["fake.command"] },
                     },
                     "serverInfo": { "name": "fake", "version": "1" },
                 },
@@ -167,6 +174,64 @@ pub fn run(input: impl Read, output: impl Write + Send + 'static) -> i32 {
                 });
                 send(json!({ "jsonrpc": "2.0", "id": id, "result": found }));
             }
+            "textDocument/codeAction" => {
+                let uri = params["textDocument"]["uri"].as_str().unwrap_or_default();
+                let only: Vec<&str> = params["context"]["only"]
+                    .as_array()
+                    .into_iter()
+                    .flatten()
+                    .filter_map(Value::as_str)
+                    .collect();
+                let mut actions = Vec::new();
+                if only.is_empty() || only.contains(&"source.organizeImports") {
+                    actions.push(json!({
+                        "title": "Organize",
+                        "kind": "source.organizeImports",
+                        "edit": { "changes": { uri: [top_line("// organized\n")] } },
+                    }));
+                }
+                if only.is_empty() {
+                    for diagnostic in params["context"]["diagnostics"]
+                        .as_array()
+                        .into_iter()
+                        .flatten()
+                    {
+                        actions.push(json!({
+                            "title": "Replace with DONE",
+                            "kind": "quickfix",
+                            "isPreferred": true,
+                            "data": { "uri": uri, "range": diagnostic["range"] },
+                        }));
+                    }
+                    actions.push(json!({
+                        "title": "Run a command",
+                        "command": "fake.command",
+                        "arguments": [1],
+                    }));
+                }
+                send(json!({ "jsonrpc": "2.0", "id": id, "result": actions }));
+            }
+            "codeAction/resolve" => {
+                let mut action = params.clone();
+                let data = &params["data"];
+                if let Some(uri) = data["uri"].as_str() {
+                    action["edit"] = json!({ "changes": { uri: [{ "range": data["range"], "newText": "DONE" }] } });
+                }
+                send(json!({ "jsonrpc": "2.0", "id": id, "result": action }));
+            }
+            "textDocument/formatting" => send(json!({
+                "jsonrpc": "2.0",
+                "id": id,
+                "result": [top_line("// formatted\n")],
+            })),
+            "workspace/executeCommand" => {
+                send(json!({
+                    "jsonrpc": "2.0",
+                    "method": "window/logMessage",
+                    "params": { "type": 3, "message": format!("executed {} {}", params["command"].as_str().unwrap_or_default(), params["arguments"]) },
+                }));
+                send(json!({ "jsonrpc": "2.0", "id": id, "result": null }));
+            }
             "fake/applyEdit" => {
                 send(json!({
                     "jsonrpc": "2.0",
@@ -217,6 +282,14 @@ pub fn run(input: impl Read, output: impl Write + Send + 'static) -> i32 {
         }
     }
     0
+}
+
+/// An edit inserting `text` at the very start.
+fn top_line(text: &str) -> Value {
+    json!({
+        "range": { "start": { "line": 0, "character": 0 }, "end": { "line": 0, "character": 0 } },
+        "newText": text,
+    })
 }
 
 fn offset_at(text: &str, position: &Value) -> usize {

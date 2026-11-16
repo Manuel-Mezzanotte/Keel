@@ -2,6 +2,7 @@
 //! between Keel and the extension host. The layout is drawn in `shell`.
 
 mod claude_code;
+mod code_actions;
 mod code_navigation;
 mod diff_view;
 mod disk;
@@ -39,6 +40,7 @@ pub(crate) use tabs::{
 use tabs::{Group, OpenAs};
 
 pub(crate) use claude_code::{OpenClaudeCode, OpenClaudeCodeInPanel};
+pub(crate) use code_actions::{FormatDocument, OrganizeImports};
 pub(crate) use code_navigation::{
     GoToImplementation, GoToReferences, GoToSymbolInFile, GoToSymbolInWorkspace,
     GoToTypeDefinition, RenameSymbol, RevealDefinition,
@@ -1024,7 +1026,7 @@ impl Workbench {
         };
         let text = document.synced_text.clone();
         match &document.backing {
-            Backing::File(_) => self.save_file(uri, after, window, cx),
+            Backing::File(_) => self.save_with_participants(uri, after, window, cx),
             Backing::Untitled => self.save_as(uri.to_owned(), text, after, window, cx),
             Backing::Image(_) | Backing::Diff(_) => {}
             Backing::Extension => {

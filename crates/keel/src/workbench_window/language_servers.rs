@@ -181,6 +181,8 @@ impl RunningServer {
 pub(super) struct LanguageState {
     running: RefCell<HashMap<&'static str, Rc<RunningServer>>>,
     documents: RefCell<HashMap<String, SyncedDocument>>,
+    /// A copy of the diagnostics, for the quick fixes the servers are asked.
+    diagnostics: RefCell<HashMap<String, BTreeMap<&'static str, Vec<Diagnostic>>>>,
 }
 
 /// The language servers of a window.
@@ -202,6 +204,32 @@ pub(super) struct Languages {
 }
 
 impl LanguageState {
+    /// What server `server` reported about `uri`.
+    pub(super) fn diagnostics_of(&self, uri: &str, server: &str) -> Vec<Diagnostic> {
+        self.diagnostics
+            .borrow()
+            .get(uri)
+            .and_then(|by_server| by_server.get(server))
+            .cloned()
+            .unwrap_or_default()
+    }
+
+    pub(super) fn mirror_diagnostics(
+        &self,
+        uri: &str,
+        by_server: Option<&BTreeMap<&'static str, Vec<Diagnostic>>>,
+    ) {
+        let mut diagnostics = self.diagnostics.borrow_mut();
+        match by_server {
+            Some(by_server) => {
+                diagnostics.insert(uri.to_owned(), by_server.clone());
+            }
+            None => {
+                diagnostics.remove(uri);
+            }
+        }
+    }
+
     /// Tells the servers that know `uri` its text is now `text`, if it
     /// changed, as one small edit. Requests call this first with the text
     /// they are about.

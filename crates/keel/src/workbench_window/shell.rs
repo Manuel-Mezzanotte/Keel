@@ -1389,6 +1389,7 @@ impl Render for Workbench {
         let root = self.snippet_actions(root, cx);
         let root = self.signature_actions(root, cx);
         let root = self.code_navigation_actions(root, cx);
+        let root = self.code_action_actions(root, cx);
         let root = self.editing_actions(root, cx);
         self.explorer_actions(root, cx)
             .size_full()

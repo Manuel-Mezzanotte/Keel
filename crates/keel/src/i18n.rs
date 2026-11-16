@@ -359,6 +359,9 @@ pub struct Strings {
     pub command_rename_symbol: &'static str,
     pub command_symbol_in_file: &'static str,
     pub command_symbol_in_workspace: &'static str,
+    pub format_timed_out: &'static str,
+    pub command_format_document: &'static str,
+    pub command_organize_imports: &'static str,
 }
 
 impl Strings {
@@ -409,6 +412,8 @@ impl Strings {
             "editor.action.goToTypeDefinition" => self.command_go_to_type_definition,
             "editor.action.goToReferences" => self.command_go_to_references,
             "editor.action.rename" => self.command_rename_symbol,
+            "editor.action.formatDocument" => self.command_format_document,
+            "editor.action.organizeImports" => self.command_organize_imports,
             "workbench.action.gotoSymbol" => self.command_symbol_in_file,
             "workbench.action.showAllSymbols" => self.command_symbol_in_workspace,
             "editor.action.triggerSuggest" => self.command_trigger_suggest,
@@ -949,6 +954,9 @@ pub const ITALIAN: Strings = Strings {
     command_rename_symbol: "Rinomina il simbolo",
     command_symbol_in_file: "Vai al simbolo nel file",
     command_symbol_in_workspace: "Vai al simbolo nel progetto",
+    format_timed_out: "Le correzioni e la formattazione al salvataggio non hanno finito in 3 secondi: il file è salvato così.",
+    command_format_document: "Formatta il documento",
+    command_organize_imports: "Organizza gli import",
 };
 
 pub const ENGLISH: Strings = Strings {
@@ -1265,6 +1273,9 @@ pub const ENGLISH: Strings = Strings {
     command_rename_symbol: "Rename Symbol",
     command_symbol_in_file: "Go to Symbol in Editor",
     command_symbol_in_workspace: "Go to Symbol in Workspace",
+    format_timed_out: "Fixes and formatting on save did not finish within 3 seconds: the file was saved as it was.",
+    command_format_document: "Format Document",
+    command_organize_imports: "Organize Imports",
 };
 
 #[cfg(test)]

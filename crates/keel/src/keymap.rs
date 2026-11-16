@@ -31,6 +31,7 @@ use crate::workbench_window::{
     OpenClaudeCodeInPanel, RenameTerminal, RunNpmScript, SplitTerminal, TERMINAL_CONTEXT,
     ToggleMaximizedPanel,
 };
+use crate::workbench_window::{FormatDocument, OrganizeImports};
 use crate::workbench_window::{
     GoToImplementation, GoToReferences, GoToSymbolInFile, GoToSymbolInWorkspace,
     GoToTypeDefinition, RenameSymbol, RevealDefinition,
@@ -243,6 +244,18 @@ pub const COMMANDS: &[KeelCommand] = &[
         id: "editor.action.triggerParameterHints",
         action: || Box::new(TriggerParameterHints),
         default_key: Some("cmd+shift+space"),
+        context: Some(EDITOR_CONTEXT),
+    },
+    KeelCommand {
+        id: "editor.action.formatDocument",
+        action: || Box::new(FormatDocument),
+        default_key: Some("shift+alt+f"),
+        context: Some(EDITOR_CONTEXT),
+    },
+    KeelCommand {
+        id: "editor.action.organizeImports",
+        action: || Box::new(OrganizeImports),
+        default_key: Some("shift+alt+o"),
         context: Some(EDITOR_CONTEXT),
     },
     KeelCommand {
@@ -850,7 +863,7 @@ mod tests {
         let (bindings, warnings) =
             read_user_bindings(Path::new("/nonexistent/keel/keybindings.json"));
         assert!(bindings.is_empty() && warnings.is_empty());
-        assert_eq!(keel_bindings(&[]).len(), 63);
+        assert_eq!(keel_bindings(&[]).len(), 65);
     }
 
     #[test]

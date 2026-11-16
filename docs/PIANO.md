@@ -883,9 +883,29 @@ Con albero, schede, ricerca dei file e controllo della cartella, Keel è cresciu
 | 6.3 | Errori e avvisi: sottolineature, pannello Problemi, numeri nella barra di stato, F8 per passare al successivo | fatta |
 | 6.4 | Scrivere: completamenti con snippet, info al passaggio del mouse, firma delle funzioni, snippet nel formato di VS Code | fatta |
 | 6.5 | Navigare: definizione, implementazione e tipo, riferimenti, rinomina, struttura del file (Cmd+Maiusc+O), simboli del progetto (Cmd+T) | fatta |
-| 6.6 | Correggere e formattare: azioni rapide (Cmd+.), formattazione anche al salvataggio, Prettier del progetto, correzioni di ESLint | da fare |
+| 6.6 | Correggere e formattare: azioni rapide (Cmd+.), formattazione anche al salvataggio, Prettier del progetto, correzioni di ESLint | fatta |
 | 6.7 | I server: TypeScript (`vtsls`), HTML, CSS, JSON, ESLint, Emmet, Tailwind, Prisma, Markdown, YAML, TOML e `rust-analyzer`; prove sui due gestionali e su Keel | da fare |
 | 6.8 | Misure e resoconto | da fare |
+
+**Note sulla 6.6**
+- **Azioni rapide (Cmd+.)**, anche dal menu del tasto destro:
+  - le correzioni dei problemi sotto il cursore e i refactoring che offre il server, prima quelle consigliate;
+  - se un'azione arriva senza modifiche, Keel le chiede al server al momento di applicarla;
+  - un'azione può modificare più file o lanciare un comando del server.
+
+  VS Code mostra anche una lampadina accanto alla riga; per ora Keel non la disegna.
+- **Organizza gli import:** Maiusc+Alt+O.
+- **Formatta il documento** (Maiusc+Alt+F):
+  - se il progetto ha Prettier in `node_modules`, usa quello, con le sue regole e il suo `.prettierignore`;
+  - altrimenti formatta il language server, con la tabulazione delle impostazioni;
+  - `editor.defaultFormatter` decide come in VS Code: con `esbenp.prettier-vscode` vale Prettier, con un altro valore il server.
+- **Al salvataggio con Cmd+S**, nell'ordine:
+  1. le azioni di `editor.codeActionsOnSave` (per esempio `source.fixAll.eslint` o `source.organizeImports`);
+  2. la formattazione, se `editor.formatOnSave` è acceso;
+  3. il salvataggio.
+
+  Le impostazioni valgono anche per un solo linguaggio, con `"[typescript]": { ... }`, come in VS Code. Il salvataggio automatico non formatta, come in VS Code. Se tutto il lavoro supera 3 secondi, Keel salva lo stesso e lo scrive nell'Output.
+- **ESLint:** le sue correzioni arrivano dal suo server nelle azioni rapide e con `source.fixAll.eslint` al salvataggio. Il server ESLint si sistema nella 6.7.
 
 **Note sulla 6.5**
 - **Vai alla definizione:**

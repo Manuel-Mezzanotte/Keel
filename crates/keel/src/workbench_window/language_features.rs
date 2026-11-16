@@ -91,6 +91,8 @@ pub(super) struct SnippetFiles {
 
 /// The bridge between one editor and the language servers.
 pub(super) struct LanguageFeatures {
+    pub(super) workbench: gpui::WeakEntity<Workbench>,
+    pub(super) offered: super::code_actions::Offered,
     pub(super) state: Rc<LanguageState>,
     pub(super) snippet_files: Rc<RefCell<SnippetFiles>>,
     pub(super) uri: String,
@@ -461,6 +463,8 @@ impl Workbench {
             return;
         }
         let features = Rc::new(LanguageFeatures {
+            workbench: cx.weak_entity(),
+            offered: Default::default(),
             state: self.languages.state.clone(),
             snippet_files: self.snippet_files.clone(),
             uri: pane.uri.clone(),
@@ -473,6 +477,7 @@ impl Workbench {
             lsp.completion_provider = Some(features.clone());
             if file {
                 lsp.hover_provider = Some(features.clone());
+                lsp.code_action_providers = vec![features.clone()];
             }
             lsp.set_completion_highlighter(Rc::new(highlight_characters));
             cx.notify();

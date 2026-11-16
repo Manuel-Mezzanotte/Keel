@@ -200,6 +200,9 @@ pub(super) fn shift_diagnostics(diagnostics: &mut [Diagnostic], old: &str, new: 
 impl Workbench {
     /// Diagnostics of `uri` changed: its editors and the Problems view follow.
     pub(super) fn diagnostics_changed(&mut self, uri: &str, cx: &mut Context<Self>) {
+        self.languages
+            .state
+            .mirror_diagnostics(uri, self.languages.diagnostics.get(uri));
         self.rebuild_problems();
         for index in 0..self.panes.len() {
             if self.panes[index].uri == uri {
@@ -337,6 +340,9 @@ impl Workbench {
         for diagnostics in by_server.values_mut() {
             shift_diagnostics(diagnostics, old, new);
         }
+        self.languages
+            .state
+            .mirror_diagnostics(uri, self.languages.diagnostics.get(uri));
         self.rebuild_problems();
     }
 
