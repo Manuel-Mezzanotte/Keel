@@ -474,7 +474,9 @@ impl Workbench {
         }
         let removed = self.documents.remove(uri);
         // Extensions never knew about images.
-        if removed.is_some_and(|document| !matches!(document.backing, Backing::Image(_))) {
+        if removed.is_some_and(|document| {
+            !matches!(document.backing, Backing::Image(_) | Backing::Diff(_))
+        }) {
             self.notify_host("documents/closed", json!({ "uri": uri }));
         }
         self.forget_backup(uri);

@@ -940,6 +940,10 @@ impl Workbench {
                             .flex_1()
                             .min_h_0()
                             .child(self.render_image(path, colors)),
+                        Some(Backing::Diff(tab)) => div()
+                            .flex_1()
+                            .min_h_0()
+                            .child(self.render_diff(tab, colors, cx)),
                         _ => div()
                             .flex_1()
                             .min_h_0()
@@ -1212,7 +1216,7 @@ impl Workbench {
                 self.documents
                     .get(&pane.uri)
                     .map(|document| &document.backing),
-                Some(Backing::Image(_))
+                Some(Backing::Image(_) | Backing::Diff(_))
             )
         });
         if let Some(pane) = self.panes.get(self.active).filter(|_| !image) {

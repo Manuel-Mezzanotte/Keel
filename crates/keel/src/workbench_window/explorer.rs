@@ -591,7 +591,7 @@ impl Workbench {
             match &mut document.backing {
                 Backing::File(file) => file.set_path(target.clone()),
                 Backing::Image(path) => *path = target.clone(),
-                Backing::Untitled | Backing::Extension => {}
+                Backing::Untitled | Backing::Extension | Backing::Diff(_) => {}
             }
             document.uri = new_uri.clone();
             document.language_id = language::vscode_id_for_path(&target).to_owned();

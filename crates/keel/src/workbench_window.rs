@@ -2,6 +2,7 @@
 //! between Keel and the extension host. The layout is drawn in `shell`.
 
 mod claude_code;
+mod diff_view;
 mod disk;
 mod editing;
 pub(crate) mod explorer;
@@ -195,6 +196,8 @@ enum Backing {
     Extension,
     /// An image shown in a preview; extensions never see it.
     Image(PathBuf),
+    /// A file's differences, drawn by gpui-component's diff view.
+    Diff(diff_view::DiffTab),
 }
 
 impl OpenDocument {
@@ -203,6 +206,7 @@ impl OpenDocument {
         match &self.backing {
             Backing::File(file) => Some(file.path()),
             Backing::Image(path) => Some(path),
+            Backing::Diff(_) => None,
             Backing::Untitled | Backing::Extension => None,
         }
     }
@@ -220,6 +224,9 @@ struct OpenDocument {
 
 impl OpenDocument {
     fn name(&self) -> String {
+        if let Backing::Diff(tab) = &self.backing {
+            return tab.title.clone();
+        }
         Uri::parse(&self.uri)
             .map(|uri| uri.file_name().to_owned())
             .unwrap_or_else(|| self.uri.clone())
@@ -354,6 +361,8 @@ pub struct Workbench {
     /// Claude Code's panel on the right: its width and its terminal.
     agent_width: f32,
     agent_terminal: Option<claude_code::AgentTerminal>,
+    /// Differences side by side, from `diffEditor.renderSideBySide`.
+    diff_split: bool,
     /// The project's git repository and the Source Control view.
     scm: source_control::SourceControl,
     /// The scripts of the project's `package.json`.
@@ -490,11 +499,17 @@ impl Workbench {
             agent_terminal: None,
             npm_scripts: None,
             scm,
+            diff_split: true,
             first_frame_drawn: false,
             _subscriptions: subscriptions,
         };
         workbench.build_tree();
         workbench.refresh_npm_scripts();
+        workbench.diff_split = workbench
+            .settings
+            .get("diffEditor.renderSideBySide")
+            .and_then(Value::as_bool)
+            .unwrap_or(true);
         workbench.refresh_git(cx);
         workbench.index_files(cx);
         workbench.watch_project(window, cx);
@@ -774,7 +789,7 @@ impl Workbench {
         document.modified = match &document.backing {
             Backing::File(file) => file.is_modified(&text),
             Backing::Untitled => !text.is_empty(),
-            Backing::Extension | Backing::Image(_) => false,
+            Backing::Extension | Backing::Image(_) | Backing::Diff(_) => false,
         };
         let params = json!({
             "uri": uri,
@@ -863,7 +878,7 @@ impl Workbench {
                     self.documents
                         .get(&pane.uri)
                         .map(|document| &document.backing),
-                    Some(Backing::Image(_))
+                    Some(Backing::Image(_) | Backing::Diff(_))
                 )
             })
             .map(|(index, pane)| {
@@ -955,7 +970,7 @@ impl Workbench {
         match &document.backing {
             Backing::File(_) => self.save_file(uri, after, window, cx),
             Backing::Untitled => self.save_as(uri.to_owned(), text, after, window, cx),
-            Backing::Image(_) => {}
+            Backing::Image(_) | Backing::Diff(_) => {}
             Backing::Extension => {
                 if let Some(extensions) = &self.extensions {
                     let write = extensions
@@ -2188,7 +2203,7 @@ impl Workbench {
                     self.documents
                         .get(&pane.uri)
                         .map(|document| &document.backing),
-                    Some(Backing::Image(_))
+                    Some(Backing::Image(_) | Backing::Diff(_))
                 )
             })
             .map(|pane| pane.uri.clone())

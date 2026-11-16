@@ -776,9 +776,22 @@ Con albero, schede, ricerca dei file e controllo della cartella, Keel è cresciu
 |---|---|---|
 | 5.1 | Motore git (crate `git`): stato, differenze, stage e unstage anche di un blocco, scarta, commit e amend, branch, push, pull, fetch, sync, stash | fatta |
 | 5.2 | Vista Controllo del codice sorgente: messaggio e Commit, file in stage, modifiche e conflitti, numero sull'icona, branch nella barra di stato | fatta |
-| 5.3 | Differenze in una scheda, affiancate o in linea; conflitti di merge risolti con un clic | da fare |
+| 5.3 | Differenze in una scheda, affiancate o in linea; conflitti di merge risolti con un clic | fatta |
 | 5.4 | Margine dell'editor (aggiunte, modifiche, cancellazioni) con stage e annulla del blocco; push, pull, sync, branch e stash dai comandi | da fare |
 | 5.5 | Misure e resoconto | da fare |
+
+**Note sulla 5.3**
+- **Un clic su un file** della vista apre le sue differenze in una scheda di anteprima, come in VS Code:
+  - «nome (modifiche)» confronta la versione in stage con il file sul disco;
+  - «nome (in stage)» confronta l'ultimo commit con la versione in stage.
+- **La vista delle differenze** è quella di gpui-component:
+  - colori della sintassi, numeri di riga e righe uguali ripiegate;
+  - «Affiancate» e «In linea» si scelgono dalla barra della scheda, e la scelta vale per tutte le schede; il primo valore viene da `diffEditor.renderSideBySide`, come in VS Code;
+  - nella barra ci sono anche «Metti in stage» o «Togli dallo stage» e «Apri il file».
+- **Le schede aperte seguono git:** dopo uno stage, un commit o un salvataggio le differenze si rileggono da sole.
+- **Conflitti di merge:**
+  - un file in conflitto si apre con un pulsante per ogni conflitto: tieni la versione corrente, quella in arrivo o entrambe;
+  - quando sono risolti tutti, «Salva e metti in stage» scrive il file, lo mette in stage e lo riapre nell'editor.
 
 **Note sulla 5.2**
 - **La vista** (Ctrl+Maiusc+G) ha in alto il messaggio, che cresce fino a 8 righe, e il pulsante «Commit su «branch»». Cmd+Invio nel messaggio fa il commit.

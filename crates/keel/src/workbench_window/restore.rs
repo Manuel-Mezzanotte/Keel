@@ -106,7 +106,7 @@ impl Workbench {
             let path = match &document.backing {
                 Backing::File(file) => Some(file.path().to_path_buf()),
                 Backing::Untitled => None,
-                Backing::Extension | Backing::Image(_) => continue,
+                Backing::Extension | Backing::Image(_) | Backing::Diff(_) => continue,
             };
             if !document.modified {
                 session::remove_backup(&folder, &document.uri);
@@ -275,7 +275,7 @@ impl Workbench {
         document.modified = match &document.backing {
             Backing::File(file) => file.is_modified(text),
             Backing::Untitled => !text.is_empty(),
-            Backing::Extension | Backing::Image(_) => false,
+            Backing::Extension | Backing::Image(_) | Backing::Diff(_) => false,
         };
         document.synced_text = text.to_owned();
         document.version += 1;

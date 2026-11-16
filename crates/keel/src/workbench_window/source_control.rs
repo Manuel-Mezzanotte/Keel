@@ -68,7 +68,7 @@ pub(super) struct SourceControl {
     pub(super) status: git::Status,
     message: Entity<TextareaState>,
     /// What git is doing now, such as "Push", shown while it runs.
-    busy: Option<&'static str>,
+    pub(super) busy: Option<&'static str>,
     refresh_task: Task<()>,
     operation: Task<()>,
 }
@@ -970,25 +970,26 @@ impl Workbench {
         }
     }
 
-    /// A click on a changed file. Until the diff tabs exist it opens the
-    /// file itself.
+    /// A click on a changed file opens its differences, or its conflicts.
     pub(super) fn open_change(
         &mut self,
         path: &str,
-        _section: Section,
+        section: Section,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        if let Some(repo) = self.scm.repo.clone() {
-            let file = repo.absolute(path);
-            if file.is_file() {
-                self.open_file_as(&file, OpenAs::Preview, window, cx);
-            }
-        }
+        let source = match section {
+            Section::Conflicts => diff_view::DiffSource::Conflict,
+            Section::Staged => diff_view::DiffSource::Staged,
+            Section::Changes => diff_view::DiffSource::Changes,
+        };
+        self.open_diff(path, source, window, cx);
     }
 
-    /// Called when the status changed, for the editors' margins.
-    fn git_status_changed(&mut self, _cx: &mut Context<Self>) {}
+    /// Called when the status changed: open differences follow.
+    fn git_status_changed(&mut self, cx: &mut Context<Self>) {
+        self.refresh_open_diffs(cx);
+    }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
