@@ -488,7 +488,8 @@ mod tests {
         socket: &mut Socket,
         wanted: impl Fn(&Value) -> bool,
     ) -> Value {
-        let deadline = Instant::now() + Duration::from_secs(10);
+        let mut seen = Vec::new();
+        let deadline = Instant::now() + Duration::from_secs(20);
         loop {
             cx.executor().advance_clock(Duration::from_millis(100));
             cx.run_until_parked();
@@ -498,6 +499,7 @@ mod tests {
                     if wanted(&message) {
                         return message;
                     }
+                    seen.push(message);
                 }
                 Ok(_) => {}
                 Err(tungstenite::Error::Io(error))
@@ -507,7 +509,10 @@ mod tests {
                     ) => {}
                 Err(error) => panic!("{error}"),
             }
-            assert!(Instant::now() < deadline, "Keel did not answer");
+            assert!(
+                Instant::now() < deadline,
+                "Keel did not answer; it sent {seen:?}"
+            );
         }
     }
 

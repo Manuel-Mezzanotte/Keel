@@ -506,6 +506,11 @@ pub struct Strings {
     pub command_open_agent: &'static str,
     pub command_new_agent: &'static str,
     pub command_add_to_agent: &'static str,
+    pub agent_changes_text: &'static str,
+    pub agent_accept_all: &'static str,
+    pub agent_reject_all: &'static str,
+    pub agent_new_file: &'static str,
+    pub agent_change_of_claude: &'static str,
 }
 
 impl Strings {
@@ -803,6 +808,11 @@ impl Strings {
             other => other,
         };
         self.agent_stopped_text.replace("{reason}", reason)
+    }
+
+    pub fn agent_changes(&self, count: usize) -> String {
+        self.agent_changes_text
+            .replace("{count}", &count.to_string())
     }
 
     pub fn agent_plan(&self, done: usize, total: usize) -> String {
@@ -1381,6 +1391,11 @@ pub const ITALIAN: Strings = Strings {
     command_open_agent: "Claude Code: Apri l'agente",
     command_new_agent: "Claude Code: Nuova conversazione",
     command_add_to_agent: "Claude Code: Aggiungi il file o la selezione alla conversazione",
+    agent_changes_text: "Modifiche di Claude: {count} file",
+    agent_accept_all: "Accetta tutte",
+    agent_reject_all: "Rifiuta tutte",
+    agent_new_file: "nuovo",
+    agent_change_of_claude: "Modifica di Claude",
 };
 
 pub const ENGLISH: Strings = Strings {
@@ -1844,6 +1859,11 @@ pub const ENGLISH: Strings = Strings {
     command_open_agent: "Claude Code: Open Agent",
     command_new_agent: "Claude Code: New Conversation",
     command_add_to_agent: "Claude Code: Add File or Selection to Conversation",
+    agent_changes_text: "Claude's changes: {count} files",
+    agent_accept_all: "Accept all",
+    agent_reject_all: "Reject all",
+    agent_new_file: "new",
+    agent_change_of_claude: "Change by Claude",
 };
 
 #[cfg(test)]

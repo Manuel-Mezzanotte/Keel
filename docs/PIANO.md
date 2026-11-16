@@ -1451,8 +1451,19 @@ Apri Keel su GestionaleHospitality. La prima volta i server si installano da sol
 | 10.2 | Modifiche proposte da Claude Code nel terminale: si aprono in Keel come differenze da accettare o rifiutare | fatta |
 | 10.3 | Crate `ai` per ACP: avvio dell'adattatore `claude-agent-acp` (installato da Keel con versione bloccata), sessioni, permessi, file letti e scritti attraverso Keel | fatta |
 | 10.4 | Pannello agente a destra, accanto a Claude Code nel terminale: conversazione, ragionamento, strumenti, piano, permessi, interrompi, riferimenti a file e selezione | fatta |
-| 10.5 | Modifiche dell'agente file per file da accettare o rifiutare; cronologia delle conversazioni | da fare |
+| 10.5 | Modifiche dell'agente file per file da accettare o rifiutare; cronologia delle conversazioni | fatta |
 | 10.6 | Misure e resoconto | da fare |
+
+**Note sulla 10.5**
+- **Prima che Claude cambi un file**, Keel ne tiene una copia: appena vede arrivare la modifica, anche quando la modalità non chiede permessi.
+- **Sopra il campo del pannello** compare «Modifiche di Claude: N file». Ogni file ha le righe aggiunte e tolte (+3 −1), con «nuovo» se l'ha creato Claude.
+  - Un clic sul file apre una scheda con le differenze tra la copia e il file adesso.
+  - ✓ accetta: la modifica resta e il file esce dall'elenco.
+  - ↶ rifiuta: il file torna com'era, anche nell'editor; un file creato da Claude va nel Cestino.
+  - «Accetta tutte» e «Rifiuta tutte» fanno lo stesso per tutti; la scheda delle differenze ha gli stessi due pulsanti.
+- **Un file che ritorna come prima** (per esempio perché Claude stesso annulla) esce dall'elenco da solo.
+- **Le copie restano** anche passando a un'altra conversazione, finché non accetti o rifiuti.
+- **La cronologia delle conversazioni** è arrivata con la 10.4: è quella di Claude Code, e si riprende dall'orologio.
 
 **Note sulla 10.4**
 - **In cima al riquadro di destra** ci sono due interruttori: «Terminale» (Claude Code nel terminale, come prima) e «Agente», il pannello nuovo. Si apre anche con Cmd+Maiusc+Esc o «Claude Code: Apri l'agente».

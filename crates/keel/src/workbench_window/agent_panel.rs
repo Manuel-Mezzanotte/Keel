@@ -91,6 +91,8 @@ pub(super) struct AgentPanel {
     /// The text files had before the agent first changed them in this
     /// conversation (none for a file it created), in order.
     pub(super) snapshots: Vec<(PathBuf, Option<String>)>,
+    /// The kept files that differ now, for the review.
+    pub(super) changes: Vec<super::agent_review::AgentChange>,
 }
 
 impl AgentPanel {
@@ -142,6 +144,7 @@ impl AgentPanel {
             notice: None,
             fake: false,
             snapshots: Vec::new(),
+            changes: Vec::new(),
         };
         (panel, events)
     }
@@ -387,6 +390,9 @@ impl Workbench {
                         self.agent_panel.mode = Some(mode.clone());
                     }
                     self.agent_panel.sync_markdown(cx);
+                    if update["sessionUpdate"] == "tool_call_update" {
+                        self.refresh_agent_changes();
+                    }
                     self.agent_panel.scroll.scroll_to_bottom();
                 }
             }
@@ -474,6 +480,7 @@ impl Workbench {
                         .map(|()| Value::Null)
                         .map_err(|error| (-32603, error.to_string())),
                 );
+                self.refresh_agent_changes();
             }
             "session/request_permission" => {
                 let tool = &params["toolCall"];
@@ -631,6 +638,7 @@ impl Workbench {
             let result = turn.await;
             this.update_in(cx, |this, window, cx| {
                 this.agent_panel.running = false;
+                this.refresh_agent_changes();
                 match result {
                     Ok(answer) => {
                         let stop = answer["stopReason"].as_str().unwrap_or("end_turn");
@@ -973,6 +981,7 @@ impl Workbench {
             .flex_col()
             .child(body)
             .children(self.render_agent_plan(colors))
+            .children(self.render_agent_changes(colors, cx))
             .children(
                 panel
                     .permissions

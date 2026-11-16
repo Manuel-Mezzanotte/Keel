@@ -26,6 +26,9 @@ pub(super) enum DiffSource {
     /// An edit Claude Code proposes, by the name of its tab; the patch is
     /// made from the file and the proposed text.
     Proposed(String),
+    /// A change the agent made to a file, by its path: what Keel kept
+    /// before against the file now.
+    Agent(String),
 }
 
 /// A tab with differences.
@@ -45,6 +48,7 @@ pub(super) fn diff_uri(path: &str, source: &DiffSource) -> String {
         DiffSource::Conflict => "conflict",
         DiffSource::Commit(hash, _) => hash.as_str(),
         DiffSource::Proposed(name) => return format!("keel-claude-diff:{name}"),
+        DiffSource::Agent(path) => return format!("keel-agent-diff:{path}"),
     };
     format!("keel-diff:{kind}/{path}")
 }
@@ -70,7 +74,9 @@ impl Workbench {
                     .map_err(|error| error.to_string())?;
                 DiffFile::parse(&patch).map_err(|error| error.message().to_string())?
             }
-            DiffSource::Proposed(_) => return Err("not a git difference".to_owned()),
+            DiffSource::Proposed(_) | DiffSource::Agent(_) => {
+                return Err("not a git difference".to_owned());
+            }
             DiffSource::Changes | DiffSource::Staged => {
                 let patch = repo
                     .diff(path, *source == DiffSource::Staged)
@@ -118,6 +124,7 @@ impl Workbench {
                 DiffSource::Conflict => format!("{name} ({})", strings.diff_conflict),
                 DiffSource::Commit(hash, _) => format!("{name} ({})", &hash[..hash.len().min(8)]),
                 DiffSource::Proposed(tab_name) => tab_name.clone(),
+                DiffSource::Agent(_) => format!("{name} (Claude)"),
             };
             self.documents.insert(
                 uri.clone(),
@@ -151,7 +158,10 @@ impl Workbench {
                 Backing::Diff(tab)
                     if !matches!(
                         tab.source,
-                        DiffSource::Conflict | DiffSource::Commit(..) | DiffSource::Proposed(_)
+                        DiffSource::Conflict
+                            | DiffSource::Commit(..)
+                            | DiffSource::Proposed(_)
+                            | DiffSource::Agent(_)
                     ) =>
                 {
                     Some((tab.path.clone(), tab.source.clone(), tab.state.clone()))
@@ -232,6 +242,9 @@ impl Workbench {
     ) -> AnyElement {
         if let DiffSource::Proposed(name) = &tab.source {
             return self.render_claude_diff(name, tab, colors, cx);
+        }
+        if let DiffSource::Agent(path) = &tab.source {
+            return self.render_agent_change_tab(path, tab, colors, cx);
         }
         let strings = self.strings();
         let path = tab.path.clone();
