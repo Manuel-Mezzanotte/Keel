@@ -21,6 +21,8 @@ const PORTS_INTERVAL: Duration = Duration::from_secs(3);
 pub(super) enum OutputChannel {
     Keel,
     Extensions,
+    /// The language servers' messages, each line starting with its name.
+    Languages,
 }
 
 impl Workbench {
@@ -64,6 +66,11 @@ impl Workbench {
                 "output-extensions",
                 strings.output_extensions,
                 OutputChannel::Extensions,
+            ))
+            .child(channel(
+                "output-languages",
+                strings.output_languages,
+                OutputChannel::Languages,
             ))
             .child(
                 Button::new("output-clear")

@@ -327,6 +327,14 @@ pub struct Strings {
     line_column: &'static str,
     spaces: &'static str,
     tab_size: &'static str,
+    pub output_languages: &'static str,
+    pub lsp_started: &'static str,
+    pub lsp_installing_text: &'static str,
+    pub lsp_failed_text: &'static str,
+    pub lsp_stopped_text: &'static str,
+    pub lsp_restarting: &'static str,
+    pub lsp_restarted: &'static str,
+    pub command_restart_language_servers: &'static str,
 }
 
 impl Strings {
@@ -369,6 +377,7 @@ impl Strings {
             "git.unstageAll" => self.command_git_unstage_all,
             "git.cleanAll" => self.command_git_discard_all,
             "git.push" => self.command_git_push,
+            "keel.restartLanguageServers" => self.command_restart_language_servers,
             "git.pull" => self.command_git_pull,
             "git.fetch" => self.command_git_fetch,
             "git.sync" => self.command_git_sync,
@@ -535,6 +544,20 @@ impl Strings {
 
     pub fn trash_question(&self, name: &str) -> String {
         self.trash_question.replace("{name}", name)
+    }
+
+    pub fn lsp_installing(&self, name: &str) -> String {
+        self.lsp_installing_text.replace("{name}", name)
+    }
+
+    pub fn lsp_failed(&self, name: &str, error: &str) -> String {
+        self.lsp_failed_text
+            .replace("{name}", name)
+            .replace("{error}", error)
+    }
+
+    pub fn lsp_stopped(&self, name: &str) -> String {
+        self.lsp_stopped_text.replace("{name}", name)
     }
 
     /// "Coming in phase 3", for the parts of the window not built yet.
@@ -844,6 +867,14 @@ pub const ITALIAN: Strings = Strings {
     line_column: "Riga {line}, col {column}",
     spaces: "Spazi: {size}",
     tab_size: "Tabulazione: {size}",
+    output_languages: "Linguaggi",
+    lsp_started: "avviato",
+    lsp_installing_text: "Installo il server {name}…",
+    lsp_failed_text: "Il server {name} non è partito: {error}",
+    lsp_stopped_text: "Il server {name} si è fermato più volte. Per riprovare: «Riavvia i language server» dalla tavolozza.",
+    lsp_restarting: "si è fermato: lo riavvio",
+    lsp_restarted: "Language server riavviati",
+    command_restart_language_servers: "Linguaggi: Riavvia i language server",
 };
 
 pub const ENGLISH: Strings = Strings {
@@ -1130,6 +1161,14 @@ pub const ENGLISH: Strings = Strings {
     line_column: "Ln {line}, Col {column}",
     spaces: "Spaces: {size}",
     tab_size: "Tab Size: {size}",
+    output_languages: "Languages",
+    lsp_started: "started",
+    lsp_installing_text: "Installing the {name} server…",
+    lsp_failed_text: "The {name} server did not start: {error}",
+    lsp_stopped_text: "The {name} server stopped several times. To try again: \"Restart Language Servers\" from the Command Palette.",
+    lsp_restarting: "stopped: starting it again",
+    lsp_restarted: "Language servers restarted",
+    command_restart_language_servers: "Languages: Restart Language Servers",
 };
 
 #[cfg(test)]

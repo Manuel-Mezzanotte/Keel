@@ -6,6 +6,7 @@ use std::path::Path;
 use gpui::{Action, App, KeyBinding};
 use serde_json::Value;
 
+use crate::workbench_window::RestartLanguageServers;
 use crate::workbench_window::explorer;
 use crate::workbench_window::{
     CheckoutBranch, Commit, CommitAmend, CreateBranch, DiscardAll, GitFetch, GitPull, GitPush,
@@ -223,6 +224,12 @@ pub const COMMANDS: &[KeelCommand] = &[
     KeelCommand {
         id: "git.cleanAll",
         action: || Box::new(DiscardAll),
+        default_key: None,
+        context: None,
+    },
+    KeelCommand {
+        id: "keel.restartLanguageServers",
+        action: || Box::new(RestartLanguageServers),
         default_key: None,
         context: None,
     },

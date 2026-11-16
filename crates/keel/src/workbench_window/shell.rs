@@ -156,6 +156,13 @@ pub(super) fn language_name(id: &str, strings: &Strings) -> String {
         "csharp" => "C#",
         "html" => "HTML",
         "css" => "CSS",
+        "scss" => "SCSS",
+        "less" => "Less",
+        "yaml" => "YAML",
+        "toml" => "TOML",
+        "prisma" => "Prisma",
+        "shellscript" => "Shell Script",
+        "dotenv" => "Environment Variables",
         "plaintext" => strings.plain_text,
         other => other,
     }
@@ -1213,6 +1220,10 @@ impl Workbench {
         if let Some(message) = &self.status_message {
             left.push(message.clone());
         }
+        // A server at work, such as rust-analyzer indexing.
+        if let Some(progress) = self.languages.progress_text() {
+            left.push(progress.to_owned());
+        }
         let image = self.panes.get(self.active).is_some_and(|pane| {
             matches!(
                 self.documents
@@ -1345,6 +1356,7 @@ impl Render for Workbench {
         let root = self.npm_actions(root, cx);
         let root = self.source_control_actions(root, cx);
         let root = self.git_gutter_actions(root, cx);
+        let root = self.language_server_actions(root, cx);
         let root = self.editing_actions(root, cx);
         self.explorer_actions(root, cx)
             .size_full()

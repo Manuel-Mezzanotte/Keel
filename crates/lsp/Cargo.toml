@@ -1,0 +1,22 @@
+[package]
+name = "lsp"
+description = "Language servers: the process, its messages, and finding or installing the servers"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[dependencies]
+anyhow.workspace = true
+futures.workspace = true
+libc.workspace = true
+lsp-types.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+workbench.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true
+
+[lints]
+workspace = true

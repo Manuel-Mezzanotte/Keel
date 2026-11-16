@@ -879,13 +879,43 @@ Con albero, schede, ricerca dei file e controllo della cartella, Keel è cresciu
 | Sottofase | Cosa | Stato |
 |---|---|---|
 | 6.1 | Colori della sintassi per JavaScript, HTML, CSS, JSON, Markdown, YAML, TOML, Rust e `.env` (oggi solo TypeScript) | fatta |
-| 6.2 | Motore LSP (crate `lsp`): processo, messaggi, documenti aperti, richieste del server, riavvio dopo un crash, registro nell'Output; trova o installa i server | da fare |
+| 6.2 | Motore LSP (crate `lsp`): processo, messaggi, documenti aperti, richieste del server, riavvio dopo un crash, registro nell'Output; trova o installa i server | fatta |
 | 6.3 | Errori e avvisi: sottolineature, pannello Problemi, numeri nella barra di stato, F8 per passare al successivo | da fare |
 | 6.4 | Scrivere: completamenti con snippet, info al passaggio del mouse, firma delle funzioni, snippet nel formato di VS Code | da fare |
 | 6.5 | Navigare: definizione, implementazione e tipo, riferimenti, rinomina, struttura del file (Cmd+Maiusc+O), simboli del progetto (Cmd+T) | da fare |
 | 6.6 | Correggere e formattare: azioni rapide (Cmd+.), formattazione anche al salvataggio, Prettier del progetto, correzioni di ESLint | da fare |
 | 6.7 | I server: TypeScript (`vtsls`), HTML, CSS, JSON, ESLint, Emmet, Tailwind, Prisma, Markdown, YAML, TOML e `rust-analyzer`; prove sui due gestionali e su Keel | da fare |
 | 6.8 | Misure e resoconto | da fare |
+
+**Note sulla 6.2**
+- **Il crate `lsp`** parla con i server: avvia il processo, manda e riceve i messaggi, annulla le richieste che non servono più e risponde da solo alle domande di routine (impostazioni, cartelle del progetto).
+- **Le modifiche viaggiano piccole:** a ogni tasto Keel manda al server solo il pezzo cambiato, non tutto il file.
+- **I server partono da soli** quando apri un file del loro linguaggio, e si fermano con la finestra. Keel li cerca in quest'ordine:
+  - nella sua cartella `servers`;
+  - per `rust-analyzer`, nella toolchain del progetto;
+  - nel `PATH` della tua shell.
+
+  Il `PATH` lo legge dalla shell di login (0,4 secondi, una volta sola, fuori dalla finestra). Così trova Node, Homebrew e `~/.cargo/bin` anche quando apri Keel dal Finder.
+- **Se un server manca, lo installa:**
+  - i server di npm in una cartella sua, con la versione bloccata (20–30 secondi la prima volta);
+  - `rust-analyzer` con `rustup component add`;
+  - Markdown e TOML scaricando il programma dalla pagina delle versioni. Il TOML di npm non ha il language server dentro.
+
+  Mentre installa lo scrive nella barra di stato. L'impostazione `keel.languageServers.autoInstall` spegne l'installazione automatica; `keel.languageServers.disabled` spegne dei server per nome, per esempio `["eslint"]`.
+- **ESLint e Tailwind** partono solo nei progetti che li usano: un file di configurazione o il pacchetto in `package.json`.
+- **Se un server si blocca, ripartono da soli,** fino a 4 volte in 3 minuti, come in VS Code. Poi Keel lo lascia fermo e lo dice. «Linguaggi: Riavvia i language server», nella tavolozza, li riavvia tutti.
+- **Messaggi dei server:** vanno nell'Output, canale «Linguaggi», con il nome del server davanti. Il lavoro in corso, come l'indicizzazione di rust-analyzer, compare nella barra di stato.
+- **Provati con i server veri** in una cartella di prova:
+
+  | Server | Avvio | Primi errori |
+  |---|---|---|
+  | TypeScript (`vtsls`) | 0,2 s | 0,8 s |
+  | JSON | 0,1 s | 0,6 s |
+  | CSS | 0,1 s | 0,6 s |
+  | YAML | 0,2 s | 0,4 s |
+  | rust-analyzer | 0,5 s | 2,6 s |
+
+  Il server TOML per ora ci mette 10 secondi ad avviarsi: lo sistemo nella 6.7.
 
 **Note sulla 6.1**
 - **Colori per:** JavaScript e JSX (con la grammatica di TSX), JSON, HTML (con JavaScript e CSS dentro), CSS, SCSS e Less, Markdown (con i blocchi di codice colorati nel loro linguaggio), YAML, TOML, Rust, script della shell e file `.env`.

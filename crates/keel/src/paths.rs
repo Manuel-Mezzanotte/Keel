@@ -50,6 +50,11 @@ pub fn recent_projects_file(data: &Path) -> PathBuf {
     data.join("recent.json")
 }
 
+/// Where Keel installs the language servers it needs.
+pub fn servers_dir(data: &Path) -> PathBuf {
+    data.join("servers")
+}
+
 pub fn extensions_dir(data: &Path) -> PathBuf {
     data.join("extensions")
 }

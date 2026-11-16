@@ -7,6 +7,7 @@ mod disk;
 mod editing;
 pub(crate) mod explorer;
 mod git_gutter;
+mod language_servers;
 mod navigation;
 mod npm_scripts;
 mod other_files;
@@ -35,6 +36,7 @@ use tabs::{Group, OpenAs};
 
 pub(crate) use claude_code::{OpenClaudeCode, OpenClaudeCodeInPanel};
 pub(crate) use git_gutter::{NextChange, PreviousChange, RevertChange, StageChange};
+pub(crate) use language_servers::RestartLanguageServers;
 pub(crate) use npm_scripts::RunNpmScript;
 pub(crate) use shell::window_options;
 pub(crate) use source_control::{
@@ -375,6 +377,8 @@ pub struct Workbench {
     scm: source_control::SourceControl,
     /// The scripts of the project's `package.json`.
     npm_scripts: Option<npm_scripts::NpmScripts>,
+    /// The language servers of the open files.
+    languages: language_servers::Languages,
     _subscriptions: Vec<Subscription>,
 }
 
@@ -511,6 +515,7 @@ impl Workbench {
             git_baselines: HashMap::new(),
             hunk_bar: None,
             first_frame_drawn: false,
+            languages: language_servers::Languages::new(cx),
             _subscriptions: subscriptions,
         };
         workbench.build_tree();
@@ -1396,6 +1401,7 @@ impl Workbench {
     }
 
     fn notify_host(&self, method: &str, params: Value) {
+        self.languages.document_event(method, &params);
         if let Some(extensions) = &self.extensions {
             let _ = extensions.host.notify(method, params);
         }
