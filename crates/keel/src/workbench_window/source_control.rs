@@ -643,6 +643,14 @@ impl Workbench {
                     .child(heading(strings.view_source_control, colors)),
             )
             .child(
+                Button::new("scm-graph")
+                    .ghost()
+                    .xsmall()
+                    .icon(Icon::new(IconName::GitGraph))
+                    .tooltip(strings.command_git_graph)
+                    .on_click(cx.listener(|this, _, window, cx| this.open_git_graph(window, cx))),
+            )
+            .child(
                 Button::new("scm-refresh")
                     .ghost()
                     .xsmall()
@@ -1007,6 +1015,7 @@ impl Workbench {
     /// Called when the status changed: open differences follow.
     fn git_status_changed(&mut self, cx: &mut Context<Self>) {
         self.refresh_open_diffs(cx);
+        self.git_graph_changed(cx);
         self.forget_git_baselines(cx);
     }
 }

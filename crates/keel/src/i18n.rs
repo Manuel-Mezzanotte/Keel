@@ -371,6 +371,40 @@ pub struct Strings {
     pub pdf_page_text: &'static str,
     pub find_previous: &'static str,
     pub find_next: &'static str,
+    pub command_git_graph: &'static str,
+    pub graph_no_repository: &'static str,
+    pub graph_search_placeholder: &'static str,
+    pub graph_uncommitted: &'static str,
+    pub graph_all_branches: &'static str,
+    pub graph_branches: &'static str,
+    pub graph_column_graph: &'static str,
+    pub graph_column_description: &'static str,
+    pub graph_column_date: &'static str,
+    pub graph_column_author: &'static str,
+    pub graph_column_commit: &'static str,
+    pub graph_load_more_text: &'static str,
+    pub graph_parents: &'static str,
+    pub graph_loading: &'static str,
+    pub graph_checkout: &'static str,
+    pub graph_create_branch: &'static str,
+    pub graph_create_tag: &'static str,
+    pub graph_cherry_pick: &'static str,
+    pub graph_revert: &'static str,
+    pub graph_merge: &'static str,
+    pub graph_delete: &'static str,
+    pub graph_copy_hash: &'static str,
+    pub graph_copy_subject: &'static str,
+    pub graph_tag_name: &'static str,
+    pub graph_checkout_branch_text: &'static str,
+    pub graph_merge_branch_text: &'static str,
+    pub graph_delete_branch_text: &'static str,
+    pub graph_delete_tag_text: &'static str,
+    pub graph_checkout_question_text: &'static str,
+    pub graph_cherry_pick_question_text: &'static str,
+    pub graph_revert_question_text: &'static str,
+    pub graph_merge_question_text: &'static str,
+    pub graph_delete_branch_question_text: &'static str,
+    pub graph_delete_tag_question_text: &'static str,
 }
 
 impl Strings {
@@ -423,6 +457,7 @@ impl Strings {
             "editor.action.rename" => self.command_rename_symbol,
             "editor.action.formatDocument" => self.command_format_document,
             "markdown.showPreview" => self.command_markdown_preview,
+            "git-graph.view" => self.command_git_graph,
             "markdown.showPreviewToSide" => self.command_markdown_preview_side,
             "editor.action.organizeImports" => self.command_organize_imports,
             "workbench.action.gotoSymbol" => self.command_symbol_in_file,
@@ -617,6 +652,52 @@ impl Strings {
         self.pdf_page_text
             .replace("{page}", &page.to_string())
             .replace("{count}", &count.to_string())
+    }
+
+    pub fn graph_load_more(&self, count: usize) -> String {
+        self.graph_load_more_text
+            .replace("{count}", &count.to_string())
+    }
+
+    pub fn graph_checkout_branch(&self, name: &str) -> String {
+        self.graph_checkout_branch_text.replace("{name}", name)
+    }
+
+    pub fn graph_merge_branch(&self, name: &str) -> String {
+        self.graph_merge_branch_text.replace("{name}", name)
+    }
+
+    pub fn graph_delete_branch(&self, name: &str) -> String {
+        self.graph_delete_branch_text.replace("{name}", name)
+    }
+
+    pub fn graph_delete_tag(&self, name: &str) -> String {
+        self.graph_delete_tag_text.replace("{name}", name)
+    }
+
+    pub fn graph_checkout_question(&self, hash: &str) -> String {
+        self.graph_checkout_question_text.replace("{hash}", hash)
+    }
+
+    pub fn graph_cherry_pick_question(&self, hash: &str) -> String {
+        self.graph_cherry_pick_question_text.replace("{hash}", hash)
+    }
+
+    pub fn graph_revert_question(&self, hash: &str) -> String {
+        self.graph_revert_question_text.replace("{hash}", hash)
+    }
+
+    pub fn graph_merge_question(&self, name: &str) -> String {
+        self.graph_merge_question_text.replace("{name}", name)
+    }
+
+    pub fn graph_delete_branch_question(&self, name: &str) -> String {
+        self.graph_delete_branch_question_text
+            .replace("{name}", name)
+    }
+
+    pub fn graph_delete_tag_question(&self, name: &str) -> String {
+        self.graph_delete_tag_question_text.replace("{name}", name)
     }
 
     pub fn preview_title(&self, name: &str) -> String {
@@ -987,6 +1068,40 @@ pub const ITALIAN: Strings = Strings {
     pdf_page_text: "Pagina {page} di {count}",
     find_previous: "Risultato precedente (Maiusc+Invio)",
     find_next: "Risultato successivo (Invio)",
+    command_git_graph: "Git Graph: Mostra il grafico",
+    graph_no_repository: "Questa cartella non è un repository git.",
+    graph_search_placeholder: "Cerca: messaggio, hash, autore, branch",
+    graph_uncommitted: "Modifiche non committate",
+    graph_all_branches: "Tutti i branch",
+    graph_branches: "Branch",
+    graph_column_graph: "Grafico",
+    graph_column_description: "Descrizione",
+    graph_column_date: "Data",
+    graph_column_author: "Autore",
+    graph_column_commit: "Commit",
+    graph_load_more_text: "Carica altri {count} commit",
+    graph_parents: "Genitori",
+    graph_loading: "Caricamento…",
+    graph_checkout: "Checkout",
+    graph_create_branch: "Crea un branch qui…",
+    graph_create_tag: "Aggiungi un tag…",
+    graph_cherry_pick: "Cherry-pick",
+    graph_revert: "Revert",
+    graph_merge: "Merge",
+    graph_delete: "Elimina",
+    graph_copy_hash: "Copia l'hash",
+    graph_copy_subject: "Copia il messaggio",
+    graph_tag_name: "Nome del tag",
+    graph_checkout_branch_text: "Checkout di «{name}»",
+    graph_merge_branch_text: "Merge di «{name}» nel branch corrente…",
+    graph_delete_branch_text: "Elimina il branch «{name}»…",
+    graph_delete_tag_text: "Elimina il tag «{name}»…",
+    graph_checkout_question_text: "Vuoi fare il checkout del commit {hash}? Non sarai su nessun branch (HEAD staccato).",
+    graph_cherry_pick_question_text: "Vuoi applicare il commit {hash} al branch corrente (cherry-pick)?",
+    graph_revert_question_text: "Vuoi annullare il commit {hash} con un nuovo commit (revert)?",
+    graph_merge_question_text: "Vuoi fare il merge di «{name}» nel branch corrente?",
+    graph_delete_branch_question_text: "Vuoi eliminare il branch «{name}»?",
+    graph_delete_tag_question_text: "Vuoi eliminare il tag «{name}»?",
 };
 
 pub const ENGLISH: Strings = Strings {
@@ -1315,6 +1430,40 @@ pub const ENGLISH: Strings = Strings {
     pdf_page_text: "Page {page} of {count}",
     find_previous: "Previous Match (Shift+Enter)",
     find_next: "Next Match (Enter)",
+    command_git_graph: "Git Graph: View Git Graph",
+    graph_no_repository: "This folder is not a git repository.",
+    graph_search_placeholder: "Find: message, hash, author, branch",
+    graph_uncommitted: "Uncommitted Changes",
+    graph_all_branches: "Show All",
+    graph_branches: "Branches",
+    graph_column_graph: "Graph",
+    graph_column_description: "Description",
+    graph_column_date: "Date",
+    graph_column_author: "Author",
+    graph_column_commit: "Commit",
+    graph_load_more_text: "Load {count} more commits",
+    graph_parents: "Parents",
+    graph_loading: "Loading…",
+    graph_checkout: "Checkout",
+    graph_create_branch: "Create Branch…",
+    graph_create_tag: "Add Tag…",
+    graph_cherry_pick: "Cherry Pick",
+    graph_revert: "Revert",
+    graph_merge: "Merge",
+    graph_delete: "Delete",
+    graph_copy_hash: "Copy Commit Hash",
+    graph_copy_subject: "Copy Commit Subject",
+    graph_tag_name: "Tag name",
+    graph_checkout_branch_text: "Checkout \"{name}\"",
+    graph_merge_branch_text: "Merge \"{name}\" into Current Branch…",
+    graph_delete_branch_text: "Delete Branch \"{name}\"…",
+    graph_delete_tag_text: "Delete Tag \"{name}\"…",
+    graph_checkout_question_text: "Do you want to check out commit {hash}? You will be on no branch (detached HEAD).",
+    graph_cherry_pick_question_text: "Do you want to apply commit {hash} to the current branch (cherry-pick)?",
+    graph_revert_question_text: "Do you want to undo commit {hash} with a new commit (revert)?",
+    graph_merge_question_text: "Do you want to merge \"{name}\" into the current branch?",
+    graph_delete_branch_question_text: "Do you want to delete branch \"{name}\"?",
+    graph_delete_tag_question_text: "Do you want to delete tag \"{name}\"?",
 };
 
 #[cfg(test)]

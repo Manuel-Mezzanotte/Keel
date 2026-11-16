@@ -31,7 +31,7 @@ use crate::workbench_window::{
     OpenClaudeCodeInPanel, RenameTerminal, RunNpmScript, SplitTerminal, TERMINAL_CONTEXT,
     ToggleMaximizedPanel,
 };
-use crate::workbench_window::{FormatDocument, OrganizeImports};
+use crate::workbench_window::{FormatDocument, OrganizeImports, ShowGitGraph};
 use crate::workbench_window::{
     GoToImplementation, GoToReferences, GoToSymbolInFile, GoToSymbolInWorkspace,
     GoToTypeDefinition, RenameSymbol, RevealDefinition,
@@ -246,6 +246,12 @@ pub const COMMANDS: &[KeelCommand] = &[
         action: || Box::new(TriggerParameterHints),
         default_key: Some("cmd+shift+space"),
         context: Some(EDITOR_CONTEXT),
+    },
+    KeelCommand {
+        id: "git-graph.view",
+        action: || Box::new(ShowGitGraph),
+        default_key: None,
+        context: None,
     },
     KeelCommand {
         id: "markdown.showPreview",

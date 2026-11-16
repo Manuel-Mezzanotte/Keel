@@ -961,6 +961,10 @@ impl Workbench {
                             .flex_1()
                             .min_h_0()
                             .child(self.render_diff(tab, colors, cx)),
+                        Some(Backing::Graph(tab)) => div()
+                            .flex_1()
+                            .min_h_0()
+                            .child(self.render_git_graph(tab, colors, cx)),
                         Some(Backing::Pdf(tab)) => div()
                             .flex_1()
                             .min_h_0()
@@ -1268,7 +1272,13 @@ impl Workbench {
                 self.documents
                     .get(&pane.uri)
                     .map(|document| &document.backing),
-                Some(Backing::Image(_) | Backing::Diff(_) | Backing::Preview(_) | Backing::Pdf(_))
+                Some(
+                    Backing::Image(_)
+                        | Backing::Diff(_)
+                        | Backing::Preview(_)
+                        | Backing::Pdf(_)
+                        | Backing::Graph(_)
+                )
             )
         });
         if let Some(uri) = self.active_pdf()
@@ -1421,6 +1431,8 @@ impl Render for Workbench {
         let root = self.code_action_actions(root, cx);
         let root = self.markdown_preview_actions(root, cx);
         let root = self.pdf_actions(root, cx);
+        let root = self.git_graph_actions(root, cx);
+        let root = self.commit_view_actions(root, cx);
         let root = self.editing_actions(root, cx);
         self.explorer_actions(root, cx)
             .size_full()

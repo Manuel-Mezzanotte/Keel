@@ -595,7 +595,8 @@ impl Workbench {
                 | Backing::Extension
                 | Backing::Diff(_)
                 | Backing::Preview(_)
-                | Backing::Pdf(_) => {}
+                | Backing::Pdf(_)
+                | Backing::Graph(_) => {}
             }
             document.uri = new_uri.clone();
             document.language_id = language::vscode_id_for_path(&target).to_owned();

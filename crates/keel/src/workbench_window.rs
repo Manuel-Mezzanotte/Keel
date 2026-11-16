@@ -4,10 +4,12 @@
 mod claude_code;
 mod code_actions;
 mod code_navigation;
+mod commit_view;
 mod diff_view;
 mod disk;
 mod editing;
 pub(crate) mod explorer;
+mod git_graph;
 mod git_gutter;
 mod language_features;
 mod language_servers;
@@ -47,6 +49,7 @@ pub(crate) use code_navigation::{
     GoToImplementation, GoToReferences, GoToSymbolInFile, GoToSymbolInWorkspace,
     GoToTypeDefinition, RenameSymbol, RevealDefinition,
 };
+pub(crate) use git_graph::ShowGitGraph;
 pub(crate) use git_gutter::{NextChange, PreviousChange, RevertChange, StageChange};
 pub(crate) use language_servers::RestartLanguageServers;
 pub(crate) use markdown_preview::{ShowMarkdownPreview, ShowMarkdownPreviewToSide};
@@ -223,6 +226,8 @@ enum Backing {
     Preview(markdown_preview::PreviewTab),
     /// A PDF file, drawn by PDFKit; boxed, being much larger than the rest.
     Pdf(Box<pdf_view::PdfTab>),
+    /// The history of the repository, as Git Graph draws it.
+    Graph(Box<git_graph::GraphTab>),
 }
 
 impl OpenDocument {
@@ -231,7 +236,7 @@ impl OpenDocument {
         match &self.backing {
             Backing::File(file) => Some(file.path()),
             Backing::Image(path) => Some(path),
-            Backing::Diff(_) | Backing::Preview(_) | Backing::Pdf(_) => None,
+            Backing::Diff(_) | Backing::Preview(_) | Backing::Pdf(_) | Backing::Graph(_) => None,
             Backing::Untitled | Backing::Extension => None,
         }
     }
@@ -252,6 +257,7 @@ impl OpenDocument {
         match &self.backing {
             Backing::Diff(tab) => return tab.title.clone(),
             Backing::Preview(tab) => return tab.title.clone(),
+            Backing::Graph(_) => return "Git Graph".to_owned(),
             _ => {}
         }
         Uri::parse(&self.uri)
@@ -413,6 +419,8 @@ pub struct Workbench {
     /// row each preview was last scrolled to.
     preview_sync: Option<(markdown_preview::SyncSide, std::time::Instant)>,
     preview_tops: HashMap<String, usize>,
+    /// The commit chosen in Git Graph, shown under it.
+    commit_view: Option<commit_view::CommitView>,
     /// The zoom of each image tab (fit when missing) and the images' sizes.
     image_zoom: HashMap<String, f32>,
     image_sizes: RefCell<HashMap<PathBuf, Option<(u32, u32)>>>,
@@ -564,6 +572,7 @@ impl Workbench {
             preview_sync: None,
             preview_tops: HashMap::new(),
             image_zoom: HashMap::new(),
+            commit_view: None,
             image_sizes: RefCell::new(HashMap::new()),
             _subscriptions: subscriptions,
         };
@@ -858,7 +867,8 @@ impl Workbench {
             | Backing::Image(_)
             | Backing::Diff(_)
             | Backing::Preview(_)
-            | Backing::Pdf(_) => false,
+            | Backing::Pdf(_)
+            | Backing::Graph(_) => false,
         };
         let params = json!({
             "uri": uri,
@@ -1059,7 +1069,11 @@ impl Workbench {
         match &document.backing {
             Backing::File(_) => self.save_with_participants(uri, after, window, cx),
             Backing::Untitled => self.save_as(uri.to_owned(), text, after, window, cx),
-            Backing::Image(_) | Backing::Diff(_) | Backing::Preview(_) | Backing::Pdf(_) => {}
+            Backing::Image(_)
+            | Backing::Diff(_)
+            | Backing::Preview(_)
+            | Backing::Pdf(_)
+            | Backing::Graph(_) => {}
             Backing::Extension => {
                 if let Some(extensions) = &self.extensions {
                     let write = extensions

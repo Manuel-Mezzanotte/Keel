@@ -1192,10 +1192,34 @@ Apri Keel su GestionaleHospitality. La prima volta i server si installano da sol
 | Sottofase | Cosa | Stato |
 |---|---|---|
 | 8.1 | Motore (crate `git`): storico con branch e tag, corsie e colori del grafico, dettagli e file di un commit, azioni, storico di un file, autore di ogni riga | fatta |
-| 8.2 | Scheda «Git Graph»: grafico con linee colorate, descrizione, data, autore e hash; filtro per branch; ricerca; altri commit a richiesta | da fare |
-| 8.3 | Dettaglio di un commit (file cambiati, differenze) e azioni dal menu: checkout, crea branch o tag, copia l'hash, cherry-pick, revert, merge, elimina branch, con conferma | da fare |
+| 8.2 | Scheda «Git Graph»: grafico con linee colorate, descrizione, data, autore e hash; filtro per branch; ricerca; altri commit a richiesta | fatta |
+| 8.3 | Dettaglio di un commit (file cambiati, differenze) e azioni dal menu: checkout, crea branch o tag, copia l'hash, cherry-pick, revert, merge, elimina branch, con conferma | fatta |
 | 8.4 | Storico di un file e autore di ogni riga nell'editor, attivabile | da fare |
 | 8.5 | Misure e resoconto | da fare |
+
+**Note sulla 8.3**
+- **Un clic su un commit** apre sotto il grafico il suo dettaglio:
+  - a sinistra hash, genitori, autore con email e data, e il messaggio completo;
+  - a destra i file cambiati, con la lettera colorata (A, M, D, R);
+  - un clic su un file apre la scheda delle differenze del commit, affiancate o in linea, intitolata «file (hash)»;
+  - un secondo clic sul commit chiude il dettaglio.
+- **Tasto destro su un commit**, come in Git Graph:
+  - Checkout (con HEAD staccato), Crea un branch qui, Aggiungi un tag, Cherry-pick, Revert, Copia l'hash, Copia il messaggio;
+  - per ogni branch del commit: Checkout, Merge nel branch corrente, Elimina; per ogni tag: Elimina.
+- **Prima di cambiare il repository Keel chiede conferma:** checkout di un commit, cherry-pick, revert, merge ed eliminazioni. I nuovi branch e tag chiedono il nome. Gli errori di git vanno nella barra di stato e nell'Output.
+- **I tag nuovi sono semplici,** senza messaggio. Git Graph chiede anche se fare un tag annotato: se ti serve, lo aggiungo.
+
+**Note sulla 8.2**
+- **Si apre** dal pulsante col grafico in cima alla vista git, oppure da «Git Graph: Mostra il grafico» nella tavolozza. È una scheda come le altre.
+- **Colonne:** Grafico, Descrizione, Data, Autore, Commit, come Git Graph.
+  - Le corsie usano i 12 colori di Git Graph e si curvano dolcemente dove cambiano posto.
+  - Il commit di HEAD ha il pallino vuoto.
+  - I branch, i branch remoti e i tag sono etichette col colore della corsia; quello di HEAD è pieno.
+- **In cima, se ci sono modifiche non committate,** c'è la riga «Modifiche non committate (N)» legata a HEAD; un clic apre la vista git.
+- **Branch:** il menu in alto mostra tutti i branch oppure uno solo.
+- **Ricerca:** cerca nel messaggio, nell'hash, nell'autore e nei nomi dei branch. Evidenzia le righe trovate, e Invio e Maiusc+Invio passano dall'una all'altra.
+- **Commit:** se ne caricano 500 alla volta; in fondo «Carica altri 500 commit».
+- **Il grafico si aggiorna da solo** quando cambia git: un commit, un checkout, anche dal terminale. In alto ci sono anche Fetch e Aggiorna.
 
 **Note sulla 8.1**
 - **Lo storico** si legge con `git log` in ordine di data, figli prima dei genitori, come Git Graph. Con ogni commit vengono anche i suoi branch, i branch remoti e i tag. Si può limitare a dei branch.

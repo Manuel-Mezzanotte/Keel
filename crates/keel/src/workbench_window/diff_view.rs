@@ -12,7 +12,7 @@ use super::shell::{Colors, note};
 use super::*;
 
 /// Which differences of a file a tab shows.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub(super) enum DiffSource {
     /// Not staged yet: the staged version against the file on disk.
     Changes,
@@ -20,6 +20,9 @@ pub(super) enum DiffSource {
     Staged,
     /// A file in merge conflict, with its conflicts to resolve.
     Conflict,
+    /// What a commit changed in the file, from Git Graph: the commit's
+    /// hash, and where a renamed file came from.
+    Commit(String, Option<String>),
 }
 
 /// A tab with differences.
@@ -32,11 +35,12 @@ pub(super) struct DiffTab {
 }
 
 /// The uri of a differences tab, distinct for each file and source.
-fn diff_uri(path: &str, source: DiffSource) -> String {
+fn diff_uri(path: &str, source: &DiffSource) -> String {
     let kind = match source {
         DiffSource::Changes => "changes",
         DiffSource::Staged => "staged",
         DiffSource::Conflict => "conflict",
+        DiffSource::Commit(hash, _) => hash.as_str(),
     };
     format!("keel-diff:{kind}/{path}")
 }
@@ -44,7 +48,7 @@ fn diff_uri(path: &str, source: DiffSource) -> String {
 impl Workbench {
     /// What a differences tab shows: the patch git makes, or the conflicts
     /// read from the file.
-    fn diff_files(&self, path: &str, source: DiffSource) -> Result<Vec<DiffFile>, String> {
+    fn diff_files(&self, path: &str, source: &DiffSource) -> Result<Vec<DiffFile>, String> {
         let repo = self.scm.repo.as_ref().ok_or_else(String::new)?;
         let language = Language::for_path(Path::new(path)).highlighter_name();
         let files = match source {
@@ -56,9 +60,15 @@ impl Workbench {
                         .map_err(|error| error.message().to_string())?,
                 ]
             }
+            DiffSource::Commit(hash, original) => {
+                let patch = repo
+                    .commit_file_diff(hash, path, original.as_deref())
+                    .map_err(|error| error.to_string())?;
+                DiffFile::parse(&patch).map_err(|error| error.message().to_string())?
+            }
             DiffSource::Changes | DiffSource::Staged => {
                 let patch = repo
-                    .diff(path, source == DiffSource::Staged)
+                    .diff(path, *source == DiffSource::Staged)
                     .map_err(|error| error.to_string())?;
                 DiffFile::parse(&patch).map_err(|error| error.message().to_string())?
             }
@@ -77,9 +87,9 @@ impl Workbench {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let uri = diff_uri(path, source);
+        let uri = diff_uri(path, &source);
         if !self.documents.contains_key(&uri) {
-            let files = match self.diff_files(path, source) {
+            let files = match self.diff_files(path, &source) {
                 Ok(files) => files,
                 Err(message) => {
                     self.report(format!("{path}: {message}"));
@@ -97,10 +107,11 @@ impl Workbench {
             cx.observe(&state, |_, _, cx| cx.notify()).detach();
             let strings = self.strings();
             let name = path.rsplit('/').next().unwrap_or(path);
-            let title = match source {
+            let title = match &source {
                 DiffSource::Changes => format!("{name} ({})", strings.diff_working_tree),
                 DiffSource::Staged => format!("{name} ({})", strings.diff_index),
                 DiffSource::Conflict => format!("{name} ({})", strings.diff_conflict),
+                DiffSource::Commit(hash, _) => format!("{name} ({})", &hash[..hash.len().min(8)]),
             };
             self.documents.insert(
                 uri.clone(),
@@ -130,14 +141,17 @@ impl Workbench {
             .values()
             .filter_map(|document| match &document.backing {
                 // Conflicts keep the choices made so far until saved.
-                Backing::Diff(tab) if tab.source != DiffSource::Conflict => {
-                    Some((tab.path.clone(), tab.source, tab.state.clone()))
+                // Conflicts keep their choices; a commit never changes.
+                Backing::Diff(tab)
+                    if !matches!(tab.source, DiffSource::Conflict | DiffSource::Commit(..)) =>
+                {
+                    Some((tab.path.clone(), tab.source.clone(), tab.state.clone()))
                 }
                 _ => None,
             })
             .collect();
         for (path, source, state) in tabs {
-            if let Ok(files) = self.diff_files(&path, source) {
+            if let Ok(files) = self.diff_files(&path, &source) {
                 state.update(cx, |state, cx| state.set_files(files, cx));
             }
         }
@@ -184,7 +198,7 @@ impl Workbench {
             cx.notify();
             return;
         }
-        let uri = diff_uri(&path, DiffSource::Conflict);
+        let uri = diff_uri(&path, &DiffSource::Conflict);
         let label = self.strings().scm_stage;
         self.run_git(
             label,
@@ -209,7 +223,7 @@ impl Workbench {
     ) -> AnyElement {
         let strings = self.strings();
         let path = tab.path.clone();
-        let source = tab.source;
+        let source = tab.source.clone();
         let empty = tab.state.read(cx).files().is_empty();
         let mut toolbar = div()
             .h(px(34.))
@@ -263,23 +277,26 @@ impl Workbench {
                         .on_click(cx.listener(|this, _, _, cx| this.set_diff_split(false, cx))),
                 );
             let stage_path = path.clone();
-            toolbar = toolbar.child(match source {
-                DiffSource::Staged => Button::new("diff-unstage")
-                    .ghost()
-                    .xsmall()
-                    .icon(Icon::new(IconName::Minus))
-                    .tooltip(strings.scm_unstage)
-                    .on_click(cx.listener(move |this, _, window, cx| {
-                        this.unstage_paths(vec![stage_path.clone()], window, cx)
-                    })),
-                _ => Button::new("diff-stage")
-                    .ghost()
-                    .xsmall()
-                    .icon(Icon::new(IconName::Plus))
-                    .tooltip(strings.scm_stage)
-                    .on_click(cx.listener(move |this, _, window, cx| {
-                        this.stage_paths(vec![stage_path.clone()], window, cx)
-                    })),
+            // A commit's differences have nothing to stage.
+            toolbar = toolbar.when(!matches!(source, DiffSource::Commit(..)), |toolbar| {
+                toolbar.child(match source {
+                    DiffSource::Staged => Button::new("diff-unstage")
+                        .ghost()
+                        .xsmall()
+                        .icon(Icon::new(IconName::Minus))
+                        .tooltip(strings.scm_unstage)
+                        .on_click(cx.listener(move |this, _, window, cx| {
+                            this.unstage_paths(vec![stage_path.clone()], window, cx)
+                        })),
+                    _ => Button::new("diff-stage")
+                        .ghost()
+                        .xsmall()
+                        .icon(Icon::new(IconName::Plus))
+                        .tooltip(strings.scm_stage)
+                        .on_click(cx.listener(move |this, _, window, cx| {
+                            this.stage_paths(vec![stage_path.clone()], window, cx)
+                        })),
+                })
             });
         }
         let open_path = path.clone();
@@ -382,7 +399,7 @@ mod tests {
             )
         });
         view.read_with(cx, |view, cx| {
-            let document = &view.documents[&diff_uri("b.txt", DiffSource::Changes)];
+            let document = &view.documents[&diff_uri("b.txt", &DiffSource::Changes)];
             let Backing::Diff(tab) = &document.backing else {
                 panic!("not a diff");
             };
@@ -402,7 +419,7 @@ mod tests {
         });
         let state = view.read_with(cx, |view, _| {
             let Backing::Diff(tab) =
-                &view.documents[&diff_uri("a.txt", DiffSource::Conflict)].backing
+                &view.documents[&diff_uri("a.txt", &DiffSource::Conflict)].backing
             else {
                 panic!("not a diff");
             };
