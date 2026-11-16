@@ -120,7 +120,7 @@ Da confermare con le misure della fase 0. Si misura con lo stesso script su Keel
 | 2 | Editor e file | grande | fatta; restano le tue prove a mano |
 | 3 | Ricerca | piccola | fatta; restano le tue prove a mano |
 | 4 | Terminale e pannello in basso | media | fatta; restano le tue prove a mano |
-| 5 | Git: modifiche e commit | media | in corso |
+| 5 | Git: modifiche e commit | media | fatta; restano le tue prove a mano |
 | 6 | Linguaggi principali: web e Rust | grande | da fare |
 | 7 | Anteprima Markdown e PDF | media | da fare |
 | 8 | Grafico e storico git | media | da fare |
@@ -778,7 +778,27 @@ Con albero, schede, ricerca dei file e controllo della cartella, Keel è cresciu
 | 5.2 | Vista Controllo del codice sorgente: messaggio e Commit, file in stage, modifiche e conflitti, numero sull'icona, branch nella barra di stato | fatta |
 | 5.3 | Differenze in una scheda, affiancate o in linea; conflitti di merge risolti con un clic | fatta |
 | 5.4 | Margine dell'editor (aggiunte, modifiche, cancellazioni) con stage e annulla del blocco; push, pull, sync, branch e stash dai comandi | fatta |
-| 5.5 | Misure e resoconto | da fare |
+| 5.5 | Misure e resoconto | fatta |
+
+**Resoconto della fase 5**
+- **Il criterio era un giro completo solo da Keel:** modifichi, controlli le differenze, metti in stage, fai il commit e il push. I test automatici fanno questo giro in un repository vero, con un remoto creato apposta: stage di file e di un blocco, commit da Cmd+Invio, amend, push con pubblicazione del branch, pull dopo un push fatto da un'altra copia, stash, cambio di branch, risoluzione di un conflitto di merge. Resta la tua prova con GitHub.
+- **Un problema trovato con le misure:** con la vista git aperta Keel usava l'1,8% di CPU senza fare niente, perché il campo del messaggio di gpui-component, quando cresce da solo (`auto_grow`), si ridisegna a ogni fotogramma. Ora la sua altezza la calcola Keel contando le righe, e la CPU a riposo è scesa allo 0,1%.
+- **Misure** su GestionaleHospitality, versione ottimizzata, con la vista git aperta:
+  - 126 MB di memoria, primo fotogramma in 323 ms;
+  - lettura dello stato di git: 17 ms, fatta in background;
+  - blocchi cambiati di un file di 20.000 righe con 424 modifiche: 1,3 ms;
+  - a riposo Keel lancia git solo quando serve: 4 comandi in 15 secondi all'avvio, poi niente.
+- **Test:** 216 automatici, tutti verdi.
+
+**Le tue prove a mano della fase 5**
+1. In un tuo progetto modifica due file e creane uno nuovo. Sull'icona della vista git compare 3 e nel margine dell'editor i segni verdi e azzurri.
+2. Metti il cursore su un blocco cambiato: compare la barra con Differenze, Metti in stage e Annulla. Prova anche Alt+F5.
+3. Apri la vista git (Ctrl+Maiusc+G) e clicca un file: si apre la scheda delle differenze. Prova «Affiancate» e «In linea».
+4. Metti in stage un file col `+`, scrivi il messaggio e premi Cmd+Invio.
+5. Clicca il branch nella barra di stato: creane uno nuovo, poi torna su `develop`.
+6. Dal menu «…» fai Push (o «Pubblica il branch» su quello nuovo) e controlla su GitHub.
+7. Scarta una modifica col pulsante a freccia: chiede conferma. Un file nuovo scartato va nel Cestino.
+8. Se ti capita un conflitto di merge, aprilo dalla vista: scegli per ogni conflitto e premi «Salva e metti in stage».
 
 **Note sulla 5.4**
 - **Il margine dell'editor** confronta il testo, anche non salvato, con la versione in stage, come VS Code:

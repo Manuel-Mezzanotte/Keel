@@ -71,7 +71,11 @@ pub(super) struct SourceControl {
     pub(super) busy: Option<&'static str>,
     refresh_task: Task<()>,
     operation: Task<()>,
+    _message_grows: Subscription,
 }
+
+/// The commit message grows with its text up to this many lines.
+const MESSAGE_ROWS: usize = 8;
 
 impl SourceControl {
     pub(super) fn new(
@@ -85,7 +89,20 @@ impl SourceControl {
         let message = cx.new(|cx| {
             TextareaState::new(window, cx)
                 .placeholder(placeholder)
-                .auto_grow(1, 8)
+                .rows(1)
+        });
+        // gpui-component's own auto_grow redraws the field on every frame,
+        // which kept the CPU busy while idle; counting lines is enough.
+        let message_grows = cx.subscribe(&message, |_, input, event: &InputEvent, cx| {
+            if matches!(event, InputEvent::Change) {
+                let lines = input
+                    .read(cx)
+                    .value()
+                    .split('\n')
+                    .count()
+                    .clamp(1, MESSAGE_ROWS);
+                input.update(cx, |input, cx| input.set_rows(lines, cx));
+            }
         });
         Self {
             repo,
@@ -94,6 +111,7 @@ impl SourceControl {
             busy: None,
             refresh_task: Task::ready(()),
             operation: Task::ready(()),
+            _message_grows: message_grows,
         }
     }
 

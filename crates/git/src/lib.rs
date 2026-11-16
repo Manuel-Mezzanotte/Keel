@@ -526,3 +526,55 @@ mod tests {
         assert!(folder.path().join("b.txt").exists());
     }
 }
+
+/// How long reading the status and finding the blocks take; run with
+/// `KEEL_GIT_TIMING=/path/to/repo cargo test --release -p git timing --
+/// --ignored --nocapture`.
+#[cfg(test)]
+mod timing {
+    use std::time::Instant;
+
+    use super::*;
+
+    #[test]
+    #[ignore]
+    fn status_and_hunks() {
+        let folder = std::env::var_os("KEEL_GIT_TIMING")
+            .map(PathBuf::from)
+            .unwrap_or_else(|| PathBuf::from(env!("CARGO_MANIFEST_DIR")));
+        let repo = Repo::discover(&folder).unwrap();
+        repo.status().unwrap();
+        let start = Instant::now();
+        for _ in 0..20 {
+            repo.status().unwrap();
+        }
+        eprintln!(
+            "status of {}: {:?} each",
+            repo.root().display(),
+            start.elapsed() / 20
+        );
+
+        let old: String = (0..20_000)
+            .map(|line| format!("let value_{line} = {line};\n"))
+            .collect();
+        let new: String = old
+            .lines()
+            .enumerate()
+            .filter(|(line, _)| line % 97 != 0)
+            .map(|(line, text)| {
+                if line % 89 == 0 {
+                    format!("{text} // changed\n")
+                } else {
+                    format!("{text}\n")
+                }
+            })
+            .collect();
+        let start = Instant::now();
+        let found = hunks(&old, &new);
+        eprintln!(
+            "{} blocks in 20,000 lines: {:?}",
+            found.len(),
+            start.elapsed()
+        );
+    }
+}
