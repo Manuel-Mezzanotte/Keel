@@ -477,6 +477,10 @@ impl Workbench {
             lsp.set_completion_highlighter(Rc::new(highlight_characters));
             cx.notify();
         });
+        if file {
+            let editor = pane.editor.clone();
+            self.install_definitions(&editor, features, cx);
+        }
     }
 
     // -----------------------------------------------------------------

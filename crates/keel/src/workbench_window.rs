@@ -2,6 +2,7 @@
 //! between Keel and the extension host. The layout is drawn in `shell`.
 
 mod claude_code;
+mod code_navigation;
 mod diff_view;
 mod disk;
 mod editing;
@@ -38,6 +39,10 @@ pub(crate) use tabs::{
 use tabs::{Group, OpenAs};
 
 pub(crate) use claude_code::{OpenClaudeCode, OpenClaudeCodeInPanel};
+pub(crate) use code_navigation::{
+    GoToImplementation, GoToReferences, GoToSymbolInFile, GoToSymbolInWorkspace,
+    GoToTypeDefinition, RenameSymbol, RevealDefinition,
+};
 pub(crate) use git_gutter::{NextChange, PreviousChange, RevertChange, StageChange};
 pub(crate) use language_servers::RestartLanguageServers;
 pub(crate) use npm_scripts::RunNpmScript;
@@ -531,7 +536,7 @@ impl Workbench {
             git_baselines: HashMap::new(),
             hunk_bar: None,
             first_frame_drawn: false,
-            languages: language_servers::Languages::new(cx),
+            languages: language_servers::Languages::new(window, cx),
             problems: Default::default(),
             snippet: None,
             snippet_files: Default::default(),

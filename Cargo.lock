@@ -3783,6 +3783,7 @@ dependencies = [
  "files",
  "futures",
  "git",
+ "globset",
  "gpui-component",
  "gpui-kit-assets",
  "gpui-pre",

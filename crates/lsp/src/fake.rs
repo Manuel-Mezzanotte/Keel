@@ -9,6 +9,10 @@
 //! automatic import comes with `completionItem/resolve`. The signature is
 //! always `saluta(nome: string, volte: number)`, with the parameter counted
 //! from the commas before the cursor.
+//!
+//! A definition is the `function` of that name in any open document.
+//! `fake/applyEdit` makes the server ask the editor to insert its `text`
+//! at the start of its `uri`.
 
 use std::collections::HashMap;
 use std::io::{self, BufReader, Read, Write};
@@ -44,6 +48,7 @@ pub fn run(input: impl Read, output: impl Write + Send + 'static) -> i32 {
                         "hoverProvider": true,
                         "completionProvider": { "triggerCharacters": ["."], "resolveProvider": true },
                         "signatureHelpProvider": { "triggerCharacters": ["(", ","] },
+                        "definitionProvider": true,
                     },
                     "serverInfo": { "name": "fake", "version": "1" },
                 },
@@ -142,6 +147,38 @@ pub fn run(input: impl Read, output: impl Write + Send + 'static) -> i32 {
                 };
                 send(json!({ "jsonrpc": "2.0", "id": id, "result": result }));
             }
+            "textDocument/definition" => {
+                let uri = params["textDocument"]["uri"].as_str().unwrap_or_default();
+                let text = documents.get(uri).cloned().unwrap_or_default();
+                let offset = offset_at(&text, &params["position"]);
+                let word = word_at(&text, offset);
+                let wanted = format!("function {word}");
+                let found = documents.iter().find_map(|(uri, text)| {
+                    let at = text.find(&wanted)? + "function ".len();
+                    let start = workbench::position::position_of(text, at);
+                    let end = workbench::position::position_of(text, at + word.len());
+                    Some(json!({
+                        "uri": uri,
+                        "range": {
+                            "start": { "line": start.line, "character": start.character },
+                            "end": { "line": end.line, "character": end.character },
+                        },
+                    }))
+                });
+                send(json!({ "jsonrpc": "2.0", "id": id, "result": found }));
+            }
+            "fake/applyEdit" => {
+                send(json!({
+                    "jsonrpc": "2.0",
+                    "id": next_id,
+                    "method": "workspace/applyEdit",
+                    "params": { "edit": { "changes": { params["uri"].as_str().unwrap_or_default(): [{
+                        "range": { "start": { "line": 0, "character": 0 }, "end": { "line": 0, "character": 0 } },
+                        "newText": params["text"],
+                    }] } } },
+                }));
+                next_id += 1;
+            }
             "fake/slow" => slow.extend(id),
             "$/cancelRequest" => {
                 let cancelled = params["id"].clone();
@@ -180,6 +217,31 @@ pub fn run(input: impl Read, output: impl Write + Send + 'static) -> i32 {
         }
     }
     0
+}
+
+fn offset_at(text: &str, position: &Value) -> usize {
+    workbench::position::offset_of(
+        text,
+        workbench::position::Position::new(
+            position["line"].as_u64().unwrap_or_default() as u32,
+            position["character"].as_u64().unwrap_or_default() as u32,
+        ),
+    )
+}
+
+fn word_at(text: &str, offset: usize) -> &str {
+    let is_word = |character: char| character.is_alphanumeric() || character == '_';
+    let start = text[..offset]
+        .char_indices()
+        .rev()
+        .take_while(|(_, character)| is_word(*character))
+        .last()
+        .map_or(offset, |(at, _)| at);
+    let end = text[offset..]
+        .char_indices()
+        .find(|(_, character)| !is_word(*character))
+        .map_or(text.len(), |(at, _)| offset + at);
+    &text[start..end]
 }
 
 fn diagnostics(uri: &str, text: &str, version: &Value) -> Value {

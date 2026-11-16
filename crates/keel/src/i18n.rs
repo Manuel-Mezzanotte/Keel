@@ -342,6 +342,23 @@ pub struct Strings {
     pub command_previous_problem: &'static str,
     pub command_trigger_parameter_hints: &'static str,
     pub command_trigger_suggest: &'static str,
+    pub lsp_not_supported: &'static str,
+    pub lsp_no_definition: &'static str,
+    pub lsp_no_references: &'static str,
+    pub lsp_references_text: &'static str,
+    pub lsp_definitions_text: &'static str,
+    pub lsp_cannot_rename: &'static str,
+    pub lsp_rename_title: &'static str,
+    pub lsp_renamed_text: &'static str,
+    pub lsp_symbols_in_file: &'static str,
+    pub lsp_symbols_in_workspace: &'static str,
+    pub command_reveal_definition: &'static str,
+    pub command_go_to_implementation: &'static str,
+    pub command_go_to_type_definition: &'static str,
+    pub command_go_to_references: &'static str,
+    pub command_rename_symbol: &'static str,
+    pub command_symbol_in_file: &'static str,
+    pub command_symbol_in_workspace: &'static str,
 }
 
 impl Strings {
@@ -387,6 +404,13 @@ impl Strings {
             "keel.restartLanguageServers" => self.command_restart_language_servers,
             "editor.action.marker.nextInFiles" => self.command_next_problem,
             "editor.action.triggerParameterHints" => self.command_trigger_parameter_hints,
+            "editor.action.revealDefinition" => self.command_reveal_definition,
+            "editor.action.goToImplementation" => self.command_go_to_implementation,
+            "editor.action.goToTypeDefinition" => self.command_go_to_type_definition,
+            "editor.action.goToReferences" => self.command_go_to_references,
+            "editor.action.rename" => self.command_rename_symbol,
+            "workbench.action.gotoSymbol" => self.command_symbol_in_file,
+            "workbench.action.showAllSymbols" => self.command_symbol_in_workspace,
             "editor.action.triggerSuggest" => self.command_trigger_suggest,
             "editor.action.marker.prevInFiles" => self.command_previous_problem,
             "git.pull" => self.command_git_pull,
@@ -555,6 +579,22 @@ impl Strings {
 
     pub fn trash_question(&self, name: &str) -> String {
         self.trash_question.replace("{name}", name)
+    }
+
+    pub fn lsp_references_title(&self, count: usize) -> String {
+        self.lsp_references_text
+            .replace("{count}", &count.to_string())
+    }
+
+    pub fn lsp_definitions_title(&self, count: usize) -> String {
+        self.lsp_definitions_text
+            .replace("{count}", &count.to_string())
+    }
+
+    pub fn lsp_renamed(&self, edits: usize, files: usize) -> String {
+        self.lsp_renamed_text
+            .replace("{edits}", &edits.to_string())
+            .replace("{files}", &files.to_string())
     }
 
     pub fn lsp_installing(&self, name: &str) -> String {
@@ -892,6 +932,23 @@ pub const ITALIAN: Strings = Strings {
     command_previous_problem: "Vai al problema precedente",
     command_trigger_parameter_hints: "Mostra i parametri",
     command_trigger_suggest: "Mostra i suggerimenti",
+    lsp_not_supported: "Nessun language server sa farlo per questo file.",
+    lsp_no_definition: "Nessuna definizione trovata",
+    lsp_no_references: "Nessun riferimento trovato",
+    lsp_references_text: "{count} riferimenti",
+    lsp_definitions_text: "{count} definizioni",
+    lsp_cannot_rename: "Qui non c'è niente da rinominare.",
+    lsp_rename_title: "Rinomina il simbolo",
+    lsp_renamed_text: "{edits} modifiche in {files} file",
+    lsp_symbols_in_file: "Vai a un simbolo del file",
+    lsp_symbols_in_workspace: "Vai a un simbolo del progetto",
+    command_reveal_definition: "Vai alla definizione",
+    command_go_to_implementation: "Vai alle implementazioni",
+    command_go_to_type_definition: "Vai alla definizione del tipo",
+    command_go_to_references: "Vai ai riferimenti",
+    command_rename_symbol: "Rinomina il simbolo",
+    command_symbol_in_file: "Vai al simbolo nel file",
+    command_symbol_in_workspace: "Vai al simbolo nel progetto",
 };
 
 pub const ENGLISH: Strings = Strings {
@@ -1191,6 +1248,23 @@ pub const ENGLISH: Strings = Strings {
     command_previous_problem: "Go to Previous Problem",
     command_trigger_parameter_hints: "Trigger Parameter Hints",
     command_trigger_suggest: "Trigger Suggest",
+    lsp_not_supported: "No language server can do this for this file.",
+    lsp_no_definition: "No definition found",
+    lsp_no_references: "No references found",
+    lsp_references_text: "{count} references",
+    lsp_definitions_text: "{count} definitions",
+    lsp_cannot_rename: "Nothing to rename here.",
+    lsp_rename_title: "Rename Symbol",
+    lsp_renamed_text: "{edits} edits in {files} files",
+    lsp_symbols_in_file: "Go to a symbol in the file",
+    lsp_symbols_in_workspace: "Go to a symbol in the project",
+    command_reveal_definition: "Go to Definition",
+    command_go_to_implementation: "Go to Implementations",
+    command_go_to_type_definition: "Go to Type Definition",
+    command_go_to_references: "Go to References",
+    command_rename_symbol: "Rename Symbol",
+    command_symbol_in_file: "Go to Symbol in Editor",
+    command_symbol_in_workspace: "Go to Symbol in Workspace",
 };
 
 #[cfg(test)]

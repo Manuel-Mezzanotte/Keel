@@ -31,6 +31,10 @@ use crate::workbench_window::{
     OpenClaudeCodeInPanel, RenameTerminal, RunNpmScript, SplitTerminal, TERMINAL_CONTEXT,
     ToggleMaximizedPanel,
 };
+use crate::workbench_window::{
+    GoToImplementation, GoToReferences, GoToSymbolInFile, GoToSymbolInWorkspace,
+    GoToTypeDefinition, RenameSymbol, RevealDefinition,
+};
 use crate::workbench_window::{GoToLine, QuickOpen};
 use crate::workbench_window::{NextChange, PreviousChange, RevertChange, StageChange};
 use crate::workbench_window::{
@@ -240,6 +244,48 @@ pub const COMMANDS: &[KeelCommand] = &[
         action: || Box::new(TriggerParameterHints),
         default_key: Some("cmd+shift+space"),
         context: Some(EDITOR_CONTEXT),
+    },
+    KeelCommand {
+        id: "editor.action.revealDefinition",
+        action: || Box::new(RevealDefinition),
+        default_key: Some("f12"),
+        context: Some(EDITOR_CONTEXT),
+    },
+    KeelCommand {
+        id: "editor.action.goToImplementation",
+        action: || Box::new(GoToImplementation),
+        default_key: Some("cmd+f12"),
+        context: Some(EDITOR_CONTEXT),
+    },
+    KeelCommand {
+        id: "editor.action.goToTypeDefinition",
+        action: || Box::new(GoToTypeDefinition),
+        default_key: None,
+        context: Some(EDITOR_CONTEXT),
+    },
+    KeelCommand {
+        id: "editor.action.goToReferences",
+        action: || Box::new(GoToReferences),
+        default_key: Some("shift+f12"),
+        context: Some(EDITOR_CONTEXT),
+    },
+    KeelCommand {
+        id: "editor.action.rename",
+        action: || Box::new(RenameSymbol),
+        default_key: Some("f2"),
+        context: Some(EDITOR_CONTEXT),
+    },
+    KeelCommand {
+        id: "workbench.action.gotoSymbol",
+        action: || Box::new(GoToSymbolInFile),
+        default_key: Some("cmd+shift+o"),
+        context: None,
+    },
+    KeelCommand {
+        id: "workbench.action.showAllSymbols",
+        action: || Box::new(GoToSymbolInWorkspace),
+        default_key: Some("cmd+t"),
+        context: None,
     },
     KeelCommand {
         id: "editor.action.marker.nextInFiles",
@@ -804,7 +850,7 @@ mod tests {
         let (bindings, warnings) =
             read_user_bindings(Path::new("/nonexistent/keel/keybindings.json"));
         assert!(bindings.is_empty() && warnings.is_empty());
-        assert_eq!(keel_bindings(&[]).len(), 57);
+        assert_eq!(keel_bindings(&[]).len(), 63);
     }
 
     #[test]

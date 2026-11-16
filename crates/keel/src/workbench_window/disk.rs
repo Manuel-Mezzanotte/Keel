@@ -58,6 +58,8 @@ impl Workbench {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
+        // Before the file list is refreshed, to tell new files apart.
+        self.watched_files_changed(paths);
         let head = paths.iter().any(|path| path.ends_with(".git/HEAD"));
         if head && self.project.refresh_branch() {
             cx.notify();

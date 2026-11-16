@@ -882,10 +882,29 @@ Con albero, schede, ricerca dei file e controllo della cartella, Keel è cresciu
 | 6.2 | Motore LSP (crate `lsp`): processo, messaggi, documenti aperti, richieste del server, riavvio dopo un crash, registro nell'Output; trova o installa i server | fatta |
 | 6.3 | Errori e avvisi: sottolineature, pannello Problemi, numeri nella barra di stato, F8 per passare al successivo | fatta |
 | 6.4 | Scrivere: completamenti con snippet, info al passaggio del mouse, firma delle funzioni, snippet nel formato di VS Code | fatta |
-| 6.5 | Navigare: definizione, implementazione e tipo, riferimenti, rinomina, struttura del file (Cmd+Maiusc+O), simboli del progetto (Cmd+T) | da fare |
+| 6.5 | Navigare: definizione, implementazione e tipo, riferimenti, rinomina, struttura del file (Cmd+Maiusc+O), simboli del progetto (Cmd+T) | fatta |
 | 6.6 | Correggere e formattare: azioni rapide (Cmd+.), formattazione anche al salvataggio, Prettier del progetto, correzioni di ESLint | da fare |
 | 6.7 | I server: TypeScript (`vtsls`), HTML, CSS, JSON, ESLint, Emmet, Tailwind, Prisma, Markdown, YAML, TOML e `rust-analyzer`; prove sui due gestionali e su Keel | da fare |
 | 6.8 | Misure e resoconto | da fare |
+
+**Note sulla 6.5**
+- **Vai alla definizione:**
+  - F12, oppure Cmd+clic sul nome: Cmd sottolinea il nome sotto il mouse, come in VS Code;
+  - si apre anche un altro file, già sul punto giusto;
+  - se le definizioni sono più di una, compare un elenco da cui scegliere.
+- **Altri salti:**
+  - Cmd+F12 va alle implementazioni;
+  - «Vai alla definizione del tipo» è nella tavolozza.
+- **Riferimenti (Maiusc+F12):** un elenco con la riga di codice e `file:riga` di ciascun riferimento. Si filtra scrivendo, Invio apre il punto. VS Code li mostra in un riquadro dentro l'editor; per ora Keel usa l'elenco.
+- **Rinomina (F2):**
+  - chiede il nuovo nome con quello attuale già selezionato;
+  - cambia tutti i file del progetto;
+  - i file aperti cambiano nell'editor, dove Cmd+Z torna indietro; quelli chiusi cambiano sul disco;
+  - la barra di stato dice quante modifiche in quanti file.
+- **Struttura del file (Cmd+Maiusc+O):** l'elenco dei simboli del file, in ordine e rientrati come sono annidati, con il tipo (funzione, classe…).
+- **Simboli del progetto (Cmd+T):** si cercano nel server mentre scrivi, con il tipo e il file.
+- **Modifiche chieste dai server:** alcune azioni fanno modificare al server altri file, oppure creare, spostare o eliminare file (eliminati vuol dire nel Cestino). Keel le applica tutte.
+- **I server sanno cosa cambia sul disco.** Quando un file cambia fuori dall'editor (un `git checkout`, un file scritto da Claude Code, una rinomina su file chiusi), Keel avvisa i server che lo hanno chiesto. Così TypeScript non lavora su versioni vecchie.
 
 **Note sulla 6.4**
 - **Completamenti** dai server, dalle estensioni e dagli snippet, in un solo menu:

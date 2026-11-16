@@ -142,6 +142,78 @@ pub fn show_with(
     receiver
 }
 
+/// Fetches the entries for what was typed, such as the project's symbols
+/// from a language server.
+pub type Fetch = Rc<dyn Fn(String, &mut App) -> gpui::Task<Vec<PickItem>>>;
+
+/// Opens a list whose entries come from `fetch` as the user types; the
+/// receiver gets the chosen entry itself.
+pub fn show_dynamic(
+    placeholder: Option<String>,
+    fetch: Fetch,
+    window: &mut Window,
+    cx: &mut App,
+) -> oneshot::Receiver<Option<PickItem>> {
+    let (sender, receiver) = oneshot::channel();
+    let sender = Rc::new(RefCell::new(Some(sender)));
+    let finish = Rc::new(move |choice: Option<PickItem>| {
+        if let Some(sender) = sender.borrow_mut().take() {
+            let _ = sender.send(choice);
+        }
+    });
+    let state = cx.new(|cx| CommandState::new(window, cx));
+    let first_render = Cell::new(true);
+    let items: Rc<RefCell<Vec<PickItem>>> = Rc::default();
+    // The latest request; an older one still running is dropped with it.
+    let pending: Rc<RefCell<Option<gpui::Task<()>>>> = Rc::default();
+    let handle = window.window_handle();
+    let request = {
+        let items = items.clone();
+        let pending = pending.clone();
+        Rc::new(move |typed: String, cx: &mut App| {
+            let task = fetch(typed, cx);
+            let items = items.clone();
+            let task = cx.spawn(async move |cx| {
+                let found = task.await;
+                *items.borrow_mut() = found;
+                handle.update(cx, |_, window, _| window.refresh()).ok();
+            });
+            *pending.borrow_mut() = Some(task);
+        })
+    };
+    request(String::new(), cx);
+
+    window.open_dialog(cx, move |dialog, window, cx| {
+        if first_render.replace(false) {
+            state.update(cx, |state, cx| state.focus(window, cx));
+        }
+        let confirm = finish.clone();
+        let cancel = finish.clone();
+        let close = finish.clone();
+        let chosen_items = items.clone();
+        let request = request.clone();
+        let rows: Vec<CommandItem> = items.borrow().iter().take(SHOWN).map(row).collect();
+        let command = Command::new(&state)
+            .filterable(false)
+            .items(rows)
+            .placeholder(placeholder.clone().unwrap_or_default())
+            .on_query(move |typed, _, cx| request(typed.to_owned(), cx))
+            .on_confirm(move |index, window, cx| {
+                let chosen = chosen_items.borrow().get(index.row).cloned();
+                if chosen.is_some() {
+                    confirm(chosen);
+                }
+                window.close_dialog(cx);
+            })
+            .on_cancel(move |_, _| cancel(None));
+        dialog
+            .w(px(600.))
+            .on_close(move |_, _, _| close(None))
+            .child(command)
+    });
+    receiver
+}
+
 fn row(item: &PickItem) -> CommandItem {
     let entry = CommandItem::new()
         .label(item.label.clone())

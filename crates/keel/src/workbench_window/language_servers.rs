@@ -80,6 +80,64 @@ pub(super) struct RunningServer {
     generation: u64,
     /// The documents it was told about with `didOpen`.
     open: RefCell<HashSet<String>>,
+    /// The files it asked to hear about when they change on disk.
+    watchers: RefCell<Vec<FileWatcher>>,
+}
+
+/// A `workspace/didChangeWatchedFiles` registration: a pattern and the
+/// kinds of change it wants (1 created, 2 changed, 4 deleted).
+struct FileWatcher {
+    registration: String,
+    pattern: globset::GlobMatcher,
+    /// For a relative pattern, the folder it starts from.
+    base: Option<PathBuf>,
+    kinds: u64,
+}
+
+impl FileWatcher {
+    fn matches(&self, path: &Path, kind: u64) -> bool {
+        if self.kinds & kind == 0 {
+            return false;
+        }
+        match &self.base {
+            Some(base) => path
+                .strip_prefix(base)
+                .is_ok_and(|rest| self.pattern.is_match(rest)),
+            None => self.pattern.is_match(path),
+        }
+    }
+}
+
+/// Reads the watchers of a `client/registerCapability` registration.
+fn file_watchers(registration: &Value) -> Vec<FileWatcher> {
+    let id = registration["id"].as_str().unwrap_or_default().to_owned();
+    registration["registerOptions"]["watchers"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .filter_map(|watcher| {
+            let (pattern, base) = match &watcher["globPattern"] {
+                Value::String(pattern) => (pattern.clone(), None),
+                relative => {
+                    let base = match &relative["baseUri"] {
+                        Value::String(uri) => Uri::parse(uri)?.file_path()?,
+                        folder => Uri::parse(folder["uri"].as_str()?)?.file_path()?,
+                    };
+                    (relative["pattern"].as_str()?.to_owned(), Some(base))
+                }
+            };
+            let glob = globset::GlobBuilder::new(&pattern)
+                .literal_separator(true)
+                .build()
+                .ok()?;
+            Some(FileWatcher {
+                registration: id.clone(),
+                pattern: glob.compile_matcher(),
+                base,
+                kinds: watcher["kind"].as_u64().unwrap_or(7),
+            })
+        })
+        .collect()
 }
 
 impl RunningServer {
@@ -247,12 +305,12 @@ impl LanguageState {
 }
 
 impl Languages {
-    pub(super) fn new(cx: &mut Context<Workbench>) -> Self {
+    pub(super) fn new(window: &mut Window, cx: &mut Context<Workbench>) -> Self {
         let (sender, mut receiver) = unbounded::<LspInput>();
-        let driver = cx.spawn(async move |this, cx| {
+        let driver = cx.spawn_in(window, async move |this, cx| {
             while let Some(input) = receiver.next().await {
                 if this
-                    .update(cx, |this, cx| this.lsp_input(input, cx))
+                    .update_in(cx, |this, window, cx| this.lsp_input(input, window, cx))
                     .is_err()
                 {
                     break;
@@ -348,7 +406,12 @@ impl Languages {
 }
 
 impl Workbench {
-    pub(super) fn lsp_input(&mut self, input: LspInput, cx: &mut Context<Self>) {
+    pub(super) fn lsp_input(
+        &mut self,
+        input: LspInput,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
         match input {
             LspInput::Opened { uri, language_id } => {
                 if !self.languages.state.documents.borrow().contains_key(&uri) {
@@ -375,7 +438,7 @@ impl Workbench {
                 id,
                 generation,
                 event,
-            } => self.server_event(id, generation, event, cx),
+            } => self.server_event(id, generation, event, window, cx),
         }
     }
 
@@ -542,6 +605,7 @@ impl Workbench {
             server,
             generation,
             open: RefCell::new(HashSet::new()),
+            watchers: RefCell::new(Vec::new()),
         });
         self.languages
             .servers
@@ -599,6 +663,7 @@ impl Workbench {
         id: &'static str,
         generation: u64,
         event: ServerEvent,
+        window: &mut Window,
         cx: &mut Context<Self>,
     ) {
         let current = match self.languages.servers.get(id) {
@@ -621,7 +686,7 @@ impl Workbench {
             }
             ServerEvent::Request { id, method, params } => {
                 let Some(running) = current else { return };
-                self.server_request(&running, id, &method, params, cx);
+                self.server_request(&running, id, &method, params, window, cx);
             }
             ServerEvent::Stderr(line) => {
                 self.log_to(OutputChannel::Languages, format!("[{}] {line}", spec.name));
@@ -665,6 +730,33 @@ impl Workbench {
                 if method == "window/showMessage" && kind <= 2 {
                     self.status_message = Some(format!("{}: {message}", spec.name));
                     cx.notify();
+                }
+            }
+            "client/registerCapability" => {
+                let Some(running) = self.languages.state.running.borrow().get(spec.id).cloned()
+                else {
+                    return;
+                };
+                for registration in params["registrations"].as_array().into_iter().flatten() {
+                    if registration["method"] == "workspace/didChangeWatchedFiles" {
+                        running
+                            .watchers
+                            .borrow_mut()
+                            .extend(file_watchers(registration));
+                    }
+                }
+            }
+            "client/unregisterCapability" => {
+                let Some(running) = self.languages.state.running.borrow().get(spec.id).cloned()
+                else {
+                    return;
+                };
+                for gone in params["unregisterations"].as_array().into_iter().flatten() {
+                    let id = gone["id"].as_str().unwrap_or_default();
+                    running
+                        .watchers
+                        .borrow_mut()
+                        .retain(|watcher| watcher.registration != id);
                 }
             }
             "$/progress" => {
@@ -712,12 +804,34 @@ impl Workbench {
         id: Value,
         method: &str,
         params: Value,
-        _cx: &mut Context<Self>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
     ) {
         let answer = match method {
-            // Edits from the server arrive with the rename and quick fix
-            // work of later sub-phases.
-            "workspace/applyEdit" => Ok(json!({ "applied": false })),
+            // Edits a server makes itself, such as after a quick fix.
+            "workspace/applyEdit" => {
+                match serde_json::from_value::<lsp_types::WorkspaceEdit>(params["edit"].clone()) {
+                    Ok(edit) => {
+                        self.apply_workspace_edit(&edit, window, cx);
+                        Ok(json!({ "applied": true }))
+                    }
+                    Err(error) => {
+                        Ok(json!({ "applied": false, "failureReason": error.to_string() }))
+                    }
+                }
+            }
+            // The server wants a file shown, such as rust-analyzer's.
+            "window/showDocument" => {
+                let uri = normalize_uri(params["uri"].as_str().unwrap_or_default());
+                let range = serde_json::from_value::<lsp_types::Range>(params["selection"].clone())
+                    .unwrap_or_default();
+                if params["external"].as_bool() == Some(true) {
+                    cx.open_url(&uri);
+                } else {
+                    self.open_lsp_range(&uri, range, OpenAs::Normal, window, cx);
+                }
+                Ok(json!({ "success": true }))
+            }
             "window/showMessageRequest" => {
                 let message = params["message"].as_str().unwrap_or_default();
                 self.log_to(
@@ -793,6 +907,70 @@ impl Workbench {
             .map(|(uri, _)| uri.clone());
         if let Some(root) = uri.and_then(|uri| self.server_root(&uri)) {
             self.start_server(spec, root, cx);
+        }
+    }
+
+    /// Tells the servers that asked about files changed on disk: created
+    /// when Quick Open did not list them yet, deleted when they are gone.
+    pub(super) fn watched_files_changed(&self, paths: &[PathBuf]) {
+        let running: Vec<Rc<RunningServer>> = self
+            .languages
+            .state
+            .running
+            .borrow()
+            .values()
+            .cloned()
+            .collect();
+        if running
+            .iter()
+            .all(|server| server.watchers.borrow().is_empty())
+        {
+            return;
+        }
+        let known = |path: &Path| {
+            let (Some(root), Some(index)) = (&self.project.root, &self.file_index) else {
+                return true;
+            };
+            path.strip_prefix(root)
+                .ok()
+                .and_then(|relative| relative.to_str())
+                .is_some_and(|relative| index.iter().any(|file| file == relative))
+        };
+        let changes: Vec<(PathBuf, u64)> = paths
+            .iter()
+            .filter(|path| !path.components().any(|part| part.as_os_str() == ".git"))
+            .map(|path| {
+                let kind = if !path.exists() {
+                    4
+                } else if path.is_file() && !known(path) {
+                    1
+                } else {
+                    2
+                };
+                (path.clone(), kind)
+            })
+            .collect();
+        for server in running {
+            let watchers = server.watchers.borrow();
+            let wanted: Vec<Value> = changes
+                .iter()
+                .filter(|(path, kind)| watchers.iter().any(|watcher| watcher.matches(path, *kind)))
+                .map(|(path, kind)| {
+                    // LSP numbers the kinds 1, 2, 3.
+                    let kind = match kind {
+                        1 => 1,
+                        2 => 2,
+                        _ => 3,
+                    };
+                    json!({ "uri": Uri::file(path).to_string(), "type": kind })
+                })
+                .collect();
+            if !wanted.is_empty() {
+                server.server.notify_raw(
+                    "workspace/didChangeWatchedFiles",
+                    json!({ "changes": wanted }),
+                );
+            }
         }
     }
 
@@ -1018,6 +1196,26 @@ mod tests {
                     .is_some_and(|(generation, _)| generation != first)
             })
         });
+    }
+
+    #[test]
+    fn file_watchers_match_their_patterns_and_kinds() {
+        let registration = json!({
+            "id": "watch-1",
+            "method": "workspace/didChangeWatchedFiles",
+            "registerOptions": { "watchers": [
+                { "globPattern": "**/*.{ts,tsx}" },
+                { "globPattern": { "baseUri": "file:///progetto", "pattern": "prisma/*.prisma" }, "kind": 4 },
+            ] },
+        });
+        let watchers = file_watchers(&registration);
+        assert_eq!(watchers.len(), 2);
+        assert!(watchers[0].matches(Path::new("/progetto/src/app/page.tsx"), 2));
+        assert!(!watchers[0].matches(Path::new("/progetto/README.md"), 2));
+        // The second one only wants deletions, under its folder.
+        assert!(watchers[1].matches(Path::new("/progetto/prisma/schema.prisma"), 4));
+        assert!(!watchers[1].matches(Path::new("/progetto/prisma/schema.prisma"), 2));
+        assert!(!watchers[1].matches(Path::new("/altro/prisma/schema.prisma"), 4));
     }
 
     #[test]
