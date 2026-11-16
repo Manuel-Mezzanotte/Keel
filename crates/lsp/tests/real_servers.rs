@@ -7,6 +7,8 @@
 //! ```
 //! `KEEL_TEST_PROJECT` picks the project and `KEEL_TEST_FILE` the file to
 //! open in it; otherwise a small sample is written for each server.
+//! `KEEL_TEST_AT` names text in the file: completion is asked right after
+//! it and hover on it.
 
 use std::path::{Path, PathBuf};
 use std::sync::{Mutex, mpsc};
@@ -94,14 +96,28 @@ fn real_servers_start_and_report() {
             let _ = sender.lock().unwrap().send(event);
         })
         .unwrap();
-        server.set_settings(servers::default_settings(spec));
+        server.set_settings(servers::settings_for(spec, &json!({}), &root));
         let start = Instant::now();
-        block_on(server.initialize(&root, None)).unwrap();
+        block_on(server.initialize(&root, servers::initialization_options(spec))).unwrap();
         let initialized = start.elapsed();
-        let text = std::fs::read_to_string(&path).unwrap();
+        // What VS Code sends once a server registers for settings changes.
+        server.notify_raw(
+            "workspace/didChangeConfiguration",
+            json!({ "settings": servers::settings_for(spec, &json!({}), &root) }),
+        );
+        // `KEEL_TEST_APPEND` adds text in memory only, such as an error.
+        let mut text = std::fs::read_to_string(&path).unwrap();
+        if let Ok(extra) = std::env::var("KEEL_TEST_APPEND") {
+            text.push_str(&extra);
+        }
         let uri = workbench::uri::Uri::file(&path).to_string();
         server.notify::<DidOpenTextDocument>(DidOpenTextDocumentParams {
-            text_document: TextDocumentItem::new(uri.parse().unwrap(), language.into(), 1, text),
+            text_document: TextDocumentItem::new(
+                uri.parse().unwrap(),
+                language.into(),
+                1,
+                text.clone(),
+            ),
         });
         let deadline = Instant::now() + Duration::from_secs(120);
         let mut diagnostics: Option<Value> = None;
@@ -118,7 +134,27 @@ fn real_servers_start_and_report() {
                         }
                     }
                 }
+                // A pull server: ask for them.
+                Ok(ServerEvent::Notification { method, .. })
+                    if method == "workspace/diagnostic/refresh" =>
+                {
+                    let report = match block_on(server.request_raw(
+                        "textDocument/diagnostic",
+                        json!({ "textDocument": { "uri": uri } }),
+                    )) {
+                        Ok(report) => report,
+                        Err(error) => panic!("[{id}] pull: {error:#}"),
+                    };
+                    diagnostics = Some(json!({ "diagnostics": report["items"] }));
+                    break;
+                }
                 Ok(ServerEvent::Exited(code)) => panic!("[{id}] exited with {code:?}"),
+                Ok(event) if std::env::var("KEEL_TEST_VERBOSE").is_ok() => {
+                    println!(
+                        "    event: {}",
+                        format!("{event:?}").chars().take(300).collect::<String>()
+                    );
+                }
                 _ => {}
             }
         }
@@ -139,6 +175,80 @@ fn real_servers_start_and_report() {
                 diagnostic["range"]["start"], diagnostic["message"]
             );
         }
+        let at = std::env::var("KEEL_TEST_AT").ok().and_then(|needle| {
+            let offset = text.find(&needle)?;
+            Some((offset, offset + needle.len()))
+        });
+        let position = |offset: usize| {
+            let position = workbench::position::position_of(&text, offset);
+            json!({ "line": position.line, "character": position.character })
+        };
+        let document = json!({ "uri": uri });
+        let capabilities = server.capabilities().cloned().unwrap();
+        let timed = |what: &str, method: &str, params: Value| {
+            let started = Instant::now();
+            let result = block_on(server.request_raw(method, params));
+            let summary = match &result {
+                Ok(Value::Array(items)) => format!("{} items", items.len()),
+                Ok(Value::Object(object)) if object.contains_key("items") => {
+                    format!("{} items", object["items"].as_array().map_or(0, Vec::len))
+                }
+                Ok(Value::Null) => "nothing".to_owned(),
+                Ok(other) => other.to_string().chars().take(80).collect(),
+                Err(error) => format!("error: {error}"),
+            };
+            println!("    {what}: {summary} in {:?}", started.elapsed());
+        };
+        if let Some((start, end)) = at {
+            if capabilities.hover_provider.is_some() {
+                timed(
+                    "hover",
+                    "textDocument/hover",
+                    json!({ "textDocument": document, "position": position(start) }),
+                );
+            }
+            if capabilities.completion_provider.is_some() {
+                timed(
+                    "completion",
+                    "textDocument/completion",
+                    json!({ "textDocument": document, "position": position(end) }),
+                );
+                // Again, warm: what typing the next letter costs.
+                timed(
+                    "completion again",
+                    "textDocument/completion",
+                    json!({ "textDocument": document, "position": position(end) }),
+                );
+            }
+            if capabilities.definition_provider.is_some() {
+                timed(
+                    "definition",
+                    "textDocument/definition",
+                    json!({ "textDocument": document, "position": position(start) }),
+                );
+            }
+            if capabilities.references_provider.is_some() {
+                timed(
+                    "references",
+                    "textDocument/references",
+                    json!({ "textDocument": document, "position": position(start), "context": { "includeDeclaration": true } }),
+                );
+            }
+        }
+        if capabilities.document_symbol_provider.is_some() {
+            timed(
+                "symbols",
+                "textDocument/documentSymbol",
+                json!({ "textDocument": document }),
+            );
+        }
+        if capabilities.document_formatting_provider.is_some() {
+            timed(
+                "formatting",
+                "textDocument/formatting",
+                json!({ "textDocument": document, "options": { "tabSize": 2, "insertSpaces": true } }),
+            );
+        }
         block_on(server.shutdown());
     }
 }
@@ -148,6 +258,12 @@ fn lsp_language(path: &Path) -> &'static str {
         Some("ts") => "typescript",
         Some("tsx") => "typescriptreact",
         Some("rs") => "rust",
+        Some("css") => "css",
+        Some("prisma") => "prisma",
+        Some("json") => "json",
+        Some("md") => "markdown",
+        Some("yaml" | "yml") => "yaml",
+        Some("toml") => "toml",
         _ => "plaintext",
     }
 }

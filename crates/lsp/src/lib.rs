@@ -83,7 +83,8 @@ mod tests {
             json!({ "check": { "command": "clippy" }, "cargo": { "features": "all" } })
         );
         assert_eq!(section_of(&nested, Some("editor.tabSize")), json!(2));
-        assert_eq!(section_of(&nested, Some("eslint")), Value::Null);
+        assert_eq!(section_of(&nested, Some("eslint")), json!({}));
+        assert_eq!(section_of(&nested, Some("editor.fontSize")), Value::Null);
         assert!(nested.get("[typescript]").is_none());
     }
 }

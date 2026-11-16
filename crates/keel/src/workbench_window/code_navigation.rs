@@ -12,12 +12,11 @@ use gpui_component::{Sizable as _, WindowExt as _};
 use lsp::lsp_types::{
     self, DocumentChangeOperation, DocumentChanges, DocumentSymbolParams, DocumentSymbolResponse,
     GotoDefinitionParams, GotoDefinitionResponse, Location, LocationLink, OneOf,
-    PrepareRenameResponse, ReferenceContext, ReferenceParams, RenameParams, ResourceOp, SymbolKind,
-    TextDocumentIdentifier, TextDocumentPositionParams, TextEdit, WorkspaceEdit,
-    WorkspaceSymbolParams, WorkspaceSymbolResponse,
+    PrepareRenameResponse, RenameParams, ResourceOp, SymbolKind, TextDocumentIdentifier,
+    TextDocumentPositionParams, TextEdit, WorkspaceEdit, WorkspaceSymbolParams,
+    WorkspaceSymbolResponse,
     request::{
-        DocumentSymbolRequest, GotoDefinition, GotoImplementation, GotoTypeDefinition,
-        PrepareRenameRequest, References, Rename, WorkspaceSymbolRequest,
+        DocumentSymbolRequest, GotoDefinition, PrepareRenameRequest, Rename, WorkspaceSymbolRequest,
     },
 };
 
@@ -208,56 +207,50 @@ impl Workbench {
             return;
         };
         let at = TextDocumentPositionParams::new(document, position);
-        let server = &running.server;
-        let request: std::pin::Pin<Box<dyn std::future::Future<Output = Vec<Place>>>> = match target
-        {
-            Target::Definition => {
-                let request = server.request::<GotoDefinition>(GotoDefinitionParams {
-                    text_document_position_params: at,
-                    work_done_progress_params: Default::default(),
-                    partial_result_params: Default::default(),
-                });
-                Box::pin(async move { places_of(request.await.ok().flatten()) })
+        let (method, mut params) = match target {
+            Target::Definition => ("textDocument/definition", json!(at)),
+            Target::Implementation => ("textDocument/implementation", json!(at)),
+            Target::TypeDefinition => ("textDocument/typeDefinition", json!(at)),
+            Target::References => ("textDocument/references", json!(at)),
+        };
+        if target == Target::References {
+            params["context"] = json!({ "includeDeclaration": true });
+        }
+        let executor = cx.background_executor().clone();
+        cx.spawn_in(window, async move |this, cx| {
+            // While a server is still indexing it may answer "content
+            // modified": VS Code asks again, and so does Keel.
+            let mut answer = None;
+            for attempt in 0..4 {
+                match running.server.request_raw(method, params.clone()).await {
+                    Ok(value) => {
+                        answer = Some(value);
+                        break;
+                    }
+                    Err(error)
+                        if attempt < 3
+                            && error
+                                .downcast_ref::<lsp::ResponseError>()
+                                .is_some_and(lsp::ResponseError::is_cancellation) =>
+                    {
+                        executor.timer(Duration::from_millis(500)).await;
+                    }
+                    Err(_) => break,
+                }
             }
-            Target::Implementation => {
-                let request = server.request::<GotoImplementation>(GotoDefinitionParams {
-                    text_document_position_params: at,
-                    work_done_progress_params: Default::default(),
-                    partial_result_params: Default::default(),
-                });
-                Box::pin(async move { places_of(request.await.ok().flatten()) })
-            }
-            Target::TypeDefinition => {
-                let request = server.request::<GotoTypeDefinition>(GotoDefinitionParams {
-                    text_document_position_params: at,
-                    work_done_progress_params: Default::default(),
-                    partial_result_params: Default::default(),
-                });
-                Box::pin(async move { places_of(request.await.ok().flatten()) })
-            }
-            Target::References => {
-                let request = server.request::<References>(ReferenceParams {
-                    text_document_position: at,
-                    work_done_progress_params: Default::default(),
-                    partial_result_params: Default::default(),
-                    context: ReferenceContext {
-                        include_declaration: true,
-                    },
-                });
-                Box::pin(async move {
-                    request
-                        .await
+            let places = match (target, answer) {
+                (Target::References, Some(value)) => {
+                    serde_json::from_value::<Option<Vec<Location>>>(value)
                         .ok()
                         .flatten()
                         .unwrap_or_default()
                         .into_iter()
                         .map(place)
                         .collect()
-                })
-            }
-        };
-        cx.spawn_in(window, async move |this, cx| {
-            let places = request.await;
+                }
+                (_, Some(value)) => places_of(serde_json::from_value(value).ok().flatten()),
+                (_, None) => Vec::new(),
+            };
             this.update_in(cx, |this, window, cx| {
                 this.show_places(target, places, window, cx)
             })

@@ -1876,6 +1876,9 @@ impl Workbench {
                     .update_user(&key, value)
                     .map(|_| Value::Null)
                     .map_err(|error| error.to_string());
+                if result.is_ok() {
+                    self.language_settings_changed();
+                }
                 self.reply(id, result);
             }
             "env/readClipboard" => {

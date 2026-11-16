@@ -884,8 +884,36 @@ Con albero, schede, ricerca dei file e controllo della cartella, Keel è cresciu
 | 6.4 | Scrivere: completamenti con snippet, info al passaggio del mouse, firma delle funzioni, snippet nel formato di VS Code | fatta |
 | 6.5 | Navigare: definizione, implementazione e tipo, riferimenti, rinomina, struttura del file (Cmd+Maiusc+O), simboli del progetto (Cmd+T) | fatta |
 | 6.6 | Correggere e formattare: azioni rapide (Cmd+.), formattazione anche al salvataggio, Prettier del progetto, correzioni di ESLint | fatta |
-| 6.7 | I server: TypeScript (`vtsls`), HTML, CSS, JSON, ESLint, Emmet, Tailwind, Prisma, Markdown, YAML, TOML e `rust-analyzer`; prove sui due gestionali e su Keel | da fare |
+| 6.7 | I server: TypeScript (`vtsls`), HTML, CSS, JSON, ESLint, Emmet, Tailwind, Prisma, Markdown, YAML, TOML e `rust-analyzer`; prove sui due gestionali e su Keel | fatta |
 | 6.8 | Misure e resoconto | da fare |
+
+**Note sulla 6.7**
+- **Ogni server è stato provato su un file vero.** In memoria, senza toccare il disco, ho aggiunto un errore e confrontato con gli strumenti a riga di comando dei progetti (tempi della prima volta, con il server appena partito):
+
+  | Progetto e file | Server | Primo errore | Uguale a |
+  |---|---|---|---|
+  | Hospitality, `sidebar.tsx` | TypeScript | 2,5 s | `tsc` |
+  | Hospitality, `sidebar.tsx` | ESLint | 1,7 s | `eslint` |
+  | Hospitality, `sidebar.tsx` | Tailwind | 2,3 s | suggerimenti sulle classi |
+  | Hospitality, `schema.prisma` | Prisma | 0,7 s | — |
+  | Hospitality, `globals.css` | CSS | 0,2 s | — |
+  | Hospitality, `package.json` | JSON | 0,4 s | — |
+  | Hospitality, `compose.yaml` | YAML | 0,4 s | — |
+  | Salon, `brand.tsx` | TypeScript ed ESLint | 3,0 s e 1,5 s | `tsc` ed `eslint` |
+  | Keel, `Cargo.toml` | TOML | 0,5 s | — |
+  | Keel, `text.rs` | rust-analyzer | 5,7 s, mentre indicizza | `cargo check` |
+
+  Con il server già avviato le risposte arrivano in millisecondi: info 8 ms, definizione 2 ms, struttura del file 12 ms, formattazione 14 ms. Un completamento di TypeScript costa circa 140 ms; il primo di un file circa 0,9 s.
+- **Cosa ho dovuto sistemare perché funzionassero come in VS Code:**
+  - **ESLint** vuole le sue impostazioni nella forma dell'estensione di VS Code. Prima di controllare aspetta il messaggio «impostazioni cambiate», e poi vuole che sia l'editor a chiedere gli errori («pull»). Keel ora fa entrambe le cose, anche per gli altri server che le usano.
+  - **CSS, HTML e JSON** formattano solo se l'editor lo chiede all'avvio; JSON scarica da solo gli schemi di `package.json`, `tsconfig.json` e degli altri file noti.
+  - **Prisma** si bloccava se le sue impostazioni mancavano: ora ha le sue predefinite, e ogni sezione mai impostata arriva come oggetto vuoto, come in VS Code.
+  - **TOML** ci metteva 10 secondi ad avviarsi cercando un catalogo di schemi che non risponde; ora usa quello di SchemaStore e parte in 0,16 s.
+  - **TypeScript** con la parola ancora vuota mandava 15.000 completamenti in un secondo; ora ne manda al massimo 1.000, già filtrati.
+  - **rust-analyzer**, mentre indicizza, risponde «contenuto cambiato»: Keel riprova da solo, come VS Code.
+  - **Nei progetti con Tailwind** il server CSS non segnala le regole `@theme`, `@apply` e simili, che non sono CSS standard.
+- **Più di Cursor:** in Cursor non hai le estensioni di ESLint, Tailwind e Prisma, quindi lì vedi solo gli errori di TypeScript. Keel avvia anche quei server, perché i progetti li usano. Si spengono con `"keel.languageServers.disabled": ["eslint", "tailwindcss"]`.
+- **Emmet** funziona in HTML, CSS e JSX. **Markdown** dà la struttura del file, i link e i riferimenti; non segnala errori se i link sono giusti.
 
 **Note sulla 6.6**
 - **Azioni rapide (Cmd+.)**, anche dal menu del tasto destro:

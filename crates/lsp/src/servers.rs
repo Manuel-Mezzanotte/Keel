@@ -290,7 +290,10 @@ pub fn default_settings(spec: &ServerSpec) -> Value {
             "vtsls": {
                 // The project's own TypeScript, as Cursor offers.
                 "autoUseWorkspaceTsdk": true,
-                "experimental": { "completion": { "enableServerSideFuzzyMatch": true } },
+                // The server filters what was typed and sends at most this
+                // many items: without a limit an empty word brings
+                // 15,000 of them, a second to send.
+                "experimental": { "completion": { "enableServerSideFuzzyMatch": true, "entriesLimit": 1000 } },
             },
             "typescript": { "updateImportsOnFileMove": { "enabled": "always" } },
             "javascript": { "updateImportsOnFileMove": { "enabled": "always" } },
@@ -312,6 +315,70 @@ pub fn default_settings(spec: &ServerSpec) -> Value {
                 "format": { "enable": true },
                 "schemaDownload": { "enable": true },
                 "schemas": json_schemas(),
+            },
+        }),
+        // ESLint asks for its whole configuration with an empty section,
+        // so its settings are the root, shaped as the VS Code extension's.
+        "eslint" => json!({
+            "validate": "on",
+            "packageManager": "npm",
+            "useESLintClass": false,
+            "experimental": { "useFlatConfig": false },
+            "useFlatConfig": true,
+            "codeAction": {
+                "disableRuleComment": { "enable": true, "location": "separateLine", "commentStyle": "line" },
+                "showDocumentation": { "enable": true },
+            },
+            "codeActionOnSave": { "enable": false, "mode": "all" },
+            "format": false,
+            "quiet": false,
+            "onIgnoredFiles": "off",
+            "options": {},
+            "rulesCustomizations": [],
+            "run": "onType",
+            "problems": { "shortenToSingleLine": false },
+            "nodePath": null,
+            "workingDirectory": { "mode": "auto" },
+        }),
+        "tailwindcss" => json!({
+            "editor": { "tabSize": 2 },
+            "tailwindCSS": {
+                "emmetCompletions": false,
+                "classAttributes": ["class", "className", "ngClass", "class:list"],
+                "classFunctions": [],
+                "includeLanguages": {},
+                "files": { "exclude": ["**/.git/**", "**/node_modules/**", "**/.hg/**", "**/.svn/**"] },
+                "validate": true,
+                "showPixelEquivalents": true,
+                "rootFontSize": 16,
+                "colorDecorators": true,
+                "suggestions": true,
+                "hovers": true,
+                "codeActions": true,
+                "lint": {
+                    "cssConflict": "warning",
+                    "invalidApply": "error",
+                    "invalidScreen": "error",
+                    "invalidVariant": "error",
+                    "invalidConfigPath": "error",
+                    "invalidTailwindDirective": "error",
+                    "invalidSourceDirective": "error",
+                    "recommendedVariantOrder": "warning",
+                    "usedBlocklistedClass": "warning",
+                },
+                "experimental": { "classRegex": [] },
+            },
+        }),
+        "prisma" => json!({
+            "prisma": { "enableDiagnostics": true, "fileWatcher": false, "trace": { "server": "off" } },
+        }),
+        "taplo" => json!({
+            "evenBetterToml": {
+                "schema": {
+                    "enabled": true,
+                    "catalogs": ["https://www.schemastore.org/api/json/catalog.json"],
+                },
+                "formatter": {},
             },
         }),
         "yaml" => json!({
@@ -365,6 +432,8 @@ fn json_schemas() -> Value {
 /// replaced.
 pub fn merge_settings(base: &mut Value, overlay: &Value) {
     match (base, overlay) {
+        // Nothing to add: a missing section must not erase the defaults.
+        (_, Value::Null) => {}
         (Value::Object(base), Value::Object(overlay)) => {
             for (key, value) in overlay {
                 match base.get_mut(key) {
@@ -380,11 +449,47 @@ pub fn merge_settings(base: &mut Value, overlay: &Value) {
 }
 
 /// What `workspace/configuration` answers a server: its defaults with the
-/// user's settings (nested, see [`crate::nested_settings`]) on top.
-pub fn settings_for(spec: &ServerSpec, user: &Value) -> Value {
+/// user's settings (nested, see [`crate::nested_settings`]) on top. For
+/// ESLint only its own section counts, at the root, plus the project folder
+/// it wants to know.
+pub fn settings_for(spec: &ServerSpec, user: &Value, root: &Path) -> Value {
     let mut settings = default_settings(spec);
+    if spec.id == "eslint" {
+        merge_settings(&mut settings, &user["eslint"]);
+        settings["workspaceFolder"] = json!({
+            "uri": workbench::uri::Uri::file(root).to_string(),
+            "name": root.file_name().map(|name| name.to_string_lossy().into_owned()).unwrap_or_default(),
+        });
+        return settings;
+    }
+    // Tailwind's at-rules (`@theme`, `@apply`...) are not CSS: in its
+    // projects the CSS server leaves them alone, as most set up VS Code.
+    if matches!(spec.id, "css" | "html")
+        && self::spec("tailwindcss").is_some_and(|tailwind| tailwind.wanted_in(root))
+    {
+        for language in ["css", "scss", "less"] {
+            settings[language]["lint"]["unknownAtRules"] = json!("ignore");
+        }
+    }
     merge_settings(&mut settings, user);
     settings
+}
+
+/// What a server gets in `initializationOptions`, as VS Code's extensions
+/// send them.
+pub fn initialization_options(spec: &ServerSpec) -> Option<Value> {
+    match spec.id {
+        // Without this the HTML, CSS and JSON servers do not format.
+        "html" | "css" => Some(json!({ "provideFormatter": true })),
+        // The JSON server downloads schemas itself instead of asking.
+        "json" => Some(json!({
+            "provideFormatter": true,
+            "handledSchemaProtocols": ["file", "http", "https"],
+        })),
+        "emmet" => Some(json!({ "showSuggestionsAsSnippets": true })),
+        "taplo" => Some(json!({ "configurationSection": "evenBetterToml" })),
+        _ => None,
+    }
 }
 
 /// The servers for a file of `language_id` in the project at `root`.
@@ -760,11 +865,29 @@ mod tests {
     #[test]
     fn user_settings_go_over_the_defaults() {
         let user = json!({ "css": { "validate": false }, "editor": { "tabSize": 2 } });
-        let settings = settings_for(spec("css").unwrap(), &user);
+        let settings = settings_for(spec("css").unwrap(), &user, Path::new("/progetto"));
         assert_eq!(settings["css"]["validate"], json!(false));
         assert_eq!(settings["css"]["hover"]["documentation"], json!(true));
         assert_eq!(settings["scss"]["validate"], json!(true));
         assert_eq!(settings["editor"]["tabSize"], json!(2));
+    }
+
+    #[test]
+    fn eslint_gets_its_own_section_at_the_root() {
+        let user = json!({ "eslint": { "run": "onSave" }, "editor": { "tabSize": 2 } });
+        let settings = settings_for(
+            spec("eslint").unwrap(),
+            &user,
+            Path::new("/Users/m/Hospitality"),
+        );
+        assert_eq!(settings["run"], json!("onSave"));
+        assert_eq!(settings["validate"], json!("on"));
+        assert_eq!(settings["workspaceFolder"]["name"], json!("Hospitality"));
+        assert!(settings.get("editor").is_none());
+        // Without any ESLint setting, the defaults stay whole.
+        let settings = settings_for(spec("eslint").unwrap(), &json!({}), Path::new("/p"));
+        assert_eq!(settings["nodePath"], Value::Null);
+        assert_eq!(settings["run"], json!("onType"));
     }
 
     #[test]

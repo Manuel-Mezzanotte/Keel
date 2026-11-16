@@ -48,6 +48,11 @@ pub(super) enum LspInput {
         uri: String,
         language_id: String,
     },
+    /// A file changed for a server that wants its diagnostics asked for.
+    Pull {
+        id: &'static str,
+        uri: String,
+    },
     Server {
         id: &'static str,
         generation: u64,
@@ -82,6 +87,9 @@ pub(super) struct RunningServer {
     open: RefCell<HashSet<String>>,
     /// The files it asked to hear about when they change on disk.
     watchers: RefCell<Vec<FileWatcher>>,
+    /// It wants its diagnostics asked for (`textDocument/diagnostic`)
+    /// instead of sending them, as ESLint does.
+    pulls_diagnostics: std::cell::Cell<bool>,
 }
 
 /// A `workspace/didChangeWatchedFiles` registration: a pattern and the
@@ -183,6 +191,8 @@ pub(super) struct LanguageState {
     documents: RefCell<HashMap<String, SyncedDocument>>,
     /// A copy of the diagnostics, for the quick fixes the servers are asked.
     diagnostics: RefCell<HashMap<String, BTreeMap<&'static str, Vec<Diagnostic>>>>,
+    /// The window's queue, for pulling diagnostics after a change.
+    sender: RefCell<Option<UnboundedSender<LspInput>>>,
 }
 
 /// The language servers of a window.
@@ -194,6 +204,11 @@ pub(super) struct Languages {
     pub(super) diagnostics: BTreeMap<String, BTreeMap<&'static str, Vec<Diagnostic>>>,
     /// Work in progress the servers report, such as indexing.
     progress: BTreeMap<(&'static str, String), String>,
+    /// Diagnostics being asked for, one request per server and file: a
+    /// newer change replaces the waiting one.
+    pulls: HashMap<(&'static str, String), Task<()>>,
+    /// The last answer of each pull, so the server can say "unchanged".
+    pull_results: HashMap<(&'static str, String), String>,
     restarts: HashMap<&'static str, Vec<Instant>>,
     next_generation: u64,
     /// Tests run the fake server in a thread when this is set, and no
@@ -248,6 +263,7 @@ impl LanguageState {
             return;
         };
         for running in self.servers_for(uri) {
+            self.queue_pull(&running, uri);
             let change = match running.sync_kind() {
                 TextDocumentSyncKind::INCREMENTAL => change.clone(),
                 TextDocumentSyncKind::FULL => TextDocumentContentChangeEvent {
@@ -299,6 +315,19 @@ impl LanguageState {
         self.documents.borrow_mut().remove(uri);
     }
 
+    /// Asks for the diagnostics of `uri` from a server that wants them pulled.
+    fn queue_pull(&self, running: &RunningServer, uri: &str) {
+        if !running.pulls_diagnostics.get() {
+            return;
+        }
+        if let Some(sender) = self.sender.borrow().as_ref() {
+            let _ = sender.unbounded_send(LspInput::Pull {
+                id: running.spec.id,
+                uri: uri.to_owned(),
+            });
+        }
+    }
+
     /// Tells `running` about `uri`, once.
     pub(super) fn open_in_server(&self, running: &RunningServer, uri: &str) {
         let documents = self.documents.borrow();
@@ -319,6 +348,8 @@ impl LanguageState {
                     document.text.clone(),
                 ),
             });
+        drop(documents);
+        self.queue_pull(running, uri);
     }
 
     /// The running servers that know `uri`.
@@ -346,9 +377,14 @@ impl Languages {
             }
         });
         Self {
-            sender,
+            sender: sender.clone(),
             servers: HashMap::new(),
-            state: Rc::default(),
+            state: Rc::new(LanguageState {
+                sender: RefCell::new(Some(sender.clone())),
+                ..Default::default()
+            }),
+            pulls: HashMap::new(),
+            pull_results: HashMap::new(),
             diagnostics: BTreeMap::new(),
             progress: BTreeMap::new(),
             restarts: HashMap::new(),
@@ -462,6 +498,7 @@ impl Workbench {
                     }
                 }
             }
+            LspInput::Pull { id, uri } => self.pull_diagnostics(id, uri, cx),
             LspInput::Server {
                 id,
                 generation,
@@ -620,6 +657,9 @@ impl Workbench {
             return;
         }
         server.set_settings(self.server_settings(spec));
+        let pulls = server
+            .capabilities()
+            .is_some_and(|capabilities| capabilities.diagnostic_provider.is_some());
         let pid = server
             .pid()
             .map(|pid| format!(" (pid {pid})"))
@@ -634,6 +674,7 @@ impl Workbench {
             generation,
             open: RefCell::new(HashSet::new()),
             watchers: RefCell::new(Vec::new()),
+            pulls_diagnostics: std::cell::Cell::new(pulls),
         });
         self.languages
             .servers
@@ -736,16 +777,19 @@ impl Workbench {
                     return;
                 };
                 let uri = normalize_uri(params.uri.as_str());
-                let entry = self.languages.diagnostics.entry(uri.clone()).or_default();
-                if params.diagnostics.is_empty() {
-                    entry.remove(spec.id);
-                } else {
-                    entry.insert(spec.id, params.diagnostics);
+                self.set_diagnostics(spec, &uri, params.diagnostics, cx);
+            }
+            // A pull server says its answers are stale: ask again.
+            "workspace/diagnostic/refresh" => {
+                let Some(running) = self.languages.state.running.borrow().get(spec.id).cloned()
+                else {
+                    return;
+                };
+                running.pulls_diagnostics.set(true);
+                let uris: Vec<String> = running.open.borrow().iter().cloned().collect();
+                for uri in uris {
+                    self.pull_diagnostics(spec.id, uri, cx);
                 }
-                if entry.is_empty() {
-                    self.languages.diagnostics.remove(&uri);
-                }
-                self.diagnostics_changed(&uri, cx);
             }
             "window/logMessage" | "window/showMessage" => {
                 let message = params["message"].as_str().unwrap_or_default();
@@ -766,11 +810,31 @@ impl Workbench {
                     return;
                 };
                 for registration in params["registrations"].as_array().into_iter().flatten() {
-                    if registration["method"] == "workspace/didChangeWatchedFiles" {
-                        running
-                            .watchers
-                            .borrow_mut()
-                            .extend(file_watchers(registration));
+                    match registration["method"].as_str() {
+                        Some("workspace/didChangeWatchedFiles") => {
+                            running
+                                .watchers
+                                .borrow_mut()
+                                .extend(file_watchers(registration));
+                        }
+                        // Diagnostics to ask for rather than wait for.
+                        Some("textDocument/diagnostic") => {
+                            running.pulls_diagnostics.set(true);
+                            let uris: Vec<String> = running.open.borrow().iter().cloned().collect();
+                            for uri in uris {
+                                self.languages.state.queue_pull(&running, &uri);
+                            }
+                        }
+                        // VS Code answers this registration with the
+                        // settings, and servers such as ESLint wait for it
+                        // before checking anything.
+                        Some("workspace/didChangeConfiguration") => {
+                            running.server.notify_raw(
+                                "workspace/didChangeConfiguration",
+                                json!({ "settings": self.server_settings(spec) }),
+                            );
+                        }
+                        _ => {}
                     }
                 }
             }
@@ -859,6 +923,14 @@ impl Workbench {
                     self.open_lsp_range(&uri, range, OpenAs::Normal, window, cx);
                 }
                 Ok(json!({ "success": true }))
+            }
+            // Older ESLint servers ask before running the project's ESLint.
+            "eslint/confirmESLintExecution" => Ok(json!(4)),
+            "eslint/openDoc" => {
+                if let Some(url) = params["url"].as_str() {
+                    cx.open_url(url);
+                }
+                Ok(json!({}))
             }
             "window/showMessageRequest" => {
                 let message = params["message"].as_str().unwrap_or_default();
@@ -1002,6 +1074,105 @@ impl Workbench {
         }
     }
 
+    /// Replaces what server `spec` says about `uri`.
+    fn set_diagnostics(
+        &mut self,
+        spec: &'static ServerSpec,
+        uri: &str,
+        diagnostics: Vec<Diagnostic>,
+        cx: &mut Context<Self>,
+    ) {
+        let entry = self
+            .languages
+            .diagnostics
+            .entry(uri.to_owned())
+            .or_default();
+        if diagnostics.is_empty() {
+            entry.remove(spec.id);
+        } else {
+            entry.insert(spec.id, diagnostics);
+        }
+        if entry.is_empty() {
+            self.languages.diagnostics.remove(uri);
+        }
+        self.diagnostics_changed(uri, cx);
+    }
+
+    /// Asks a pull server for the diagnostics of `uri`, a moment after the
+    /// last change, as VS Code does.
+    fn pull_diagnostics(&mut self, id: &'static str, uri: String, cx: &mut Context<Self>) {
+        let Some(running) = self.languages.state.running.borrow().get(id).cloned() else {
+            return;
+        };
+        let Some(spec) = servers::spec(id) else {
+            return;
+        };
+        let key = (id, uri.clone());
+        let previous = self.languages.pull_results.get(&key).cloned();
+        let identifier = running
+            .server
+            .capabilities()
+            .and_then(|capabilities| capabilities.diagnostic_provider.as_ref())
+            .and_then(|provider| match provider {
+                lsp_types::DiagnosticServerCapabilities::Options(options) => {
+                    options.identifier.clone()
+                }
+                lsp_types::DiagnosticServerCapabilities::RegistrationOptions(options) => {
+                    options.diagnostic_options.identifier.clone()
+                }
+            });
+        let task = cx.spawn(async move |this, cx| {
+            cx.background_executor()
+                .timer(Duration::from_millis(200))
+                .await;
+            let request = running.server.request_raw(
+                "textDocument/diagnostic",
+                json!({
+                    "textDocument": { "uri": uri },
+                    "identifier": identifier,
+                    "previousResultId": previous,
+                }),
+            );
+            let Ok(report) = request.await else { return };
+            this.update(cx, |this, cx| {
+                let key = (id, uri.clone());
+                if let Some(result) = report["resultId"].as_str() {
+                    this.languages
+                        .pull_results
+                        .insert(key.clone(), result.to_owned());
+                }
+                this.languages.pulls.remove(&key);
+                if report["kind"] == "full" {
+                    let items = serde_json::from_value::<Vec<Diagnostic>>(report["items"].clone())
+                        .unwrap_or_default();
+                    this.set_diagnostics(spec, &normalize_uri(&uri), items, cx);
+                }
+            })
+            .ok();
+        });
+        self.languages.pulls.insert(key, task);
+    }
+
+    /// The user's settings changed: every server reads them again.
+    pub(super) fn language_settings_changed(&self) {
+        let running: Vec<Rc<RunningServer>> = self
+            .languages
+            .state
+            .running
+            .borrow()
+            .values()
+            .cloned()
+            .collect();
+        for server in running {
+            let settings = self.server_settings(server.spec);
+            server.server.set_settings(settings.clone());
+            server.server.notify_raw(
+                "workspace/didChangeConfiguration",
+                json!({ "settings": settings }),
+            );
+        }
+    }
+
     /// "Restart Language Servers": stops every server and starts again the
     /// ones the open files need.
     pub(super) fn restart_language_servers(&mut self, cx: &mut Context<Self>) {
@@ -1055,7 +1226,8 @@ impl Workbench {
 
     /// The settings a server reads with `workspace/configuration`.
     fn server_settings(&self, spec: &ServerSpec) -> Value {
-        servers::settings_for(spec, &lsp::nested_settings(&self.settings.merged()))
+        let root = self.project.root.clone().unwrap_or_default();
+        servers::settings_for(spec, &lsp::nested_settings(&self.settings.merged()), &root)
     }
 
     pub(super) fn language_server_actions(
@@ -1073,8 +1245,7 @@ impl Workbench {
 
 /// What a server gets in `initializationOptions`.
 fn initialization_options(spec: &ServerSpec, _settings: &Settings) -> Option<Value> {
-    let _ = spec;
-    None
+    servers::initialization_options(spec)
 }
 
 /// Servers and Keel may spell the same file differently, for example

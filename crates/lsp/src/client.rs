@@ -495,6 +495,9 @@ pub fn section_of(settings: &Value, section: Option<&str>) -> Value {
     for part in section.split('.') {
         match value.get(part) {
             Some(inner) => value = inner,
+            // A whole section the user never set is an empty object, as
+            // VS Code gives: some servers fail on `null`.
+            None if !section.contains('.') => return Value::Object(Default::default()),
             None => return Value::Null,
         }
     }
@@ -529,6 +532,7 @@ fn client_capabilities() -> Value {
             "symbol": { "symbolKind": { "valueSet": symbol_kinds } },
             "executeCommand": {},
             "fileOperations": { "willRename": true, "didRename": true },
+            "diagnostics": { "refreshSupport": true },
         },
         "textDocument": {
             "synchronization": { "didSave": true, "willSave": false, "willSaveWaitUntil": false },
@@ -586,6 +590,7 @@ fn client_capabilities() -> Value {
             "rangeFormatting": {},
             "rename": { "prepareSupport": true },
             "colorProvider": {},
+            "diagnostic": { "dynamicRegistration": true, "relatedDocumentSupport": false },
             "publishDiagnostics": {
                 "relatedInformation": true,
                 "versionSupport": true,
