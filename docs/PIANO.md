@@ -1449,10 +1449,28 @@ Apri Keel su GestionaleHospitality. La prima volta i server si installano da sol
 |---|---|---|
 | 10.1 | Collegamento IDE: Keel si annuncia in `~/.claude/ide/` come VS Code e Cursor; Claude Code nei terminali di Keel vede cartelle, schede aperte, selezione e Problemi, apre e salva file; Cmd+Alt+K gli passa il file e le righe | fatta |
 | 10.2 | Modifiche proposte da Claude Code nel terminale: si aprono in Keel come differenze da accettare o rifiutare | fatta |
-| 10.3 | Crate `ai` per ACP: avvio dell'adattatore `claude-agent-acp` (installato da Keel con versione bloccata), sessioni, permessi, file letti e scritti attraverso Keel | da fare |
+| 10.3 | Crate `ai` per ACP: avvio dell'adattatore `claude-agent-acp` (installato da Keel con versione bloccata), sessioni, permessi, file letti e scritti attraverso Keel | fatta |
 | 10.4 | Pannello agente a destra, accanto a Claude Code nel terminale: conversazione, ragionamento, strumenti, piano, permessi, interrompi, riferimenti a file e selezione | da fare |
 | 10.5 | Modifiche dell'agente file per file da accettare o rifiutare; cronologia delle conversazioni | da fare |
 | 10.6 | Misure e resoconto | da fare |
+
+**Note sulla 10.3**
+- **Il crate `ai`** parla ACP con l'agente: un messaggio JSON per riga sul suo input e output.
+  - Keel apre le sessioni, manda i messaggi, li interrompe e cambia modalità.
+  - Risponde alle richieste dell'agente: leggere e scrivere file attraverso Keel, chiedere il permesso.
+- **La conversazione** si costruisce dagli aggiornamenti dell'agente:
+  - messaggi che arrivano a pezzi e ragionamento;
+  - strumenti con il loro stato e le differenze dei file;
+  - piano, comandi `/`, modalità e titolo.
+- **L'adattatore** è `@agentclientprotocol/claude-agent-acp` 0.107.3, bloccato come i language server. Keel lo installa con npm nella sua cartella `servers`.
+  - Ci mette poco più di 2 minuti, una volta sola: 115 pacchetti, tra cui l'SDK di Claude Code.
+  - Usa il tuo login di Claude Code: nessuna chiave in Keel.
+- **Provato con l'adattatore vero, senza mandare messaggi:**
+  - risponde in 0,46 s e apre una sessione in 3,7 s;
+  - elenca le tue conversazioni di Claude Code con il loro titolo, quindi la cronologia è quella di Claude Code stesso;
+  - offre le modalità Manuale, Accetta modifiche, Piano, Auto e Bypass, e i tuoi comandi `/` e skill.
+- **Come modifica i file:** questa versione dell'adattatore li scrive da sé, con gli strumenti di Claude Code, e prima chiede il permesso mostrando la differenza. La revisione file per file della 10.5 parte da qui.
+- **Per i test** c'è un agente finto che risponde come l'adattatore senza modello: conversa, chiede il permesso, modifica un file, si interrompe, ricorda le sessioni.
 
 **Note sulla 10.2**
 - **Quando Claude Code nel terminale vuole cambiare un file**, Keel apre una scheda con le differenze tra il file com'è sul disco e la proposta.
