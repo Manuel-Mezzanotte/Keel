@@ -72,6 +72,7 @@ markdown = "=1.0.0"
 lsp-types = "0.97"
 
 # Keel crates
+ai = { path = "crates/ai" }
 extensions = { path = "crates/extensions" }
 settings = { path = "crates/settings" }
 workbench = { path = "crates/workbench" }

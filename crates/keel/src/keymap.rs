@@ -8,8 +8,8 @@ use serde_json::Value;
 
 use crate::workbench_window::explorer;
 use crate::workbench_window::{
-    CheckExtensionUpdates, ImportFromCursor, InstallFromVsix, RestartExtensions, SelectIconTheme,
-    ShowFileHistory, ToggleBlame, UpdateAllExtensions,
+    CheckExtensionUpdates, ImportFromCursor, InsertAtMention, InstallFromVsix, RestartExtensions,
+    SelectIconTheme, ShowFileHistory, ToggleBlame, UpdateAllExtensions,
 };
 use crate::workbench_window::{
     CheckoutBranch, Commit, CommitAmend, CreateBranch, DiscardAll, GitFetch, GitPull, GitPush,
@@ -256,6 +256,12 @@ pub const COMMANDS: &[KeelCommand] = &[
         action: || Box::new(InstallFromVsix),
         default_key: None,
         context: None,
+    },
+    KeelCommand {
+        id: "claude-code.insertAtMentioned",
+        action: || Box::new(InsertAtMention),
+        default_key: Some("cmd+alt+k"),
+        context: Some(EDITOR_CONTEXT),
     },
     KeelCommand {
         id: "keel.extensions.importFromCursor",
@@ -935,7 +941,7 @@ mod tests {
         let (bindings, warnings) =
             read_user_bindings(Path::new("/nonexistent/keel/keybindings.json"));
         assert!(bindings.is_empty() && warnings.is_empty());
-        assert_eq!(keel_bindings(&[]).len(), 67);
+        assert_eq!(keel_bindings(&[]).len(), 68);
     }
 
     #[test]

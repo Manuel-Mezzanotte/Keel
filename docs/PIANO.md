@@ -1443,6 +1443,35 @@ Apri Keel su GestionaleHospitality. La prima volta i server si installano da sol
 
 **Obiettivo.** Lavorare con Claude Code dentro Keel, vedendo e controllando ogni modifica.
 
+**Sottofasi**
+
+| Sottofase | Cosa | Stato |
+|---|---|---|
+| 10.1 | Collegamento IDE: Keel si annuncia in `~/.claude/ide/` come VS Code e Cursor; Claude Code nei terminali di Keel vede cartelle, schede aperte, selezione e Problemi, apre e salva file; Cmd+Alt+K gli passa il file e le righe | fatta |
+| 10.2 | Modifiche proposte da Claude Code nel terminale: si aprono in Keel come differenze da accettare o rifiutare | da fare |
+| 10.3 | Crate `ai` per ACP: avvio dell'adattatore `claude-agent-acp` (installato da Keel con versione bloccata), sessioni, permessi, file letti e scritti attraverso Keel | da fare |
+| 10.4 | Pannello agente a destra, accanto a Claude Code nel terminale: conversazione, ragionamento, strumenti, piano, permessi, interrompi, riferimenti a file e selezione | da fare |
+| 10.5 | Modifiche dell'agente file per file da accettare o rifiutare; cronologia delle conversazioni | da fare |
+| 10.6 | Misure e resoconto | da fare |
+
+**Note sulla 10.1**
+- **Ogni finestra di Keel si annuncia a Claude Code** come fanno VS Code e Cursor:
+  - apre un collegamento solo su questo Mac (127.0.0.1) con un codice segreto;
+  - lo scrive in `~/.claude/ide/<porta>.lock`, leggibile solo da te, insieme alla cartella del progetto;
+  - quando la finestra si chiude, il file sparisce.
+- **I terminali di Keel** ricevono `CLAUDE_CODE_SSE_PORT`, quindi `claude` avviato lì (anche con Cmd+Esc) si collega da solo alla sua finestra. Da un terminale esterno basta `/ide` e scegliere «Keel».
+- **Cosa vede Claude Code:**
+  - le cartelle e le schede aperte;
+  - il file e la selezione dove sei: Keel glieli dice appena il cursore si muove;
+  - i Problemi, e quando cambiano.
+- **Cosa può fare Claude Code:** aprire un file selezionando un pezzo di testo, sapere se un file ha modifiche non salvate, salvarlo.
+- **Cmd+Alt+K** («Claude Code: Inserisci il riferimento al file», come in VS Code) mette nel messaggio di Claude Code il file e le righe selezionate.
+- **Provato col vero Claude Code 2.1.303:**
+  - si collega, si presenta e chiede l'elenco degli strumenti;
+  - vuole il sottoprotocollo WebSocket `mcp`: senza conferma restava zitto.
+  - Per rifare la prova: `KEEL_CLAUDE_PROJECT=<cartella fidata> KEEL_PTY_RUN=<pty_run.py> cargo test -p ai -- --ignored real_claude --nocapture`. Con `KEEL_IDE_TRACE=1` Keel stampa i messaggi ricevuti.
+- **Le modifiche proposte** (`openDiff`) arrivano con la 10.2: per ora Keel risponde che non le offre ancora.
+
 **Cosa si fa**
 - **Claude Code nel terminale, collegato a Keel.** È lo stesso collegamento che Claude Code usa con VS Code e JetBrains: un WebSocket annunciato da un file in `~/.claude/ide/`. Claude vede il file aperto e la selezione e legge i Problemi; le modifiche che propone si aprono in Keel come differenze da accettare o rifiutare.
 - **Pannello agente con ACP** (Agent Client Protocol, il protocollo aperto di Zed) e l'adattatore `@agentclientprotocol/claude-agent-acp`:

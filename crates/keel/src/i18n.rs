@@ -474,6 +474,8 @@ pub struct Strings {
     pub cursor_blocker_views: &'static str,
     pub cursor_blocker_webviews: &'static str,
     pub cursor_blocker_language_server: &'static str,
+    pub command_insert_at_mention: &'static str,
+    pub claude_not_connected: &'static str,
 }
 
 impl Strings {
@@ -487,6 +489,7 @@ impl Strings {
             "workbench.action.selectTheme" => self.command_theme,
             "workbench.action.selectIconTheme" => self.command_icon_theme,
             "keel.extensions.importFromCursor" => self.command_import_cursor,
+            "claude-code.insertAtMentioned" => self.command_insert_at_mention,
             "keel.selectLanguage" => self.command_language,
             "workbench.action.toggleSidebarVisibility" => self.command_toggle_sidebar,
             "workbench.action.togglePanel" => self.command_toggle_panel,
@@ -1291,6 +1294,8 @@ pub const ITALIAN: Strings = Strings {
     cursor_blocker_views: "pannelli propri",
     cursor_blocker_webviews: "pagine web interne",
     cursor_blocker_language_server: "avvia un language server",
+    command_insert_at_mention: "Claude Code: Inserisci il riferimento al file",
+    claude_not_connected: "Claude Code non è collegato a questa finestra: avvialo in un terminale di Keel.",
 };
 
 pub const ENGLISH: Strings = Strings {
@@ -1722,6 +1727,8 @@ pub const ENGLISH: Strings = Strings {
     cursor_blocker_views: "its own panels",
     cursor_blocker_webviews: "web pages inside the window",
     cursor_blocker_language_server: "starts a language server",
+    command_insert_at_mention: "Claude Code: Insert At-Mention",
+    claude_not_connected: "Claude Code is not connected to this window: start it in a Keel terminal.",
 };
 
 #[cfg(test)]

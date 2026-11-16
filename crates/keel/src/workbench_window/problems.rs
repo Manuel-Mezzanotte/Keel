@@ -200,6 +200,7 @@ pub(super) fn shift_diagnostics(diagnostics: &mut [Diagnostic], old: &str, new: 
 impl Workbench {
     /// Diagnostics of `uri` changed: its editors and the Problems view follow.
     pub(super) fn diagnostics_changed(&mut self, uri: &str, cx: &mut Context<Self>) {
+        self.claude_diagnostics_changed(uri);
         self.languages
             .state
             .mirror_diagnostics(uri, self.languages.diagnostics.get(uri));

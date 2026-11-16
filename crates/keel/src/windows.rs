@@ -246,7 +246,13 @@ fn open_window(root: Option<PathBuf>, file: Option<PathBuf>, cx: &mut App) {
     let opened = cx.open_window(window_options(bounds), {
         let created = created.clone();
         move |window, cx| {
-            let view = cx.new(|cx| Workbench::new(opening, settings, setup, window, cx));
+            let view = cx.new(|cx| {
+                let mut workbench = Workbench::new(opening, settings, setup, window, cx);
+                if let Some(ide_dir) = ai::ide::default_ide_dir() {
+                    workbench.start_claude_ide(ide_dir, window, cx);
+                }
+                workbench
+            });
             *created.borrow_mut() = Some(view.downgrade());
             cx.new(|cx| Root::new(view, window, cx))
         }

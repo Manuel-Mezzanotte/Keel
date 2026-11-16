@@ -171,6 +171,9 @@ impl Workbench {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> Option<Entity<TerminalView>> {
+        let mut spawn = spawn;
+        // Claude Code started here connects to this window.
+        spawn.env.extend(self.claude_ide_env());
         let started = match terminal_view::start(spawn) {
             Ok(started) => started,
             Err(error) => {

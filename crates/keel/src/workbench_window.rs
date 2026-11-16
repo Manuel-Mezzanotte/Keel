@@ -3,6 +3,8 @@
 
 mod blame;
 mod claude_code;
+mod claude_diff;
+mod claude_ide;
 mod code_actions;
 mod code_navigation;
 mod commit_view;
@@ -51,6 +53,7 @@ use tabs::{Group, OpenAs};
 
 pub(crate) use blame::{ShowFileHistory, ToggleBlame};
 pub(crate) use claude_code::{OpenClaudeCode, OpenClaudeCodeInPanel};
+pub(crate) use claude_ide::InsertAtMention;
 pub(crate) use code_actions::{FormatDocument, OrganizeImports};
 pub(crate) use code_navigation::{
     GoToImplementation, GoToReferences, GoToSymbolInFile, GoToSymbolInWorkspace,
@@ -373,6 +376,8 @@ pub struct Workbench {
     store: extensions_view::ExtensionStore,
     /// Restarts a stuck extension host.
     watchdog: host_watchdog::HostWatchdog,
+    /// The connection Claude Code makes to the window, as to VS Code.
+    claude_ide: Option<claude_ide::ClaudeIde>,
     /// The file icon theme of `workbench.iconTheme`; none uses Keel's icons.
     icon_theme: Option<Rc<extensions::icon_theme::IconTheme>>,
     /// Languages the running extensions add.
@@ -562,6 +567,7 @@ impl Workbench {
             extension_data: None,
             store,
             watchdog: Default::default(),
+            claude_ide: None,
             icon_theme: None,
             extension_languages: Default::default(),
             output,
