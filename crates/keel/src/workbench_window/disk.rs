@@ -62,7 +62,9 @@ impl Workbench {
         if head && self.project.refresh_branch() {
             cx.notify();
         }
-        if paths.iter().any(|path| !path.ends_with(".git/HEAD")) {
+        self.refresh_git(cx);
+        let in_git = |path: &PathBuf| path.components().any(|part| part.as_os_str() == ".git");
+        if paths.iter().any(|path| !in_git(path)) {
             self.refresh_tree(cx);
             self.index_files(cx);
         }
@@ -203,6 +205,7 @@ impl Workbench {
                 self.notify_host("documents/saved", json!({ "uri": uri }));
                 self.forget_backup(uri);
                 self.refresh_title(window);
+                self.refresh_git(cx);
                 cx.notify();
                 if let Some(after) = after {
                     self.finish(after, window, cx);

@@ -8,6 +8,10 @@ use serde_json::Value;
 
 use crate::workbench_window::explorer;
 use crate::workbench_window::{
+    CheckoutBranch, Commit, CommitAmend, CreateBranch, DiscardAll, GitFetch, GitPull, GitPush,
+    GitRefresh, GitStash, GitStashPop, GitSync, StageAll, UnstageAll,
+};
+use crate::workbench_window::{
     CloseAllEditors, CloseEditor, CloseEditorsInGroup, CloseOtherEditors, FocusGroup1, FocusGroup2,
     FocusGroup3, KeepEditor, NextEditor, PreviousEditor, ReopenClosedEditor, SplitEditor,
     TogglePinEditor,
@@ -188,6 +192,90 @@ pub const COMMANDS: &[KeelCommand] = &[
     KeelCommand {
         id: "keel.claudeCode.openInPanel",
         action: || Box::new(OpenClaudeCodeInPanel),
+        default_key: None,
+        context: None,
+    },
+    KeelCommand {
+        id: "git.commit",
+        action: || Box::new(Commit),
+        default_key: None,
+        context: None,
+    },
+    KeelCommand {
+        id: "git.commitStagedAmend",
+        action: || Box::new(CommitAmend),
+        default_key: None,
+        context: None,
+    },
+    KeelCommand {
+        id: "git.stageAll",
+        action: || Box::new(StageAll),
+        default_key: None,
+        context: None,
+    },
+    KeelCommand {
+        id: "git.unstageAll",
+        action: || Box::new(UnstageAll),
+        default_key: None,
+        context: None,
+    },
+    KeelCommand {
+        id: "git.cleanAll",
+        action: || Box::new(DiscardAll),
+        default_key: None,
+        context: None,
+    },
+    KeelCommand {
+        id: "git.push",
+        action: || Box::new(GitPush),
+        default_key: None,
+        context: None,
+    },
+    KeelCommand {
+        id: "git.pull",
+        action: || Box::new(GitPull),
+        default_key: None,
+        context: None,
+    },
+    KeelCommand {
+        id: "git.fetch",
+        action: || Box::new(GitFetch),
+        default_key: None,
+        context: None,
+    },
+    KeelCommand {
+        id: "git.sync",
+        action: || Box::new(GitSync),
+        default_key: None,
+        context: None,
+    },
+    KeelCommand {
+        id: "git.stash",
+        action: || Box::new(GitStash),
+        default_key: None,
+        context: None,
+    },
+    KeelCommand {
+        id: "git.stashPop",
+        action: || Box::new(GitStashPop),
+        default_key: None,
+        context: None,
+    },
+    KeelCommand {
+        id: "git.refresh",
+        action: || Box::new(GitRefresh),
+        default_key: None,
+        context: None,
+    },
+    KeelCommand {
+        id: "git.checkout",
+        action: || Box::new(CheckoutBranch),
+        default_key: None,
+        context: None,
+    },
+    KeelCommand {
+        id: "git.branch",
+        action: || Box::new(CreateBranch),
         default_key: None,
         context: None,
     },
@@ -555,6 +643,7 @@ pub fn bind(user: &[UserBinding], cx: &mut App) -> Vec<String> {
         }
     }
     key_bindings.extend(explorer::tree_bindings());
+    key_bindings.extend(crate::workbench_window::source_control_bindings());
     key_bindings.extend(crate::workbench_window::terminal_bindings(
         &window_keys_for_shell(user),
         cx,

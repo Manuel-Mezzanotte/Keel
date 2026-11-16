@@ -345,41 +345,58 @@ impl Workbench {
             .border_color(colors.border)
             .bg(colors.editor)
             .children(SideView::ALL.into_iter().enumerate().map(|(index, view)| {
-                Button::new(("side-view", index))
-                    .ghost()
-                    .small()
+                let count = match view {
+                    SideView::SourceControl => self.git_change_count(),
+                    _ => 0,
+                };
+                div()
+                    .relative()
                     .flex_1()
-                    .icon(Icon::new(side_view_icon(view)))
-                    .selected(view == self.layout.side_view)
-                    .tooltip(side_view_title(view, strings))
-                    .on_click(cx.listener(move |this, _, _, cx| {
-                        this.layout.select_side_view(view);
-                        cx.notify();
-                    }))
+                    .flex()
+                    .child(
+                        Button::new(("side-view", index))
+                            .ghost()
+                            .small()
+                            .flex_1()
+                            .icon(Icon::new(side_view_icon(view)))
+                            .selected(view == self.layout.side_view)
+                            .tooltip(side_view_title(view, strings))
+                            .on_click(cx.listener(move |this, _, _, cx| {
+                                this.layout.select_side_view(view);
+                                cx.notify();
+                            })),
+                    )
+                    .when(count > 0, |button| {
+                        button.child(
+                            div()
+                                .absolute()
+                                .top(px(-4.))
+                                .right(px(-2.))
+                                .min_w(px(15.))
+                                .h(px(15.))
+                                .px(px(3.))
+                                .rounded_full()
+                                .flex()
+                                .items_center()
+                                .justify_center()
+                                .bg(colors.accent)
+                                .text_color(cx.theme().primary_foreground)
+                                .text_size(px(9.5))
+                                .font_weight(FontWeight::SEMIBOLD)
+                                .child(if count > 999 {
+                                    "999+".to_owned()
+                                } else {
+                                    count.to_string()
+                                }),
+                        )
+                    })
             }));
 
         let content: AnyElement = match self.layout.side_view {
             SideView::Explorer if self.project.root.is_some() => self.render_explorer(colors, cx),
             SideView::Explorer => self.render_open_editors(colors, cx).into_any_element(),
             SideView::Search => self.render_search(colors, cx),
-            SideView::SourceControl => div()
-                .child(heading(strings.view_source_control, colors))
-                .when_some(self.project.branch.clone(), |view, branch| {
-                    view.child(
-                        div()
-                            .px_2()
-                            .py_1()
-                            .flex()
-                            .items_center()
-                            .gap_2()
-                            .text_sm()
-                            .text_color(colors.text)
-                            .child(Icon::new(IconName::GitBranch).small())
-                            .child(branch),
-                    )
-                })
-                .child(note(strings.coming_in_phase(5), colors))
-                .into_any_element(),
+            SideView::SourceControl => self.render_source_control(colors, cx),
             SideView::Extensions => self.render_extensions(colors).into_any_element(),
         };
 
@@ -1213,9 +1230,11 @@ impl Workbench {
         (left, right)
     }
 
-    fn render_status_bar(&self, colors: Colors, cx: &App) -> Div {
+    fn render_status_bar(&self, colors: Colors, cx: &mut Context<Self>) -> Div {
         let (left, right) = self.status_texts(cx);
         let branch = self.project.branch.is_some();
+        let sync = self.sync_text();
+        let has_repo = self.scm.repo.is_some();
         div()
             .h(px(STATUS_HEIGHT))
             .flex_none()
@@ -1228,16 +1247,41 @@ impl Workbench {
             .text_color(colors.muted)
             .child(div().flex().items_center().gap_4().min_w_0().children(
                 left.into_iter().enumerate().map(|(index, text)| {
+                    let is_branch = branch && index == 0;
                     div()
+                        .id(("status-left", index))
                         .flex()
                         .items_center()
                         .gap_1()
                         .truncate()
-                        .when(branch && index == 0, |item| {
+                        .when(is_branch, |item| {
                             item.text_color(colors.text)
                                 .child(Icon::new(IconName::GitBranch).xsmall())
                         })
                         .child(text)
+                        .when(is_branch && has_repo, |item| {
+                            item.cursor_pointer()
+                                .hover(|item| item.text_color(colors.accent))
+                                .on_click(
+                                    cx.listener(|this, _, window, cx| {
+                                        this.choose_branch(window, cx)
+                                    }),
+                                )
+                        })
+                        .when_some(sync.clone().filter(|_| is_branch), |item, sync| {
+                            item.child(
+                                div()
+                                    .id("status-sync")
+                                    .ml_2()
+                                    .cursor_pointer()
+                                    .hover(|item| item.text_color(colors.accent))
+                                    .on_click(cx.listener(|this, _, window, cx| {
+                                        window.dispatch_action(Box::new(super::GitSync), cx);
+                                        let _ = this;
+                                    }))
+                                    .child(sync),
+                            )
+                        })
                 }),
             ))
             .child(
@@ -1293,6 +1337,7 @@ impl Render for Workbench {
         let root = self.tab_actions(root, cx);
         let root = self.terminal_actions(root, cx);
         let root = self.npm_actions(root, cx);
+        let root = self.source_control_actions(root, cx);
         let root = self.editing_actions(root, cx);
         self.explorer_actions(root, cx)
             .size_full()

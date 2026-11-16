@@ -11,13 +11,16 @@ pub struct ProjectWatcher {
 }
 
 /// Calls `changed` with the paths that changed under `root`. Inside `.git`
-/// only `HEAD` counts, so a checkout is noticed but git's busywork is not.
+/// only `HEAD`, the index and the branches count, so a checkout, a stage
+/// or a commit made in a terminal is noticed but git's busywork is not.
 pub fn watch(
     root: &Path,
     changed: impl Fn(Vec<PathBuf>) + Send + 'static,
 ) -> notify::Result<ProjectWatcher> {
     let git = root.join(".git");
     let head = git.join("HEAD");
+    let index = git.join("index");
+    let refs = git.join("refs");
     let mut watcher = notify::recommended_watcher(move |event: notify::Result<notify::Event>| {
         let Ok(event) = event else {
             return;
@@ -28,7 +31,12 @@ pub fn watch(
         let paths: Vec<PathBuf> = event
             .paths
             .into_iter()
-            .filter(|path| !path.starts_with(&git) || *path == head)
+            .filter(|path| {
+                !path.starts_with(&git)
+                    || *path == head
+                    || *path == index
+                    || path.starts_with(&refs)
+            })
             .collect();
         if !paths.is_empty() {
             changed(paths);

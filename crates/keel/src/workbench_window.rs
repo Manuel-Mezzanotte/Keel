@@ -12,6 +12,7 @@ mod panel_views;
 mod restore;
 mod search_view;
 mod shell;
+mod source_control;
 mod tabs;
 mod terminal_view;
 mod terminals;
@@ -33,6 +34,11 @@ use tabs::{Group, OpenAs};
 pub(crate) use claude_code::{OpenClaudeCode, OpenClaudeCodeInPanel};
 pub(crate) use npm_scripts::RunNpmScript;
 pub(crate) use shell::window_options;
+pub(crate) use source_control::{
+    CheckoutBranch, Commit, CommitAmend, CreateBranch, DiscardAll, GitFetch, GitPull, GitPush,
+    GitRefresh, GitStash, GitStashPop, GitSync, StageAll, UnstageAll,
+    bindings as source_control_bindings,
+};
 pub(crate) use terminal_view::{TERMINAL_CONTEXT, bindings as terminal_bindings};
 pub(crate) use terminals::{
     FocusNextTerminal, FocusPreviousTerminal, KillTerminal, NewTerminal, RenameTerminal,
@@ -348,6 +354,8 @@ pub struct Workbench {
     /// Claude Code's panel on the right: its width and its terminal.
     agent_width: f32,
     agent_terminal: Option<claude_code::AgentTerminal>,
+    /// The project's git repository and the Source Control view.
+    scm: source_control::SourceControl,
     /// The scripts of the project's `package.json`.
     npm_scripts: Option<npm_scripts::NpmScripts>,
     _subscriptions: Vec<Subscription>,
@@ -383,6 +391,7 @@ impl Workbench {
             // Files may have changed in another app, such as Claude Code.
             if window.is_window_active() {
                 this.project.refresh_branch();
+                this.refresh_git(cx);
                 this.refresh_tree(cx);
                 this.index_files(cx);
             }
@@ -423,6 +432,12 @@ impl Workbench {
             .string("editor.wordWrap")
             .is_some_and(|wrap| wrap != "off");
         let font_size = editing::font_size_setting(&settings);
+        let scm = source_control::SourceControl::new(
+            project.root.as_deref(),
+            language.strings(),
+            window,
+            cx,
+        );
         let mut workbench = Self {
             settings,
             language,
@@ -474,11 +489,13 @@ impl Workbench {
             agent_width: claude_code::AGENT_WIDTH,
             agent_terminal: None,
             npm_scripts: None,
+            scm,
             first_frame_drawn: false,
             _subscriptions: subscriptions,
         };
         workbench.build_tree();
         workbench.refresh_npm_scripts();
+        workbench.refresh_git(cx);
         workbench.index_files(cx);
         workbench.watch_project(window, cx);
         workbench.data_dir = opening.data_dir.clone();

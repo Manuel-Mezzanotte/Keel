@@ -775,10 +775,33 @@ Con albero, schede, ricerca dei file e controllo della cartella, Keel è cresciu
 | Sottofase | Cosa | Stato |
 |---|---|---|
 | 5.1 | Motore git (crate `git`): stato, differenze, stage e unstage anche di un blocco, scarta, commit e amend, branch, push, pull, fetch, sync, stash | fatta |
-| 5.2 | Vista Controllo del codice sorgente: messaggio e Commit, file in stage, modifiche e conflitti, numero sull'icona, branch nella barra di stato | da fare |
+| 5.2 | Vista Controllo del codice sorgente: messaggio e Commit, file in stage, modifiche e conflitti, numero sull'icona, branch nella barra di stato | fatta |
 | 5.3 | Differenze in una scheda, affiancate o in linea; conflitti di merge risolti con un clic | da fare |
 | 5.4 | Margine dell'editor (aggiunte, modifiche, cancellazioni) con stage e annulla del blocco; push, pull, sync, branch e stash dai comandi | da fare |
 | 5.5 | Misure e resoconto | da fare |
+
+**Note sulla 5.2**
+- **La vista** (Ctrl+Maiusc+G) ha in alto il messaggio, che cresce fino a 8 righe, e il pulsante «Commit su «branch»». Cmd+Invio nel messaggio fa il commit.
+- **Sotto ci sono tre elenchi:** Conflitti di merge, Modifiche in stage e Modifiche. Ogni file mostra il nome, la cartella e la lettera colorata (M, A, D, U, R). Passandoci sopra compaiono i pulsanti:
+  - apri il file;
+  - scarta le modifiche;
+  - metti in stage o togli dallo stage.
+
+  Sui titoli degli elenchi ci sono gli stessi pulsanti per tutti i file insieme.
+- **Commit senza niente in stage:** chiede se mettere tutto in stage e fare il commit, come lo «smart commit» di VS Code.
+- **Scarta:**
+  - chiede sempre conferma;
+  - i file che git conosce tornano come erano;
+  - i file nuovi vanno nel Cestino, così si possono recuperare.
+- **Il menu «…»** ha Pull, Push, Fetch, Sincronizza, Commit (amend), Cambia branch, Crea un branch, Metti da parte e Riprendi le modifiche. Gli stessi comandi sono nella tavolozza, con i nomi di VS Code (`git.push`, `git.checkout`…).
+- **Senza modifiche,** se il branch è avanti o indietro rispetto al remoto, compare «Sincronizza ↓1 ↑2»; se non è ancora sul remoto, «Pubblica il branch».
+- **Sull'icona della vista** c'è il numero dei file cambiati.
+- **Nella barra di stato:**
+  - un clic sul branch apre l'elenco per cambiarlo o crearne uno;
+  - accanto al branch compare `↓1 ↑2`, e un clic sincronizza;
+  - mentre git lavora c'è scritto, per esempio, «Push…».
+- **Quando si aggiorna:** lo stato si rilegge in background quando cambia un file, quando salvi, quando torni su Keel e quando git cambia l'indice o i branch, anche con un comando lanciato nel terminale.
+- **Gli errori di git** (per esempio un push rifiutato) vanno nella barra di stato e nell'Output.
 
 **Note sulla 5.1**
 - **Git passa dal comando `git`**, invece che da `gix` come diceva lo stack: così Keel usa lo stesso programma, le stesse impostazioni, gli stessi hook e le stesse credenziali del terminale, con una dipendenza grossa in meno.
