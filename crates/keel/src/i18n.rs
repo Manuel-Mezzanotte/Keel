@@ -99,7 +99,6 @@ pub struct Strings {
     pub no_terminal: &'static str,
     pub panel_ports: &'static str,
     pub no_output: &'static str,
-    pub agent_not_connected: &'static str,
     pub plain_text: &'static str,
     pub close_editor: &'static str,
     pub welcome_open: &'static str,
@@ -481,6 +480,32 @@ pub struct Strings {
     pub claude_proposed_edit: &'static str,
     pub claude_accept: &'static str,
     pub claude_reject: &'static str,
+    pub agent_view_terminal: &'static str,
+    pub agent_view_agent: &'static str,
+    pub agent_placeholder: &'static str,
+    pub agent_no_data: &'static str,
+    pub agent_stopped: &'static str,
+    pub agent_stopped_text: &'static str,
+    pub agent_reason_cancelled: &'static str,
+    pub agent_reason_limit: &'static str,
+    pub agent_reason_refusal: &'static str,
+    pub agent_history: &'static str,
+    pub agent_new: &'static str,
+    pub agent_installing: &'static str,
+    pub agent_starting: &'static str,
+    pub agent_empty: &'static str,
+    pub agent_start: &'static str,
+    pub agent_working: &'static str,
+    pub agent_thinking: &'static str,
+    pub agent_plan_text: &'static str,
+    pub agent_permission_text: &'static str,
+    pub agent_mode: &'static str,
+    pub agent_stop: &'static str,
+    pub agent_send: &'static str,
+    pub agent_add_file: &'static str,
+    pub command_open_agent: &'static str,
+    pub command_new_agent: &'static str,
+    pub command_add_to_agent: &'static str,
 }
 
 impl Strings {
@@ -496,6 +521,9 @@ impl Strings {
             "keel.extensions.importFromCursor" => self.command_import_cursor,
             "claude-code.insertAtMentioned" => self.command_insert_at_mention,
             "claude-code.acceptProposedDiff" => self.command_accept_proposed,
+            "keel.agent.open" => self.command_open_agent,
+            "keel.agent.newConversation" => self.command_new_agent,
+            "keel.agent.addToConversation" => self.command_add_to_agent,
             "claude-code.rejectProposedDiff" => self.command_reject_proposed,
             "keel.selectLanguage" => self.command_language,
             "workbench.action.toggleSidebarVisibility" => self.command_toggle_sidebar,
@@ -767,6 +795,26 @@ impl Strings {
         self.cursor_needs_text.replace("{name}", name)
     }
 
+    pub fn agent_stop_reason(&self, reason: &str) -> String {
+        let reason = match reason {
+            "cancelled" => self.agent_reason_cancelled,
+            "max_tokens" | "max_turn_requests" => self.agent_reason_limit,
+            "refusal" => self.agent_reason_refusal,
+            other => other,
+        };
+        self.agent_stopped_text.replace("{reason}", reason)
+    }
+
+    pub fn agent_plan(&self, done: usize, total: usize) -> String {
+        self.agent_plan_text
+            .replace("{done}", &done.to_string())
+            .replace("{total}", &total.to_string())
+    }
+
+    pub fn agent_permission(&self, title: &str) -> String {
+        self.agent_permission_text.replace("{title}", title)
+    }
+
     pub fn extension_installed(&self, name: &str) -> String {
         self.extension_installed_text.replace("{name}", name)
     }
@@ -923,7 +971,6 @@ pub const ITALIAN: Strings = Strings {
     no_terminal: "Nessun terminale aperto",
     panel_ports: "Porte",
     no_output: "Nessun messaggio",
-    agent_not_connected: "Non collegato",
     plain_text: "Testo normale",
     close_editor: "Chiudi",
     welcome_open: "Apri…",
@@ -1308,6 +1355,32 @@ pub const ITALIAN: Strings = Strings {
     claude_proposed_edit: "Proposta di Claude Code",
     claude_accept: "Accetta",
     claude_reject: "Rifiuta",
+    agent_view_terminal: "Terminale",
+    agent_view_agent: "Agente",
+    agent_placeholder: "Chiedi a Claude… (Invio invia, Maiusc+Invio va a capo)",
+    agent_no_data: "Keel non sa dove installare l'adattatore di Claude.",
+    agent_stopped: "Claude si è fermato. Premi Avvia per ripartire; i dettagli sono nell'Output.",
+    agent_stopped_text: "Turno finito: {reason}.",
+    agent_reason_cancelled: "interrotto",
+    agent_reason_limit: "raggiunto il limite",
+    agent_reason_refusal: "Claude ha rifiutato",
+    agent_history: "Conversazioni passate",
+    agent_new: "Nuova conversazione",
+    agent_installing: "Installazione dell'adattatore di Claude, solo la prima volta (circa 2 minuti)…",
+    agent_starting: "Avvio di Claude…",
+    agent_empty: "Scrivi a Claude qui sotto. Con @ aggiungi il file aperto o la selezione.",
+    agent_start: "Avvia",
+    agent_working: "Claude sta lavorando…",
+    agent_thinking: "Ragionamento",
+    agent_plan_text: "Piano: {done} di {total}",
+    agent_permission_text: "Claude chiede il permesso: {title}",
+    agent_mode: "Modalità",
+    agent_stop: "Interrompi",
+    agent_send: "Invia",
+    agent_add_file: "Aggiungi il file aperto o la selezione",
+    command_open_agent: "Claude Code: Apri l'agente",
+    command_new_agent: "Claude Code: Nuova conversazione",
+    command_add_to_agent: "Claude Code: Aggiungi il file o la selezione alla conversazione",
 };
 
 pub const ENGLISH: Strings = Strings {
@@ -1361,7 +1434,6 @@ pub const ENGLISH: Strings = Strings {
     no_terminal: "No terminal open",
     panel_ports: "Ports",
     no_output: "No messages",
-    agent_not_connected: "Not connected",
     plain_text: "Plain Text",
     close_editor: "Close",
     welcome_open: "Open…",
@@ -1746,6 +1818,32 @@ pub const ENGLISH: Strings = Strings {
     claude_proposed_edit: "Proposed by Claude Code",
     claude_accept: "Accept",
     claude_reject: "Reject",
+    agent_view_terminal: "Terminal",
+    agent_view_agent: "Agent",
+    agent_placeholder: "Ask Claude… (Enter sends, Shift+Enter new line)",
+    agent_no_data: "Keel does not know where to install Claude's adapter.",
+    agent_stopped: "Claude stopped. Press Start to begin again; details are in the Output.",
+    agent_stopped_text: "Turn ended: {reason}.",
+    agent_reason_cancelled: "stopped",
+    agent_reason_limit: "limit reached",
+    agent_reason_refusal: "Claude refused",
+    agent_history: "Past conversations",
+    agent_new: "New conversation",
+    agent_installing: "Installing Claude's adapter, only the first time (about 2 minutes)…",
+    agent_starting: "Starting Claude…",
+    agent_empty: "Write to Claude below. @ adds the open file or the selection.",
+    agent_start: "Start",
+    agent_working: "Claude is working…",
+    agent_thinking: "Thinking",
+    agent_plan_text: "Plan: {done} of {total}",
+    agent_permission_text: "Claude asks permission: {title}",
+    agent_mode: "Mode",
+    agent_stop: "Stop",
+    agent_send: "Send",
+    agent_add_file: "Add the open file or the selection",
+    command_open_agent: "Claude Code: Open Agent",
+    command_new_agent: "Claude Code: New Conversation",
+    command_add_to_agent: "Claude Code: Add File or Selection to Conversation",
 };
 
 #[cfg(test)]

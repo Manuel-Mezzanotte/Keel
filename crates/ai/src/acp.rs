@@ -334,6 +334,20 @@ impl Agent {
         self.notify("session/cancel", json!({ "sessionId": session }))
     }
 
+    /// Changes a session option, such as `mode` (how the agent asks
+    /// permission), as `claude-agent-acp` offers them.
+    pub fn set_config_option(
+        &self,
+        session: &str,
+        option: &str,
+        value: &str,
+    ) -> impl Future<Output = Result<Value>> + use<> {
+        self.request(
+            "session/set_config_option",
+            json!({ "sessionId": session, "configId": option, "value": value }),
+        )
+    }
+
     pub fn set_mode(
         &self,
         session: &str,
@@ -353,6 +367,18 @@ impl Drop for Agent {
             let _ = child.wait();
         }
     }
+}
+
+/// A selection the user points the agent to, with its text.
+pub fn selection_block(path: &Path, lines: (u32, u32), text: &str) -> Value {
+    json!({
+        "type": "resource",
+        "resource": {
+            "uri": format!("file://{}#L{}:{}", path.display(), lines.0, lines.1),
+            "mimeType": "text/plain",
+            "text": text,
+        },
+    })
 }
 
 /// A text block of a prompt.

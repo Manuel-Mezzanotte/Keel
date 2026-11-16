@@ -1125,29 +1125,60 @@ impl Workbench {
         let strings = self.strings();
         let terminal = self.render_agent_terminal();
         let running = terminal.is_some();
+        let showing_agent = self.agent_panel.view == super::agent_panel::AgentView::Agent;
+        let switch =
+            |id: &'static str, label: &'static str, view: super::agent_panel::AgentView| {
+                Button::new(id)
+                    .ghost()
+                    .xsmall()
+                    .label(label)
+                    .selected(self.agent_panel.view == view)
+                    .on_click(cx.listener(move |this, _, window, cx| {
+                        this.agent_panel.view = view;
+                        if view == super::agent_panel::AgentView::Agent {
+                            this.ensure_agent(window, cx);
+                        }
+                        cx.notify();
+                    }))
+            };
         let header = div()
             .h(px(44.))
             .flex_none()
-            .px_3p5()
+            .px_3()
             .flex()
             .items_center()
-            .gap_2()
+            .gap_1()
             .border_b_1()
             .border_color(colors.border)
-            .child(div().size(px(7.)).rounded_full().bg(if running {
-                cx.theme().success
-            } else {
-                colors.faint
-            }))
+            .child(div().size(px(7.)).rounded_full().bg(
+                if running || self.agent_panel.agent.is_some() {
+                    cx.theme().success
+                } else {
+                    colors.faint
+                },
+            ))
             .child(
                 div()
                     .text_sm()
                     .font_weight(FontWeight::SEMIBOLD)
                     .text_color(colors.text)
+                    .mr_1()
                     .child("Claude Code"),
             )
+            .child(switch(
+                "agent-view-terminal",
+                strings.agent_view_terminal,
+                super::agent_panel::AgentView::Terminal,
+            ))
+            .child(switch(
+                "agent-view-agent",
+                strings.agent_view_agent,
+                super::agent_panel::AgentView::Agent,
+            ))
             .child(div().ml_auto().map(|right| {
-                if running {
+                if showing_agent {
+                    right.child(self.render_agent_header_buttons(cx))
+                } else if running {
                     right.child(
                         Button::new("close-claude-code")
                             .ghost()
@@ -1160,14 +1191,17 @@ impl Workbench {
                     )
                 } else {
                     right
-                        .text_xs()
-                        .text_color(colors.muted)
-                        .child(strings.agent_not_connected)
                 }
             }));
-        let body = match terminal {
-            Some(terminal) => div().flex_1().min_h_0().child(terminal),
-            None => div()
+        let body = match (showing_agent, terminal) {
+            (true, _) => div()
+                .flex_1()
+                .min_h_0()
+                .flex()
+                .flex_col()
+                .child(self.render_agent_conversation(colors, cx)),
+            (false, Some(terminal)) => div().flex_1().min_h_0().child(terminal),
+            (false, None) => div()
                 .flex_1()
                 .min_h_0()
                 .flex()
@@ -1416,6 +1450,7 @@ impl Render for Workbench {
         let root = self.cursor_import_actions(root, cx);
         let root = self.claude_ide_actions(root, cx);
         let root = self.claude_diff_actions(root, cx);
+        let root = self.agent_panel_actions(root, cx);
         let root = self.editing_actions(root, cx);
         self.explorer_actions(root, cx)
             .size_full()

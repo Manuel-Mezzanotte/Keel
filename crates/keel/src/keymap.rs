@@ -8,9 +8,9 @@ use serde_json::Value;
 
 use crate::workbench_window::explorer;
 use crate::workbench_window::{
-    AcceptProposedDiff, CheckExtensionUpdates, ImportFromCursor, InsertAtMention, InstallFromVsix,
-    RejectProposedDiff, RestartExtensions, SelectIconTheme, ShowFileHistory, ToggleBlame,
-    UpdateAllExtensions,
+    AcceptProposedDiff, AddToAgent, CheckExtensionUpdates, ImportFromCursor, InsertAtMention,
+    InstallFromVsix, NewAgentConversation, OpenAgent, RejectProposedDiff, RestartExtensions,
+    SelectIconTheme, ShowFileHistory, ToggleBlame, UpdateAllExtensions,
 };
 use crate::workbench_window::{
     CheckoutBranch, Commit, CommitAmend, CreateBranch, DiscardAll, GitFetch, GitPull, GitPush,
@@ -263,6 +263,24 @@ pub const COMMANDS: &[KeelCommand] = &[
         action: || Box::new(InsertAtMention),
         default_key: Some("cmd+alt+k"),
         context: Some(EDITOR_CONTEXT),
+    },
+    KeelCommand {
+        id: "keel.agent.open",
+        action: || Box::new(OpenAgent),
+        default_key: Some("cmd+shift+escape"),
+        context: None,
+    },
+    KeelCommand {
+        id: "keel.agent.newConversation",
+        action: || Box::new(NewAgentConversation),
+        default_key: None,
+        context: None,
+    },
+    KeelCommand {
+        id: "keel.agent.addToConversation",
+        action: || Box::new(AddToAgent),
+        default_key: None,
+        context: None,
     },
     KeelCommand {
         id: "claude-code.acceptProposedDiff",
@@ -954,7 +972,7 @@ mod tests {
         let (bindings, warnings) =
             read_user_bindings(Path::new("/nonexistent/keel/keybindings.json"));
         assert!(bindings.is_empty() && warnings.is_empty());
-        assert_eq!(keel_bindings(&[]).len(), 68);
+        assert_eq!(keel_bindings(&[]).len(), 69);
     }
 
     #[test]

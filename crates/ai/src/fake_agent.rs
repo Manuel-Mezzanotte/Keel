@@ -104,7 +104,7 @@ impl Fake {
                 json!({ "jsonrpc": "2.0", "id": id, "result": { "stopReason": "cancelled" } }),
             );
             return;
-        } else if words.first() == Some(&"edit") && words.len() == 4 {
+        } else if words.first() == Some(&"edit") && words.len() >= 4 {
             let (path, old, new) = (words[1], words[2], words[3]);
             self.text(&session, "agent_thought_chunk", "Reading the file.");
             let read = self.ask(
@@ -205,9 +205,13 @@ impl Fake {
                 }
                 json!({})
             }
-            "session/set_mode" => {
+            "session/set_mode" | "session/set_config_option" => {
                 let session = params["sessionId"].as_str().unwrap_or_default().to_owned();
-                self.update(&session, json!({ "sessionUpdate": "current_mode_update", "currentModeId": params["modeId"] }));
+                let mode = params.get("modeId").unwrap_or(&params["value"]).clone();
+                self.update(
+                    &session,
+                    json!({ "sessionUpdate": "current_mode_update", "currentModeId": mode }),
+                );
                 json!({})
             }
             "session/prompt" => {

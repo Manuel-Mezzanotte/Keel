@@ -1450,9 +1450,30 @@ Apri Keel su GestionaleHospitality. La prima volta i server si installano da sol
 | 10.1 | Collegamento IDE: Keel si annuncia in `~/.claude/ide/` come VS Code e Cursor; Claude Code nei terminali di Keel vede cartelle, schede aperte, selezione e Problemi, apre e salva file; Cmd+Alt+K gli passa il file e le righe | fatta |
 | 10.2 | Modifiche proposte da Claude Code nel terminale: si aprono in Keel come differenze da accettare o rifiutare | fatta |
 | 10.3 | Crate `ai` per ACP: avvio dell'adattatore `claude-agent-acp` (installato da Keel con versione bloccata), sessioni, permessi, file letti e scritti attraverso Keel | fatta |
-| 10.4 | Pannello agente a destra, accanto a Claude Code nel terminale: conversazione, ragionamento, strumenti, piano, permessi, interrompi, riferimenti a file e selezione | da fare |
+| 10.4 | Pannello agente a destra, accanto a Claude Code nel terminale: conversazione, ragionamento, strumenti, piano, permessi, interrompi, riferimenti a file e selezione | fatta |
 | 10.5 | Modifiche dell'agente file per file da accettare o rifiutare; cronologia delle conversazioni | da fare |
 | 10.6 | Misure e resoconto | da fare |
+
+**Note sulla 10.4**
+- **In cima al riquadro di destra** ci sono due interruttori: «Terminale» (Claude Code nel terminale, come prima) e «Agente», il pannello nuovo. Si apre anche con Cmd+Maiusc+Esc o «Claude Code: Apri l'agente».
+- **La prima volta** Keel installa l'adattatore, in circa 2 minuti, e lo dice nel pannello. Poi Claude parte in pochi secondi nella cartella del progetto.
+- **Nella conversazione:**
+  - i tuoi messaggi a destra;
+  - le risposte di Claude in Markdown, che arrivano mentre scrive;
+  - il ragionamento chiuso in una riga «Ragionamento» che si apre con un clic;
+  - gli strumenti con icona, titolo e stato (… ✓ ✗) e le differenze dei file in rosso e verde: un clic apre il file alla riga giusta.
+- **Il piano** di Claude sta sopra il campo, con le voci fatte, in corso e da fare.
+- **Le richieste di permesso** compaiono sopra il campo, con la differenza del file e i pulsanti di Claude («Allow», «Always allow», «Reject»…).
+- **Il campo:**
+  - Invio invia, Maiusc+Invio va a capo;
+  - «@» aggiunge il file aperto, o le righe selezionate col loro testo, e si vedono come etichette;
+  - il menu della modalità cambia come Claude chiede i permessi (Manuale, Accetta modifiche, Piano, Auto…);
+  - durante un turno il pulsante diventa «Interrompi».
+- **In alto a destra:** «Nuova conversazione» (+) e le conversazioni passate del progetto (orologio). Sono quelle di Claude Code stesso, anche quelle iniziate nel terminale, e si riprendono da dove erano.
+- **Cosa resta fuori per ora:**
+  - i comandi `/` di Claude nel campo;
+  - le immagini incollate;
+  - la conversazione non si riapre da sola quando riapri la finestra, ma si ritrova nell'orologio.
 
 **Note sulla 10.3**
 - **Il crate `ai`** parla ACP con l'agente: un messaggio JSON per riga sul suo input e output.

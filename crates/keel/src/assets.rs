@@ -31,7 +31,10 @@ gpui_kit_assets::icon_assets!(
         Trash,
         CircleX,
         TriangleAlert,
-        Info
+        Info,
+        Pencil,
+        Clock,
+        Square
     ]
 );
 

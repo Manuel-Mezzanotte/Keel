@@ -1,6 +1,7 @@
 //! The workbench: the window with its panels and editors, and the bridge
 //! between Keel and the extension host. The layout is drawn in `shell`.
 
+mod agent_panel;
 mod blame;
 mod claude_code;
 mod claude_diff;
@@ -51,6 +52,7 @@ pub(crate) use tabs::{
 };
 use tabs::{Group, OpenAs};
 
+pub(crate) use agent_panel::{AddToAgent, NewAgentConversation, OpenAgent};
 pub(crate) use blame::{ShowFileHistory, ToggleBlame};
 pub(crate) use claude_code::{OpenClaudeCode, OpenClaudeCodeInPanel};
 pub(crate) use claude_diff::{AcceptProposedDiff, RejectProposedDiff};
@@ -381,6 +383,8 @@ pub struct Workbench {
     claude_ide: Option<claude_ide::ClaudeIde>,
     /// Edits Claude Code proposed, waiting for Accept or Reject.
     claude_diffs: Vec<claude_diff::ProposedEdit>,
+    /// Claude Code as a conversation, on the right.
+    agent_panel: agent_panel::AgentPanel,
     /// The file icon theme of `workbench.iconTheme`; none uses Keel's icons.
     icon_theme: Option<Rc<extensions::icon_theme::IconTheme>>,
     /// Languages the running extensions add.
@@ -537,6 +541,9 @@ impl Workbench {
         let (store, store_events) =
             extensions_view::ExtensionStore::new(language.strings(), window, cx);
         subscriptions.push(store_events);
+        let (agent_panel, agent_events) =
+            agent_panel::AgentPanel::new(language.strings(), window, cx);
+        subscriptions.push(agent_events);
         let opening = opening.into();
         let project = Project::new(opening.root.clone());
         let word_wrap = settings
@@ -572,6 +579,7 @@ impl Workbench {
             watchdog: Default::default(),
             claude_ide: None,
             claude_diffs: Vec::new(),
+            agent_panel,
             icon_theme: None,
             extension_languages: Default::default(),
             output,
