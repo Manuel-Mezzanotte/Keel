@@ -1290,7 +1290,50 @@ Apri Keel su GestionaleHospitality. La prima volta i server si installano da sol
 | 9.3 | Temi colore e temi di icone dai VSIX (Dracula, Material Icon Theme), configurazioni di linguaggio | fatta |
 | 9.4 | Isolamento (un'estensione bloccata o in crash non ferma Keel e si riavvia) e ponte `vscode` allargato per Peacock, gitignore e markdownlint | fatta |
 | 9.5 | Importa da Cursor l'elenco delle estensioni | fatta |
-| 9.6 | Misure e resoconto | da fare |
+| 9.6 | Misure e resoconto | fatta |
+
+**Resoconto della fase 9**
+- **Il criterio era:** VSAuto Ghost si installa dalla vista Estensioni come in Cursor e le estensioni della lista funzionano.
+  - VSAuto Ghost si installa da VSIX, o con «Importa da Cursor» che la copia dalla cartella di Cursor.
+  - Dracula, Material Icon Theme, Peacock, gitignore e markdownlint arrivano da Open VSX e funzionano: le prove automatiche le fanno girare con quello che usano davvero.
+  - **Resta la tua prova a mano.**
+- **Cosa c'è ora:**
+  - vista Estensioni con ricerca su Open VSX, installazione, aggiornamenti, attiva e disattiva anche per progetto, disinstalla nel Cestino, dettagli col README;
+  - temi colore e di icone dai VSIX, linguaggi delle estensioni;
+  - host che si riavvia da solo se un'estensione si blocca, e che sopravvive agli errori delle estensioni;
+  - import da Cursor.
+- **Correzioni trovate strada facendo:**
+  - le estensioni con `onLanguage:` non partivano mai (markdownlint);
+  - un'estensione `*` che eseguiva un comando mentre si attivava restava bloccata (Peacock);
+  - il lettore dei JSON con commenti diventava lentissimo con tante virgole.
+- **Non ancora:**
+  - i pannelli propri delle estensioni, le webview, i notebook, il debugger;
+  - i language server avviati dalle estensioni;
+  - i task delle estensioni e la loro formattazione.
+  - Per questo Jupyter, Docker, Java, Dart e simili restano fuori, e «Importa da Cursor» lo dice.
+- **Misure** (versione ottimizzata, progetto di prova con un README e due file):
+
+  | | Keel | Language server | Primo disegno |
+  |---|---|---|---|
+  | Senza estensioni | 127 MB | 84 MB | 271–565 ms |
+  | Con le sei estensioni (Dracula, Material Icon Theme, Peacock, gitignore, markdownlint, VSAuto Ghost) | 152 MB | 84 MB | 280–288 ms |
+
+  - Le sei estensioni costano circa 25 MB, compreso V8; il primo disegno non cambia, perché le estensioni partono dopo.
+  - Open VSX: una ricerca risponde in 0,14–0,18 s; scaricare Dracula (480 KB) richiede 0,7 s e markdownlint (350 KB) 0,3 s.
+  - Tradurre il tema Dracula richiede 3 ms; leggere Material Icon Theme (1.256 icone) 25 ms.
+  - «Importa da Cursor» controlla le tue 47 estensioni in circa 5 secondi.
+  - Un host bloccato viene riavviato al più 15 secondi dopo: 5 tra un controllo e l'altro, più 10 di attesa.
+- **Test:** 322 automatici, tutti verdi, più 19 da lanciare a mano: tra questi le prove sulle estensioni vere e quella sul vero Open VSX.
+
+**Le tue prove a mano della fase 9**
+1. Vista Estensioni (Cmd+Maiusc+X): cerca «dracula» e installa «Dracula Theme». Poi «Preferenze: Tema colori» e scegli «Dracula Theme».
+2. Installa «Material Icon Theme», poi «Preferenze: Tema icona file» e sceglilo. Controlla le icone nell'Esplora risorse; torna a «Icone di Keel» se non ti piace.
+3. Menu «…» della vista → «Importa da Cursor…». Guarda i tre gruppi e premi «Installa le disponibili», oppure installa solo quelle che vuoi.
+4. In un progetto: «Peacock: Change to a Favorite Color». La barra del titolo e quella di stato si colorano, e il colore finisce in `.vscode/settings.json` del progetto (lo vede anche Cursor).
+5. Apri un file Markdown con spazi in fondo a una riga: markdownlint lo segnala nel pannello Problemi. Mettiti sulla riga e premi Cmd+.: «Fix this violation» lo corregge.
+6. In un progetto senza `.gitignore`: «Add gitignore», scegli «Node» e controlla il file creato.
+7. Sull'ingranaggio di un'estensione: «Disattiva per questo progetto», poi «Attiva». Il suo tema o le sue icone spariscono e tornano senza riaprire la finestra.
+8. Disinstalla un'estensione: la conferma e poi la cartella nel Cestino.
 
 **Note sulla 9.5**
 - **«Importa da Cursor…»** sta nel menu «…» della vista Estensioni e nella tavolozza («Estensioni: Importa da Cursor»).
@@ -1302,9 +1345,9 @@ Apri Keel su GestionaleHospitality. La prima volta i server si installano da sol
 - **«Senza: pagine web interne» o «editor propri»:** l'estensione si installa e funziona in parte, come Peacock.
 - **Ogni estensione ha il suo pulsante «Installa»;** in cima, «Installa le disponibili (N)» le installa tutte.
 - **Con le tue 47 estensioni di Cursor** il controllo dura circa 5 secondi, perché chiede a Open VSX 8 estensioni alla volta.
-  - Da installare: 16, tra cui Dracula, Material Icon Theme, Peacock, gitignore, markdownlint e VSAuto Ghost.
+  - Da installare: 18 (17 da Open VSX più VSAuto Ghost), tra cui Dracula, Material Icon Theme, Peacock, gitignore e markdownlint.
   - Già in Keel: 7.
-  - Non funzionano: 24, come Jupyter, Docker, Java, Dart e Flutter, Remote SSH.
+  - Non funzionano: 22, come Jupyter, Docker, Java, Dart e Flutter, Remote SSH.
 - **Il riconoscimento è a buon senso:** guarda il `package.json` e cerca nel codice principale le webview e i language client. Qualche estensione «da installare» può comunque non servire a nulla in Keel, per esempio le scorciatoie di Jupyter.
 
 **Note sulla 9.4**
