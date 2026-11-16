@@ -62,6 +62,9 @@ libc = "0.2.191"
 # Git: line differences for the editor's margin and for staging blocks.
 imara-diff = "=0.2.0"
 
+# Image sizes, read from the file header: the version GPUI uses.
+image = { version = "=0.25.10", default-features = false, features = ["png", "jpeg", "gif", "webp", "bmp", "ico", "tiff"] }
+
 # The Markdown parser gpui-component uses, to map the preview to its source.
 markdown = "=1.0.0"
 

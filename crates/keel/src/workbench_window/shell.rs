@@ -956,7 +956,7 @@ impl Workbench {
                         Some(Backing::Image(path)) => div()
                             .flex_1()
                             .min_h_0()
-                            .child(self.render_image(path, colors)),
+                            .child(self.render_image(&pane.uri, path, colors, cx)),
                         Some(Backing::Diff(tab)) => div()
                             .flex_1()
                             .min_h_0()
@@ -1267,6 +1267,11 @@ impl Workbench {
                 Some(Backing::Image(_) | Backing::Diff(_) | Backing::Preview(_))
             )
         });
+        // An image: its size and its zoom, as VS Code shows them.
+        if let Some((size, zoom)) = self.image_status() {
+            right.push(size);
+            right.push(zoom);
+        }
         if let Some(pane) = self.panes.get(self.active).filter(|_| !image) {
             let position = pane.editor.read(cx).cursor_position();
             right.push(

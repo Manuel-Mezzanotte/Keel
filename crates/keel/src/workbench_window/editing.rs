@@ -123,7 +123,13 @@ impl Workbench {
         cx.notify();
     }
 
-    fn zoom(&mut self, step: f32, cx: &mut Context<Self>) {
+    pub(super) fn zoom(&mut self, step: f32, cx: &mut Context<Self>) {
+        // On an image the zoom keys zoom the image.
+        if let Some((uri, _)) = self.active_image() {
+            let step = (step != 0.).then_some(step > 0.);
+            self.zoom_image(&uri, step, cx);
+            return;
+        }
         self.font_size = if step == 0. {
             font_size_setting(&self.settings)
         } else {

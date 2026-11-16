@@ -409,6 +409,9 @@ pub struct Workbench {
     /// row each preview was last scrolled to.
     preview_sync: Option<(markdown_preview::SyncSide, std::time::Instant)>,
     preview_tops: HashMap<String, usize>,
+    /// The zoom of each image tab (fit when missing) and the images' sizes.
+    image_zoom: HashMap<String, f32>,
+    image_sizes: RefCell<HashMap<PathBuf, Option<(u32, u32)>>>,
     /// The signature shown above the cursor.
     signature: Option<signature_help::SignatureState>,
     signature_task: Task<()>,
@@ -556,6 +559,8 @@ impl Workbench {
             signature_task: Task::ready(()),
             preview_sync: None,
             preview_tops: HashMap::new(),
+            image_zoom: HashMap::new(),
+            image_sizes: RefCell::new(HashMap::new()),
             _subscriptions: subscriptions,
         };
         workbench.build_tree();

@@ -365,6 +365,7 @@ pub struct Strings {
     pub preview_title_text: &'static str,
     pub command_markdown_preview: &'static str,
     pub command_markdown_preview_side: &'static str,
+    pub image_fit: &'static str,
 }
 
 impl Strings {
@@ -969,6 +970,7 @@ pub const ITALIAN: Strings = Strings {
     preview_title_text: "Anteprima {name}",
     command_markdown_preview: "Markdown: Apri l'anteprima",
     command_markdown_preview_side: "Markdown: Apri l'anteprima a lato",
+    image_fit: "Adatta",
 };
 
 pub const ENGLISH: Strings = Strings {
@@ -1291,6 +1293,7 @@ pub const ENGLISH: Strings = Strings {
     preview_title_text: "Preview {name}",
     command_markdown_preview: "Markdown: Open Preview",
     command_markdown_preview_side: "Markdown: Open Preview to the Side",
+    image_fit: "Fit",
 };
 
 #[cfg(test)]

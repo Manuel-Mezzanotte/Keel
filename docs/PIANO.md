@@ -1088,9 +1088,19 @@ Apri Keel su GestionaleHospitality. La prima volta i server si installano da sol
 |---|---|---|
 | 7.1 | Anteprima Markdown in una scheda, affiancata (Cmd+K V) o al posto dell'editor (Cmd+Maiusc+V), aggiornata mentre scrivi, con i colori del tema | fatta |
 | 7.2 | Scorrimento sincronizzato nei due versi; link ad altri file, a titoli e al web; immagini locali; liste di controllo da spuntare | fatta |
-| 7.3 | Immagini e SVG con zoom | da fare |
+| 7.3 | Immagini e SVG con zoom | fatta |
 | 7.4 | PDF in una scheda con PDFKit: pagine, zoom, miniature, ricerca, copia del testo | da fare |
 | 7.5 | Misure e resoconto | da fare |
+
+**Note sulla 7.3**
+- **Zoom delle immagini e degli SVG,** come nell'anteprima di VS Code:
+  - all'apertura l'immagine si adatta allo spazio;
+  - un clic ingrandisce, Alt+clic rimpicciolisce;
+  - Cmd con la rotella o il trackpad fa lo stesso;
+  - Cmd+= e Cmd+- vanno ai livelli dopo e prima (10%, 20%… 100%, 150%, 200%… fino a 2000%), Cmd+0 torna ad «Adatta»;
+  - ingrandita oltre lo spazio, l'immagine scorre.
+- **Barra di stato:** le dimensioni in pixel e lo zoom, per esempio `1920 × 1080` e `150%`. Per gli SVG le dimensioni vengono da `width` e `height`, o dal `viewBox`.
+- Sulle immagini i tasti dello zoom non cambiano la dimensione del testo degli editor.
 
 **Note sulla 7.2**
 - **Scorrimento sincronizzato nei due versi,** come in VS Code: scorrendo l'editor, l'anteprima mostra in cima il blocco della prima riga visibile; scorrendo l'anteprima, l'editor va alla riga del blocco in cima.
