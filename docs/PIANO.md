@@ -118,7 +118,7 @@ Da confermare con le misure della fase 0. Si misura con lo stesso script su Keel
 | 0 | Prototipo e prova a tempo | 2–3 settimane | fatta; restano le tue prove a mano |
 | 1 | Fondamenta e design | media | fatta; restano le tue prove a mano |
 | 2 | Editor e file | grande | fatta; restano le tue prove a mano |
-| 3 | Ricerca | piccola | da fare |
+| 3 | Ricerca | piccola | in corso |
 | 4 | Terminale e pannello in basso | media | da fare |
 | 5 | Git: modifiche e commit | media | da fare |
 | 6 | Linguaggi principali: web e Rust | grande | da fare |
@@ -566,6 +566,28 @@ Con albero, schede, ricerca dei file e controllo della cartella, Keel è cresciu
 ### Fase 3 — Ricerca
 
 **Obiettivo.** Trovare qualsiasi cosa nel progetto in un attimo.
+
+**Sottofasi**
+
+| Sottofase | Cosa | Stato |
+|---|---|---|
+| 3.1 | Motore di ricerca: maiuscole, parola intera, regex, cartelle da includere ed escludere, `.gitignore`, file binari saltati; sostituzione con i gruppi della regex | fatta |
+| 3.2 | Vista Cerca nella barra laterale (Cmd+Shift+F): campi e interruttori, risultati per file, clic che porta alla riga | da fare |
+| 3.3 | Sostituisci in tutti i file con l'anteprima, per file o tutto insieme | da fare |
+| 3.4 | Cerca e sostituisci nel file (Cmd+F), misure e resoconto | da fare |
+
+**Note sulla 3.1**
+- Il motore sta nel crate `files` (`search.rs`): percorre il progetto su più thread con il crate `ignore`, come ripgrep, e cerca con il crate `regex`.
+- **Lascia fuori:** i file ignorati da git, quelli nascosti dell'Esplora risorse, i binari e quelli oltre 5 MB.
+- **Si ferma a 20.000 risultati**, e lo dice.
+- **Cartelle come in VS Code:** «da includere» e «da escludere» accettano più modelli separati da virgola (`src, *.ts`); `src` vale per tutto quello che c'è dentro.
+- **Sostituzione:** con una regex, `$1` e `${nome}` riprendono i gruppi; senza regex il testo resta letterale.
+- **Misure su GestionaleHospitality**, versione ottimizzata:
+  - «booking»: 7.310 risultati in 327 file in 26 ms;
+  - «useState»: 594 risultati in 14 ms;
+  - «z»: arriva al limite di 20.000 in 15 ms.
+
+  Il criterio della fase era meno di un secondo.
 
 **Cosa si fa**
 - **Cerca nei file** (Cmd+Shift+F): maiuscole e minuscole, parola intera, regex; cartelle da includere ed escludere; rispetta `.gitignore`; risultati raggruppati per file, con anteprima.

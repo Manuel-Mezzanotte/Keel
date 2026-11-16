@@ -5,6 +5,7 @@
 pub mod fuzzy;
 mod list;
 mod operations;
+pub mod search;
 mod tree;
 mod watch;
 

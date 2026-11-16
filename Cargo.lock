@@ -1919,6 +1919,7 @@ dependencies = [
  "globset",
  "ignore",
  "notify",
+ "regex",
  "tempfile",
  "trash",
 ]
@@ -3716,6 +3717,7 @@ dependencies = [
  "gpui-pre-platform",
  "language",
  "lsp-types",
+ "serde",
  "serde_json",
  "settings",
  "sys-locale",
