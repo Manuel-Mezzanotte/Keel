@@ -748,7 +748,7 @@ impl Workbench {
             cx.listener(|this, _: &InstallFromVsix, window, cx| this.install_from_vsix(window, cx)),
         )
         .on_action(cx.listener(|this, _: &RestartExtensions, window, cx| {
-            this.restart_extensions(window, cx)
+            this.restart_extensions_by_hand(window, cx)
         }))
         .on_action(cx.listener(|this, action: &ExtensionMenu, window, cx| {
             this.run_extension_menu(action, window, cx)

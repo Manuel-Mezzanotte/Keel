@@ -442,6 +442,8 @@ pub struct Strings {
     pub command_icon_theme: &'static str,
     pub choose_icon_theme: &'static str,
     pub icon_theme_none: &'static str,
+    pub extensions_restarted_text: &'static str,
+    pub extensions_gave_up: &'static str,
 }
 
 impl Strings {
@@ -701,6 +703,10 @@ impl Strings {
     pub fn extension_updates_found(&self, count: usize) -> String {
         self.extension_updates_found_text
             .replace("{count}", &count.to_string())
+    }
+
+    pub fn extensions_restarted(&self, what: &str) -> String {
+        self.extensions_restarted_text.replace("{what}", what)
     }
 
     pub fn extension_installed(&self, name: &str) -> String {
@@ -1205,6 +1211,8 @@ pub const ITALIAN: Strings = Strings {
     command_icon_theme: "Preferenze: Tema icona file",
     choose_icon_theme: "Scegli il tema delle icone dei file",
     icon_theme_none: "Icone di Keel",
+    extensions_restarted_text: "Un'estensione non rispondeva ({what}): estensioni riavviate.",
+    extensions_gave_up: "Le estensioni si sono bloccate troppe volte e restano spente. Riavviale dal menu «…» della vista Estensioni.",
 };
 
 pub const ENGLISH: Strings = Strings {
@@ -1604,6 +1612,8 @@ pub const ENGLISH: Strings = Strings {
     command_icon_theme: "Preferences: File Icon Theme",
     choose_icon_theme: "Select File Icon Theme",
     icon_theme_none: "Keel's icons",
+    extensions_restarted_text: "An extension stopped responding ({what}): extensions restarted.",
+    extensions_gave_up: "Extensions stopped responding too many times and stay off. Restart them from the … menu of the Extensions view.",
 };
 
 #[cfg(test)]

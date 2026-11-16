@@ -631,9 +631,18 @@ fn a_stuck_extension_does_not_hold_the_window() {
         .block_on(host.load_extension(&extension, folder.path()))
         .unwrap();
     // Never answered: the loop holds the host's thread.
+    // A free host answers a ping at once...
+    let ping =
+        runtime.block_on(async { tokio::time::timeout(Duration::from_secs(2), host.ping()).await });
+    assert!(matches!(ping, Ok(Ok(()))), "{ping:?}");
     let activation = host.activate(&extension.id());
     std::thread::sleep(Duration::from_millis(200));
     assert!(host.is_running());
+    // ...a stuck one never does, and says what it was doing.
+    let ping = runtime
+        .block_on(async { tokio::time::timeout(Duration::from_millis(500), host.ping()).await });
+    assert!(ping.is_err(), "the stuck host answered: {ping:?}");
+    assert_eq!(host.waiting_for(), ["extensions/activate keel-tests.stuck"]);
     let started = std::time::Instant::now();
     drop(host);
     assert!(

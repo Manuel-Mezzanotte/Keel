@@ -14,6 +14,7 @@ pub(crate) mod explorer;
 mod extensions_view;
 mod git_graph;
 mod git_gutter;
+mod host_watchdog;
 mod language_features;
 mod language_servers;
 mod markdown_preview;
@@ -365,6 +366,8 @@ pub struct Workbench {
     extension_data: Option<PathBuf>,
     /// The Open VSX search and the updates found.
     store: extensions_view::ExtensionStore,
+    /// Restarts a stuck extension host.
+    watchdog: host_watchdog::HostWatchdog,
     /// The file icon theme of `workbench.iconTheme`; none uses Keel's icons.
     icon_theme: Option<Rc<extensions::icon_theme::IconTheme>>,
     /// Languages the running extensions add.
@@ -553,6 +556,7 @@ impl Workbench {
             extension_state: Default::default(),
             extension_data: None,
             store,
+            watchdog: Default::default(),
             icon_theme: None,
             extension_languages: Default::default(),
             output,
@@ -1476,6 +1480,7 @@ impl Workbench {
             quick_diff: false,
             status_items: BTreeMap::new(),
         });
+        self.watch_host(window, cx);
 
         cx.spawn_in(window, async move |this, cx| {
             while let Some(event) = events.next().await {

@@ -54,6 +54,9 @@
     describe,
   };
 
+  // Answered at once: Keel asks it to tell a busy host from a stuck one.
+  callHandlers.set("host/ping", () => "pong");
+
   async function handle(message) {
     switch (message.type) {
       case "reply": {

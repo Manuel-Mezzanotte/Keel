@@ -63,7 +63,8 @@ pub enum HostEvent {
     },
 }
 
-type Pending = Arc<Mutex<HashMap<u64, oneshot::Sender<Result<Value, String>>>>>;
+/// The calls waiting for the host's answer, with what each one asked.
+type Pending = Arc<Mutex<HashMap<u64, (oneshot::Sender<Result<Value, String>>, String)>>>;
 
 /// What the host thread's operations share, kept in V8's op state.
 struct HostChannels {
@@ -204,7 +205,15 @@ impl ExtensionHost {
     pub fn call(&self, method: &str, params: Value) -> impl Future<Output = Result<Value>> + use<> {
         let id = self.next_id.fetch_add(1, Ordering::Relaxed);
         let (answer, answered) = oneshot::channel();
-        self.pending.lock().unwrap().insert(id, answer);
+        // What the call is about, to name what keeps a stuck host busy.
+        let subject = ["command", "id", "extension"]
+            .iter()
+            .find_map(|key| params[*key].as_str())
+            .map_or_else(
+                || method.to_owned(),
+                |subject| format!("{method} {subject}"),
+            );
+        self.pending.lock().unwrap().insert(id, (answer, subject));
         let sent = self.send(&Message::Call {
             id,
             method: method.to_owned(),
@@ -277,6 +286,29 @@ impl ExtensionHost {
 }
 
 impl ExtensionHost {
+    /// Asks the host to answer at once. A host stuck in an extension's code
+    /// never answers.
+    pub fn ping(&self) -> impl Future<Output = Result<()>> + use<> {
+        let call = self.call("host/ping", Value::Null);
+        async move { call.await.map(|_| ()) }
+    }
+
+    /// What the oldest unanswered calls asked, such as
+    /// `commands/execute vsauto.start`: the likely cause of a stuck host.
+    pub fn waiting_for(&self) -> Vec<String> {
+        let pending = self.pending.lock().unwrap();
+        let mut calls: Vec<(&u64, &String)> = pending
+            .iter()
+            .filter(|(_, (_, subject))| subject != "host/ping")
+            .map(|(id, (_, subject))| (id, subject))
+            .collect();
+        calls.sort();
+        calls
+            .into_iter()
+            .map(|(_, subject)| subject.clone())
+            .collect()
+    }
+
     /// Whether the host's thread is still running.
     pub fn is_running(&self) -> bool {
         matches!(
@@ -316,7 +348,7 @@ fn op_keel_post(state: &mut OpState, #[string] message: String) -> Result<(), Js
         .map_err(|error| JsErrorBox::type_error(error.to_string()))?;
     match message {
         Message::Reply { id, result, error } => {
-            if let Some(answer) = channels.pending.lock().unwrap().remove(&id) {
+            if let Some((answer, _)) = channels.pending.lock().unwrap().remove(&id) {
                 let _ = answer.send(match error {
                     Some(error) => Err(error),
                     None => Ok(result),
