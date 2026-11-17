@@ -1087,6 +1087,32 @@ mod window_tests {
     }
 
     #[gpui::test]
+    fn jdtls_edits_come_as_a_client_command(cx: &mut TestAppContext) {
+        let (_folder, base, view, cx) = window(cx);
+        let app = Uri::file(&base.join("app.ts")).to_string();
+        // A quick fix of jdtls carries its edit in `java.apply.workspaceEdit`.
+        view.read_with(cx, |view, _| {
+            let running = view.languages.servers_for(&app);
+            running[0].server.notify_raw(
+                "fake/clientCommand",
+                json!({ "command": "java.apply.workspaceEdit", "arguments": [{ "changes": { app.clone(): [{
+                    "range": { "start": { "line": 0, "character": 0 }, "end": { "line": 0, "character": 0 } },
+                    "newText": "import java.util.List;\n",
+                }] } }] }),
+            );
+        });
+        wait_until(cx, "the edit in the editor", |cx| {
+            view.read_with(cx, |view, cx| {
+                view.active_editor()
+                    .unwrap()
+                    .read(cx)
+                    .value()
+                    .starts_with("import java.util.List;\n")
+            })
+        });
+    }
+
+    #[gpui::test]
     fn server_edits_reach_open_and_closed_files(cx: &mut TestAppContext) {
         let (_folder, base, view, cx) = window(cx);
         let app = Uri::file(&base.join("app.ts")).to_string();

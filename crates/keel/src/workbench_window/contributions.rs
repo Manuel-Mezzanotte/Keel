@@ -141,6 +141,15 @@ impl Workbench {
     /// languages of the running extensions.
     pub(super) fn language_id_for(&self, path: &Path) -> String {
         let builtin = language::vscode_id_for_path(path);
+        // Spring Boot's configuration, as its VS Code extension names it,
+        // in Spring Boot projects only: elsewhere it stays plain YAML.
+        if let Some(spring) = spring_boot_language(path, builtin)
+            && self.project.root.as_deref().is_some_and(|root| {
+                lsp::servers::spec("spring-boot").is_some_and(|spec| spec.wanted_in(root))
+            })
+        {
+            return spring.to_owned();
+        }
         if builtin != "plaintext" {
             return builtin.to_owned();
         }
@@ -305,8 +314,53 @@ impl Workbench {
     }
 }
 
+/// The Spring Boot language of `application.properties`, `bootstrap.yml`
+/// and their profiles (`application-dev.yaml`...).
+fn spring_boot_language(path: &Path, builtin: &str) -> Option<&'static str> {
+    let name = path.file_name()?.to_str()?;
+    if !(name.starts_with("application") || name.starts_with("bootstrap")) {
+        return None;
+    }
+    match builtin {
+        "properties" => Some("spring-boot-properties"),
+        "yaml" => Some("spring-boot-properties-yaml"),
+        _ => None,
+    }
+}
+
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn spring_boot_configuration_files() {
+        let cases = [
+            (
+                "application.properties",
+                "properties",
+                Some("spring-boot-properties"),
+            ),
+            (
+                "application-dev.yml",
+                "yaml",
+                Some("spring-boot-properties-yaml"),
+            ),
+            (
+                "bootstrap.yaml",
+                "yaml",
+                Some("spring-boot-properties-yaml"),
+            ),
+            ("compose.yaml", "yaml", None),
+            ("messages.properties", "properties", None),
+            ("application.json", "json", None),
+        ];
+        for (name, builtin, expected) in cases {
+            assert_eq!(
+                super::spring_boot_language(Path::new(name), builtin),
+                expected,
+                "{name}"
+            );
+        }
+    }
+
     use gpui::TestAppContext;
 
     use super::*;

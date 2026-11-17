@@ -597,7 +597,8 @@ impl Workbench {
                 | Backing::Preview(_)
                 | Backing::Pdf(_)
                 | Backing::Graph(_)
-                | Backing::ExtensionDetails(_) => {}
+                | Backing::ExtensionDetails(_)
+                | Backing::Library => {}
             }
             document.uri = new_uri.clone();
             document.language_id = self.language_id_for(&target);

@@ -47,7 +47,7 @@ impl Language {
             "html" => Language::Html,
             "css" | "scss" | "less" | "tailwindcss" => Language::Css,
             "markdown" => Language::Markdown,
-            "yaml" => Language::Yaml,
+            "yaml" | "spring-boot-properties-yaml" => Language::Yaml,
             "toml" => Language::Toml,
             "rust" => Language::Rust,
             "shellscript" | "dotenv" => Language::Shell,

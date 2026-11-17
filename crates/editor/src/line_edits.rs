@@ -34,8 +34,22 @@ pub fn comment_syntax(language_id: &str) -> CommentSyntax<'static> {
         "typescript" | "typescriptreact" | "javascript" | "javascriptreact" | "rust" | "c"
         | "cpp" | "csharp" | "java" | "swift" | "go" | "kotlin" | "dart" | "scss" | "less"
         | "jsonc" | "php" | "scala" | "prisma" | "groovy" => C_STYLE,
-        "python" | "shellscript" | "yaml" | "toml" | "ruby" | "perl" | "r" | "dockerfile"
-        | "makefile" | "powershell" | "properties" | "elixir" | "gitignore" | "ignore" => HASH,
+        "python"
+        | "shellscript"
+        | "yaml"
+        | "toml"
+        | "ruby"
+        | "perl"
+        | "r"
+        | "dockerfile"
+        | "makefile"
+        | "powershell"
+        | "properties"
+        | "elixir"
+        | "gitignore"
+        | "ignore"
+        | "spring-boot-properties"
+        | "spring-boot-properties-yaml" => HASH,
         "sql" | "lua" | "haskell" => CommentSyntax {
             line: Some("--"),
             block: None,

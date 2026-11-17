@@ -356,6 +356,11 @@ impl Workbench {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
+        // A class of a library, which only jdtls can show.
+        if uri.starts_with("jdt:") {
+            self.open_class_file(uri.to_owned(), range, window, cx);
+            return;
+        }
         let Some(path) = Uri::parse(uri).and_then(|parsed| parsed.file_path()) else {
             return;
         };

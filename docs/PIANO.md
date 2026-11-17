@@ -1588,7 +1588,7 @@ Apri Keel su GestionaleHospitality. La prima volta i server si installano da sol
 | 11.1 | Colori e riconoscimento dei file: Python, Java, C, C++, C#, Bash e zsh, Dockerfile, SQL, XML, Makefile e `.properties` | fatta |
 | 11.2 | Motore dei server: archivi `tar.gz` e `zip` con controllo SHA-256; programmi necessari (Java, .NET, strumenti di Xcode) e guida a installarli quando mancano | fatta |
 | 11.3 | Python: `basedpyright` e `ruff`, con l'ambiente virtuale del progetto (`.venv`, uv, Poetry) | fatta |
-| 11.4 | Java con `jdtls` (Maven e Gradle) e Spring Boot (`application.properties` e `.yml`) | da fare |
+| 11.4 | Java con `jdtls` (Maven e Gradle) e Spring Boot (`application.properties` e `.yml`) | fatta |
 | 11.5 | C e C++ con `clangd` (`compile_commands.json`, clang-format); C# con .NET | da fare |
 | 11.6 | Linguaggi di base: Bash e zsh (con ShellCheck e shfmt), Dockerfile, SQL, XML, Makefile | da fare |
 | 11.7 | Prove su un progetto per ogni linguaggio, misure e resoconto | da fare |
@@ -1596,6 +1596,40 @@ Apri Keel su GestionaleHospitality. La prima volta i server si installano da sol
 **Decisioni prese all'inizio**
 - **I server sono quelli delle estensioni di VS Code** più usate, così il comportamento è lo stesso: Pylance si basa su Pyright (qui `basedpyright`, la sua versione libera); Java usa `jdtls` come l'estensione di Red Hat; XML usa `lemminx`, sempre di Red Hat.
 - **Keel installa da solo** i server che si scaricano (npm, archivi dalle pagine di rilascio). **Non installa da solo** i programmi di sistema, cioè Java, .NET e gli strumenti di Xcode: se mancano ti dice cosa manca e ti offre il comando da lanciare nel terminale.
+
+**Note sulla 11.4**
+- **Java con il pacchetto dell'estensione di VS Code.** Keel scarica l'estensione Java di Red Hat per Mac Apple (133 MB, con impronta SHA-256). Dentro ci sono jdtls 1.58, il Java 25 su cui gira e Lombok: non serve installare Java.
+  - Ho provato prima jdtls 1.63 dal sito di Eclipse: vuole Java 25 anche se il suo script dice 21, e sul Mac c'è Java 21. VS Code evita il problema allo stesso modo, portandosi il suo Java.
+  - Keel lancia jdtls con le stesse opzioni di memoria di VS Code (parte da 100 MB, al massimo 2 GB). Lo lancia direttamente, senza lo script Python.
+  - L'indice di ogni progetto sta nella cartella del server dentro i dati di Keel (`workspaces/<progetto>-<impronta>`), non nella cache di sistema.
+  - **Lombok:** se `pom.xml` o `build.gradle` lo nominano, jdtls parte con il suo agente, come in VS Code. Senza, i progetti che lo usano sarebbero pieni di falsi errori.
+  - **Maven e Gradle** si importano da soli. Dopo una modifica a `pom.xml` o `build.gradle` Keel aggiorna il progetto senza chiedere: VS Code chiede, Keel non ha dove farlo.
+- **Le classi delle librerie** (Vai alla definizione su `SpringApplication`) si aprono in una scheda in sola lettura, con il testo che dà jdtls: il sorgente se Maven lo ha scaricato, altrimenti la classe ricostruita.
+- **Le azioni rapide di Java** portano la modifica in un comando (`java.apply.workspaceEdit`): Keel lo esegue da sé, come l'estensione di VS Code.
+- **Spring Boot** usa il server dell'estensione di VS Code (VMware, 83 MB), solo nei progetti il cui `pom.xml` o `build.gradle` nomina `spring-boot`.
+  - `application*.properties` e `application*.yml` (anche `bootstrap` e i profili come `application-dev.yml`) diventano file di Spring Boot, con completamenti, errori e info sulle proprietà. Fuori dai progetti Spring restano normali file YAML e properties.
+  - Il server gira sul Java di jdtls.
+  - **Non lavora da solo:** chiede a jdtls il classpath e i tipi passando dall'editor. Keel fa lo stesso passaggio di VS Code:
+    - jdtls parte con le 5 parti di Spring Boot (`jars/`). Per questo nei progetti Spring Keel installa prima Spring Boot, poi jdtls.
+    - Le domande di Spring Boot (`sts/addClasspathListener`, `sts/javaType`…) vanno a jdtls come comandi `sts.java.…`.
+    - Le risposte di jdtls al cambiare del classpath (`sts4.classpath.…`) tornano a Spring Boot.
+    - Due installazioni dello stesso server non si sovrappongono più: la seconda aspetta la prima.
+- **Prove con i server veri** su un progetto Spring Boot 4.1 con Maven, creato con start.spring.io. Le dipendenze di Maven vanno in un deposito nella cartella di prova, non nel tuo `~/.m2`.
+
+  | Prova | Tempo |
+  |---|---|
+  | jdtls, installazione | 20 s |
+  | jdtls, avvio | 1,2–2,7 s |
+  | jdtls, primo import Maven con gli errori (scarica 62 MB di dipendenze) | 18 s |
+  | jdtls, errori con il progetto già importato | 4,5 s in tutto |
+  | jdtls, info / completamento / definizione | 0,4 s / 10–65 ms / 4–480 ms |
+  | jdtls, riferimenti | 36–440 ms |
+  | jdtls, sorgente di una classe di libreria | 107 ms |
+  | Spring Boot, installazione | 4,9 s |
+  | Spring Boot, completamento di `server.po` in `application.properties` | 2 s la prima volta, poi 5 ms |
+
+- **Non provato con un progetto vero:** Gradle, che la prima volta scarica la sua distribuzione (circa 130 MB). Il codice è lo stesso di Maven.
+- La prima ricerca dei riferimenti su una classe di libreria, con l'import appena finito, ha dato un errore interno di jdtls. Rifatta poco dopo ha funzionato.
 
 **Note sulla 11.3**
 - **Due server per Python**, come in VS Code con Pylance e l'estensione di Ruff:

@@ -96,6 +96,20 @@ pub(super) struct RunningServer {
     /// It wants its diagnostics asked for (`textDocument/diagnostic`)
     /// instead of sending them, as ESLint does.
     pulls_diagnostics: std::cell::Cell<bool>,
+    /// Commands it registered while running (`workspace/executeCommand`).
+    commands: RefCell<HashSet<String>>,
+}
+
+impl RunningServer {
+    /// Whether it runs `command`, declared at the start or registered later.
+    fn runs_command(&self, command: &str) -> bool {
+        self.commands.borrow().contains(command)
+            || self
+                .server
+                .capabilities()
+                .and_then(|capabilities| capabilities.execute_command_provider.as_ref())
+                .is_some_and(|provider| provider.commands.iter().any(|known| known == command))
+    }
 }
 
 /// A `workspace/didChangeWatchedFiles` registration: a pattern and the
@@ -529,6 +543,98 @@ impl Workbench {
         }
     }
 
+    /// Runs a command that belongs to the editor rather than to a server.
+    /// Returns whether it knew the command.
+    pub(super) fn client_command(
+        &mut self,
+        command: &str,
+        arguments: &[Value],
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> bool {
+        match command {
+            // jdtls's quick fixes and refactorings carry their edit here.
+            "java.apply.workspaceEdit" => {
+                if let Some(edit) = arguments.first().and_then(|edit| {
+                    serde_json::from_value::<lsp_types::WorkspaceEdit>(edit.clone()).ok()
+                }) {
+                    self.apply_workspace_edit(&edit, window, cx);
+                }
+                true
+            }
+            // jdtls found a Spring Boot project: VS Code's extension then
+            // has Spring Boot's server follow the classpath.
+            "vscode-spring-boot.ls.start" => {
+                self.enable_spring_boot_classpath(cx);
+                true
+            }
+            // VS Code's Java extension reloads extension bundles; Keel's
+            // are loaded at the start.
+            "_java.reloadBundles.command" => true,
+            _ => false,
+        }
+    }
+
+    /// Tells Spring Boot's server to follow the project's classpath, which
+    /// it then asks jdtls for. Only once both run.
+    fn enable_spring_boot_classpath(&self, cx: &mut Context<Self>) {
+        let running = self.languages.state.running.borrow();
+        if let (Some(spring), true) = (running.get("spring-boot"), running.contains_key("jdtls")) {
+            let request = spring.server.request_raw(
+                "workspace/executeCommand",
+                json!({ "command": "sts.vscode-spring-boot.enableClasspathListening", "arguments": [true] }),
+            );
+            cx.background_spawn(async move {
+                let _ = request.await;
+            })
+            .detach();
+        }
+    }
+
+    /// Shows a class of a library, as jdtls gives it: its source when the
+    /// library comes with one, or what jdtls rebuilds from the class.
+    pub(super) fn open_class_file(
+        &mut self,
+        uri: String,
+        range: lsp_types::Range,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let column = self.active.min(self.panes.len().saturating_sub(1));
+        if self.documents.contains_key(&uri) {
+            self.show_tab(&uri, column, OpenAs::Normal, true, window, cx);
+            self.select_lsp_range(range, window, cx);
+            return;
+        }
+        let Some(Slot::Running(running)) = self.languages.servers.get("jdtls") else {
+            return;
+        };
+        let request = running
+            .server
+            .request_raw("java/classFileContents", json!({ "uri": uri }));
+        cx.spawn_in(window, async move |this, cx| {
+            let answer = request.await;
+            this.update_in(cx, |this, window, cx| {
+                let text = match answer {
+                    Ok(Value::String(text)) if !text.is_empty() => text,
+                    Ok(_) => return,
+                    Err(error) => {
+                        this.report(format!("Java: {error:#}"));
+                        cx.notify();
+                        return;
+                    }
+                };
+                if !this.documents.contains_key(&uri) {
+                    this.add_document(uri.clone(), Backing::Library, "java".to_owned(), text);
+                }
+                this.show_tab(&uri, column, OpenAs::Normal, true, window, cx);
+                this.select_lsp_range(range, window, cx);
+            })
+            .ok();
+        })
+        .detach();
+    }
+
     /// Asks once whether to install what a server needs, in a terminal.
     fn offer_prerequisite(
         &mut self,
@@ -609,7 +715,14 @@ impl Workbench {
         }
         #[cfg(not(test))]
         let fake = false;
-        let options = initialization_options(spec, &self.settings);
+        let user_settings = lsp::nested_settings(&self.settings.merged());
+        // jdtls loads Spring Boot's parts when it starts: in its projects
+        // they are installed first, unless Spring Boot's server is off.
+        let spring_first = spec.id == "jdtls"
+            && auto_install
+            && servers::spec("spring-boot")
+                .is_some_and(|spring| spring.wanted_in(&root) && !self.server_disabled(spring));
+        let options_dir = servers_dir.clone().unwrap_or_default();
         let task = cx.spawn(async move |this, cx| {
             let started: anyhow::Result<LanguageServer> = if fake {
                 lsp::fake::spawn()
@@ -639,6 +752,30 @@ impl Workbench {
                         return;
                     }
                 };
+                if spring_first
+                    && let (Some(spring), Some(dir)) =
+                        (servers::spec("spring-boot"), servers_dir.clone())
+                {
+                    let root = root.clone();
+                    let installed = cx
+                        .background_spawn(async move {
+                            let env = servers::login_environment();
+                            match servers::find(spring, &dir, &root, env) {
+                                Some(_) => Ok(String::new()),
+                                None => servers::install(spring, &dir, &root, env),
+                            }
+                        })
+                        .await;
+                    if let Err(error) = installed {
+                        this.update(cx, |this, _| {
+                            this.log_to(
+                                OutputChannel::Languages,
+                                format!("[{}] {error:#}", spring.name),
+                            );
+                        })
+                        .ok();
+                    }
+                }
                 let found = {
                     let (servers_dir, root) = (servers_dir.clone(), root.clone());
                     cx.background_spawn(async move {
@@ -701,6 +838,9 @@ impl Workbench {
                     return;
                 }
             };
+            // After the install: jdtls names files of Spring Boot's.
+            let options =
+                servers::initialization_options(spec, &root, &user_settings, &options_dir);
             let initialized = {
                 let initialize = server.initialize(&root, options);
                 let timeout = cx.background_executor().timer(INITIALIZE_TIMEOUT);
@@ -755,6 +895,7 @@ impl Workbench {
             open: RefCell::new(HashSet::new()),
             watchers: RefCell::new(Vec::new()),
             pulls_diagnostics: std::cell::Cell::new(pulls),
+            commands: RefCell::new(HashSet::new()),
         });
         self.languages
             .servers
@@ -775,6 +916,9 @@ impl Workbench {
             .collect();
         for uri in uris {
             self.languages.open_in_server(&running, &uri);
+        }
+        if matches!(spec.id, "jdtls" | "spring-boot") {
+            self.enable_spring_boot_classpath(cx);
         }
         if self
             .status_message
@@ -905,6 +1049,15 @@ impl Workbench {
                                 self.languages.state.queue_pull(&running, &uri);
                             }
                         }
+                        Some("workspace/executeCommand") => {
+                            running.commands.borrow_mut().extend(
+                                registration["registerOptions"]["commands"]
+                                    .as_array()
+                                    .into_iter()
+                                    .flatten()
+                                    .filter_map(|command| command.as_str().map(str::to_owned)),
+                            );
+                        }
                         // VS Code answers this registration with the
                         // settings, and servers such as ESLint wait for it
                         // before checking anything.
@@ -1011,6 +1164,97 @@ impl Workbench {
                     cx.open_url(url);
                 }
                 Ok(json!({}))
+            }
+            // Spring Boot's server asks about the project's Java through
+            // the editor: jdtls answers, with the parts it loaded for it.
+            method if method.starts_with("sts/") => {
+                let jdtls = self.languages.state.running.borrow().get("jdtls").cloned();
+                match (servers::spring_boot_relay(method, &params), jdtls) {
+                    (Some((command, arguments)), Some(jdtls)) => {
+                        let asker = self
+                            .languages
+                            .state
+                            .running
+                            .borrow()
+                            .get(running.spec.id)
+                            .cloned();
+                        let request = jdtls.server.request_raw(
+                            "workspace/executeCommand",
+                            json!({ "command": command, "arguments": arguments }),
+                        );
+                        cx.spawn(async move |_, _| {
+                            let answer = request.await.map_err(|error| {
+                                ResponseError::new(
+                                    ResponseError::INTERNAL_ERROR,
+                                    format!("{error:#}"),
+                                )
+                            });
+                            if let Some(asker) = asker {
+                                asker.server.respond(id, answer);
+                            }
+                        })
+                        .detach();
+                        return;
+                    }
+                    // Moving the cursor and the like: nothing to do.
+                    (None, _) => Ok(Value::Null),
+                    (Some(_), None) => Err(ResponseError::new(
+                        ResponseError::INTERNAL_ERROR,
+                        "the Java server is not running",
+                    )),
+                }
+            }
+            // A command the editor runs, as VS Code's Java extension does
+            // for jdtls; one Keel does not know goes to the server that
+            // registered it, as Spring Boot's classpath callbacks do.
+            "workspace/executeClientCommand" => {
+                let command = params["command"].as_str().unwrap_or_default().to_owned();
+                let arguments = params["arguments"].as_array().cloned().unwrap_or_default();
+                if self.client_command(&command, &arguments, window, cx) {
+                    Ok(Value::Null)
+                } else if let Some(target) = {
+                    let servers = self.languages.state.running.borrow();
+                    servers
+                        .values()
+                        .find(|other| {
+                            other.spec.id != running.spec.id && other.runs_command(&command)
+                        })
+                        // Spring Boot's classpath callbacks (`sts4.classpath.…`).
+                        .or_else(|| {
+                            command
+                                .starts_with("sts")
+                                .then(|| servers.get("spring-boot"))
+                                .flatten()
+                        })
+                        .cloned()
+                } {
+                    let asker = self
+                        .languages
+                        .state
+                        .running
+                        .borrow()
+                        .get(running.spec.id)
+                        .cloned();
+                    let request = target.server.request_raw(
+                        "workspace/executeCommand",
+                        json!({ "command": command, "arguments": arguments }),
+                    );
+                    cx.spawn(async move |_, _| {
+                        let answer = request.await.map_err(|error| {
+                            ResponseError::new(ResponseError::INTERNAL_ERROR, format!("{error:#}"))
+                        });
+                        if let Some(asker) = asker {
+                            asker.server.respond(id, answer);
+                        }
+                    })
+                    .detach();
+                    return;
+                } else {
+                    Err(ResponseError::new(
+                        ResponseError::METHOD_NOT_FOUND,
+                        format!("Keel does not know the command {command}"),
+                    ))
+                }
             }
             "window/showMessageRequest" => {
                 let message = params["message"].as_str().unwrap_or_default();
@@ -1321,11 +1565,6 @@ impl Workbench {
             }),
         )
     }
-}
-
-/// What a server gets in `initializationOptions`.
-fn initialization_options(spec: &ServerSpec, _settings: &Settings) -> Option<Value> {
-    servers::initialization_options(spec)
 }
 
 /// Servers and Keel may spell the same file differently, for example

@@ -160,6 +160,8 @@ pub(super) fn language_name(id: &str, strings: &Strings) -> String {
         "xml" => "XML",
         "dockerfile" => "Dockerfile",
         "properties" => "Properties",
+        "spring-boot-properties" => "Spring Boot Properties",
+        "spring-boot-properties-yaml" => "Spring Boot Properties YAML",
         "html" => "HTML",
         "css" => "CSS",
         "scss" => "SCSS",
@@ -945,7 +947,7 @@ impl Workbench {
                             .flex_1()
                             .min_h_0()
                             .child(self.render_markdown_preview(tab, colors, cx)),
-                        _ => div()
+                        backing => div()
                             .flex_1()
                             .min_h_0()
                             .relative()
@@ -954,6 +956,8 @@ impl Workbench {
                             .children(self.render_blame_column(index, cx))
                             .child(
                                 Editor::new(&pane.editor)
+                                    // A library's class is there to read.
+                                    .readonly(matches!(backing, Some(Backing::Library)))
                                     .flex_1()
                                     .min_w_0()
                                     .h_full()

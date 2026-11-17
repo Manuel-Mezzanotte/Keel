@@ -64,6 +64,9 @@ pub enum Activation {
         files: &'static [&'static str],
         packages: &'static [&'static str],
     },
+    /// Only if the project's Maven or Gradle build names this text, such
+    /// as `spring-boot`.
+    BuildMentions(&'static str),
 }
 
 /// A language server Keel knows.
@@ -92,6 +95,7 @@ impl ServerSpec {
     pub fn wanted_in(&self, root: &Path) -> bool {
         match self.activation {
             Activation::Always => true,
+            Activation::BuildMentions(text) => build_files_mention(root, text),
             Activation::ProjectUses { files, packages } => {
                 let has_file = files.iter().any(|name| match name.strip_suffix('*') {
                     Some(prefix) => std::fs::read_dir(root).is_ok_and(|entries| {
@@ -130,6 +134,44 @@ const WEB_LANGUAGES: &[&str] = &[
     "typescriptreact",
     "javascript",
     "javascriptreact",
+];
+
+/// The languages of Spring Boot's server: its configuration files, which
+/// Keel recognizes in Spring Boot projects, and Java.
+pub const SPRING_BOOT_LANGUAGES: &[&str] = &[
+    "spring-boot-properties",
+    "spring-boot-properties-yaml",
+    "java",
+];
+
+const SPRING_BOOT_SERVER: &str =
+    "extension/language-server/spring-boot-language-server-2.4.1-SNAPSHOT-exec.jar";
+
+/// The parts of Spring Boot's extension that jdtls loads
+/// (`contributes.javaExtensions` in its `package.json`).
+const SPRING_BOOT_JDTLS_BUNDLES: &[&str] = &[
+    "extension/jars/io.projectreactor.reactor-core.jar",
+    "extension/jars/org.reactivestreams.reactive-streams.jar",
+    "extension/jars/jdt-ls-commons.jar",
+    "extension/jars/jdt-ls-extension.jar",
+    "extension/jars/sts-gradle-tooling.jar",
+];
+
+/// The jar that starts jdtls, inside its download.
+const JDTLS_LAUNCHER: &str =
+    "extension/server/plugins/org.eclipse.equinox.launcher_1.8.0.v20260804-1928.jar";
+
+/// The Java options of VS Code's Java extension (`java.jdt.ls.vmargs`):
+/// a small heap to start with, and a garbage collector that gives memory
+/// back.
+const JDTLS_VM_ARGS: &[&str] = &[
+    "-XX:+UseParallelGC",
+    "-XX:GCTimeRatio=4",
+    "-XX:AdaptiveSizePolicyWeight=90",
+    "-Dsun.zip.disableMemoryMapping=true",
+    "-Xmx2G",
+    "-Xms100m",
+    "-Xlog:disable",
 ];
 
 /// Every server Keel can run, in the order they start for a file.
@@ -335,6 +377,45 @@ pub const SERVERS: &[ServerSpec] = &[
         needs: &[],
     },
     ServerSpec {
+        id: "jdtls",
+        name: "Java",
+        languages: &["java"],
+        // The launcher inside the download; Keel starts it with Java.
+        program: JDTLS_LAUNCHER,
+        args: &[],
+        // VS Code's Java extension for this Mac: jdtls with the Java it
+        // runs on and Lombok, so nothing else needs installing.
+        install: Install::Download {
+            url: "https://open-vsx.org/api/redhat/java/darwin-{x64}/1.58.0/file/redhat.java-1.58.0@darwin-{x64}.vsix",
+            version: "1.58.0",
+            unpack: Unpack::Archive {
+                program: JDTLS_LAUNCHER,
+            },
+            sha256: Some("8783b3331d6b35e8ae80833e76974edbca2fa5f3a9d9943b598680087d2b24e8"),
+        },
+        activation: Activation::Always,
+        needs: &[],
+    },
+    ServerSpec {
+        id: "spring-boot",
+        name: "Spring Boot",
+        languages: SPRING_BOOT_LANGUAGES,
+        program: SPRING_BOOT_SERVER,
+        args: &[],
+        // VS Code's Spring Boot extension: its server, and the parts jdtls
+        // loads to answer it about the project's classes.
+        install: Install::Download {
+            url: "https://open-vsx.org/api/VMware/vscode-spring-boot/2.4.1/file/VMware.vscode-spring-boot-2.4.1.vsix",
+            version: "2.4.1",
+            unpack: Unpack::Archive {
+                program: SPRING_BOOT_SERVER,
+            },
+            sha256: Some("6971f2bbc513a944e7f907e48ec68f64848d689630d5616bf54ef0803349f6ed"),
+        },
+        activation: Activation::BuildMentions("spring-boot"),
+        needs: &[],
+    },
+    ServerSpec {
         id: "rust-analyzer",
         name: "rust-analyzer",
         languages: &["rust"],
@@ -354,6 +435,30 @@ pub const SERVERS: &[ServerSpec] = &[
 pub fn default_settings(spec: &ServerSpec) -> Value {
     let css = json!({ "validate": true, "completion": { "triggerPropertyValueCompletion": true, "completePropertyWithSemicolon": true }, "hover": { "documentation": true, "references": true } });
     match spec.id {
+        "jdtls" => json!({
+            "java": {
+                // VS Code asks before updating the project after a change
+                // to `pom.xml` or `build.gradle`; Keel has nowhere to ask
+                // and does it, as most people answer.
+                "configuration": { "updateBuildConfiguration": "automatic" },
+                "import": {
+                    "maven": { "enabled": true },
+                    "gradle": { "enabled": true, "wrapper": { "enabled": true } },
+                    "exclusions": ["**/node_modules/**", "**/.metadata/**", "**/archetype-resources/**", "**/META-INF/maven/**"],
+                },
+                "maven": { "downloadSources": true },
+                "autobuild": { "enabled": true },
+                "completion": {
+                    "enabled": true,
+                    "importOrder": ["#", "java", "javax", "org", "com", ""],
+                    "favoriteStaticMembers": ["org.junit.jupiter.api.Assertions.*", "org.mockito.Mockito.*", "org.mockito.ArgumentMatchers.*"],
+                },
+                "format": { "enabled": true },
+                "signatureHelp": { "enabled": true },
+                "errors": { "incompleteClasspath": { "severity": "warning" } },
+                "server": { "launchMode": "Standard" },
+            },
+        }),
         "basedpyright" => json!({
             "python": { "analysis": { "autoImportCompletions": true } },
             "basedpyright": { "analysis": {
@@ -625,8 +730,34 @@ fn poetry_environment(root: &Path) -> Option<PathBuf> {
 
 /// What a server gets in `initializationOptions`, as VS Code's extensions
 /// send them.
-pub fn initialization_options(spec: &ServerSpec) -> Option<Value> {
+pub fn initialization_options(
+    spec: &ServerSpec,
+    root: &Path,
+    user: &Value,
+    servers_dir: &Path,
+) -> Option<Value> {
     match spec.id {
+        "spring-boot" => Some(json!({
+            "workspaceFolders": [workbench::uri::Uri::file(root).to_string()],
+            "enableJdtClasspath": false,
+        })),
+        "jdtls" => Some(json!({
+            "workspaceFolders": [workbench::uri::Uri::file(root).to_string()],
+            "settings": settings_for(spec, user, root),
+            "bundles": spring_boot_bundles(servers_dir, root),
+            // What VS Code's Java extension can do beyond the protocol,
+            // as far as Keel does it too.
+            "extendedClientCapabilities": {
+                "classFileContentsSupport": true,
+                "executeClientCommandSupport": true,
+                "resolveAdditionalTextEditsSupport": true,
+                "progressReportProvider": false,
+                "clientHoverProvider": false,
+                "clientDocumentSymbolProvider": false,
+                "shouldLanguageServerExitOnShutdown": true,
+                "snippetEditSupport": false,
+            },
+        })),
         // Without this the HTML, CSS and JSON servers do not format.
         "html" | "css" => Some(json!({ "provideFormatter": true })),
         // The JSON server downloads schemas itself instead of asking.
@@ -737,7 +868,8 @@ fn downloaded_program(dir: &Path, program: &str, version: &str, unpack: Unpack) 
     }
 }
 
-/// Fills in the machine's architecture, in each project's spelling.
+/// Fills in the machine's architecture, in each project's spelling:
+/// `{arch}`, `{aarch_64}`, `{arm64}` (Go) and `{x64}` (VS Code).
 pub fn expand_arch(text: &str) -> String {
     let apple_silicon = std::env::consts::ARCH == "aarch64";
     text.replace("{arch}", if apple_silicon { "aarch64" } else { "x86_64" })
@@ -746,6 +878,7 @@ pub fn expand_arch(text: &str) -> String {
             if apple_silicon { "aarch_64" } else { "x86_64" },
         )
         .replace("{arm64}", if apple_silicon { "arm64" } else { "amd64" })
+        .replace("{x64}", if apple_silicon { "arm64" } else { "x64" })
 }
 
 /// A program on the `PATH` of `env`.
@@ -828,7 +961,23 @@ pub fn install(
     root: &Path,
     env: &HashMap<String, String>,
 ) -> Result<String> {
+    // One install at a time per folder: two windows, or jdtls waiting for
+    // Spring Boot's parts, must not write the same download.
+    static INSTALLING: OnceLock<
+        std::sync::Mutex<HashMap<PathBuf, std::sync::Arc<std::sync::Mutex<()>>>>,
+    > = OnceLock::new();
     let dir = install_dir(servers_dir, spec);
+    let lock = INSTALLING
+        .get_or_init(Default::default)
+        .lock()
+        .unwrap()
+        .entry(dir.clone())
+        .or_default()
+        .clone();
+    let _installing = lock.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+    if find(spec, servers_dir, root, env).is_some_and(|program| program.starts_with(&dir)) {
+        return Ok(String::new());
+    }
     std::fs::create_dir_all(&dir)?;
     let (program, args) = install_command(spec, servers_dir, env)?;
     let output = Command::new(&program)
@@ -960,12 +1109,226 @@ pub fn command(
         .map(|(key, value)| (key.clone(), value.clone()))
         .collect();
     variables.extend(extra_env.iter().cloned());
+    let (program, args) = match spec.id {
+        "jdtls" => jdtls_command(&program, root, extra_env),
+        "spring-boot" => spring_boot_command(&program, extra_env),
+        _ => (
+            program,
+            spec.args.iter().map(|arg| (*arg).to_owned()).collect(),
+        ),
+    };
     ServerCommand {
         program,
-        args: spec.args.iter().map(|arg| (*arg).to_owned()).collect(),
+        args,
         env: variables,
         cwd: root.to_path_buf(),
     }
+}
+
+/// The Java of a prerequisite, or the one on the `PATH`.
+fn java_program(extra_env: &[(String, String)]) -> PathBuf {
+    extra_env
+        .iter()
+        .find(|(key, _)| key == "JAVA_HOME")
+        .map_or_else(
+            || PathBuf::from("java"),
+            |(_, home)| Path::new(home).join("bin/java"),
+        )
+}
+
+/// The Java that comes with VS Code's Java extension:
+/// `extension/jre/<version>-macosx-<arch>/bin/java`.
+fn bundled_java(extension: &Path) -> Option<PathBuf> {
+    let mut found: Vec<PathBuf> = std::fs::read_dir(extension.join("jre"))
+        .ok()?
+        .flatten()
+        .map(|entry| entry.path().join("bin/java"))
+        .filter(|java| java.exists())
+        .collect();
+    found.sort();
+    found.pop()
+}
+
+/// Whether the project's build files name `text`, such as `lombok`.
+fn build_files_mention(root: &Path, text: &str) -> bool {
+    ["pom.xml", "build.gradle", "build.gradle.kts"]
+        .iter()
+        .any(|name| {
+            std::fs::read_to_string(root.join(name)).is_ok_and(|build| build.contains(text))
+        })
+}
+
+/// Starts jdtls as the Java extension of VS Code does, without needing
+/// Python for the `bin/jdtls` script. Its settings and the index of each
+/// project stay in Keel's folder of the server: `config` and
+/// `workspaces/<project>-<hash>`.
+fn jdtls_command(
+    launcher: &Path,
+    root: &Path,
+    extra_env: &[(String, String)],
+) -> (PathBuf, Vec<String>) {
+    // `<servers>/jdtls/<version>/extension/server/plugins/<launcher>.jar`
+    let extension = launcher
+        .ancestors()
+        .nth(3)
+        .unwrap_or(Path::new("."))
+        .to_path_buf();
+    let version_dir = extension.parent().unwrap_or(&extension);
+    let server_dir = version_dir.parent().unwrap_or(version_dir);
+    let shared = extension
+        .join("server")
+        .join(if std::env::consts::ARCH == "aarch64" {
+            "config_mac_arm"
+        } else {
+            "config_mac"
+        });
+    let mut args: Vec<String> = JDTLS_VM_ARGS.iter().map(|arg| (*arg).to_owned()).collect();
+    // Lombok writes code at compile time: without its agent, projects that
+    // use it are full of false errors. VS Code adds it the same way.
+    if build_files_mention(root, "lombok")
+        && let Ok(entries) = std::fs::read_dir(extension.join("lombok"))
+        && let Some(jar) = entries
+            .flatten()
+            .map(|entry| entry.path())
+            .find(|path| path.extension().is_some_and(|extension| extension == "jar"))
+    {
+        args.push(format!("-javaagent:{}", jar.display()));
+    }
+    args.extend(
+        [
+            "-Declipse.application=org.eclipse.jdt.ls.core.id1",
+            "-Dosgi.bundles.defaultStartLevel=4",
+            "-Declipse.product=org.eclipse.jdt.ls.core.product",
+            "-Dosgi.checkConfiguration=true",
+            &format!("-Dosgi.sharedConfiguration.area={}", shared.display()),
+            "-Dosgi.sharedConfiguration.area.readOnly=true",
+            "-Dosgi.configuration.cascaded=true",
+            // Needed from Java 24 on, harmless before.
+            "-Djdk.xml.maxGeneralEntitySizeLimit=0",
+            "-Djdk.xml.totalEntitySizeLimit=0",
+            "--add-modules=ALL-SYSTEM",
+            "--add-opens",
+            "java.base/java.util=ALL-UNNAMED",
+            "--add-opens",
+            "java.base/java.lang=ALL-UNNAMED",
+            "-jar",
+        ]
+        .map(str::to_owned),
+    );
+    args.push(launcher.to_string_lossy().into_owned());
+    args.push("-configuration".to_owned());
+    args.push(server_dir.join("config").to_string_lossy().into_owned());
+    args.push("-data".to_owned());
+    args.push(
+        server_dir
+            .join("workspaces")
+            .join(project_folder_name(root))
+            .to_string_lossy()
+            .into_owned(),
+    );
+    let java = bundled_java(&extension).unwrap_or_else(|| java_program(extra_env));
+    (java, args)
+}
+
+/// Starts Spring Boot's server as its extension does, on the Java that
+/// comes with jdtls when there is one.
+fn spring_boot_command(jar: &Path, extra_env: &[(String, String)]) -> (PathBuf, Vec<String>) {
+    // `<servers>/spring-boot/<version>/extension/language-server/<jar>`
+    let servers = jar.ancestors().nth(5).unwrap_or(Path::new("."));
+    let java = installed_jdtls_extension(servers)
+        .and_then(|extension| bundled_java(&extension))
+        .unwrap_or_else(|| java_program(extra_env));
+    let args = [
+        "-Xmx1024m",
+        "-Dsts.lsp.client=vscode",
+        "-Dspring.config.location=classpath:/application.properties",
+        "-Djdk.util.zip.disableZip64ExtraFieldValidation=true",
+        "-Dspring.main.web-application-type=NONE",
+        "-Xlog:jni+resolve=off",
+        "-jar",
+    ]
+    .iter()
+    .map(|arg| (*arg).to_owned())
+    .chain([jar.to_string_lossy().into_owned()])
+    .collect();
+    (java, args)
+}
+
+/// The `extension` folder of the installed jdtls, if any.
+fn installed_jdtls_extension(servers_dir: &Path) -> Option<PathBuf> {
+    let spec = spec("jdtls")?;
+    let Install::Download { version, .. } = spec.install else {
+        return None;
+    };
+    let extension = install_dir(servers_dir, spec)
+        .join(version)
+        .join("extension");
+    extension.exists().then_some(extension)
+}
+
+/// The parts jdtls loads for Spring Boot, when the project uses it and its
+/// server is installed.
+fn spring_boot_bundles(servers_dir: &Path, root: &Path) -> Vec<String> {
+    let Some(spring) = spec("spring-boot") else {
+        return Vec::new();
+    };
+    let Install::Download { version, .. } = spring.install else {
+        return Vec::new();
+    };
+    let folder = install_dir(servers_dir, spring).join(version);
+    if !spring.wanted_in(root) || !folder.exists() {
+        return Vec::new();
+    }
+    SPRING_BOOT_JDTLS_BUNDLES
+        .iter()
+        .map(|bundle| folder.join(bundle))
+        .filter(|bundle| bundle.exists())
+        .map(|bundle| bundle.to_string_lossy().into_owned())
+        .collect()
+}
+
+/// What Spring Boot's server asks the editor about Java, and the jdtls
+/// command that answers, as VS Code's Spring Boot extension passes them on:
+/// `(command, arguments)` for `workspace/executeCommand` on jdtls.
+pub fn spring_boot_relay(method: &str, params: &Value) -> Option<(&'static str, Vec<Value>)> {
+    let command = match method {
+        "sts/addClasspathListener" => "sts.java.addClasspathListener",
+        "sts/removeClasspathListener" => "sts.java.removeClasspathListener",
+        "sts/javaType" => "sts.java.type",
+        "sts/javadocHoverLink" => "sts.java.javadocHoverLink",
+        "sts/javaLocation" => "sts.java.location",
+        "sts/javadoc" => "sts.java.javadoc",
+        "sts/javaSearchTypes" => "sts.java.search.types",
+        "sts/javaSearchPackages" => "sts.java.search.packages",
+        "sts/javaSubTypes" => "sts.java.hierarchy.subtypes",
+        "sts/javaSuperTypes" => "sts.java.hierarchy.supertypes",
+        "sts/javaCodeComplete" => "sts.java.code.completions",
+        "sts/project/gav" => "sts.project.gav",
+        _ => return None,
+    };
+    // The classpath listeners pass only the command to call back.
+    let arguments = if method.ends_with("ClasspathListener") {
+        vec![params["callbackCommandId"].clone()]
+    } else {
+        vec![params.clone()]
+    };
+    Some((command, arguments))
+}
+
+/// A folder name for a project, readable and unique: `Keel-1a2b3c4d5e6f`.
+fn project_folder_name(root: &Path) -> String {
+    use sha2::{Digest as _, Sha256};
+    let hash = Sha256::digest(root.to_string_lossy().as_bytes());
+    let name = root
+        .file_name()
+        .map(|name| name.to_string_lossy().into_owned())
+        .unwrap_or_default();
+    let short: String = hash
+        .iter()
+        .take(6)
+        .map(|byte| format!("{byte:02x}"))
+        .collect();
+    format!("{name}-{short}")
 }
 
 /// The environment of the user's login shell, read once. An app opened from
@@ -1306,6 +1669,105 @@ mod tests {
             settings(fixed)["python"]["pythonPath"],
             json!("/opt/python")
         );
+    }
+
+    #[test]
+    fn spring_boot_questions_go_to_jdtls() {
+        let params = json!({ "callbackCommandId": "sts4.classpath.abc" });
+        assert_eq!(
+            spring_boot_relay("sts/addClasspathListener", &params),
+            Some((
+                "sts.java.addClasspathListener",
+                vec![json!("sts4.classpath.abc")]
+            ))
+        );
+        let params = json!({ "projectUri": "file:///p", "fqName": "eu.prova.App" });
+        assert_eq!(
+            spring_boot_relay("sts/javaType", &params),
+            Some(("sts.java.type", vec![params.clone()]))
+        );
+        assert_eq!(spring_boot_relay("sts/moveCursor", &params), None);
+    }
+
+    #[test]
+    fn spring_boot_only_in_its_projects() {
+        let root = tempfile::tempdir().unwrap();
+        let spring = spec("spring-boot").unwrap();
+        assert!(!spring.wanted_in(root.path()));
+        std::fs::write(
+            root.path().join("pom.xml"),
+            "<parent><artifactId>spring-boot-starter-parent</artifactId></parent>",
+        )
+        .unwrap();
+        assert!(spring.wanted_in(root.path()));
+        let ids: Vec<&str> = servers_for("java", root.path())
+            .iter()
+            .map(|spec| spec.id)
+            .collect();
+        assert_eq!(ids, ["jdtls", "spring-boot"]);
+    }
+
+    #[test]
+    fn jdtls_runs_on_its_own_java_with_its_index_in_keels_folder() {
+        let servers = tempfile::tempdir().unwrap();
+        let extension = servers.path().join("jdtls/1.58.0/extension");
+        let java = extension.join("jre/25.0.4.1-macosx-aarch64/bin/java");
+        std::fs::create_dir_all(java.parent().unwrap()).unwrap();
+        std::fs::write(&java, "").unwrap();
+        std::fs::create_dir_all(extension.join("lombok")).unwrap();
+        std::fs::write(extension.join("lombok/lombok-1.18.39.jar"), "").unwrap();
+        let launcher = servers.path().join("jdtls/1.58.0").join(JDTLS_LAUNCHER);
+        let project = tempfile::tempdir().unwrap();
+        let env = HashMap::new();
+        let command = command(
+            spec("jdtls").unwrap(),
+            launcher.clone(),
+            project.path(),
+            &env,
+            &[],
+        );
+        assert_eq!(command.program, java);
+        let args = command.args.join(" ");
+        assert!(
+            args.contains(&format!("-jar {}", launcher.display())),
+            "{args}"
+        );
+        assert!(args.contains(&format!(
+            "-configuration {}",
+            servers.path().join("jdtls/config").display()
+        )));
+        assert!(args.contains(&format!(
+            "-data {}",
+            servers.path().join("jdtls/workspaces").display()
+        )));
+        assert!(!args.contains("lombok"), "only for projects that use it");
+        std::fs::write(
+            project.path().join("pom.xml"),
+            "<artifactId>lombok</artifactId>",
+        )
+        .unwrap();
+        let command = super::command(spec("jdtls").unwrap(), launcher, project.path(), &env, &[]);
+        assert!(
+            command
+                .args
+                .iter()
+                .any(|arg| arg.starts_with("-javaagent:") && arg.ends_with("lombok-1.18.39.jar"))
+        );
+
+        // Spring Boot's server runs on the same Java.
+        let jar = servers
+            .path()
+            .join("spring-boot/2.4.1")
+            .join(SPRING_BOOT_SERVER);
+        let spring = super::command(
+            spec("spring-boot").unwrap(),
+            jar.clone(),
+            project.path(),
+            &env,
+            &[],
+        );
+        assert_eq!(spring.program, java);
+        assert_eq!(spring.args.last().unwrap(), &jar.to_string_lossy());
     }
 
     #[test]

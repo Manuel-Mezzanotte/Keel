@@ -215,6 +215,10 @@ impl Workbench {
             self.apply_workspace_edit(edit, window, cx);
         }
         if let Some(command) = &action.command {
+            let arguments = command.arguments.clone().unwrap_or_default();
+            if self.client_command(&command.command, &arguments, window, cx) {
+                return;
+            }
             let request = running
                 .server
                 .request::<ExecuteCommand>(ExecuteCommandParams {

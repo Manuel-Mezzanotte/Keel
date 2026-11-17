@@ -239,6 +239,9 @@ enum Backing {
     Untitled,
     /// Owned by an extension's file system, such as `vsauto-ghost:`.
     Extension,
+    /// Read-only text a language server shows, such as a Java class of a
+    /// library (`jdt:`).
+    Library,
     /// An image shown in a preview; extensions never see it.
     Image(PathBuf),
     /// A file's differences, drawn by gpui-component's diff view.
@@ -263,7 +266,8 @@ impl OpenDocument {
             | Backing::Preview(_)
             | Backing::Pdf(_)
             | Backing::Graph(_)
-            | Backing::ExtensionDetails(_) => None,
+            | Backing::ExtensionDetails(_)
+            | Backing::Library => None,
             Backing::Untitled | Backing::Extension => None,
         }
     }
@@ -935,7 +939,8 @@ impl Workbench {
             | Backing::Preview(_)
             | Backing::Pdf(_)
             | Backing::Graph(_)
-            | Backing::ExtensionDetails(_) => false,
+            | Backing::ExtensionDetails(_)
+            | Backing::Library => false,
         };
         let params = json!({
             "uri": uri,
@@ -1142,7 +1147,8 @@ impl Workbench {
             | Backing::Preview(_)
             | Backing::Pdf(_)
             | Backing::Graph(_)
-            | Backing::ExtensionDetails(_) => {}
+            | Backing::ExtensionDetails(_)
+            | Backing::Library => {}
             Backing::Extension => {
                 if let Some(extensions) = &self.extensions {
                     let write = extensions

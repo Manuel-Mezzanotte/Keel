@@ -12,7 +12,8 @@
 //!
 //! A definition is the `function` of that name in any open document.
 //! `fake/applyEdit` makes the server ask the editor to insert its `text`
-//! at the start of its `uri`.
+//! at the start of its `uri`; `fake/clientCommand` makes it ask the editor
+//! to run its `command` with its `arguments`, as jdtls does.
 //!
 //! Each `TODO` has a quick fix, "Replace with DONE", whose edit comes with
 //! `codeAction/resolve`; "Organize" (`source.organizeImports`) adds a
@@ -241,6 +242,15 @@ pub fn run(input: impl Read, output: impl Write + Send + 'static) -> i32 {
                         "range": { "start": { "line": 0, "character": 0 }, "end": { "line": 0, "character": 0 } },
                         "newText": params["text"],
                     }] } } },
+                }));
+                next_id += 1;
+            }
+            "fake/clientCommand" => {
+                send(json!({
+                    "jsonrpc": "2.0",
+                    "id": next_id,
+                    "method": "workspace/executeClientCommand",
+                    "params": { "command": params["command"], "arguments": params["arguments"] },
                 }));
                 next_id += 1;
             }

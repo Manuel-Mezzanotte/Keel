@@ -8,7 +8,7 @@
 //! `KEEL_TEST_PROJECT` picks the project and `KEEL_TEST_FILE` the file to
 //! open in it; otherwise a small sample is written for each server.
 //! `KEEL_TEST_AT` names text in the file: completion is asked right after
-//! it and hover on it.
+//! it and hover on it. `KEEL_TEST_SETTINGS` is JSON for the user settings.
 
 use std::path::{Path, PathBuf};
 use std::sync::{Mutex, mpsc};
@@ -45,6 +45,11 @@ fn sample(id: &str, dir: &Path) -> (PathBuf, &'static str) {
             "app.py",
             "python",
             "import os\n\ndef total(x: int) -> int:\n    return x + \"uno\"\n",
+        ),
+        "jdtls" => (
+            "src/main/java/eu/prova/App.java",
+            "java",
+            "package eu.prova;\n\npublic class App {\n    public static void main(String[] args) {\n        int total = \"uno\";\n        System.out.println(total);\n    }\n}\n",
         ),
         other => panic!("no sample for {other}"),
     };
@@ -102,14 +107,21 @@ fn real_servers_start_and_report() {
             let _ = sender.lock().unwrap().send(event);
         })
         .unwrap();
-        server.set_settings(servers::settings_for(spec, &json!({}), &root));
+        let user: Value = std::env::var("KEEL_TEST_SETTINGS")
+            .map(|text| serde_json::from_str(&text).expect("KEEL_TEST_SETTINGS is JSON"))
+            .unwrap_or_else(|_| json!({}));
+        server.set_settings(servers::settings_for(spec, &user, &root));
         let start = Instant::now();
-        block_on(server.initialize(&root, servers::initialization_options(spec))).unwrap();
+        block_on(server.initialize(
+            &root,
+            servers::initialization_options(spec, &root, &user, &servers_dir),
+        ))
+        .unwrap();
         let initialized = start.elapsed();
         // What VS Code sends once a server registers for settings changes.
         server.notify_raw(
             "workspace/didChangeConfiguration",
-            json!({ "settings": servers::settings_for(spec, &json!({}), &root) }),
+            json!({ "settings": servers::settings_for(spec, &user, &root) }),
         );
         // `KEEL_TEST_APPEND` adds text in memory only, such as an error.
         let mut text = std::fs::read_to_string(&path).unwrap();
@@ -252,6 +264,29 @@ fn real_servers_start_and_report() {
                     "textDocument/definition",
                     json!({ "textDocument": document, "position": position(start) }),
                 );
+                // A library class: jdtls gives its text.
+                if id == "jdtls"
+                    && let Ok(Value::Array(found)) = block_on(server.request_raw(
+                        "textDocument/definition",
+                        json!({ "textDocument": document, "position": position(start) }),
+                    ))
+                    && let Some(uri) = found
+                        .first()
+                        .and_then(|location| location["uri"].as_str())
+                        .filter(|uri| uri.starts_with("jdt:"))
+                {
+                    let started = Instant::now();
+                    let text = block_on(
+                        server.request_raw("java/classFileContents", json!({ "uri": uri })),
+                    );
+                    println!(
+                        "    class file: {} characters in {:?}",
+                        text.ok()
+                            .and_then(|text| text.as_str().map(str::len))
+                            .unwrap_or(0),
+                        started.elapsed()
+                    );
+                }
             }
             if capabilities.references_provider.is_some() {
                 timed(
@@ -291,6 +326,7 @@ fn lsp_language(path: &Path) -> &'static str {
         Some("yaml" | "yml") => "yaml",
         Some("toml") => "toml",
         Some("py") => "python",
+        Some("java") => "java",
         _ => "plaintext",
     }
 }

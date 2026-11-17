@@ -59,6 +59,7 @@ pub struct ResponseError {
 
 impl ResponseError {
     pub const METHOD_NOT_FOUND: i64 = -32601;
+    pub const INTERNAL_ERROR: i64 = -32603;
     pub const REQUEST_CANCELLED: i64 = -32800;
     pub const CONTENT_MODIFIED: i64 = -32801;
 
