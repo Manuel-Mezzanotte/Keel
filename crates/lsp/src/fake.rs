@@ -15,6 +15,10 @@
 //! at the start of its `uri`; `fake/clientCommand` makes it ask the editor
 //! to run its `command` with its `arguments`, as jdtls does.
 //!
+//! `fake/registerPull` registers diagnostics to ask for, as csharp-ls does;
+//! each `textDocument/diagnostic` then answers "pulled N", counting the
+//! requests. `fake/progressEnd` ends a piece of work (`$/progress`).
+//!
 //! Each `TODO` has a quick fix, "Replace with DONE", whose edit comes with
 //! `codeAction/resolve`; "Organize" (`source.organizeImports`) adds a
 //! `// organized` line at the top, and formatting a `// formatted` one.
@@ -39,6 +43,7 @@ pub fn run(input: impl Read, output: impl Write + Send + 'static) -> i32 {
     let mut slow: Vec<Value> = Vec::new();
     let mut reader = BufReader::new(input);
     let mut next_id = 1000;
+    let mut pulls = 0;
     while let Ok(Some(message)) = read_message(&mut reader) {
         let method = message["method"].as_str().unwrap_or_default();
         let id = message.get("id").cloned();
@@ -254,6 +259,32 @@ pub fn run(input: impl Read, output: impl Write + Send + 'static) -> i32 {
                 }));
                 next_id += 1;
             }
+            "fake/registerPull" => {
+                send(json!({
+                    "jsonrpc": "2.0",
+                    "id": next_id,
+                    "method": "client/registerCapability",
+                    "params": { "registrations": [{ "id": "pull", "method": "textDocument/diagnostic", "registerOptions": {} }] },
+                }));
+                next_id += 1;
+            }
+            "textDocument/diagnostic" => {
+                pulls += 1;
+                send(json!({
+                    "jsonrpc": "2.0",
+                    "id": id,
+                    "result": { "kind": "full", "items": [{
+                        "range": { "start": { "line": 0, "character": 0 }, "end": { "line": 0, "character": 1 } },
+                        "severity": 2,
+                        "message": format!("pulled {pulls}"),
+                    }] },
+                }));
+            }
+            "fake/progressEnd" => send(json!({
+                "jsonrpc": "2.0",
+                "method": "$/progress",
+                "params": { "token": "load", "value": { "kind": "end" } },
+            })),
             "fake/slow" => slow.extend(id),
             "$/cancelRequest" => {
                 let cancelled = params["id"].clone();

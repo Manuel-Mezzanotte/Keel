@@ -1114,6 +1114,18 @@ impl Workbench {
                     }
                     Some("end") => {
                         self.languages.progress.remove(&key);
+                        // Work such as loading the project changes the
+                        // answers, and servers like csharp-ls do not say
+                        // so: ask again for the open files' diagnostics.
+                        let running = self.languages.state.running.borrow().get(spec.id).cloned();
+                        if let Some(running) =
+                            running.filter(|running| running.pulls_diagnostics.get())
+                        {
+                            let uris: Vec<String> = running.open.borrow().iter().cloned().collect();
+                            for uri in uris {
+                                self.pull_diagnostics(spec.id, uri, cx);
+                            }
+                        }
                     }
                     _ => {}
                 }
@@ -1723,6 +1735,51 @@ mod tests {
         // Once per window: a second server needing Java asks nothing.
         missing(&view, cx);
         assert!(!cx.has_pending_prompt());
+    }
+
+    #[gpui::test]
+    fn pulled_diagnostics_are_asked_again_when_a_server_ends_its_work(cx: &mut TestAppContext) {
+        let (_folder, base, view, cx) = window(cx);
+        let path = base.join("app.ts");
+        let uri = Uri::file(&path).to_string();
+        view.update_in(cx, |view, window, cx| view.open_file(&path, window, cx));
+        wait_until(cx, "the server to start", |cx| {
+            view.read_with(cx, |view, _| view.languages.is_running("vtsls"))
+        });
+        let pulled = |view: &Entity<Workbench>, cx: &mut VisualTestContext, message: &str| {
+            view.read_with(cx, |view, _| {
+                view.languages
+                    .diagnostics
+                    .get(&uri)
+                    .and_then(|by_server| by_server.get("vtsls"))
+                    .is_some_and(|found| {
+                        found.iter().any(|diagnostic| diagnostic.message == message)
+                    })
+            })
+        };
+        let notify = |view: &Entity<Workbench>, cx: &mut VisualTestContext, method: &str| {
+            view.read_with(cx, |view, _| {
+                view.languages.servers_for(&uri)[0]
+                    .server
+                    .notify_raw(method, Value::Null)
+            })
+        };
+        // csharp-ls registers its diagnostics while it loads the project.
+        notify(&view, cx, "fake/registerPull");
+        // Pulls wait a moment after the last change.
+        let advance = |cx: &mut VisualTestContext| {
+            cx.executor().advance_clock(Duration::from_millis(300));
+        };
+        wait_until(cx, "the first pull", |cx| {
+            advance(cx);
+            pulled(&view, cx, "pulled 1")
+        });
+        // Loading done, it says nothing more: Keel asks again.
+        notify(&view, cx, "fake/progressEnd");
+        wait_until(cx, "the second pull", |cx| {
+            advance(cx);
+            pulled(&view, cx, "pulled 2")
+        });
     }
 
     #[gpui::test]

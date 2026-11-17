@@ -157,6 +157,8 @@ const SPRING_BOOT_JDTLS_BUNDLES: &[&str] = &[
     "extension/jars/sts-gradle-tooling.jar",
 ];
 
+const CSHARP_LS_DLL: &str = "tools/net10.0/any/CSharpLanguageServer.dll";
+
 /// The jar that starts jdtls, inside its download.
 const JDTLS_LAUNCHER: &str =
     "extension/server/plugins/org.eclipse.equinox.launcher_1.8.0.v20260804-1928.jar";
@@ -414,6 +416,37 @@ pub const SERVERS: &[ServerSpec] = &[
         },
         activation: Activation::BuildMentions("spring-boot"),
         needs: &[],
+    },
+    ServerSpec {
+        id: "clangd",
+        name: "C/C++",
+        languages: &["c", "cpp", "cuda-cpp", "objective-c", "objective-cpp"],
+        program: "clangd",
+        args: &[],
+        // Apple's, from the Xcode tools: it knows the macOS SDK's headers.
+        // Homebrew's LLVM, if first on the `PATH`, is used instead.
+        install: Install::System,
+        activation: Activation::Always,
+        needs: &[Prerequisite::XcodeTools],
+    },
+    ServerSpec {
+        id: "csharp-ls",
+        name: "C#",
+        languages: &["csharp"],
+        // The .NET program inside the NuGet package; Keel starts it with
+        // `dotnet`, as `dotnet tool install` would.
+        program: CSHARP_LS_DLL,
+        args: &[],
+        install: Install::Download {
+            url: "https://api.nuget.org/v3-flatcontainer/csharp-ls/0.28.0/csharp-ls.0.28.0.nupkg",
+            version: "0.28.0",
+            unpack: Unpack::Archive {
+                program: CSHARP_LS_DLL,
+            },
+            sha256: Some("8f815e4f22674106a8244beba07e4b4b062e31528e404aa8489312effb8c0e0c"),
+        },
+        activation: Activation::Always,
+        needs: &[Prerequisite::Dotnet { min: 10 }],
     },
     ServerSpec {
         id: "rust-analyzer",
@@ -1112,6 +1145,16 @@ pub fn command(
     let (program, args) = match spec.id {
         "jdtls" => jdtls_command(&program, root, extra_env),
         "spring-boot" => spring_boot_command(&program, extra_env),
+        "csharp-ls" => {
+            let dotnet = extra_env
+                .iter()
+                .find(|(key, _)| key == "DOTNET_ROOT")
+                .map_or_else(
+                    || PathBuf::from("dotnet"),
+                    |(_, root)| Path::new(root).join("dotnet"),
+                );
+            (dotnet, vec![program.to_string_lossy().into_owned()])
+        }
         _ => (
             program,
             spec.args.iter().map(|arg| (*arg).to_owned()).collect(),

@@ -1589,13 +1589,35 @@ Apri Keel su GestionaleHospitality. La prima volta i server si installano da sol
 | 11.2 | Motore dei server: archivi `tar.gz` e `zip` con controllo SHA-256; programmi necessari (Java, .NET, strumenti di Xcode) e guida a installarli quando mancano | fatta |
 | 11.3 | Python: `basedpyright` e `ruff`, con l'ambiente virtuale del progetto (`.venv`, uv, Poetry) | fatta |
 | 11.4 | Java con `jdtls` (Maven e Gradle) e Spring Boot (`application.properties` e `.yml`) | fatta |
-| 11.5 | C e C++ con `clangd` (`compile_commands.json`, clang-format); C# con .NET | da fare |
+| 11.5 | C e C++ con `clangd` (`compile_commands.json`, clang-format); C# con .NET | fatta |
 | 11.6 | Linguaggi di base: Bash e zsh (con ShellCheck e shfmt), Dockerfile, SQL, XML, Makefile | da fare |
 | 11.7 | Prove su un progetto per ogni linguaggio, misure e resoconto | da fare |
 
 **Decisioni prese all'inizio**
 - **I server sono quelli delle estensioni di VS Code** più usate, così il comportamento è lo stesso: Pylance si basa su Pyright (qui `basedpyright`, la sua versione libera); Java usa `jdtls` come l'estensione di Red Hat; XML usa `lemminx`, sempre di Red Hat.
 - **Keel installa da solo** i server che si scaricano (npm, archivi dalle pagine di rilascio). **Non installa da solo** i programmi di sistema, cioè Java, .NET e gli strumenti di Xcode: se mancano ti dice cosa manca e ti offre il comando da lanciare nel terminale.
+
+**Note sulla 11.5**
+- **C, C++ e Objective-C** usano `clangd` degli strumenti di Xcode (Apple clangd 21), che conosce già le intestazioni dell'SDK di macOS. Se il `PATH` ha prima l'LLVM di Homebrew, vale quello. Keel non lo installa: se mancano gli strumenti di Xcode propone `xcode-select --install`.
+  - Le opzioni di compilazione vengono da `compile_commands.json`, nella cartella del progetto o in `build/`. CMake lo scrive con `CMAKE_EXPORT_COMPILE_COMMANDS`; senza, clangd usa opzioni generiche, come nell'estensione di VS Code.
+  - La formattazione usa il `.clang-format` del progetto.
+- **C#** usa `csharp-ls` 0.28, un pacchetto NuGet (22 MB, con impronta SHA-256) che Keel avvia con `dotnet`. Carica da solo la soluzione (`.sln`, `.slnx`) o i `.csproj` della cartella.
+  - Serve **.NET 10**, che sul Mac non c'è. Keel lo dice e propone `brew install --cask dotnet-sdk`, che chiede la tua password. Per le prove ho scaricato l'SDK ufficiale di .NET 10 nella cartella di prova (impronta SHA-512 di Microsoft verificata), senza installarlo nel sistema.
+  - VS Code con C# Dev Kit usa il server Roslyn di Microsoft. Quello vuole messaggi suoi per aprire la soluzione e scarica .NET da sé. csharp-ls usa lo stesso Roslyn con il protocollo normale.
+  - I messaggi di errore di C# sono in italiano, perché .NET segue la lingua del Mac.
+- **Errori chiesti di nuovo a fine lavoro.** csharp-ls chiede all'editor di domandargli gli errori, ma lo dice prima di aver caricato il progetto, e dopo non avvisa. Keel ora richiede gli errori dei file aperti ogni volta che un server finisce un lavoro (`$/progress` «end»), per esempio il caricamento del progetto.
+- **Prove con i server veri** su un progetto C++ con CMake e su uno C# creato con `dotnet new console`:
+
+  | Prova | Tempo |
+  |---|---|
+  | clangd, avvio | 29 ms |
+  | clangd, primi errori (con le intestazioni di sistema) | 0,64 s |
+  | clangd, completamento / info / definizione / riferimenti | 15 ms / 3 ms / meno di 1 ms / meno di 1 ms |
+  | csharp-ls, installazione | 0,9 s |
+  | csharp-ls, avvio | 0,3 s |
+  | csharp-ls, primi errori (progetto caricato) | 2 s |
+  | csharp-ls, completamento: primo / dopo | 175 ms / 12 ms |
+  | csharp-ls, info / riferimenti / formattazione | 0,7 s / 94 ms / 112 ms |
 
 **Note sulla 11.4**
 - **Java con il pacchetto dell'estensione di VS Code.** Keel scarica l'estensione Java di Red Hat per Mac Apple (133 MB, con impronta SHA-256). Dentro ci sono jdtls 1.58, il Java 25 su cui gira e Lombok: non serve installare Java.

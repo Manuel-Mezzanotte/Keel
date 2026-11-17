@@ -140,7 +140,7 @@ fn real_servers_start_and_report() {
         let deadline = Instant::now() + Duration::from_secs(120);
         let mut diagnostics: Option<Value> = None;
         // Servers that only answer when asked, as Ruff: ask, as Keel does.
-        let pulls = server
+        let mut pulls = server
             .capabilities()
             .is_some_and(|capabilities| capabilities.diagnostic_provider.is_some());
         if pulls && !matches!(id, "eslint") {
@@ -172,9 +172,26 @@ fn real_servers_start_and_report() {
                         }
                     }
                 }
-                // A pull server: ask for them.
-                Ok(ServerEvent::Notification { method, .. })
-                    if method == "workspace/diagnostic/refresh" =>
+                // Diagnostics to ask for, registered after the start.
+                Ok(ServerEvent::Notification { method, params })
+                    if method == "client/registerCapability"
+                        && params["registrations"]
+                            .as_array()
+                            .into_iter()
+                            .flatten()
+                            .any(|registration| {
+                                registration["method"] == "textDocument/diagnostic"
+                            }) =>
+                {
+                    pulls = true;
+                }
+                // A pull server: ask for them, also when it ends some work,
+                // as Keel does.
+                Ok(ServerEvent::Notification { method, params })
+                    if method == "workspace/diagnostic/refresh"
+                        || (pulls
+                            && method == "$/progress"
+                            && params["value"]["kind"] == "end") =>
                 {
                     let report = match block_on(server.request_raw(
                         "textDocument/diagnostic",
@@ -327,6 +344,9 @@ fn lsp_language(path: &Path) -> &'static str {
         Some("toml") => "toml",
         Some("py") => "python",
         Some("java") => "java",
+        Some("c") => "c",
+        Some("cpp" | "hpp" | "h") => "cpp",
+        Some("cs") => "csharp",
         _ => "plaintext",
     }
 }
