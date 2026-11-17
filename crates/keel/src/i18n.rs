@@ -332,6 +332,10 @@ pub struct Strings {
     pub lsp_started: &'static str,
     pub lsp_installing_text: &'static str,
     pub lsp_failed_text: &'static str,
+    pub prerequisite_missing_text: &'static str,
+    pub prerequisite_detail_text: &'static str,
+    pub install_in_terminal: &'static str,
+    pub install_terminal_name_text: &'static str,
     pub lsp_stopped_text: &'static str,
     pub lsp_restarting: &'static str,
     pub lsp_restarted: &'static str,
@@ -896,6 +900,20 @@ impl Strings {
         self.lsp_installing_text.replace("{name}", name)
     }
 
+    pub fn prerequisite_missing(&self, server: &str, what: &str) -> String {
+        self.prerequisite_missing_text
+            .replace("{server}", server)
+            .replace("{what}", what)
+    }
+
+    pub fn prerequisite_detail(&self, command: &str) -> String {
+        self.prerequisite_detail_text.replace("{command}", command)
+    }
+
+    pub fn install_terminal_name(&self, what: &str) -> String {
+        self.install_terminal_name_text.replace("{what}", what)
+    }
+
     pub fn lsp_failed(&self, name: &str, error: &str) -> String {
         self.lsp_failed_text
             .replace("{name}", name)
@@ -1217,6 +1235,10 @@ pub const ITALIAN: Strings = Strings {
     lsp_started: "avviato",
     lsp_installing_text: "Installo il server {name}…",
     lsp_failed_text: "Il server {name} non è partito: {error}",
+    prerequisite_missing_text: "Per il server {server} serve {what}, che non è installato.",
+    prerequisite_detail_text: "Keel può aprire un terminale con il comando:\n{command}\n\nQuando ha finito, usa «Linguaggi: Riavvia i language server» dalla tavolozza.",
+    install_in_terminal: "Installa nel terminale",
+    install_terminal_name_text: "Installa {what}",
     lsp_stopped_text: "Il server {name} si è fermato più volte. Per riprovare: «Riavvia i language server» dalla tavolozza.",
     lsp_restarting: "si è fermato: lo riavvio",
     lsp_restarted: "Language server riavviati",
@@ -1685,6 +1707,10 @@ pub const ENGLISH: Strings = Strings {
     lsp_started: "started",
     lsp_installing_text: "Installing the {name} server…",
     lsp_failed_text: "The {name} server did not start: {error}",
+    prerequisite_missing_text: "The {server} server needs {what}, which is not installed.",
+    prerequisite_detail_text: "Keel can open a terminal with the command:\n{command}\n\nWhen it is done, run “Languages: Restart Language Servers” from the palette.",
+    install_in_terminal: "Install in Terminal",
+    install_terminal_name_text: "Install {what}",
     lsp_stopped_text: "The {name} server stopped several times. To try again: \"Restart Language Servers\" from the Command Palette.",
     lsp_restarting: "stopped: starting it again",
     lsp_restarted: "Language servers restarted",

@@ -27,6 +27,7 @@ use lsp::lsp_types::{
         DidChangeTextDocument, DidCloseTextDocument, DidOpenTextDocument, DidSaveTextDocument,
     },
 };
+use lsp::prerequisites::{self, Prerequisite};
 use lsp::servers::{self, ServerSpec};
 use lsp::{LanguageServer, ResponseError, ServerEvent};
 
@@ -57,6 +58,11 @@ pub(super) enum LspInput {
         id: &'static str,
         generation: u64,
         event: ServerEvent,
+    },
+    /// A server cannot start without something the user installs.
+    Missing {
+        server: &'static str,
+        prerequisite: Prerequisite,
     },
 }
 
@@ -210,6 +216,8 @@ pub(super) struct Languages {
     /// The last answer of each pull, so the server can say "unchanged".
     pull_results: HashMap<(&'static str, String), String>,
     restarts: HashMap<&'static str, Vec<Instant>>,
+    /// Prerequisites already offered to install, once per window.
+    offered: HashSet<Prerequisite>,
     next_generation: u64,
     /// Tests run the fake server in a thread when this is set, and no
     /// server at all otherwise.
@@ -397,6 +405,7 @@ impl Languages {
             diagnostics: BTreeMap::new(),
             progress: BTreeMap::new(),
             restarts: HashMap::new(),
+            offered: HashSet::new(),
             next_generation: 1,
             #[cfg(test)]
             fake: false,
@@ -513,7 +522,45 @@ impl Workbench {
                 generation,
                 event,
             } => self.server_event(id, generation, event, window, cx),
+            LspInput::Missing {
+                server,
+                prerequisite,
+            } => self.offer_prerequisite(server, prerequisite, window, cx),
         }
+    }
+
+    /// Asks once whether to install what a server needs, in a terminal.
+    fn offer_prerequisite(
+        &mut self,
+        server: &str,
+        prerequisite: Prerequisite,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        if !self.languages.offered.insert(prerequisite) {
+            return;
+        }
+        let strings = self.strings();
+        let command = prerequisite.install_command();
+        let message = strings.prerequisite_missing(server, &prerequisite.name());
+        let detail = strings.prerequisite_detail(&command);
+        let buttons = [strings.install_in_terminal, strings.cancel];
+        let answer = window.prompt(PromptLevel::Warning, &message, Some(&detail), &buttons, cx);
+        let name = strings.install_terminal_name(&prerequisite.name());
+        cx.spawn_in(window, async move |this, cx| {
+            if answer.await.ok() != Some(0) {
+                return;
+            }
+            this.update_in(cx, |this, window, cx| {
+                let spawn = terminal_view::shell_spawn(this.terminal_folder(), cx);
+                if let Some(view) = this.add_terminal(spawn, None, true, window, cx) {
+                    view.read(cx).run(&command);
+                    this.name_terminal(&view, name);
+                }
+            })
+            .ok();
+        })
+        .detach();
     }
 
     /// The folder a server for `uri` works in: the project, or the file's
@@ -538,6 +585,8 @@ impl Workbench {
         let generation = self.languages.next_generation;
         self.languages.next_generation += 1;
         let sender = self.languages.sender.clone();
+        #[cfg_attr(test, allow(unused_variables))]
+        let sender_for_missing = sender.clone();
         let on_event = move |event| {
             let _ = sender.unbounded_send(LspInput::Server {
                 id: spec.id,
@@ -569,6 +618,27 @@ impl Workbench {
                         LanguageServer::connect(spec.name, reader, writer, Arc::new(on_event), None)
                     })
             } else {
+                // What the server needs comes first: no point installing
+                // a Java server without Java.
+                let checked = cx
+                    .background_spawn(async move {
+                        prerequisites::check_all(spec.needs, servers::login_environment())
+                    })
+                    .await;
+                let extra_env = match checked {
+                    Ok(extra_env) => extra_env,
+                    Err(missing) => {
+                        let _ = sender_for_missing.unbounded_send(LspInput::Missing {
+                            server: spec.name,
+                            prerequisite: missing.prerequisite,
+                        });
+                        this.update(cx, |this, cx| {
+                            this.server_failed(spec, generation, missing.into(), cx)
+                        })
+                        .ok();
+                        return;
+                    }
+                };
                 let found = {
                     let (servers_dir, root) = (servers_dir.clone(), root.clone());
                     cx.background_spawn(async move {
@@ -612,6 +682,7 @@ impl Workbench {
                                 program,
                                 &root,
                                 servers::login_environment(),
+                                &extra_env,
                             );
                             LanguageServer::start(spec.name, &command, on_event)
                         })
@@ -1385,6 +1456,34 @@ mod tests {
             })
         });
         assert!(logged);
+    }
+
+    #[gpui::test]
+    fn a_missing_prerequisite_is_offered_once_in_a_terminal(cx: &mut TestAppContext) {
+        let (_folder, _base, view, cx) = window(cx);
+        let missing = |view: &Entity<Workbench>, cx: &mut VisualTestContext| {
+            view.update_in(cx, |view, window, cx| {
+                view.lsp_input(
+                    LspInput::Missing {
+                        server: "Java",
+                        prerequisite: Prerequisite::Java { min: 21 },
+                    },
+                    window,
+                    cx,
+                )
+            });
+        };
+        missing(&view, cx);
+        assert!(cx.has_pending_prompt());
+        cx.simulate_prompt_answer("Installa nel terminale");
+        cx.run_until_parked();
+        let names: Vec<Option<String>> = view.read_with(cx, |view, _| {
+            view.terminals.iter().map(|tab| tab.name.clone()).collect()
+        });
+        assert_eq!(names, [Some("Installa Java 21".to_owned())]);
+        // Once per window: a second server needing Java asks nothing.
+        missing(&view, cx);
+        assert!(!cx.has_pending_prompt());
     }
 
     #[gpui::test]

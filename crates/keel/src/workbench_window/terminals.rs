@@ -51,7 +51,7 @@ pub(crate) enum TerminalCommand {
 pub(super) struct TerminalTab {
     pub(super) view: Entity<TerminalView>,
     /// The name the user gave it, if any.
-    name: Option<String>,
+    pub(super) name: Option<String>,
     group: usize,
     _subscription: Subscription,
 }

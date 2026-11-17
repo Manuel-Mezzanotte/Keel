@@ -91,7 +91,8 @@ fn real_servers_start_and_report() {
         let found = started.elapsed();
         let (sender, events) = mpsc::channel();
         let sender = Mutex::new(sender);
-        let command = servers::command(spec, program.clone(), &root, env);
+        let extra = lsp::prerequisites::check_all(spec.needs, env).unwrap();
+        let command = servers::command(spec, program.clone(), &root, env, &extra);
         let server = LanguageServer::start(spec.name, &command, move |event| {
             let _ = sender.lock().unwrap().send(event);
         })

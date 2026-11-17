@@ -1586,7 +1586,7 @@ Apri Keel su GestionaleHospitality. La prima volta i server si installano da sol
 | Sottofase | Cosa | Stato |
 |---|---|---|
 | 11.1 | Colori e riconoscimento dei file: Python, Java, C, C++, C#, Bash e zsh, Dockerfile, SQL, XML, Makefile e `.properties` | fatta |
-| 11.2 | Motore dei server: archivi `tar.gz` e `zip` con controllo SHA-256; programmi necessari (Java, .NET, strumenti di Xcode) e guida a installarli quando mancano | da fare |
+| 11.2 | Motore dei server: archivi `tar.gz` e `zip` con controllo SHA-256; programmi necessari (Java, .NET, strumenti di Xcode) e guida a installarli quando mancano | fatta |
 | 11.3 | Python: `basedpyright` e `ruff`, con l'ambiente virtuale del progetto (`.venv`, uv, Poetry) | da fare |
 | 11.4 | Java con `jdtls` (Maven e Gradle) e Spring Boot (`application.properties` e `.yml`) | da fare |
 | 11.5 | C e C++ con `clangd` (`compile_commands.json`, clang-format); C# con .NET | da fare |
@@ -1596,6 +1596,18 @@ Apri Keel su GestionaleHospitality. La prima volta i server si installano da sol
 **Decisioni prese all'inizio**
 - **I server sono quelli delle estensioni di VS Code** più usate, così il comportamento è lo stesso: Pylance si basa su Pyright (qui `basedpyright`, la sua versione libera); Java usa `jdtls` come l'estensione di Red Hat; XML usa `lemminx`, sempre di Red Hat.
 - **Keel installa da solo** i server che si scaricano (npm, archivi dalle pagine di rilascio). **Non installa da solo** i programmi di sistema, cioè Java, .NET e gli strumenti di Xcode: se mancano ti dice cosa manca e ti offre il comando da lanciare nel terminale.
+
+**Note sulla 11.2**
+- **Download controllati.** Ogni server scaricato ha la sua impronta SHA-256 scritta in Keel. Se il file scaricato non corrisponde, Keel lo butta e non installa niente. Vale anche per taplo e marksman della fase 6, che prima non avevano il controllo.
+  - Le impronte sono quelle dei file per Mac Apple; sui Mac Intel non c'è niente con cui confrontare.
+- **Archivi `tar.gz` e `zip`.** Ogni versione va in una cartella sua, così una nuova non si mescola con la vecchia. Il `tar` di macOS apre anche gli `zip`.
+- **Programmi necessari:** Java, .NET e gli strumenti di Xcode.
+  - Keel li controlla prima di installare il server: è inutile scaricare il server di Java senza Java.
+  - **Java** si cerca in `JAVA_HOME`, nei JDK che macOS conosce, in quelli di Homebrew (anche senza il collegamento che Homebrew suggerisce) e nel `PATH`. Ci vuole la versione giusta: Keel lancia `java -version`. Su questo Mac trova Java 21 in 0,3 s.
+  - **.NET** si cerca in `DOTNET_ROOT`, nel `PATH` e nelle cartelle dove lo mette il suo installatore; ci vuole un SDK della versione giusta.
+  - **Gli strumenti di Xcode** ci sono se `xcode-select -p` indica una cartella che esiste. Senza di loro `/usr/bin/clangd` chiede solo di installarli.
+- **Se manca qualcosa** Keel lo chiede una volta per finestra, per esempio: «Per il server Java serve Java 21, che non è installato». Con «Installa nel terminale» apre un terminale con il comando (`brew install openjdk@21`, `brew install --cask dotnet-sdk` o `xcode-select --install`). Quando ha finito, «Linguaggi: Riavvia i language server» fa ripartire i server.
+- Il server riceve le variabili del programma trovato, come `JAVA_HOME` e la sua cartella in testa al `PATH`, così usa proprio quello.
 
 **Note sulla 11.1**
 - **Colori** per Python, Java, C, C++, C#, SQL, Makefile, XML, Dockerfile e `.properties`; Bash e zsh li avevano già.

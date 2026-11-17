@@ -5,10 +5,13 @@
 //! - [`text::content_change`] turns an edit into the small change servers want.
 //! - [`servers`] knows which server goes with which language, where to find
 //!   it and how to install it.
+//! - [`prerequisites`] finds what some servers need on the machine, such as
+//!   Java.
 
 mod client;
 #[doc(hidden)]
 pub mod fake;
+pub mod prerequisites;
 pub mod rpc;
 pub mod servers;
 pub mod snippet;

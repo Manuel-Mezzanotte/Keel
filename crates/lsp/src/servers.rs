@@ -13,6 +13,7 @@ use anyhow::{Context as _, Result, bail};
 use serde_json::{Value, json};
 
 use crate::ServerCommand;
+use crate::prerequisites::Prerequisite;
 
 /// How a missing server is installed.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -24,13 +25,32 @@ pub enum Install {
     },
     /// A rustup component of the project's toolchain.
     Rustup { component: &'static str },
-    /// A single program downloaded from a release page. `{arch}` in the
-    /// address becomes `aarch64` or `x86_64`; `gzip` files are unpacked.
+    /// A download from a release page. In the address `{arch}` becomes
+    /// `aarch64` or `x86_64`, `{aarch_64}` `aarch_64` or `x86_64`, and
+    /// `{arm64}` `arm64` or `amd64`, as projects name them.
     Download {
         url: &'static str,
         version: &'static str,
-        gzip: bool,
+        unpack: Unpack,
+        /// The SHA-256 of the Apple silicon download. A different one stops
+        /// the install; on Intel Macs there is nothing to compare with.
+        sha256: Option<&'static str>,
     },
+    /// Part of something the user installs, such as the Xcode tools: Keel
+    /// finds it but does not install it.
+    System,
+}
+
+/// What a download is.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Unpack {
+    /// The program itself.
+    File,
+    /// The program, compressed with gzip.
+    Gzip,
+    /// A `.tar.gz` or `.zip` archive, unpacked into a folder of its
+    /// version; `program` is where the program is inside it.
+    Archive { program: &'static str },
 }
 
 /// When a server is worth starting for a project.
@@ -59,6 +79,8 @@ pub struct ServerSpec {
     pub args: &'static [&'static str],
     pub install: Install,
     pub activation: Activation,
+    /// What must be on the machine first, such as Java.
+    pub needs: &'static [Prerequisite],
 }
 
 impl ServerSpec {
@@ -123,6 +145,7 @@ pub const SERVERS: &[ServerSpec] = &[
             version: "0.3.0",
         },
         activation: Activation::Always,
+        needs: &[],
     },
     ServerSpec {
         id: "eslint",
@@ -138,6 +161,7 @@ pub const SERVERS: &[ServerSpec] = &[
             files: &[".eslintrc*", "eslint.config.*"],
             packages: &["eslint"],
         },
+        needs: &[],
     },
     ServerSpec {
         id: "html",
@@ -150,6 +174,7 @@ pub const SERVERS: &[ServerSpec] = &[
             version: "4.10.0",
         },
         activation: Activation::Always,
+        needs: &[],
     },
     ServerSpec {
         id: "css",
@@ -162,6 +187,7 @@ pub const SERVERS: &[ServerSpec] = &[
             version: "4.10.0",
         },
         activation: Activation::Always,
+        needs: &[],
     },
     ServerSpec {
         id: "json",
@@ -174,6 +200,7 @@ pub const SERVERS: &[ServerSpec] = &[
             version: "4.10.0",
         },
         activation: Activation::Always,
+        needs: &[],
     },
     ServerSpec {
         id: "tailwindcss",
@@ -196,6 +223,7 @@ pub const SERVERS: &[ServerSpec] = &[
             files: &["tailwind.config.*"],
             packages: &["tailwindcss", "@tailwindcss/postcss", "@tailwindcss/vite"],
         },
+        needs: &[],
     },
     ServerSpec {
         id: "emmet",
@@ -215,6 +243,7 @@ pub const SERVERS: &[ServerSpec] = &[
             version: "2.8.0",
         },
         activation: Activation::Always,
+        needs: &[],
     },
     ServerSpec {
         id: "prisma",
@@ -227,6 +256,7 @@ pub const SERVERS: &[ServerSpec] = &[
             version: "31.13.0",
         },
         activation: Activation::Always,
+        needs: &[],
     },
     ServerSpec {
         id: "yaml",
@@ -239,6 +269,7 @@ pub const SERVERS: &[ServerSpec] = &[
             version: "2.0.0",
         },
         activation: Activation::Always,
+        needs: &[],
     },
     ServerSpec {
         id: "taplo",
@@ -250,9 +281,11 @@ pub const SERVERS: &[ServerSpec] = &[
         install: Install::Download {
             url: "https://github.com/tamasfe/taplo/releases/download/0.10.0/taplo-darwin-{arch}.gz",
             version: "0.10.0",
-            gzip: true,
+            unpack: Unpack::Gzip,
+            sha256: Some("713734314c3e71894b9e77513c5349835eefbd52908445a0d73b0c7dc469347d"),
         },
         activation: Activation::Always,
+        needs: &[],
     },
     ServerSpec {
         id: "marksman",
@@ -263,9 +296,11 @@ pub const SERVERS: &[ServerSpec] = &[
         install: Install::Download {
             url: "https://github.com/artempyanykh/marksman/releases/download/2026-02-08/marksman-macos",
             version: "2026-02-08",
-            gzip: false,
+            unpack: Unpack::File,
+            sha256: Some("6a801c17b5ac0dba69787c5282b3b3bd416e66c96253fae098d311c6bbd1833b"),
         },
         activation: Activation::Always,
+        needs: &[],
     },
     ServerSpec {
         id: "rust-analyzer",
@@ -277,6 +312,7 @@ pub const SERVERS: &[ServerSpec] = &[
             component: "rust-analyzer",
         },
         activation: Activation::Always,
+        needs: &[],
     },
 ];
 
@@ -511,7 +547,9 @@ pub fn install_dir(servers_dir: &Path, spec: &ServerSpec) -> PathBuf {
         Install::Npm { package, .. } => {
             servers_dir.join(package.trim_start_matches('@').replace('/', "-"))
         }
-        Install::Download { .. } | Install::Rustup { .. } => servers_dir.join(spec.id),
+        Install::Download { .. } | Install::Rustup { .. } | Install::System => {
+            servers_dir.join(spec.id)
+        }
     }
 }
 
@@ -536,12 +574,28 @@ pub fn find(
                 return Some(program);
             }
         }
-        Install::Download { version, .. } => {
-            let program = dir.join(spec.program);
+        Install::Download {
+            version, unpack, ..
+        } => {
+            let program = downloaded_program(&dir, spec.program, version, unpack);
             let installed = std::fs::read_to_string(dir.join("version")).ok();
             if installed.as_deref().map(str::trim) == Some(version) && program.exists() {
                 return Some(program);
             }
+        }
+        Install::System => {
+            if let Some(program) = which_in(spec.program, env) {
+                return Some(program);
+            }
+            // Programs of the Xcode tools that are not on the `PATH`.
+            let output = Command::new("/usr/bin/xcrun")
+                .args(["--find", spec.program])
+                .stdin(Stdio::null())
+                .stderr(Stdio::null())
+                .output()
+                .ok()?;
+            let path = PathBuf::from(String::from_utf8_lossy(&output.stdout).trim());
+            return (output.status.success() && path.exists()).then_some(path);
         }
         Install::Rustup { .. } => {
             let output = Command::new(which_in("rustup", env)?)
@@ -561,6 +615,25 @@ pub fn find(
         }
     }
     which_in(spec.program, env)
+}
+
+/// Where a downloaded program is once unpacked.
+fn downloaded_program(dir: &Path, program: &str, version: &str, unpack: Unpack) -> PathBuf {
+    match unpack {
+        Unpack::File | Unpack::Gzip => dir.join(program),
+        Unpack::Archive { program } => dir.join(version).join(expand_arch(program)),
+    }
+}
+
+/// Fills in the machine's architecture, in each project's spelling.
+pub fn expand_arch(text: &str) -> String {
+    let apple_silicon = std::env::consts::ARCH == "aarch64";
+    text.replace("{arch}", if apple_silicon { "aarch64" } else { "x86_64" })
+        .replace(
+            "{aarch_64}",
+            if apple_silicon { "aarch_64" } else { "x86_64" },
+        )
+        .replace("{arm64}", if apple_silicon { "arm64" } else { "amd64" })
 }
 
 /// A program on the `PATH` of `env`.
@@ -613,29 +686,27 @@ pub fn install_command(
                 ],
             ))
         }
-        Install::Download { url, gzip, .. } => {
-            let url = url.replace("{arch}", std::env::consts::ARCH);
-            let output = dir.join(spec.program).to_string_lossy().into_owned();
-            let script = if gzip {
-                r#"/usr/bin/curl --fail --silent --show-error --location "$1" | /usr/bin/gunzip > "$2""#
-            } else {
-                r#"/usr/bin/curl --fail --silent --show-error --location --output "$2" "$1""#
-            };
-            Ok((
-                PathBuf::from("/bin/sh"),
-                vec![
-                    "-o".to_owned(),
-                    "pipefail".to_owned(),
-                    "-c".to_owned(),
-                    script.to_owned(),
-                    "sh".to_owned(),
-                    url,
-                    output,
-                ],
-            ))
-        }
+        Install::Download { url, .. } => Ok((
+            PathBuf::from("/usr/bin/curl"),
+            vec![
+                "--fail".to_owned(),
+                "--silent".to_owned(),
+                "--show-error".to_owned(),
+                "--location".to_owned(),
+                "--output".to_owned(),
+                dir.join(DOWNLOAD).to_string_lossy().into_owned(),
+                expand_arch(url),
+            ],
+        )),
+        Install::System => bail!(
+            "{} comes with the system: Keel does not install it",
+            spec.program
+        ),
     }
 }
+
+/// The name of a download before it is checked and unpacked.
+const DOWNLOAD: &str = "download.part";
 
 /// Installs `spec`. Slow: run it away from the interface. Returns what the
 /// installer printed, for the Output view.
@@ -667,13 +738,100 @@ pub fn install(
     if !output.status.success() {
         bail!("{} failed: {}", program.display(), printed.trim());
     }
-    if let Install::Download { version, .. } = spec.install {
-        use std::os::unix::fs::PermissionsExt as _;
-        let program = dir.join(spec.program);
-        std::fs::set_permissions(&program, std::fs::Permissions::from_mode(0o755))?;
-        std::fs::write(dir.join("version"), version)?;
+    if let Install::Download {
+        version,
+        unpack,
+        sha256,
+        ..
+    } = spec.install
+    {
+        finish_download(&dir, spec.program, version, unpack, sha256)?;
     }
     Ok(printed)
+}
+
+/// Checks a download and puts the program in place.
+fn finish_download(
+    dir: &Path,
+    program: &str,
+    version: &str,
+    unpack: Unpack,
+    sha256: Option<&str>,
+) -> Result<()> {
+    use std::os::unix::fs::PermissionsExt as _;
+    let download = dir.join(DOWNLOAD);
+    if let Some(expected) = sha256.filter(|_| std::env::consts::ARCH == "aarch64") {
+        let actual = sha256_of(&download)?;
+        if actual != expected {
+            let _ = std::fs::remove_file(&download);
+            bail!("the download is not the expected one (SHA-256 {actual}, expected {expected})");
+        }
+    }
+    let target = downloaded_program(dir, program, version, unpack);
+    match unpack {
+        Unpack::File => std::fs::rename(&download, &target)?,
+        Unpack::Gzip => {
+            let output = Command::new("/usr/bin/gunzip")
+                .arg("--stdout")
+                .arg(&download)
+                .stdin(Stdio::null())
+                .output()?;
+            if !output.status.success() {
+                bail!(
+                    "gunzip failed: {}",
+                    String::from_utf8_lossy(&output.stderr).trim()
+                );
+            }
+            std::fs::write(&target, output.stdout)?;
+            std::fs::remove_file(&download)?;
+        }
+        Unpack::Archive { .. } => {
+            // A folder per version: a new one never mixes with the old.
+            let folder = dir.join(version);
+            std::fs::create_dir_all(&folder)?;
+            // macOS's `tar` reads `.zip` files too.
+            let output = Command::new("/usr/bin/tar")
+                .arg("-xf")
+                .arg(&download)
+                .arg("-C")
+                .arg(&folder)
+                .stdin(Stdio::null())
+                .output()?;
+            if !output.status.success() {
+                bail!(
+                    "unpacking failed: {}",
+                    String::from_utf8_lossy(&output.stderr).trim()
+                );
+            }
+            std::fs::remove_file(&download)?;
+        }
+    }
+    if !target.exists() {
+        bail!("{} is not in the download", target.display());
+    }
+    std::fs::set_permissions(&target, std::fs::Permissions::from_mode(0o755))?;
+    std::fs::write(dir.join("version"), version)?;
+    Ok(())
+}
+
+/// The SHA-256 of a file, in hexadecimal.
+fn sha256_of(path: &Path) -> Result<String> {
+    use sha2::{Digest as _, Sha256};
+    let mut file = std::fs::File::open(path)?;
+    let mut hasher = Sha256::new();
+    let mut buffer = vec![0; 1 << 16];
+    loop {
+        let read = file.read(&mut buffer)?;
+        if read == 0 {
+            break;
+        }
+        hasher.update(&buffer[..read]);
+    }
+    Ok(hasher
+        .finalize()
+        .iter()
+        .map(|byte| format!("{byte:02x}"))
+        .collect())
 }
 
 /// The command that starts `spec` from `program`.
@@ -682,14 +840,18 @@ pub fn command(
     program: PathBuf,
     root: &Path,
     env: &HashMap<String, String>,
+    extra_env: &[(String, String)],
 ) -> ServerCommand {
+    let mut variables: Vec<(String, String)> = env
+        .iter()
+        .filter(|(key, _)| !extra_env.iter().any(|(extra, _)| extra == *key))
+        .map(|(key, value)| (key.clone(), value.clone()))
+        .collect();
+    variables.extend(extra_env.iter().cloned());
     ServerCommand {
         program,
         args: spec.args.iter().map(|arg| (*arg).to_owned()).collect(),
-        env: env
-            .iter()
-            .map(|(key, value)| (key.clone(), value.clone()))
-            .collect(),
+        env: variables,
         cwd: root.to_path_buf(),
     }
 }
@@ -851,15 +1013,143 @@ mod tests {
         let error = install_command(spec("vtsls").unwrap(), servers, &env).unwrap_err();
         assert!(error.to_string().contains("npm"), "{error}");
         let (program, args) = install_command(spec("marksman").unwrap(), servers, &env).unwrap();
-        assert_eq!(program, Path::new("/bin/sh"));
+        assert_eq!(program, Path::new("/usr/bin/curl"));
         assert_eq!(
-            args[args.len() - 2],
+            args.last().unwrap(),
             "https://github.com/artempyanykh/marksman/releases/download/2026-02-08/marksman-macos"
         );
-        assert_eq!(args.last().unwrap(), "/data/servers/marksman/marksman");
+        assert_eq!(args[args.len() - 2], "/data/servers/marksman/download.part");
         let (_, args) = install_command(spec("taplo").unwrap(), servers, &env).unwrap();
-        assert!(args[3].contains("gunzip"));
-        assert!(args[5].ends_with(&format!("taplo-darwin-{}.gz", std::env::consts::ARCH)));
+        assert!(
+            args.last()
+                .unwrap()
+                .ends_with(&format!("taplo-darwin-{}.gz", std::env::consts::ARCH))
+        );
+    }
+
+    /// A server spec for a download from `archive`, a local file.
+    fn download_spec(archive: &Path, unpack: Unpack, sha256: Option<&str>) -> &'static ServerSpec {
+        let url: &'static str = Box::leak(format!("file://{}", archive.display()).into_boxed_str());
+        let sha256 = sha256.map(|hash| &*Box::leak(hash.to_owned().into_boxed_str()));
+        Box::leak(Box::new(ServerSpec {
+            id: "tool",
+            name: "Tool",
+            languages: &["tool"],
+            program: "tool",
+            args: &[],
+            install: Install::Download {
+                url,
+                version: "1.0",
+                unpack,
+                sha256,
+            },
+            activation: Activation::Always,
+            needs: &[],
+        }))
+    }
+
+    #[test]
+    fn archives_are_checked_unpacked_and_found() {
+        let work = tempfile::tempdir().unwrap();
+        let source = work.path().join("source/tool-{arch}");
+        let source = PathBuf::from(expand_arch(&source.to_string_lossy()));
+        std::fs::create_dir_all(&source).unwrap();
+        std::fs::write(source.join("tool"), "#!/bin/sh\necho ok\n").unwrap();
+        let env = HashMap::from([("PATH".to_owned(), String::new())]);
+        for (name, flags) in [("tool.tar.gz", "-czf"), ("tool.zip", "--format=zip -cf")] {
+            let archive = work.path().join(name);
+            let mut tar = Command::new("/usr/bin/tar");
+            tar.args(flags.split(' '))
+                .arg(&archive)
+                .arg("-C")
+                .arg(work.path().join("source"));
+            tar.arg(source.file_name().unwrap());
+            assert!(tar.status().unwrap().success());
+            let hash = sha256_of(&archive).unwrap();
+            let unpack = Unpack::Archive {
+                program: "tool-{arch}/tool",
+            };
+            let servers = work.path().join(format!("servers-{name}"));
+
+            // A different SHA-256 stops the install on Apple silicon.
+            let wrong = download_spec(&archive, unpack, Some(&"0".repeat(64)));
+            let result = install(wrong, &servers, work.path(), &env);
+            if std::env::consts::ARCH == "aarch64" {
+                let error = result.unwrap_err().to_string();
+                assert!(error.contains("not the expected one"), "{error}");
+                assert_eq!(find(wrong, &servers, work.path(), &env), None);
+            }
+
+            let spec = download_spec(&archive, unpack, Some(&hash));
+            install(spec, &servers, work.path(), &env).unwrap();
+            let program = find(spec, &servers, work.path(), &env).expect("installed");
+            assert_eq!(
+                program,
+                install_dir(&servers, spec)
+                    .join("1.0")
+                    .join(expand_arch("tool-{arch}/tool"))
+            );
+            let output = Command::new(&program).output().unwrap();
+            assert_eq!(String::from_utf8_lossy(&output.stdout), "ok\n", "{name}");
+            assert!(!install_dir(&servers, spec).join(DOWNLOAD).exists());
+        }
+    }
+
+    #[test]
+    fn single_files_and_gzip_are_installed_too() {
+        let work = tempfile::tempdir().unwrap();
+        let plain = work.path().join("tool");
+        std::fs::write(&plain, "#!/bin/sh\necho ok\n").unwrap();
+        let env = HashMap::from([("PATH".to_owned(), String::new())]);
+        let spec = download_spec(&plain, Unpack::File, None);
+        install(spec, &work.path().join("a"), work.path(), &env).unwrap();
+        assert!(find(spec, &work.path().join("a"), work.path(), &env).is_some());
+
+        let gzip = work.path().join("tool.gz");
+        let compressed = Command::new("/usr/bin/gzip")
+            .args(["--stdout"])
+            .arg(&plain)
+            .output()
+            .unwrap();
+        std::fs::write(&gzip, compressed.stdout).unwrap();
+        let spec = download_spec(&gzip, Unpack::Gzip, None);
+        install(spec, &work.path().join("b"), work.path(), &env).unwrap();
+        let program = find(spec, &work.path().join("b"), work.path(), &env).unwrap();
+        let output = Command::new(&program).output().unwrap();
+        assert_eq!(String::from_utf8_lossy(&output.stdout), "ok\n");
+    }
+
+    #[test]
+    fn architectures_in_each_projects_spelling() {
+        let expanded = expand_arch("{arch} {aarch_64} {arm64}");
+        if std::env::consts::ARCH == "aarch64" {
+            assert_eq!(expanded, "aarch64 aarch_64 arm64");
+        } else {
+            assert_eq!(expanded, "x86_64 x86_64 amd64");
+        }
+    }
+
+    #[test]
+    fn extra_variables_replace_the_shell_ones() {
+        let env = HashMap::from([
+            ("PATH".to_owned(), "/usr/bin".to_owned()),
+            ("HOME".to_owned(), "/Users/m".to_owned()),
+        ]);
+        let extra = [("PATH".to_owned(), "/jdk/bin:/usr/bin".to_owned())];
+        let command = command(
+            spec("taplo").unwrap(),
+            PathBuf::from("taplo"),
+            Path::new("/p"),
+            &env,
+            &extra,
+        );
+        let path: Vec<_> = command
+            .env
+            .iter()
+            .filter(|(key, _)| key == "PATH")
+            .collect();
+        assert_eq!(path, [&("PATH".to_owned(), "/jdk/bin:/usr/bin".to_owned())]);
+        assert!(command.env.iter().any(|(key, _)| key == "HOME"));
     }
 
     #[test]
