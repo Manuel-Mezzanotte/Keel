@@ -41,6 +41,11 @@ fn sample(id: &str, dir: &Path) -> (PathBuf, &'static str) {
             "rust",
             "fn main() { let x: u32 = \"no\"; }\n",
         ),
+        "basedpyright" | "ruff" => (
+            "app.py",
+            "python",
+            "import os\n\ndef total(x: int) -> int:\n    return x + \"uno\"\n",
+        ),
         other => panic!("no sample for {other}"),
     };
     if id == "rust-analyzer" {
@@ -122,7 +127,27 @@ fn real_servers_start_and_report() {
         });
         let deadline = Instant::now() + Duration::from_secs(120);
         let mut diagnostics: Option<Value> = None;
-        while Instant::now() < deadline {
+        // Servers that only answer when asked, as Ruff: ask, as Keel does.
+        let pulls = server
+            .capabilities()
+            .is_some_and(|capabilities| capabilities.diagnostic_provider.is_some());
+        if pulls && !matches!(id, "eslint") {
+            match block_on(server.request_raw(
+                "textDocument/diagnostic",
+                json!({ "textDocument": { "uri": uri } }),
+            )) {
+                Ok(report)
+                    if report["items"]
+                        .as_array()
+                        .is_some_and(|items| !items.is_empty()) =>
+                {
+                    diagnostics = Some(json!({ "diagnostics": report["items"] }));
+                }
+                Ok(_) => {}
+                Err(error) => println!("    pull: {error:#}"),
+            }
+        }
+        while diagnostics.is_none() && Instant::now() < deadline {
             match events.recv_timeout(Duration::from_millis(200)) {
                 Ok(ServerEvent::Notification { method, params })
                     if method == "textDocument/publishDiagnostics" =>
@@ -265,6 +290,7 @@ fn lsp_language(path: &Path) -> &'static str {
         Some("md") => "markdown",
         Some("yaml" | "yml") => "yaml",
         Some("toml") => "toml",
+        Some("py") => "python",
         _ => "plaintext",
     }
 }

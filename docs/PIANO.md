@@ -1587,7 +1587,7 @@ Apri Keel su GestionaleHospitality. La prima volta i server si installano da sol
 |---|---|---|
 | 11.1 | Colori e riconoscimento dei file: Python, Java, C, C++, C#, Bash e zsh, Dockerfile, SQL, XML, Makefile e `.properties` | fatta |
 | 11.2 | Motore dei server: archivi `tar.gz` e `zip` con controllo SHA-256; programmi necessari (Java, .NET, strumenti di Xcode) e guida a installarli quando mancano | fatta |
-| 11.3 | Python: `basedpyright` e `ruff`, con l'ambiente virtuale del progetto (`.venv`, uv, Poetry) | da fare |
+| 11.3 | Python: `basedpyright` e `ruff`, con l'ambiente virtuale del progetto (`.venv`, uv, Poetry) | fatta |
 | 11.4 | Java con `jdtls` (Maven e Gradle) e Spring Boot (`application.properties` e `.yml`) | da fare |
 | 11.5 | C e C++ con `clangd` (`compile_commands.json`, clang-format); C# con .NET | da fare |
 | 11.6 | Linguaggi di base: Bash e zsh (con ShellCheck e shfmt), Dockerfile, SQL, XML, Makefile | da fare |
@@ -1596,6 +1596,34 @@ Apri Keel su GestionaleHospitality. La prima volta i server si installano da sol
 **Decisioni prese all'inizio**
 - **I server sono quelli delle estensioni di VS Code** più usate, così il comportamento è lo stesso: Pylance si basa su Pyright (qui `basedpyright`, la sua versione libera); Java usa `jdtls` come l'estensione di Red Hat; XML usa `lemminx`, sempre di Red Hat.
 - **Keel installa da solo** i server che si scaricano (npm, archivi dalle pagine di rilascio). **Non installa da solo** i programmi di sistema, cioè Java, .NET e gli strumenti di Xcode: se mancano ti dice cosa manca e ti offre il comando da lanciare nel terminale.
+
+**Note sulla 11.3**
+- **Due server per Python**, come in VS Code con Pylance e l'estensione di Ruff:
+  - **basedpyright** (da npm), la versione libera di Pyright, il motore di Pylance. Dà gli errori di tipo, i completamenti con gli import automatici, le info, le definizioni, i riferimenti, la rinomina e la struttura del file.
+  - **Ruff** (archivio con impronta SHA-256). Dà gli avvisi di stile e i bug probabili con le regole del `pyproject.toml`, le correzioni (anche `source.fixAll.ruff` al salvataggio), il riordino degli import e la formattazione.
+- **L'ambiente virtuale del progetto**, cercato come fa l'estensione Python di VS Code. In ordine:
+  1. `python.defaultInterpreterPath` delle impostazioni;
+  2. `.venv` (quello che crea uv), `venv` o `env`, purché siano davvero ambienti, cioè abbiano `pyvenv.cfg`;
+  3. l'ambiente di Poetry nella sua cache.
+
+  Così i pacchetti installati nel progetto si trovano. Senza nessun ambiente vale il `python3` del `PATH`.
+- **Quanto controlla:** la modalità `standard`, quella del comando `pyright`. Pylance parte spento, basedpyright molto più severo. Il progetto può scegliere nel `pyproject.toml` (`[tool.basedpyright]`) o con `"basedpyright.analysis.typeCheckingMode"` nelle impostazioni (`off`, `basic`, `standard`, `strict`, `all`).
+  - Su Hondana `standard` trova errori veri, per esempio un `CatalogIndex` che non rispetta il protocollo `CatalogLike`.
+- **Prove con i server veri** (scaricati nella cartella di prova):
+
+  | Prova | Tempo |
+  |---|---|
+  | basedpyright, installazione | 1,8 s |
+  | basedpyright, primi errori su un file di prova | 0,45 s |
+  | basedpyright, primi errori su `hondana/api.py` | 0,83 s |
+  | basedpyright, info su `fastapi` (preso dal `.venv` del progetto) | 7 ms |
+  | basedpyright, completamento: primo / dopo | 230 ms / 2 ms |
+  | basedpyright, riferimenti | 9 ms |
+  | Ruff, installazione | 0,6 s |
+  | Ruff, errori | 8 ms |
+  | Ruff, formattazione | meno di 1 ms |
+
+- Ruff dà gli errori solo quando l'editor li chiede. Keel lo faceva già nella finestra; ora lo fa anche la prova automatica con i server veri.
 
 **Note sulla 11.2**
 - **Download controllati.** Ogni server scaricato ha la sua impronta SHA-256 scritta in Keel. Se il file scaricato non corrisponde, Keel lo butta e non installa niente. Vale anche per taplo e marksman della fase 6, che prima non avevano il controllo.

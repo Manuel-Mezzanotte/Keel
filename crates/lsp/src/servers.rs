@@ -303,6 +303,38 @@ pub const SERVERS: &[ServerSpec] = &[
         needs: &[],
     },
     ServerSpec {
+        id: "basedpyright",
+        name: "Python",
+        languages: &["python"],
+        program: "basedpyright-langserver",
+        args: &["--stdio"],
+        // Pyright, as in Pylance, in its free build with the parts Pylance
+        // keeps for itself (semantic colors, inlay hints...).
+        install: Install::Npm {
+            package: "basedpyright",
+            version: "1.40.2",
+        },
+        activation: Activation::Always,
+        needs: &[],
+    },
+    ServerSpec {
+        id: "ruff",
+        name: "Ruff",
+        languages: &["python"],
+        program: "ruff",
+        args: &["server"],
+        install: Install::Download {
+            url: "https://github.com/astral-sh/ruff/releases/download/0.17.5/ruff-{arch}-apple-darwin.tar.gz",
+            version: "0.17.5",
+            unpack: Unpack::Archive {
+                program: "ruff-{arch}-apple-darwin/ruff",
+            },
+            sha256: Some("4ffadabec5c5fee1ddb2eecac0787ffe6fa18c665b73da9258b84211f40c5829"),
+        },
+        activation: Activation::Always,
+        needs: &[],
+    },
+    ServerSpec {
         id: "rust-analyzer",
         name: "rust-analyzer",
         languages: &["rust"],
@@ -322,6 +354,20 @@ pub const SERVERS: &[ServerSpec] = &[
 pub fn default_settings(spec: &ServerSpec) -> Value {
     let css = json!({ "validate": true, "completion": { "triggerPropertyValueCompletion": true, "completePropertyWithSemicolon": true }, "hover": { "documentation": true, "references": true } });
     match spec.id {
+        "basedpyright" => json!({
+            "python": { "analysis": { "autoImportCompletions": true } },
+            "basedpyright": { "analysis": {
+                // Pyright's own default, the one the `pyright` command
+                // uses. basedpyright's "recommended" flags much more than
+                // VS Code and Cursor do; projects choose in their
+                // `pyproject.toml` or `pyrightconfig.json`.
+                "typeCheckingMode": "standard",
+                "autoImportCompletions": true,
+                "diagnosticMode": "openFilesOnly",
+                "useLibraryCodeForTypes": true,
+                "autoSearchPaths": true,
+            } },
+        }),
         "vtsls" => json!({
             "vtsls": {
                 // The project's own TypeScript, as Cursor offers.
@@ -498,6 +544,13 @@ pub fn settings_for(spec: &ServerSpec, user: &Value, root: &Path) -> Value {
         });
         return settings;
     }
+    // The project's own Python, as the Python extension picks it.
+    if spec.id == "basedpyright"
+        && user["python"]["pythonPath"].is_null()
+        && let Some(python) = python_interpreter(root, user)
+    {
+        settings["python"]["pythonPath"] = json!(python.to_string_lossy());
+    }
     // Tailwind's at-rules (`@theme`, `@apply`...) are not CSS: in its
     // projects the CSS server leaves them alone, as most set up VS Code.
     if matches!(spec.id, "css" | "html")
@@ -509,6 +562,65 @@ pub fn settings_for(spec: &ServerSpec, user: &Value, root: &Path) -> Value {
     }
     merge_settings(&mut settings, user);
     settings
+}
+
+/// The Python of a project, as VS Code's Python extension finds it:
+/// `python.defaultInterpreterPath` if set, then a virtual environment in
+/// the project (`.venv`, which uv and most tools make, `venv` or `env`),
+/// then Poetry's own. `None` leaves the server to the `python3` on the
+/// `PATH`.
+pub fn python_interpreter(root: &Path, user: &Value) -> Option<PathBuf> {
+    if let Some(path) = user["python"]["defaultInterpreterPath"].as_str() {
+        let path = PathBuf::from(path);
+        let path = if path.is_relative() {
+            root.join(path)
+        } else {
+            path
+        };
+        if path.exists() {
+            return Some(path);
+        }
+    }
+    let in_project = [".venv", "venv", "env"]
+        .iter()
+        .map(|name| root.join(name))
+        .find(|venv| venv.join("pyvenv.cfg").exists() && venv.join("bin/python").exists());
+    if let Some(venv) = in_project {
+        return Some(venv.join("bin/python"));
+    }
+    poetry_environment(root).map(|venv| venv.join("bin/python"))
+}
+
+/// Poetry keeps environments in its cache, named after the project:
+/// `keel-AbCdEf12-py3.12`.
+fn poetry_environment(root: &Path) -> Option<PathBuf> {
+    if !root.join("poetry.lock").exists() {
+        return None;
+    }
+    let manifest = std::fs::read_to_string(root.join("pyproject.toml")).ok()?;
+    let name = manifest
+        .lines()
+        .map(str::trim)
+        .find_map(|line| {
+            let value = line.strip_prefix("name")?.trim_start().strip_prefix('=')?;
+            Some(value.trim().trim_matches(['"', '\'']).to_owned())
+        })?
+        .to_lowercase()
+        .replace(['_', '.'], "-");
+    let home = std::env::var("HOME").ok()?;
+    let cache = Path::new(&home).join("Library/Caches/pypoetry/virtualenvs");
+    let mut found: Vec<PathBuf> = std::fs::read_dir(cache)
+        .ok()?
+        .flatten()
+        .map(|entry| entry.path())
+        .filter(|path| {
+            path.file_name()
+                .is_some_and(|file| file.to_string_lossy().starts_with(&format!("{name}-")))
+                && path.join("bin/python").exists()
+        })
+        .collect();
+    found.sort();
+    found.pop()
 }
 
 /// What a server gets in `initializationOptions`, as VS Code's extensions
@@ -936,6 +1048,7 @@ mod tests {
         assert_eq!(ids("typescript"), ["vtsls"]);
         assert_eq!(ids("rust"), ["rust-analyzer"]);
         assert_eq!(ids("toml"), ["taplo"]);
+        assert_eq!(ids("python"), ["basedpyright", "ruff"]);
         assert_eq!(ids("plaintext"), Vec::<&str>::new());
     }
 
@@ -1150,6 +1263,49 @@ mod tests {
             .collect();
         assert_eq!(path, [&("PATH".to_owned(), "/jdk/bin:/usr/bin".to_owned())]);
         assert!(command.env.iter().any(|(key, _)| key == "HOME"));
+    }
+
+    #[test]
+    fn python_comes_from_the_projects_environment() {
+        let root = tempfile::tempdir().unwrap();
+        let root = root.path();
+        let settings = |user: Value| settings_for(spec("basedpyright").unwrap(), &user, root);
+        // No environment: the server uses the `python3` on the `PATH`.
+        assert_eq!(settings(json!({}))["python"]["pythonPath"], Value::Null);
+        assert_eq!(
+            settings(json!({}))["basedpyright"]["analysis"]["typeCheckingMode"],
+            json!("standard")
+        );
+
+        // A folder named like an environment, but not one, is skipped.
+        std::fs::create_dir_all(root.join("env/bin")).unwrap();
+        std::fs::write(root.join("env/bin/python"), "").unwrap();
+        assert_eq!(settings(json!({}))["python"]["pythonPath"], Value::Null);
+        std::fs::write(root.join("env/pyvenv.cfg"), "home = /usr/bin\n").unwrap();
+        let env_python = root.join("env/bin/python").to_string_lossy().into_owned();
+        assert_eq!(
+            settings(json!({}))["python"]["pythonPath"],
+            json!(env_python)
+        );
+
+        // `.venv`, as uv makes it, comes first.
+        std::fs::create_dir_all(root.join(".venv/bin")).unwrap();
+        std::fs::write(root.join(".venv/bin/python"), "").unwrap();
+        std::fs::write(root.join(".venv/pyvenv.cfg"), "uv = 0.13\n").unwrap();
+        let venv_python = root.join(".venv/bin/python").to_string_lossy().into_owned();
+        assert_eq!(
+            settings(json!({}))["python"]["pythonPath"],
+            json!(venv_python)
+        );
+
+        // The user's choice wins, also relative to the project.
+        let chosen = json!({ "python": { "defaultInterpreterPath": "env/bin/python" } });
+        assert_eq!(settings(chosen)["python"]["pythonPath"], json!(env_python));
+        let fixed = json!({ "python": { "pythonPath": "/opt/python" } });
+        assert_eq!(
+            settings(fixed)["python"]["pythonPath"],
+            json!("/opt/python")
+        );
     }
 
     #[test]
