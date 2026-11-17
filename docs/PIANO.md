@@ -126,7 +126,7 @@ Da confermare con le misure della fase 0. Si misura con lo stesso script su Keel
 | 8 | Grafico e storico git | media | fatta; restano le tue prove a mano |
 | 9 | Estensioni | grande | fatta; restano le tue prove a mano |
 | 10 | IA: Claude Code | media | fatta; restano le tue prove a mano |
-| 11 | Altri linguaggi | media | da fare |
+| 11 | Altri linguaggi | media | in corso |
 | 12 | Rifinitura, prestazioni e affidabilità | grande | da fare |
 
 Due traguardi: dopo la **fase 0** si decide se continuare; dopo la **fase 6** Keel è usabile tutti i giorni per i progetti web, con Cursor di riserva.
@@ -1580,6 +1580,22 @@ Apri Keel su GestionaleHospitality. La prima volta i server si installano da sol
 
 **Fatto quando**
 - Per ogni linguaggio un progetto di prova si comporta come in VS Code.
+
+**Sottofasi**
+
+| Sottofase | Cosa | Stato |
+|---|---|---|
+| 11.1 | Colori e riconoscimento dei file: Python, Java, C, C++, C#, Bash e zsh, Dockerfile, SQL, XML, Makefile e `.properties` | da fare |
+| 11.2 | Motore dei server: archivi `tar.gz` e `zip` con controllo SHA-256; programmi necessari (Java, .NET, strumenti di Xcode) e guida a installarli quando mancano | da fare |
+| 11.3 | Python: `basedpyright` e `ruff`, con l'ambiente virtuale del progetto (`.venv`, uv, Poetry) | da fare |
+| 11.4 | Java con `jdtls` (Maven e Gradle) e Spring Boot (`application.properties` e `.yml`) | da fare |
+| 11.5 | C e C++ con `clangd` (`compile_commands.json`, clang-format); C# con .NET | da fare |
+| 11.6 | Linguaggi di base: Bash e zsh (con ShellCheck e shfmt), Dockerfile, SQL, XML, Makefile | da fare |
+| 11.7 | Prove su un progetto per ogni linguaggio, misure e resoconto | da fare |
+
+**Decisioni prese all'inizio**
+- **I server sono quelli delle estensioni di VS Code** più usate, così il comportamento è lo stesso: Pylance si basa su Pyright (qui `basedpyright`, la sua versione libera); Java usa `jdtls` come l'estensione di Red Hat; XML usa `lemminx`, sempre di Red Hat.
+- **Keel installa da solo** i server che si scaricano (npm, archivi dalle pagine di rilascio). **Non installa da solo** i programmi di sistema, cioè Java, .NET e gli strumenti di Xcode: se mancano ti dice cosa manca e ti offre il comando da lanciare nel terminale.
 
 ### Fase 12 — Rifinitura, prestazioni e affidabilità
 
