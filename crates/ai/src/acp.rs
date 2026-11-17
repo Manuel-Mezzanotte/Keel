@@ -692,7 +692,12 @@ mod tests {
         let mut total = 0;
         for row in table.iter().filter(|row| family.contains(&row.0)) {
             total += row.2;
-            println!("process {} {} MB {}", row.0, row.2 / 1024, row.3.rsplit('/').next().unwrap_or_default());
+            println!(
+                "process {} {} MB {}",
+                row.0,
+                row.2 / 1024,
+                row.3.rsplit('/').next().unwrap_or_default()
+            );
         }
         println!("total {} MB", total / 1024);
     }

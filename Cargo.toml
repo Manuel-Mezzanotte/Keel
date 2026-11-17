@@ -12,7 +12,9 @@ publish = false
 # UI framework. gpui-component is built on the `gpui-pre` snapshot of Zed's
 # GPUI, so the app must use the very same crate and version.
 gpui = { package = "gpui-pre", version = "=0.3.12" }
-# Grammars for the languages of phase 6: web and Rust. JSON is always built in.
+# Grammars for the languages of phases 6 (web and Rust) and 11 (the others).
+# JSON is always built in; XML, Dockerfile and `.properties` come from
+# their own crates in `language`.
 gpui-component = { version = "=0.9.1", features = [
     "tree-sitter-typescript",
     "tree-sitter-tsx",
@@ -25,6 +27,13 @@ gpui-component = { version = "=0.9.1", features = [
     "tree-sitter-toml",
     "tree-sitter-rust",
     "tree-sitter-bash",
+    "tree-sitter-python",
+    "tree-sitter-java",
+    "tree-sitter-c",
+    "tree-sitter-cpp",
+    "tree-sitter-csharp",
+    "tree-sitter-sql",
+    "tree-sitter-make",
 ] }
 # The macOS platform for GPUI; `font-kit` is needed to draw any text.
 gpui_platform = { package = "gpui-pre-platform", version = "=0.3.12", features = ["font-kit"] }
@@ -83,6 +92,14 @@ terminal = { path = "crates/terminal" }
 git = { path = "crates/git" }
 lsp = { path = "crates/lsp" }
 pdf = { path = "crates/pdf" }
+
+# Grammars gpui-component does not ship.
+tree-sitter-xml = "0.7.0"
+tree-sitter-containerfile = "0.9.2"
+tree-sitter-properties = "0.3.0"
+tree-sitter-c-sharp = "0.23.1"
+tree-sitter-c = "0.24.1"
+tree-sitter-cpp = "0.23.4"
 
 # Testing
 tempfile = "3.27"

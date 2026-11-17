@@ -2,7 +2,7 @@
 
 use std::path::Path;
 
-use gpui_component::highlighter::LanguageRegistry;
+use gpui_component::highlighter::{LanguageConfig, LanguageRegistry};
 
 /// A language Keel can highlight.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -17,6 +17,16 @@ pub enum Language {
     Toml,
     Rust,
     Shell,
+    Python,
+    Java,
+    C,
+    Cpp,
+    CSharp,
+    Sql,
+    Makefile,
+    Xml,
+    Dockerfile,
+    Properties,
     PlainText,
 }
 
@@ -41,6 +51,16 @@ impl Language {
             "toml" => Language::Toml,
             "rust" => Language::Rust,
             "shellscript" | "dotenv" => Language::Shell,
+            "python" => Language::Python,
+            "java" => Language::Java,
+            "c" => Language::C,
+            "cpp" | "cuda-cpp" => Language::Cpp,
+            "csharp" => Language::CSharp,
+            "sql" => Language::Sql,
+            "makefile" => Language::Makefile,
+            "xml" | "xsl" | "svg" => Language::Xml,
+            "dockerfile" => Language::Dockerfile,
+            "properties" | "java-properties" | "spring-boot-properties" => Language::Properties,
             _ => Language::PlainText,
         }
     }
@@ -59,6 +79,16 @@ impl Language {
             Language::Toml => "toml",
             Language::Rust => "rust",
             Language::Shell => "bash",
+            Language::Python => "python",
+            Language::Java => "java",
+            Language::C => "c",
+            Language::Cpp => "cpp",
+            Language::CSharp => "csharp",
+            Language::Sql => "sql",
+            Language::Makefile => "make",
+            Language::Xml => "xml",
+            Language::Dockerfile => "dockerfile",
+            Language::Properties => "properties",
             Language::PlainText => "text",
         }
     }
@@ -78,9 +108,12 @@ pub fn vscode_id_for_path(path: &Path) -> &'static str {
         "tsconfig.json" | "jsconfig.json" | ".eslintrc.json" | "devcontainer.json"
         | "settings.json" | "keybindings.json" | "extensions.json" | "launch.json"
         | "tasks.json" | ".babelrc" | ".swcrc" => return "jsonc",
-        ".zshrc" | ".bashrc" | ".zprofile" | ".bash_profile" | ".profile" => {
+        ".zshrc" | ".bashrc" | ".zprofile" | ".bash_profile" | ".profile" | ".zshenv"
+        | ".zlogin" | ".zlogout" | ".bash_aliases" | ".bash_logout" | "pkgbuild" => {
             return "shellscript";
         }
+        "dockerfile" | "containerfile" => return "dockerfile",
+        "makefile" | "gnumakefile" => return "makefile",
         "cargo.lock" | ".prettierrc.toml" => return "toml",
         ".prettierrc" | ".eslintrc" => return "json",
         _ => {}
@@ -91,6 +124,10 @@ pub fn vscode_id_for_path(path: &Path) -> &'static str {
     }
     if name.starts_with("tsconfig.") && name.ends_with(".json") {
         return "jsonc";
+    }
+    // `Dockerfile.dev`, `Containerfile.prod`...
+    if name.starts_with("dockerfile.") || name.starts_with("containerfile.") {
+        return "dockerfile";
     }
     let extension = path
         .extension()
@@ -114,12 +151,90 @@ pub fn vscode_id_for_path(path: &Path) -> &'static str {
         Some("prisma") => "prisma",
         Some("sh" | "bash" | "zsh") => "shellscript",
         Some("env") => "dotenv",
+        Some("py" | "pyi" | "pyw") => "python",
+        Some("java") => "java",
+        Some("c" | "i") => "c",
+        // `.h` is C++ in VS Code too: clangd reads C headers either way.
+        Some(
+            "cpp" | "cc" | "cxx" | "c++" | "cppm" | "ixx" | "h" | "hpp" | "hh" | "hxx" | "h++"
+            | "inl" | "ipp" | "tpp" | "ino",
+        ) => "cpp",
+        Some("cu" | "cuh") => "cuda-cpp",
+        Some("cs" | "csx" | "cake") => "csharp",
+        Some("sql") => "sql",
+        Some("mk" | "mak") => "makefile",
+        Some(
+            "xml" | "xsd" | "xslt" | "xsl" | "pom" | "csproj" | "fsproj" | "vbproj" | "props"
+            | "targets" | "plist" | "xaml" | "axaml" | "iml" | "storyboard" | "xib" | "nuspec"
+            | "resx" | "wsdl" | "rss" | "atom" | "xhtml" | "svg" | "fxml" | "drawio",
+        ) => "xml",
+        Some("dockerfile" | "containerfile") => "dockerfile",
+        Some("properties") => "properties",
         _ => "plaintext",
     }
 }
 
 /// JSX rules that complete the TypeScript ones for TSX files.
 const JSX_HIGHLIGHTS: &str = include_str!("queries/jsx_highlights.scm");
+
+/// Grammars Keel adds to gpui-component's: some it does not ship, and
+/// some it ships without colors (C#) or with only part of them (C++, whose
+/// rules build on C's, as in the grammar's own editor setup).
+fn extra_grammars() -> Vec<LanguageConfig> {
+    let cpp_highlights = format!(
+        "{}\n{}",
+        tree_sitter_cpp::HIGHLIGHT_QUERY,
+        tree_sitter_c::HIGHLIGHT_QUERY
+    );
+    vec![
+        LanguageConfig::new(
+            "cpp",
+            tree_sitter_cpp::LANGUAGE.into(),
+            vec![],
+            &cpp_highlights,
+            "",
+            "",
+        ),
+        LanguageConfig::new(
+            "csharp",
+            tree_sitter_c_sharp::LANGUAGE.into(),
+            vec![],
+            tree_sitter_c_sharp::HIGHLIGHTS_QUERY,
+            "",
+            "",
+        ),
+        LanguageConfig::new(
+            "xml",
+            tree_sitter_xml::LANGUAGE_XML.into(),
+            vec![],
+            tree_sitter_xml::XML_HIGHLIGHT_QUERY,
+            "",
+            "",
+        ),
+        LanguageConfig::new(
+            "dockerfile",
+            tree_sitter_containerfile::LANGUAGE.into(),
+            vec![
+                "bash".into(),
+                "json".into(),
+                "yaml".into(),
+                "toml".into(),
+                "xml".into(),
+            ],
+            tree_sitter_containerfile::HIGHLIGHTS_QUERY,
+            tree_sitter_containerfile::INJECTIONS_QUERY,
+            "",
+        ),
+        LanguageConfig::new(
+            "properties",
+            tree_sitter_properties::LANGUAGE.into(),
+            vec![],
+            tree_sitter_properties::HIGHLIGHTS_QUERY,
+            "",
+            "",
+        ),
+    ]
+}
 
 /// Adjusts gpui-component's grammars before any editor is created.
 ///
@@ -128,6 +243,14 @@ const JSX_HIGHLIGHTS: &str = include_str!("queries/jsx_highlights.scm");
 /// attributes.
 pub fn register_grammars() {
     let registry = LanguageRegistry::singleton();
+    for config in extra_grammars() {
+        registry.register(&config.name.clone(), &config);
+    }
+    // Make's rules color only the standard targets; VS Code colors them all.
+    if let Some(mut make) = registry.language("make") {
+        make.highlights = format!("{}\n(targets (word) @function)\n", make.highlights).into();
+        registry.register("make", &make);
+    }
     let (Some(typescript), Some(mut tsx)) =
         (registry.language("typescript"), registry.language("tsx"))
     else {
@@ -189,8 +312,121 @@ mod tests {
     }
 
     #[test]
+    fn files_of_the_other_languages() {
+        let cases = [
+            ("main.py", "python"),
+            ("stubs.pyi", "python"),
+            ("App.java", "java"),
+            ("main.c", "c"),
+            ("vector.h", "cpp"),
+            ("engine.cpp", "cpp"),
+            ("engine.hpp", "cpp"),
+            ("Program.cs", "csharp"),
+            ("schema.sql", "sql"),
+            ("Makefile", "makefile"),
+            ("GNUmakefile", "makefile"),
+            ("rules.mk", "makefile"),
+            ("pom.xml", "xml"),
+            ("App.csproj", "xml"),
+            ("icon.svg", "xml"),
+            ("Dockerfile", "dockerfile"),
+            ("Dockerfile.dev", "dockerfile"),
+            ("Containerfile", "dockerfile"),
+            ("api.dockerfile", "dockerfile"),
+            ("application.properties", "properties"),
+            ("install.zsh", "shellscript"),
+            (".zshenv", "shellscript"),
+        ];
+        for (name, id) in cases {
+            assert_eq!(vscode_id_for_path(Path::new(name)), id, "{name}");
+        }
+        assert_eq!(Language::for_path(Path::new("main.py")), Language::Python);
+        assert_eq!(Language::for_path(Path::new("vector.h")), Language::Cpp);
+        assert_eq!(
+            Language::for_path(Path::new("Dockerfile")),
+            Language::Dockerfile
+        );
+    }
+
+    #[test]
+    fn the_other_languages_get_colors() {
+        register_grammars();
+        let cases = [
+            (
+                "python",
+                "def total(x):\n    return \"ciao\"\n",
+                "def",
+                "keyword",
+            ),
+            (
+                "python",
+                "def total(x):\n    return \"ciao\"\n",
+                "\"ciao\"",
+                "string",
+            ),
+            ("java", "class App { int count = 1; }", "class", "keyword"),
+            (
+                "java",
+                "class App { String s = \"ciao\"; }",
+                "\"ciao\"",
+                "string",
+            ),
+            ("c", "int main(void) { return 0; }", "return", "keyword"),
+            (
+                "cpp",
+                "namespace keel { class Engine {}; }",
+                "namespace",
+                "keyword",
+            ),
+            ("cpp", "int main() { return 0; }", "return", "keyword"),
+            (
+                "csharp",
+                "class Program { string s = \"ciao\"; }",
+                "class",
+                "keyword",
+            ),
+            (
+                "csharp",
+                "class Program { string s = \"ciao\"; }",
+                "\"ciao\"",
+                "string",
+            ),
+            ("sql", "SELECT name FROM guests;", "SELECT", "keyword"),
+            ("make", "build:\n\tcargo build\n", "build", "function"),
+            ("make", "build:\n\t$(CC) main.c\n", "CC", "constant"),
+            (
+                "xml",
+                "<project><name>keel</name></project>",
+                "project",
+                "tag",
+            ),
+            (
+                "dockerfile",
+                "FROM node:24\nRUN npm ci\n",
+                "FROM",
+                "keyword",
+            ),
+            (
+                "dockerfile",
+                "FROM node:24\nRUN echo \"ciao\"\n",
+                "\"ciao\"",
+                "string",
+            ),
+            ("properties", "server.port=8080\n", "server", "property"),
+            ("properties", "server.port=8080\n", "8080", "string"),
+        ];
+        for (language, code, needle, style) in cases {
+            assert_eq!(
+                color_of(language, code, needle),
+                theme_color(style),
+                "{language}: {needle} should be a {style}"
+            );
+        }
+    }
+
+    #[test]
     fn everything_else_is_plain_text() {
-        for name in ["README", "schema.prisma", "notes.txt", "Makefile"] {
+        for name in ["README", "schema.prisma", "notes.txt", "requirements.txt"] {
             assert_eq!(
                 Language::for_path(Path::new(name)),
                 Language::PlainText,
@@ -240,6 +476,16 @@ mod tests {
             Language::Toml,
             Language::Rust,
             Language::Shell,
+            Language::Python,
+            Language::Java,
+            Language::C,
+            Language::Cpp,
+            Language::CSharp,
+            Language::Sql,
+            Language::Makefile,
+            Language::Xml,
+            Language::Dockerfile,
+            Language::Properties,
         ] {
             let config = registry
                 .language(language.highlighter_name())

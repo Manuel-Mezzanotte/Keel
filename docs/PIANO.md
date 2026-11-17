@@ -1585,7 +1585,7 @@ Apri Keel su GestionaleHospitality. La prima volta i server si installano da sol
 
 | Sottofase | Cosa | Stato |
 |---|---|---|
-| 11.1 | Colori e riconoscimento dei file: Python, Java, C, C++, C#, Bash e zsh, Dockerfile, SQL, XML, Makefile e `.properties` | da fare |
+| 11.1 | Colori e riconoscimento dei file: Python, Java, C, C++, C#, Bash e zsh, Dockerfile, SQL, XML, Makefile e `.properties` | fatta |
 | 11.2 | Motore dei server: archivi `tar.gz` e `zip` con controllo SHA-256; programmi necessari (Java, .NET, strumenti di Xcode) e guida a installarli quando mancano | da fare |
 | 11.3 | Python: `basedpyright` e `ruff`, con l'ambiente virtuale del progetto (`.venv`, uv, Poetry) | da fare |
 | 11.4 | Java con `jdtls` (Maven e Gradle) e Spring Boot (`application.properties` e `.yml`) | da fare |
@@ -1596,6 +1596,21 @@ Apri Keel su GestionaleHospitality. La prima volta i server si installano da sol
 **Decisioni prese all'inizio**
 - **I server sono quelli delle estensioni di VS Code** più usate, così il comportamento è lo stesso: Pylance si basa su Pyright (qui `basedpyright`, la sua versione libera); Java usa `jdtls` come l'estensione di Red Hat; XML usa `lemminx`, sempre di Red Hat.
 - **Keel installa da solo** i server che si scaricano (npm, archivi dalle pagine di rilascio). **Non installa da solo** i programmi di sistema, cioè Java, .NET e gli strumenti di Xcode: se mancano ti dice cosa manca e ti offre il comando da lanciare nel terminale.
+
+**Note sulla 11.1**
+- **Colori** per Python, Java, C, C++, C#, SQL, Makefile, XML, Dockerfile e `.properties`; Bash e zsh li avevano già.
+  - Sette grammatiche erano già in gpui-component, da accendere.
+  - XML, Dockerfile e `.properties` vengono da crate a parte.
+  - C# era senza regole di colore e C++ ne aveva solo una parte: ora hanno quelle delle loro grammatiche, e C++ usa anche quelle di C, come fanno gli editor che lo supportano.
+- **Nel Dockerfile** i comandi dopo `RUN` hanno i colori della shell. I file JSON, YAML, TOML e XML scritti dentro il Dockerfile hanno i loro colori.
+- **Nei Makefile** tutti i target sono colorati come funzioni, come in VS Code; la grammatica colorava solo quelli standard (`all`, `clean`…).
+- **Riconoscimento dei file**, con gli stessi identificativi di VS Code (che usano i server e le estensioni):
+  - `Dockerfile`, `Containerfile` e `Dockerfile.dev`;
+  - `Makefile`, `GNUmakefile`, `.mk`;
+  - `pom.xml`, `.csproj`, `.svg`, `.plist` e gli altri file XML;
+  - `.zshenv` e gli altri file di zsh.
+- **`.h` vale come C++**, come in VS Code: `clangd` legge bene le intestazioni C in entrambi i casi.
+- Nella barra di stato i nuovi linguaggi hanno il loro nome. Commenti con Cmd+/ e rientro dopo `:` in Python funzionavano già.
 
 ### Fase 12 — Rifinitura, prestazioni e affidabilità
 
