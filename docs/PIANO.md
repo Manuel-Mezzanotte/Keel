@@ -33,7 +33,7 @@ Si lavora **una fase alla volta**. All'inizio di ogni fase ne dettagliamo i pass
 - **Lingue dell'interfaccia:** italiano e inglese obbligatori, le altre facoltative.
 - **Aspetto:** disposizione come Cursor, stile Apple; temi Mezzanotte (predefinito), Chiaro e Nero, più quelli importati.
 - **Sistemi:** solo Mac obbligatorio.
-- **Verifica:** test automatici e misure, niente screenshot. L'aspetto lo controlli tu.
+- **Verifica:** test automatici e misure. Per l'aspetto, dal 18 novembre Keel si può disegnare fuori dallo schermo in immagini (`scripts/snapshots.sh`), senza catturare lo schermo; l'ultima parola resta tua.
 - **Commit:** li faccio io sul branch `develop`, con il tuo account e senza attribuzioni a Claude, in inglese e nello stile Conventional Commits (`feat:`, `fix:`, `docs:`, `chore:`, `test:`…). Uno per ogni sottofase o pezzo importante, con push su GitHub dopo ogni commit. `main` si aggiorna solo quando lo dici tu.
 - **Lingua del codice:** nomi, commenti, README e commit in inglese; i documenti in `docs/` in italiano.
 - **Identità:** nome Keel, app `Keel.app`, identificativo `com.manuelmezzanotte.keel` (come `com.manuelmezzanotte.sail` del browser), comando `keel` nel terminale.
@@ -1920,6 +1920,47 @@ La prima volta che apri un file di un linguaggio, Keel scarica il suo server: ne
   - VSAuto Ghost non ha etichette: tutto quello che usa c'è.
 - **I controlli della pagina Impostazioni cambiano davvero** (quarta prova): interruttori, menu, numeri e testi scrivevano l'impostazione mentre la finestra stava ancora gestendo il clic, e la scrittura si perdeva senza errori, sia nelle pagine di Keel sia in quelle delle estensioni. Ora la scrittura aspetta che la finestra abbia finito. Il test scrive come fa un controllo, e senza la correzione fallisce.
 - **Prove automatiche:** pagina delle impostazioni e cambi che arrivano all'estensione (dalla pagina, da `settings.json` salvato a mano, col ripristino), proposta dei temi dopo l'installazione, icone del tema nelle schede e nell'apertura rapida, etichette delle estensioni; le 20 impostazioni vere di VSAuto Ghost lette dal suo pacchetto.
+
+**Nuovo aspetto: due stili e viste ridisegnate** (18 novembre, dopo la tua richiesta di restyling)
+- **Due stili della finestra**, scelti con `keel.interfaceStyle` o dalla pagina Impostazioni → Interfaccia; si cambiano al volo, in ogni finestra.
+  - **Pannelli sospesi** (`floating`, quello di prima, rivisto): le card stanno su uno sfondo di una tonalità più scuro, con un'ombra leggera, così si staccano come la barra laterale del Finder. Prima lo sfondo e la barra laterale avevano lo stesso colore e si distinguevano solo dal bordo.
+  - **Piatto** (`flat`, nuovo, come Cursor): i pannelli si toccano e li dividono linee sottili. La barra in alto è più bassa (40 punti invece di 52) e i semafori di macOS restano al centro; le schede sono quelle di VS Code, con una riga colorata sopra quella in uso; la barra di stato ha la sua linea. Il selettore della barra laterale, le schede e l'intestazione di Claude Code stanno su una sola linea che attraversa la finestra.
+  - Controlli, viste e finestre in sovrimpressione sono gli stessi nei due stili: cambia solo la cornice.
+- **Pagina «Interfaccia»** al posto di «Aspetto», la prima delle Impostazioni:
+  - i due stili disegnati in piccolo con i colori del tema, da scegliere con un clic;
+  - i temi come campioni (Mezzanotte, Chiaro, Nero e quelli delle estensioni); con «Segui chiaro e scuro di macOS» acceso, il tema scelto diventa il preferito per il suo modo;
+  - **Animazioni** (`keel.animations`), acceso di base; «Riduci movimento» di macOS le spegne comunque;
+  - lingua e percorso sopra l'editor.
+- **Animazioni:**
+  - barra laterale, Claude Code e pannello in basso entrano e escono scorrendo dal loro bordo (220 ms), senza ridimensionare quello che contengono: il terminale non cambia misura a ogni fotogramma;
+  - il selettore della barra laterale fa scorrere la sua capsula (o, nello stile piatto, la riga sotto l'icona) fino alla vista scelta;
+  - una vista della barra laterale compare con una dissolvenza; la pagina di benvenuto sale al suo posto;
+  - le frecce delle sezioni (Modifiche, Grafico, Installate, Script npm…) ruotano invece di scattare;
+  - Cmd+P e la tavolozza entrano con una dissolvenza leggera.
+- **Controllo versione:**
+  - il messaggio parte da tre righe e cresce fino a dieci; il bordo si accende mentre scrivi, e sotto ci sono il ramo (un clic per cambiarlo), la sincronizzazione e ⌘↩;
+  - **Commit** è un pulsante largo quanto la vista, con un menu accanto: commit (modifica), push, pull, sincronizza; mentre il commit gira mostra la rotellina;
+  - **il grafico** sta in basso e tiene l'altezza a cui lo trascini dalla linea sopra di lui (doppio clic: torna a 300 punti); si chiude alla sua intestazione con un'animazione, e l'altezza si ricorda per progetto. Le modifiche prendono il resto;
+  - senza modifiche compare «Nessuna modifica» con un simbolo, invece di una riga di testo;
+  - i pulsanti delle intestazioni e delle righe sono più grandi (24 e 22 punti invece di 20).
+- **Le parti vuote della barra laterale:**
+  - **Cerca**, prima di cercare: cosa fare, le ricerche recenti e «Vai a»: file per nome, simbolo nel progetto, simbolo nel file, riga, ognuno con i suoi tasti (letti dalle scorciatoie vere, anche le tue). In alto, «Cerca di nuovo», «Cancella la ricerca» e il filtro delle cartelle;
+  - **Estensioni:** l'elenco delle installate si chiude con la sua freccia e ha il conteggio; righe più ariose, con il nome su tutta la larghezza e versione e stato sotto; gli aggiornamenti trovati in un riquadro con «Aggiorna»; le **estensioni consigliate dal progetto** (lette da `.vscode/extensions.json`, come VS Code) con «Installa»; in fondo gli **strumenti** a vista (installa da VSIX, importa da Cursor, impostazioni, riavvia) e una nota su cosa funziona in Keel;
+  - **senza cartella aperta**, Esplora risorse e Cerca dicono come aprirne una, con il pulsante.
+- **Pagina di benvenuto** (nessun file aperto): il progetto e il suo ramo, poi «Inizia» con vai a un file, apri, nuovo file, tutti i comandi, Claude Code e Impostazioni, ognuno con i suoi tasti, e i progetti recenti.
+- **Pulsanti più grandi ovunque:** barra in alto (32 punti), intestazioni delle viste, pannello in basso, Git Graph, differenze, terminale, Output, pannello agente, barra di ricerca nell'editor, PDF.
+- **Finestre in sovrimpressione:** Cmd+P e la tavolozza sono una superficie sola, senza la cornice dentro la cornice e senza la X; si aprono sotto la barra in alto, con i tasti in fondo («↑↓ per muoverti, ↩ per scegliere, esc per chiudere»). Il velo sotto le finestre è più leggero.
+- **Icone che mancavano:** alcune icone usate da Keel non erano nel pacchetto e restavano invisibili, per esempio il pulsante di Git Graph accanto a «Grafico» e la tastiera della scheda Scorciatoie. Ora un test legge il codice e controlla che ogni icona usata si carichi.
+- **Come l'ho guardato:** con `scripts/snapshots.sh <cartella>` Keel disegna la sua finestra fuori dallo schermo e la salva in immagini PNG, nei due stili e in Mezzanotte e Chiaro, con ogni vista, il pannello, Cmd+P, un menu, Impostazioni e il benvenuto. Non si apre niente sullo schermo e non serve il permesso di registrazione: è Keel stesso che si disegna. Usa una cartella dati sua, con i language server spenti, e c'è solo compilando con `--features snapshots`.
+- **Prove automatiche:** lo stile piatto mette la barra laterale contro il bordo e sotto una barra di 40 punti; la barra laterale esce scorrendo, sparisce e torna uguale; l'altezza del grafico ha i suoi limiti e si ricorda; i consigli del progetto si leggono con i commenti e senza quelli indesiderati; le icone usate si caricano. Nei test le animazioni sono spente, perché il loro orologio si muove solo quando lo dicono loro.
+- **Non ancora:** la casella «Search…» della pagina Impostazioni resta in inglese, perché viene da gpui-component, che non ha l'italiano.
+
+**Le tue prove a mano del nuovo aspetto**
+1. Apri Impostazioni (Cmd+,) → Interfaccia e passa da «Pannelli sospesi» a «Piatto» e ritorno, con Mezzanotte e con Chiaro. Guarda i semafori: devono restare al centro della barra in alto in tutti e due gli stili.
+2. Cmd+B, Cmd+J e Cmd+Alt+B: barra laterale, pannello e Claude Code devono scorrere dentro e fuori senza scatti. Con «Animazioni» spento, o con «Riduci movimento» di macOS acceso, compaiono e spariscono e basta.
+3. Controllo versione: scrivi un messaggio lungo (cresce fino a dieci righe), fai un commit con ⌘↩ e uno dal pulsante; trascina la linea sopra «Grafico» in alto e in basso, chiudilo e riaprilo, poi riapri il progetto: l'altezza deve essere rimasta.
+4. Cerca ed Estensioni prima di scrivere: prova le righe «Vai a» e gli strumenti. In un progetto con `.vscode/extensions.json` devono comparire le consigliate.
+5. Cmd+P, Cmd+Shift+P e un menu col tasto destro su una scheda: una sola cornice, niente X, il velo leggero.
 
 **Le tue prove a mano della fase 12**
 1. **Crash:** in un terminale lancia `kill -9` sul processo di Keel (`pgrep -x keel`), poi riapri Keel. Nella barra di stato compare «Keel non si è chiuso normalmente l'ultima volta», e le modifiche non salvate sono tornate.

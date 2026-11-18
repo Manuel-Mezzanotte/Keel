@@ -95,6 +95,7 @@ cargo run -p keel                              # avvio in sviluppo
 cargo test --workspace                         # tutti i test
 cargo clippy --workspace --all-targets         # controlli
 scripts/make-dmg.sh                            # Keel.app + target/release/Keel-0.1.0.dmg
+scripts/snapshots.sh <cartella>                # la finestra disegnata fuori dallo schermo, in PNG
 ```
 
 ---
@@ -130,10 +131,11 @@ Dopo le prime prove dell'app vera (18 novembre) sono arrivati altri giri di rito
   - proposta dei temi appena installate;
   - icone del tema di icone in ogni lista;
   - etichette «Funziona in parte» e «Non funziona in Keel»;
-- correzione dei controlli della pagina Impostazioni, che non salvavano (`8fbd01c`).
+- correzione dei controlli della pagina Impostazioni, che non salvavano (`8fbd01c`);
+- **nuovo aspetto** (sera del 18 novembre): due stili della finestra, «Pannelli sospesi» e «Piatto», scelti dalla nuova pagina Impostazioni → Interfaccia (`keel.interfaceStyle`); animazioni di pannelli, selettore e sezioni (`keel.animations`); Controllo versione con messaggio più grande, pulsante Commit largo e grafico ridimensionabile; Cerca, Estensioni e benvenuto senza spazi vuoti; pulsanti più grandi; Cmd+P e tavolozza su una superficie sola. Il dettaglio è in `PIANO.md`, «Nuovo aspetto».
 
 Stato dei controlli all'ultimo commit:
-- tutti i test passano, 192 solo nell'app;
+- tutti i test passano, 200 solo nell'app;
 - clippy non segnala niente;
 - con un progetto web aperto Keel occupa circa 130–150 MB e mostra la prima schermata in circa 400 ms.
 
@@ -213,7 +215,7 @@ L'idea è permettere a chi usa Keel di cambiarne l'aspetto con un suo file, come
 ## 5. Come si lavora
 
 - **Una fase alla volta,** divisa in sottofasi. Non si comincia una fase senza il via dell'autore.
-- **Verifica:** test automatici, anche dell'interfaccia senza aprire finestre, più build e misure. Niente screenshot: l'aspetto lo controlla l'autore.
+- **Verifica:** test automatici, anche dell'interfaccia senza aprire finestre, più build e misure. Per l'aspetto c'è `scripts/snapshots.sh`, che disegna la finestra fuori dallo schermo in immagini, senza catturare lo schermo; l'ultima parola resta all'autore.
   - Un difetto si riproduce prima con un test che fallisce, poi si corregge.
 - **Commit:**
   - sul branch `develop`, con l'account dell'autore e senza attribuzioni ad assistenti;
