@@ -196,6 +196,8 @@ pub struct Strings {
     pub results_limited: &'static str,
     pub replace_placeholder: &'static str,
     pub toggle_replace: &'static str,
+    pub replace_one: &'static str,
+    replaced_in_file_text: &'static str,
     pub replace_all: &'static str,
     pub replace_in_file: &'static str,
     pub replace_detail: &'static str,
@@ -732,6 +734,11 @@ impl Strings {
             .replace("{text}", text)
     }
 
+    pub fn replaced_in_file(&self, count: usize) -> String {
+        self.replaced_in_file_text
+            .replace("{count}", &count.to_string())
+    }
+
     pub fn replaced_summary(&self, count: &str, files: &str) -> String {
         self.replaced_summary
             .replace("{count}", count)
@@ -1241,6 +1248,8 @@ pub const ITALIAN: Strings = Strings {
     not_text: "«{name}» non è un file di testo: Keel non lo apre",
     replace_question: "Sostituire {count} occorrenze in {files} file con «{text}»?",
     replaced_summary: "Sostituite {count} occorrenze in {files} file",
+    replace_one: "Sostituisci (Invio)",
+    replaced_in_file_text: "Sostituite {count} occorrenze",
     results: [
         "{count} risultato in {files} file",
         "{count} risultati in {files} file",
@@ -1719,6 +1728,8 @@ pub const ENGLISH: Strings = Strings {
     not_text: "\"{name}\" is not a text file, so Keel does not open it",
     replace_question: "Replace {count} matches in {files} files with \"{text}\"?",
     replaced_summary: "Replaced {count} matches in {files} files",
+    replace_one: "Replace (Enter)",
+    replaced_in_file_text: "Replaced {count} matches",
     results: [
         "{count} result in {files} file",
         "{count} results in {files} files",

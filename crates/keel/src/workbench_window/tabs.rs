@@ -22,6 +22,30 @@ pub(super) struct Tab {
     pub(super) parked: Option<Pane>,
 }
 
+/// A tab being dragged to another place in its group or to another group.
+#[derive(Clone)]
+pub(super) struct DraggedTab {
+    pub(super) group: usize,
+    pub(super) index: usize,
+    pub(super) name: String,
+}
+
+impl gpui::Render for DraggedTab {
+    fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        let theme = cx.theme();
+        div()
+            .px_2()
+            .py_1()
+            .rounded(px(6.))
+            .border_1()
+            .border_color(theme.border)
+            .bg(theme.popover)
+            .text_sm()
+            .text_color(theme.foreground)
+            .child(self.name.clone())
+    }
+}
+
 /// How a file opens.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(super) enum OpenAs {
@@ -137,6 +161,8 @@ impl Workbench {
             EditorState::new(window, cx)
                 .language(language.highlighter_name())
                 .tab_size(tab_size)
+                // Cmd+F opens Keel's own find bar.
+                .searchable(false)
                 .soft_wrap(soft_wrap)
                 .default_value(text)
         });
@@ -606,6 +632,118 @@ impl Workbench {
         cx.notify();
     }
 
+    /// Moves a tab to position `to_index` of group `to_group`, as dragging
+    /// it does: within its group the order changes; to another group the
+    /// tab goes there, with its editor, cursor and undo history, and a group
+    /// left empty closes. Pinned tabs stay before the others.
+    pub(super) fn move_tab(
+        &mut self,
+        from_group: usize,
+        from_index: usize,
+        to_group: usize,
+        to_index: usize,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let Some(moved) = self
+            .groups
+            .get(from_group)
+            .and_then(|group| group.tabs.get(from_index))
+        else {
+            return;
+        };
+        if to_group >= self.groups.len() {
+            return;
+        }
+        let uri = moved.uri.clone();
+        let pinned = moved.pinned;
+        // Where pinned and unpinned tabs may go.
+        let place = |tabs: &[Tab], at: usize| {
+            let pinned_count = tabs.iter().filter(|tab| tab.pinned).count();
+            if pinned {
+                at.min(pinned_count)
+            } else {
+                at.max(pinned_count)
+            }
+        };
+        if from_group == to_group {
+            let group = &mut self.groups[from_group];
+            let active_uri = group.tabs[group.active].uri.clone();
+            let tab = group.tabs.remove(from_index);
+            let at = place(&group.tabs, to_index.min(group.tabs.len()));
+            group.tabs.insert(at, tab);
+            group.active = group
+                .tabs
+                .iter()
+                .position(|tab| tab.uri == active_uri)
+                .unwrap_or(0);
+        } else {
+            // Already open there: show that one and close this one.
+            if let Some(existing) = self.groups[to_group]
+                .tabs
+                .iter()
+                .position(|tab| tab.uri == uri)
+            {
+                let source_closes = self.groups[from_group].tabs.len() == 1;
+                self.close_tab_now(from_group, from_index, window, cx);
+                let to_group = if source_closes && from_group < to_group {
+                    to_group - 1
+                } else {
+                    to_group
+                };
+                self.activate_tab(to_group, existing, true, window, cx);
+                self.session_changed(cx);
+                return;
+            }
+            // The moved tab's editor: in view, it is the group's pane.
+            let only_tab = self.groups[from_group].tabs.len() == 1;
+            let in_view = self.groups[from_group].active == from_index;
+            let mut tab;
+            let pane;
+            let mut to_group = to_group;
+            if only_tab {
+                tab = self.groups.remove(from_group).tabs.remove(0);
+                pane = self.panes.remove(from_group);
+                if to_group > from_group {
+                    to_group -= 1;
+                }
+            } else {
+                if in_view {
+                    let neighbor = if from_index + 1 < self.groups[from_group].tabs.len() {
+                        from_index + 1
+                    } else {
+                        from_index - 1
+                    };
+                    self.activate_tab(from_group, neighbor, false, window, cx);
+                }
+                let group = &mut self.groups[from_group];
+                tab = group.tabs.remove(from_index);
+                if from_index < group.active {
+                    group.active -= 1;
+                }
+                let Some(parked) = tab.parked.take() else {
+                    return;
+                };
+                pane = parked;
+            }
+            tab.parked = None;
+            tab.preview = false;
+            let group = &mut self.groups[to_group];
+            let shown = std::mem::replace(&mut self.panes[to_group], pane);
+            group.tabs[group.active].parked = Some(shown);
+            let at = place(&group.tabs, to_index.min(group.tabs.len()));
+            group.tabs.insert(at, tab);
+            group.active = at;
+            self.install_completions(to_group, cx);
+            self.active = self.active.min(self.panes.len() - 1);
+            self.focus_pane(to_group, window, cx);
+        }
+        self.publish_editors(window, cx);
+        self.refresh_title(window);
+        self.session_changed(cx);
+        cx.notify();
+    }
+
     fn toggle_pin(&mut self, group: usize, tab: usize, cx: &mut Context<Self>) {
         let Some(tabs) = self.groups.get_mut(group).map(|group| &mut group.tabs) else {
             return;
@@ -959,6 +1097,46 @@ mod tests {
                 tab("d.ts", false, false)
             ]]
         );
+    }
+
+    #[gpui::test]
+    fn dragged_tabs_change_place_and_group(cx: &mut TestAppContext) {
+        let (_folder, base, view, cx) = project(cx);
+        for name in ["a.ts", "b.ts", "c.ts"] {
+            open(&view, cx, &base.join(name), OpenAs::Normal);
+        }
+        let names = |view: &Entity<Workbench>, cx: &mut VisualTestContext| {
+            tabs(view, cx)
+                .into_iter()
+                .map(|group| {
+                    group
+                        .into_iter()
+                        .map(|(name, _, _)| name)
+                        .collect::<Vec<_>>()
+                })
+                .collect::<Vec<_>>()
+        };
+        assert_eq!(names(&view, cx), [["a.ts", "b.ts", "c.ts"]]);
+        // c.ts to the front: it stays in view.
+        view.update_in(cx, |view, window, cx| view.move_tab(0, 2, 0, 0, window, cx));
+        assert_eq!(names(&view, cx), [["c.ts", "a.ts", "b.ts"]]);
+        assert_eq!(active_text(&view, cx), "let c = 1;\n");
+        // Split, then drag a.ts into the new group, with its text.
+        view.update_in(cx, |view, window, cx| view.split_editor(0, window, cx));
+        assert_eq!(
+            names(&view, cx),
+            [vec!["c.ts", "a.ts", "b.ts"], vec!["c.ts"]]
+        );
+        view.update_in(cx, |view, window, cx| view.move_tab(0, 1, 1, 1, window, cx));
+        assert_eq!(
+            names(&view, cx),
+            [vec!["c.ts", "b.ts"], vec!["c.ts", "a.ts"]]
+        );
+        assert_eq!(active_text(&view, cx), "let a = 1;\n");
+        // The last tab of a group leaves: the group closes.
+        view.update_in(cx, |view, window, cx| view.move_tab(1, 1, 0, 2, window, cx));
+        view.update_in(cx, |view, window, cx| view.move_tab(1, 0, 0, 0, window, cx));
+        assert_eq!(names(&view, cx), [vec!["c.ts", "b.ts", "a.ts"]]);
     }
 
     #[gpui::test]

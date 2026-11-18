@@ -69,20 +69,27 @@ fn main() -> ExitCode {
                 }
             }
         }
-        Command::Open(path) => {
-            let path = path.map(|path| paths::normalize(&path));
+        Command::Open(paths_to_open) => {
+            let mut paths_to_open: Vec<PathBuf> = paths_to_open
+                .iter()
+                .map(|path| paths::normalize(path))
+                .collect();
             let socket = instance::socket_path(&paths::data_dir());
-            // A Keel already running opens the path in a window of its own.
-            if instance::forward(&socket, path.as_deref()) {
+            // A Keel already running opens the paths in its windows.
+            let first = (!paths_to_open.is_empty()).then(|| paths_to_open.remove(0));
+            if instance::forward(&socket, first.as_deref()) {
+                for path in &paths_to_open {
+                    instance::forward(&socket, Some(path));
+                }
                 return ExitCode::SUCCESS;
             }
-            run(path, socket);
+            run(first, paths_to_open, socket);
             ExitCode::SUCCESS
         }
     }
 }
 
-fn run(path: Option<PathBuf>, socket: PathBuf) {
+fn run(path: Option<PathBuf>, more: Vec<PathBuf>, socket: PathBuf) {
     // Before anything else, so a crash at the start is kept too.
     if let Some(unclean) = crash::start(&paths::data_dir()) {
         eprintln!(
@@ -156,6 +163,10 @@ fn run(path: Option<PathBuf>, socket: PathBuf) {
         .detach();
 
         windows::open_startup(path, cx);
+        // The other paths of `keel a.ts b.ts`, each in its project's window.
+        for path in more {
+            windows::open(Some(path), cx);
+        }
         cx.activate(true);
     });
 }

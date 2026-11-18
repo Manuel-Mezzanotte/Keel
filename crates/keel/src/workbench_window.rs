@@ -18,6 +18,7 @@ mod editing;
 pub(crate) mod explorer;
 mod extension_features;
 mod extensions_view;
+mod find_bar;
 mod git_graph;
 mod git_gutter;
 mod host_watchdog;
@@ -68,6 +69,7 @@ pub(crate) use cursor_import::ImportFromCursor;
 pub(crate) use extensions_view::{
     CheckExtensionUpdates, InstallFromVsix, RestartExtensions, UpdateAllExtensions,
 };
+pub(crate) use find_bar::bindings as find_bindings;
 pub(crate) use git_graph::ShowGitGraph;
 pub(crate) use git_gutter::{NextChange, PreviousChange, RevertChange, StageChange};
 pub(crate) use language_servers::RestartLanguageServers;
@@ -359,6 +361,7 @@ pub struct Workbench {
     closed: Vec<String>,
     /// The Search view's fields, switches and results.
     search: search_view::SearchView,
+    find: find_bar::FindBar,
     /// Very large files the user agreed to open.
     large_files_ok: other_files::LargeFilesOk,
     /// Where the session and the backups are kept, if anywhere.
@@ -579,6 +582,7 @@ impl Workbench {
             closed: Vec::new(),
             large_files_ok: Default::default(),
             search: Self::create_search_view(window, cx, language.strings()),
+            find: Self::create_find_bar(window, cx, language.strings()),
             data_dir: None,
             restoring: false,
             session_task: Task::ready(()),
@@ -2870,6 +2874,28 @@ mod tests {
 
     pub(super) fn test_settings() -> Settings {
         Settings::load("/nonexistent/keel-test/settings.json", None)
+    }
+
+    /// A window on one file, for the tests of each part.
+    pub(super) fn window_with_file<'a>(
+        cx: &'a mut TestAppContext,
+        name: &str,
+        text: &str,
+    ) -> (
+        tempfile::TempDir,
+        std::path::PathBuf,
+        Entity<Workbench>,
+        &'a mut gpui::VisualTestContext,
+    ) {
+        set_up(cx);
+        let folder = tempfile::tempdir().unwrap();
+        let path = folder.path().join(name);
+        std::fs::write(&path, text).unwrap();
+        let document = Document::open(&path).unwrap();
+        let (view, cx) = cx.add_window_view(|window, cx| {
+            Workbench::new(Some(document), test_settings(), None, window, cx)
+        });
+        (folder, path, view, cx)
     }
 
     fn set_up(cx: &mut TestAppContext) {

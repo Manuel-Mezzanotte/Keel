@@ -5,8 +5,8 @@ use std::path::PathBuf;
 /// What the user asked for on the command line.
 #[derive(Debug, PartialEq, Eq)]
 pub enum Command {
-    /// Open a window, on a folder, a file, or nothing.
-    Open(Option<PathBuf>),
+    /// Open a window, on folders and files, or on nothing.
+    Open(Vec<PathBuf>),
     /// Print the version and exit.
     Version,
     /// Print the usage and exit.
@@ -17,11 +17,12 @@ pub enum Command {
 
 /// Usage text printed by `keel --help` and after a wrong invocation.
 pub const USAGE: &str = "\
-Usage: keel [PATH]
+Usage: keel [PATH...]
 
-Opens PATH in Keel: a folder as a project, a file in its project. `keel .`
-opens the current folder. A file that does not exist yet is created on the
-first save. If Keel is already running, PATH opens there.
+Opens each PATH in Keel: a folder as a project, a file in its project.
+`keel .` opens the current folder; `keel a.ts b.ts` opens both files. A
+file that does not exist yet is created on the first save. If Keel is
+already running, the paths open there.
 
 Options:
   --install-extension VSIX  Install a VS Code extension package
@@ -30,7 +31,7 @@ Options:
 
 /// Parses the arguments that follow the program name.
 pub fn parse(arguments: impl IntoIterator<Item = String>) -> Result<Command, String> {
-    let mut file = None;
+    let mut files = Vec::new();
     let mut only_files = false;
     let mut arguments = arguments.into_iter();
     while let Some(argument) = arguments.next() {
@@ -47,13 +48,11 @@ pub fn parse(arguments: impl IntoIterator<Item = String>) -> Result<Command, Str
                 "--" => only_files = true,
                 other => return Err(format!("unknown option: {other}")),
             }
-        } else if file.is_none() {
-            file = Some(PathBuf::from(argument));
         } else {
-            return Err("only one file or folder can be opened at a time".to_owned());
+            files.push(PathBuf::from(argument));
         }
     }
-    Ok(Command::Open(file))
+    Ok(Command::Open(files))
 }
 
 #[cfg(test)]
@@ -66,14 +65,14 @@ mod tests {
 
     #[test]
     fn no_arguments_opens_an_empty_editor() {
-        assert_eq!(parse_args(&[]), Ok(Command::Open(None)));
+        assert_eq!(parse_args(&[]), Ok(Command::Open(Vec::new())));
     }
 
     #[test]
     fn a_path_opens_that_file() {
         assert_eq!(
             parse_args(&["src/app.tsx"]),
-            Ok(Command::Open(Some(PathBuf::from("src/app.tsx"))))
+            Ok(Command::Open(vec![PathBuf::from("src/app.tsx")]))
         );
     }
 
@@ -81,7 +80,7 @@ mod tests {
     fn a_dot_opens_the_current_folder() {
         assert_eq!(
             parse_args(&["."]),
-            Ok(Command::Open(Some(PathBuf::from("."))))
+            Ok(Command::Open(vec![PathBuf::from(".")]))
         );
     }
 
@@ -97,7 +96,7 @@ mod tests {
     fn a_double_dash_lets_file_names_start_with_a_dash() {
         assert_eq!(
             parse_args(&["--", "-notes.md"]),
-            Ok(Command::Open(Some(PathBuf::from("-notes.md"))))
+            Ok(Command::Open(vec![PathBuf::from("-notes.md")]))
         );
     }
 
@@ -111,8 +110,19 @@ mod tests {
     }
 
     #[test]
-    fn unknown_options_and_extra_files_are_errors() {
+    fn unknown_options_are_errors() {
         assert!(parse_args(&["--wat"]).is_err());
-        assert!(parse_args(&["a.ts", "b.ts"]).is_err());
+    }
+
+    #[test]
+    fn several_paths_open_together() {
+        assert_eq!(
+            parse_args(&["a.ts", "b.ts", "--", "-c.ts"]),
+            Ok(Command::Open(vec![
+                PathBuf::from("a.ts"),
+                PathBuf::from("b.ts"),
+                PathBuf::from("-c.ts"),
+            ]))
+        );
     }
 }

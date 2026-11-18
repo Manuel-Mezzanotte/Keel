@@ -730,9 +730,23 @@ impl Workbench {
             menu_entry(strings.explorer_copy_path, TabCommand::CopyPath),
             menu_entry(strings.explorer_reveal, TabCommand::Reveal),
         ];
+        let dragged = super::tabs::DraggedTab {
+            group,
+            index,
+            name: name.clone(),
+        };
         div()
             .id(("tab", group * 1000 + index))
             .group(hover_group.clone())
+            .on_drag(dragged, |dragged, _, _, cx| cx.new(|_| dragged.clone()))
+            .drag_over::<super::tabs::DraggedTab>(move |style, _, _, _| {
+                style.border_l_2().border_color(colors.accent)
+            })
+            .on_drop(
+                cx.listener(move |this, dragged: &super::tabs::DraggedTab, window, cx| {
+                    this.move_tab(dragged.group, dragged.index, group, index, window, cx)
+                }),
+            )
             .flex_none()
             .h(px(28.))
             .pl_3()
@@ -909,6 +923,23 @@ impl Workbench {
                                 .items_center()
                                 .gap_0p5()
                                 .overflow_x_scroll()
+                                // Dropped after the last tab: at the end.
+                                .on_drop(cx.listener(
+                                    move |this, dragged: &super::tabs::DraggedTab, window, cx| {
+                                        let end = this
+                                            .groups
+                                            .get(index)
+                                            .map_or(0, |group| group.tabs.len());
+                                        this.move_tab(
+                                            dragged.group,
+                                            dragged.index,
+                                            index,
+                                            end,
+                                            window,
+                                            cx,
+                                        )
+                                    },
+                                ))
                                 .children(tabs),
                         )
                         .children(self.render_preview_button(index, cx)),
@@ -965,6 +996,7 @@ impl Workbench {
                                     .text_size(px(self.font_size)),
                             )
                             .children(self.render_hunk_bar(index, colors, cx))
+                            .children(self.render_find_bar(index, colors, cx))
                             .children(self.render_signature_help(index, colors, cx)),
                     },
                 )
@@ -1467,6 +1499,7 @@ impl Render for Workbench {
         let root = self.claude_diff_actions(root, cx);
         let root = self.agent_panel_actions(root, cx);
         let root = self.editing_actions(root, cx);
+        let root = self.find_actions(root, cx);
         self.explorer_actions(root, cx)
             .size_full()
             .flex()

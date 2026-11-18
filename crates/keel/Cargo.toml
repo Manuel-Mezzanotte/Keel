@@ -18,6 +18,7 @@ extensions.workspace = true
 files.workspace = true
 futures.workspace = true
 gpui.workspace = true
+gpui-base.workspace = true
 gpui-component.workspace = true
 gpui-kit-assets.workspace = true
 gpui_platform.workspace = true

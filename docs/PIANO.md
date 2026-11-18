@@ -1815,7 +1815,7 @@ La prima volta che apri un file di un linguaggio, Keel scarica il suo server: ne
 | Sottofase | Cosa | Stato |
 |---|---|---|
 | 12.1 | Affidabilità: registro locale dei crash e avviso alla ripartenza; prova di ripresa dopo un crash vero (`kill -9`) con le modifiche non salvate; salvataggi che rispettano permessi e collegamenti | fatta |
-| 12.2 | Editor, i rimasti della fase 2: pieghe da tastiera, comandi sulle righe con più cursori, regex e parola intera in Cmd+F, più file insieme da `keel`, trascinare le schede | da fare |
+| 12.2 | Editor, i rimasti della fase 2: pieghe da tastiera, comandi sulle righe con più cursori, regex e parola intera in Cmd+F, più file insieme da `keel`, trascinare le schede | fatta |
 | 12.3 | Sticky scroll e minimappa, disegnati da Keel | da fare |
 | 12.4 | Impostazioni con interfaccia grafica ed editor delle scorciatoie | da fare |
 | 12.5 | Importa da Cursor impostazioni, scorciatoie e progetti recenti | da fare |
@@ -1823,6 +1823,28 @@ La prima volta che apri un file di un linguaggio, Keel scarica il suo server: ne
 | 12.7 | Prestazioni: file e progetti enormi, sessione lunga senza perdite di memoria, misure finali contro Cursor; resoconto | da fare |
 
 **Già fatto nelle fasi precedenti:** i salvataggi sicuri (file temporaneo, poi rinomina) e le copie delle modifiche non salvate, che tornano dopo un crash o Cmd+Q (fase 2.6).
+
+**Note sulla 12.2**
+- **Una copia di gpui-base in Keel** (`vendor/gpui-base`, la versione 0.9.1, scelta tua). Tre cose servivano a funzioni che gpui-component tiene private, quindi ho aggiunto poche funzioni pubbliche, segnate `KEEL:`.
+  - L'elenco delle modifiche è in `vendor/gpui-base/KEEL.md`.
+  - A una nuova versione si copia di nuovo il crate e si rifanno quelle modifiche.
+- **Pieghe da tastiera**, con i tasti di VS Code:
+  - Cmd+Alt+[ piega il blocco del cursore, Cmd+Alt+] lo riapre;
+  - Cmd+K Cmd+0 piega tutto, Cmd+K Cmd+J riapre tutto.
+
+  Si trovano anche nella tavolozza («Piega», «Espandi», «Piega tutto», «Espandi tutto»). Se il cursore finisce dentro una piega, va alla prima riga del blocco.
+- **Comandi sulle righe con più cursori:** commenta, sposta, copia, elimina e inserisci righe ora valgono per ogni cursore, non solo per il principale.
+  - I cursori sulla stessa riga o su righe vicine fanno un blocco unico, come in VS Code.
+  - È un solo passo per Cmd+Z.
+- **Barra di ricerca di Keel (Cmd+F, Cmd+Alt+F per sostituire)** al posto di quella di gpui-component.
+  - **«Aa»** distingue maiuscole e minuscole, anche per le lettere accentate (prima solo per quelle inglesi).
+  - **«Parola intera»** e **«.\*» (regex)**. Nella sostituzione con regex valgono `$1` e `${nome}`; se la regex è sbagliata, la barra dice perché, in rosso.
+  - Mostra il risultato corrente sul totale («2/5»). Invio e Maiusc+Invio, o Cmd+G e Cmd+Maiusc+G, passano al successivo e al precedente; Esc chiude.
+  - Cmd+Alt+C, Cmd+Alt+W e Cmd+Alt+R accendono le tre opzioni, come in VS Code.
+  - Scrivendo, Keel seleziona il primo risultato; aprendo la barra con del testo selezionato su una riga, lo usa come ricerca.
+- **Più file insieme:** `keel a.ts b.ts` apre entrambi, ognuno nella finestra del suo progetto. Funziona anche con Keel già aperto.
+- **Schede da trascinare:** in un altro punto del gruppo o in un altro gruppo. Il file passa con il suo editor, cioè cursore, scorrimento e annulla. Un gruppo che resta vuoto si chiude. Le schede fissate restano davanti alle altre.
+- Il trascinamento vero col mouse non si può provare nei test: ho provato lo spostamento che fa. Resta la tua prova a mano.
 
 **Note sulla 12.1**
 - **Registro dei crash, solo su questo Mac.** Se Keel va in errore, scrive `crashes/crash-<data>-<pid>.log` nella sua cartella dati. Dentro ci sono la versione di Keel e di macOS, il thread, il messaggio, il punto del codice e il backtrace. Tiene gli ultimi 20 registri. Niente viene mandato fuori.
