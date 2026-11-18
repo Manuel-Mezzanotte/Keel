@@ -131,7 +131,7 @@ impl Workbench {
         let document = self.documents.get(uri)?;
         let language = Language::for_vscode_id(&document.language_id);
         let text = document.synced_text.clone();
-        let tab_size = self.tab_size();
+        let tab_size = self.tab_size_for(&document.language_id);
         let soft_wrap = self.word_wrap;
         let editor = cx.new(|cx| {
             EditorState::new(window, cx)

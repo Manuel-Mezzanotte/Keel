@@ -457,7 +457,7 @@ impl Workbench {
         let (Some(running), Ok(parsed)) = (running, uri.parse::<lsp_types::Uri>()) else {
             return Task::ready(());
         };
-        let tab_size = self.tab_size();
+        let tab_size = self.tab_size_for(&language_id);
         let request = running
             .server
             .request::<Formatting>(DocumentFormattingParams {

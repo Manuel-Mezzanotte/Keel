@@ -1590,12 +1590,34 @@ Apri Keel su GestionaleHospitality. La prima volta i server si installano da sol
 | 11.3 | Python: `basedpyright` e `ruff`, con l'ambiente virtuale del progetto (`.venv`, uv, Poetry) | fatta |
 | 11.4 | Java con `jdtls` (Maven e Gradle) e Spring Boot (`application.properties` e `.yml`) | fatta |
 | 11.5 | C e C++ con `clangd` (`compile_commands.json`, clang-format); C# con .NET | fatta |
-| 11.6 | Linguaggi di base: Bash e zsh (con ShellCheck e shfmt), Dockerfile, SQL, XML, Makefile | da fare |
+| 11.6 | Linguaggi di base: Bash e zsh (con ShellCheck e shfmt), Dockerfile, SQL, XML, Makefile | fatta |
 | 11.7 | Prove su un progetto per ogni linguaggio, misure e resoconto | da fare |
 
 **Decisioni prese all'inizio**
 - **I server sono quelli delle estensioni di VS Code** più usate, così il comportamento è lo stesso: Pylance si basa su Pyright (qui `basedpyright`, la sua versione libera); Java usa `jdtls` come l'estensione di Red Hat; XML usa `lemminx`, sempre di Red Hat.
 - **Keel installa da solo** i server che si scaricano (npm, archivi dalle pagine di rilascio). **Non installa da solo** i programmi di sistema, cioè Java, .NET e gli strumenti di Xcode: se mancano ti dice cosa manca e ti offre il comando da lanciare nel terminale.
+
+**Note sulla 11.6**
+- **Bash e zsh:** il server di Bash IDE, l'estensione più usata in VS Code. Dà errori, completamenti, info e struttura del file.
+  - Usa **ShellCheck** per gli avvisi e **shfmt** per formattare. In VS Code li installi tu; Keel li scarica da solo, con l'impronta SHA-256, e li mette in testa al `PATH` del server. Se il download fallisce, il server parte lo stesso e l'Output dice cosa manca.
+  - Su zsh ShellCheck non lavora (non lo supporta), come in VS Code.
+- **Dockerfile:** il server dell'estensione Docker di VS Code. Dà istruzioni sconosciute, porte sbagliate, completamenti e formattazione. Per `compose.yaml` resta il server YAML della fase 6, con lo schema di Compose.
+- **XML:** `lemminx`, il server dell'estensione XML di Red Hat, nella versione nativa che non vuole Java (16 MB). Ha le stesse impostazioni predefinite di VS Code:
+  - un file senza schema riceve solo un suggerimento;
+  - gli schemi nominati dai file (come quello di Maven in `pom.xml`) si scaricano e controllano il file.
+- **SQL:** `sqruff`, che dà gli avvisi di stile e formatta. VS Code da solo non ha niente per SQL, oltre ai colori.
+  - Ho scartato `sqls`: per Mac esiste solo per Intel e senza un database collegato dà poco.
+  - **Mancano i completamenti** delle parole di SQL: sqruff non li fa.
+- **Makefile:** solo colori, come in VS Code, che non ha un server. Però i Makefile ora si scrivono con i tab veri, come la regola predefinita di VS Code: i comandi dei target li vogliono.
+  - **Tab e spazi per linguaggio.** `editor.tabSize` e `editor.insertSpaces` valgono anche dentro `"[python]": { ... }` e simili, come in VS Code; prima valevano per tutti i file.
+- **Prove con i server veri** su file di prova:
+
+  | Server | Installazione | Primo errore | Formattazione |
+  |---|---|---|---|
+  | Bash (con ShellCheck e shfmt) | 3,3 s | «Double quote to prevent globbing» | 186 ms |
+  | Dockerfile | 1,7 s | «Unknown instruction: RUNN» | meno di 1 ms |
+  | XML | 1,1 s | tag chiuso male | meno di 1 ms |
+  | SQL | 0,8 s | spazi mancanti | 2 ms |
 
 **Note sulla 11.5**
 - **C, C++ e Objective-C** usano `clangd` degli strumenti di Xcode (Apple clangd 21), che conosce già le intestazioni dell'SDK di macOS. Se il `PATH` ha prima l'LLVM di Homebrew, vale quello. Keel non lo installa: se mancano gli strumenti di Xcode propone `xcode-select --install`.

@@ -738,7 +738,7 @@ impl Workbench {
                         prerequisites::check_all(spec.needs, servers::login_environment())
                     })
                     .await;
-                let extra_env = match checked {
+                let mut extra_env = match checked {
                     Ok(extra_env) => extra_env,
                     Err(missing) => {
                         let _ = sender_for_missing.unbounded_send(LspInput::Missing {
@@ -752,6 +752,36 @@ impl Workbench {
                         return;
                     }
                 };
+                // Programs the server runs, such as ShellCheck for Bash.
+                if !spec.helpers.is_empty() {
+                    let (dir, root) = (servers_dir.clone().unwrap_or_default(), root.clone());
+                    let install = auto_install && servers_dir.is_some();
+                    let (folders, problems) = cx
+                        .background_spawn(async move {
+                            servers::prepare_helpers(
+                                spec,
+                                &dir,
+                                &root,
+                                servers::login_environment(),
+                                install,
+                            )
+                        })
+                        .await;
+                    servers::with_path_first(
+                        &folders,
+                        servers::login_environment(),
+                        &mut extra_env,
+                    );
+                    this.update(cx, |this, _| {
+                        for problem in problems {
+                            this.log_to(
+                                OutputChannel::Languages,
+                                format!("[{}] {problem}", spec.name),
+                            );
+                        }
+                    })
+                    .ok();
+                }
                 if spring_first
                     && let (Some(spring), Some(dir)) =
                         (servers::spec("spring-boot"), servers_dir.clone())
@@ -1779,6 +1809,16 @@ mod tests {
         wait_until(cx, "the second pull", |cx| {
             advance(cx);
             pulled(&view, cx, "pulled 2")
+        });
+    }
+
+    #[gpui::test]
+    fn makefiles_indent_with_tabs(cx: &mut TestAppContext) {
+        let (_folder, _base, view, cx) = window(cx);
+        view.read_with(cx, |view, _| {
+            assert!(view.tab_size_for("makefile").hard_tabs);
+            assert!(!view.tab_size_for("python").hard_tabs);
+            assert_eq!(view.tab_size_for("python").tab_size, 2);
         });
     }
 

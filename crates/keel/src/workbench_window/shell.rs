@@ -1316,7 +1316,12 @@ impl Workbench {
             right.push(
                 strings.line_column(position.line as usize + 1, position.character as usize + 1),
             );
-            let tab_size = self.tab_size();
+            let language_id = self
+                .documents
+                .get(&pane.uri)
+                .map(|document| document.language_id.clone())
+                .unwrap_or_default();
+            let tab_size = self.tab_size_for(&language_id);
             right.push(strings.indentation(tab_size.tab_size, tab_size.hard_tabs));
             right.push("UTF-8".to_owned());
             if let Some(document) = self.documents.get(&pane.uri) {

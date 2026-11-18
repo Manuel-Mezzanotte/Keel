@@ -51,6 +51,22 @@ fn sample(id: &str, dir: &Path) -> (PathBuf, &'static str) {
             "java",
             "package eu.prova;\n\npublic class App {\n    public static void main(String[] args) {\n        int total = \"uno\";\n        System.out.println(total);\n    }\n}\n",
         ),
+        "bash" => (
+            "deploy.sh",
+            "shellscript",
+            "#!/bin/bash\nfile=$1\nif [ -f $file ]; then\n  echo trovato\nfi\n",
+        ),
+        "dockerfile" => (
+            "Dockerfile",
+            "dockerfile",
+            "FROM node:24\nRUNN npm ci\nEXPOSE 99999\n",
+        ),
+        "lemminx" => (
+            "pom.xml",
+            "xml",
+            "<project>\n  <name>prova</name>\n</projec>\n",
+        ),
+        "sqruff" => ("schema.sql", "sql", "select a,b from ospiti where id=1\n"),
         other => panic!("no sample for {other}"),
     };
     if id == "rust-analyzer" {
@@ -101,7 +117,10 @@ fn real_servers_start_and_report() {
         let found = started.elapsed();
         let (sender, events) = mpsc::channel();
         let sender = Mutex::new(sender);
-        let extra = lsp::prerequisites::check_all(spec.needs, env).unwrap();
+        let mut extra = lsp::prerequisites::check_all(spec.needs, env).unwrap();
+        let (folders, problems) = servers::prepare_helpers(spec, &servers_dir, &root, env, true);
+        assert!(problems.is_empty(), "{problems:?}");
+        servers::with_path_first(&folders, env, &mut extra);
         let command = servers::command(spec, program.clone(), &root, env, &extra);
         let server = LanguageServer::start(spec.name, &command, move |event| {
             let _ = sender.lock().unwrap().send(event);
@@ -347,6 +366,9 @@ fn lsp_language(path: &Path) -> &'static str {
         Some("c") => "c",
         Some("cpp" | "hpp" | "h") => "cpp",
         Some("cs") => "csharp",
+        Some("sh" | "zsh") => "shellscript",
+        Some("xml") => "xml",
+        Some("sql") => "sql",
         _ => "plaintext",
     }
 }

@@ -84,6 +84,9 @@ pub struct ServerSpec {
     pub activation: Activation,
     /// What must be on the machine first, such as Java.
     pub needs: &'static [Prerequisite],
+    /// Programs it runs, which Keel downloads too and puts first on its
+    /// `PATH`, such as ShellCheck for Bash (ids in [`HELPERS`]).
+    pub helpers: &'static [&'static str],
 }
 
 impl ServerSpec {
@@ -190,6 +193,7 @@ pub const SERVERS: &[ServerSpec] = &[
         },
         activation: Activation::Always,
         needs: &[],
+        helpers: &[],
     },
     ServerSpec {
         id: "eslint",
@@ -206,6 +210,7 @@ pub const SERVERS: &[ServerSpec] = &[
             packages: &["eslint"],
         },
         needs: &[],
+        helpers: &[],
     },
     ServerSpec {
         id: "html",
@@ -219,6 +224,7 @@ pub const SERVERS: &[ServerSpec] = &[
         },
         activation: Activation::Always,
         needs: &[],
+        helpers: &[],
     },
     ServerSpec {
         id: "css",
@@ -232,6 +238,7 @@ pub const SERVERS: &[ServerSpec] = &[
         },
         activation: Activation::Always,
         needs: &[],
+        helpers: &[],
     },
     ServerSpec {
         id: "json",
@@ -245,6 +252,7 @@ pub const SERVERS: &[ServerSpec] = &[
         },
         activation: Activation::Always,
         needs: &[],
+        helpers: &[],
     },
     ServerSpec {
         id: "tailwindcss",
@@ -268,6 +276,7 @@ pub const SERVERS: &[ServerSpec] = &[
             packages: &["tailwindcss", "@tailwindcss/postcss", "@tailwindcss/vite"],
         },
         needs: &[],
+        helpers: &[],
     },
     ServerSpec {
         id: "emmet",
@@ -288,6 +297,7 @@ pub const SERVERS: &[ServerSpec] = &[
         },
         activation: Activation::Always,
         needs: &[],
+        helpers: &[],
     },
     ServerSpec {
         id: "prisma",
@@ -301,6 +311,7 @@ pub const SERVERS: &[ServerSpec] = &[
         },
         activation: Activation::Always,
         needs: &[],
+        helpers: &[],
     },
     ServerSpec {
         id: "yaml",
@@ -314,6 +325,7 @@ pub const SERVERS: &[ServerSpec] = &[
         },
         activation: Activation::Always,
         needs: &[],
+        helpers: &[],
     },
     ServerSpec {
         id: "taplo",
@@ -330,6 +342,7 @@ pub const SERVERS: &[ServerSpec] = &[
         },
         activation: Activation::Always,
         needs: &[],
+        helpers: &[],
     },
     ServerSpec {
         id: "marksman",
@@ -345,6 +358,7 @@ pub const SERVERS: &[ServerSpec] = &[
         },
         activation: Activation::Always,
         needs: &[],
+        helpers: &[],
     },
     ServerSpec {
         id: "basedpyright",
@@ -360,6 +374,7 @@ pub const SERVERS: &[ServerSpec] = &[
         },
         activation: Activation::Always,
         needs: &[],
+        helpers: &[],
     },
     ServerSpec {
         id: "ruff",
@@ -377,6 +392,7 @@ pub const SERVERS: &[ServerSpec] = &[
         },
         activation: Activation::Always,
         needs: &[],
+        helpers: &[],
     },
     ServerSpec {
         id: "jdtls",
@@ -397,6 +413,7 @@ pub const SERVERS: &[ServerSpec] = &[
         },
         activation: Activation::Always,
         needs: &[],
+        helpers: &[],
     },
     ServerSpec {
         id: "spring-boot",
@@ -416,6 +433,7 @@ pub const SERVERS: &[ServerSpec] = &[
         },
         activation: Activation::BuildMentions("spring-boot"),
         needs: &[],
+        helpers: &[],
     },
     ServerSpec {
         id: "clangd",
@@ -428,6 +446,7 @@ pub const SERVERS: &[ServerSpec] = &[
         install: Install::System,
         activation: Activation::Always,
         needs: &[Prerequisite::XcodeTools],
+        helpers: &[],
     },
     ServerSpec {
         id: "csharp-ls",
@@ -447,6 +466,73 @@ pub const SERVERS: &[ServerSpec] = &[
         },
         activation: Activation::Always,
         needs: &[Prerequisite::Dotnet { min: 10 }],
+        helpers: &[],
+    },
+    ServerSpec {
+        id: "bash",
+        name: "Bash",
+        languages: &["shellscript"],
+        program: "bash-language-server",
+        args: &["start"],
+        install: Install::Npm {
+            package: "bash-language-server",
+            version: "5.8.1",
+        },
+        activation: Activation::Always,
+        needs: &[],
+        // It checks with ShellCheck and formats with shfmt when they are
+        // on its `PATH`, as VS Code's Bash IDE asks you to install them.
+        helpers: &["shellcheck", "shfmt"],
+    },
+    ServerSpec {
+        id: "dockerfile",
+        name: "Dockerfile",
+        languages: &["dockerfile"],
+        program: "docker-langserver",
+        args: &["--stdio"],
+        install: Install::Npm {
+            package: "dockerfile-language-server-nodejs",
+            version: "0.15.0",
+        },
+        activation: Activation::Always,
+        needs: &[],
+        helpers: &[],
+    },
+    ServerSpec {
+        id: "lemminx",
+        name: "XML",
+        languages: &["xml", "xsl", "svg"],
+        program: "lemminx-osx-{aarch_64}",
+        args: &[],
+        // The native build of the server of VS Code's XML extension: no
+        // Java needed.
+        install: Install::Download {
+            url: "https://github.com/redhat-developer/vscode-xml/releases/download/0.29.3/lemminx-osx-{aarch_64}.zip",
+            version: "0.29.3",
+            unpack: Unpack::Archive {
+                program: "lemminx-osx-{aarch_64}",
+            },
+            sha256: Some("185db5630ce85be43ea0fab034e7841b1327c2793db05ab481e029cf493d86ce"),
+        },
+        activation: Activation::Always,
+        needs: &[],
+        helpers: &[],
+    },
+    ServerSpec {
+        id: "sqruff",
+        name: "SQL",
+        languages: &["sql"],
+        program: "sqruff",
+        args: &["lsp"],
+        install: Install::Download {
+            url: "https://github.com/quarylabs/sqruff/releases/download/v0.44.0/sqruff-darwin-{arch}.tar.gz",
+            version: "0.44.0",
+            unpack: Unpack::Archive { program: "sqruff" },
+            sha256: Some("a4246a192080b9d9d6ef3a747fce3cba4daed42da3c80a097670cd4ed4c4fa41"),
+        },
+        activation: Activation::Always,
+        needs: &[],
+        helpers: &[],
     },
     ServerSpec {
         id: "rust-analyzer",
@@ -459,6 +545,7 @@ pub const SERVERS: &[ServerSpec] = &[
         },
         activation: Activation::Always,
         needs: &[],
+        helpers: &[],
     },
 ];
 
@@ -468,6 +555,16 @@ pub const SERVERS: &[ServerSpec] = &[
 pub fn default_settings(spec: &ServerSpec) -> Value {
     let css = json!({ "validate": true, "completion": { "triggerPropertyValueCompletion": true, "completePropertyWithSemicolon": true }, "hover": { "documentation": true, "references": true } });
     match spec.id {
+        // The defaults of VS Code's XML extension: a file without a schema
+        // only gets a hint, and schemas named by files are downloaded.
+        "lemminx" => json!({
+            "xml": {
+                "validation": { "enabled": true, "noGrammar": "hint", "schema": { "enabled": "always" } },
+                "downloadExternalResources": { "enabled": true },
+                "format": { "enabled": true, "splitAttributes": "preserve", "maxLineWidth": 0 },
+                "completion": { "autoCloseTags": true },
+            },
+        }),
         "jdtls" => json!({
             "java": {
                 // VS Code asks before updating the project after a change
@@ -770,6 +867,7 @@ pub fn initialization_options(
     servers_dir: &Path,
 ) -> Option<Value> {
     match spec.id {
+        "lemminx" => Some(json!({ "settings": settings_for(spec, user, root) })),
         "spring-boot" => Some(json!({
             "workspaceFolders": [workbench::uri::Uri::file(root).to_string()],
             "enableJdtClasspath": false,
@@ -813,7 +911,102 @@ pub fn servers_for(language_id: &str, root: &Path) -> Vec<&'static ServerSpec> {
 }
 
 pub fn spec(id: &str) -> Option<&'static ServerSpec> {
-    SERVERS.iter().find(|spec| spec.id == id)
+    SERVERS.iter().chain(HELPERS).find(|spec| spec.id == id)
+}
+
+/// Programs servers run, downloaded like servers but never started as
+/// one: they serve no language.
+pub const HELPERS: &[ServerSpec] = &[
+    ServerSpec {
+        id: "shellcheck",
+        name: "ShellCheck",
+        languages: &[],
+        program: "shellcheck",
+        args: &[],
+        install: Install::Download {
+            url: "https://github.com/koalaman/shellcheck/releases/download/v0.11.0/shellcheck-v0.11.0.darwin.{arch}.tar.gz",
+            version: "0.11.0",
+            unpack: Unpack::Archive {
+                program: "shellcheck-v0.11.0/shellcheck",
+            },
+            sha256: Some("339b930feb1ea764467013cc1f72d09cd6b869ebf1013296ba9055ab2ffbd26f"),
+        },
+        activation: Activation::Always,
+        needs: &[],
+        helpers: &[],
+    },
+    ServerSpec {
+        id: "shfmt",
+        name: "shfmt",
+        languages: &[],
+        program: "shfmt",
+        args: &[],
+        install: Install::Download {
+            url: "https://github.com/mvdan/sh/releases/download/v3.14.1/shfmt_v3.14.1_darwin_{arm64}",
+            version: "3.14.1",
+            unpack: Unpack::File,
+            sha256: Some("b7c872db63553ccffc7253aba3ed7d4885a27d83f1ba567b1138c6315a5847e5"),
+        },
+        activation: Activation::Always,
+        needs: &[],
+        helpers: &[],
+    },
+];
+
+/// Finds, or installs when `install` is set, the helpers of `spec`.
+/// Returns the folders to put first on its `PATH`, and what went wrong:
+/// a missing helper only takes a feature away, the server still starts.
+pub fn prepare_helpers(
+    spec: &ServerSpec,
+    servers_dir: &Path,
+    root: &Path,
+    env: &HashMap<String, String>,
+    install: bool,
+) -> (Vec<PathBuf>, Vec<String>) {
+    let mut folders = Vec::new();
+    let mut problems = Vec::new();
+    for id in spec.helpers {
+        let Some(helper) = self::spec(id) else {
+            continue;
+        };
+        let mut found = find(helper, servers_dir, root, env);
+        if found.is_none() && install {
+            match self::install(helper, servers_dir, root, env) {
+                Ok(_) => found = find(helper, servers_dir, root, env),
+                Err(error) => problems.push(format!("{}: {error:#}", helper.name)),
+            }
+        }
+        if let Some(folder) = found.as_deref().and_then(Path::parent) {
+            folders.push(folder.to_path_buf());
+        }
+    }
+    (folders, problems)
+}
+
+/// Puts `folders` first on the `PATH`, after any change `extra_env`
+/// already makes to it.
+pub fn with_path_first(
+    folders: &[PathBuf],
+    env: &HashMap<String, String>,
+    extra_env: &mut Vec<(String, String)>,
+) {
+    if folders.is_empty() {
+        return;
+    }
+    let current = extra_env
+        .iter()
+        .rev()
+        .find(|(key, _)| key == "PATH")
+        .map(|(_, value)| value.clone())
+        .or_else(|| env.get("PATH").cloned())
+        .unwrap_or_default();
+    let mut parts: Vec<String> = folders
+        .iter()
+        .map(|folder| folder.to_string_lossy().into_owned())
+        .collect();
+    parts.push(current);
+    extra_env.retain(|(key, _)| key != "PATH");
+    extra_env.push(("PATH".to_owned(), parts.join(":")));
 }
 
 /// Where Keel keeps one server it installed.
@@ -1564,6 +1757,7 @@ mod tests {
             },
             activation: Activation::Always,
             needs: &[],
+            helpers: &[],
         }))
     }
 
@@ -1811,6 +2005,36 @@ mod tests {
         );
         assert_eq!(spring.program, java);
         assert_eq!(spring.args.last().unwrap(), &jar.to_string_lossy());
+    }
+
+    #[test]
+    fn helpers_go_first_on_the_path() {
+        let env = HashMap::from([("PATH".to_owned(), "/usr/bin".to_owned())]);
+        let mut extra = Vec::new();
+        with_path_first(
+            &[PathBuf::from("/s/shellcheck"), PathBuf::from("/s/shfmt")],
+            &env,
+            &mut extra,
+        );
+        assert_eq!(
+            extra,
+            [(
+                "PATH".to_owned(),
+                "/s/shellcheck:/s/shfmt:/usr/bin".to_owned()
+            )]
+        );
+        // After a prerequisite's own change to the `PATH`.
+        let mut extra = vec![("PATH".to_owned(), "/jdk/bin:/usr/bin".to_owned())];
+        with_path_first(&[PathBuf::from("/s/tool")], &env, &mut extra);
+        assert_eq!(
+            extra,
+            [("PATH".to_owned(), "/s/tool:/jdk/bin:/usr/bin".to_owned())]
+        );
+        assert_eq!(spec("shellcheck").unwrap().languages.len(), 0);
+        assert_eq!(
+            servers_for("shellscript", Path::new("/p"))[0].helpers,
+            ["shellcheck", "shfmt"]
+        );
     }
 
     #[test]

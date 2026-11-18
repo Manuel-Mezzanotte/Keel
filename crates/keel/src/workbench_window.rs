@@ -753,18 +753,31 @@ impl Workbench {
         self.language.strings()
     }
 
-    /// The indentation from `editor.tabSize` and `editor.insertSpaces`.
-    fn tab_size(&self) -> gpui_component::input::TabSize {
+    /// Indentation for files of `language_id`: `"[language]"` settings
+    /// first, then VS Code's own default for the language (tabs in
+    /// Makefiles, which need them), then the general settings.
+    fn tab_size_for(&self, language_id: &str) -> gpui_component::input::TabSize {
+        let tab_size = self
+            .language_setting(language_id, "editor.tabSize")
+            .and_then(|size| size.as_f64())
+            .map_or(2, |size| size.clamp(1.0, 16.0) as usize);
+        let insert_spaces = self
+            .settings
+            .get(&format!("[{language_id}]"))
+            .and_then(|overrides| overrides.get("editor.insertSpaces"))
+            .and_then(Value::as_bool)
+            .or(match language_id {
+                "makefile" => Some(false),
+                _ => None,
+            })
+            .or_else(|| {
+                self.settings
+                    .get("editor.insertSpaces")
+                    .and_then(Value::as_bool)
+            });
         gpui_component::input::TabSize {
-            tab_size: self
-                .settings
-                .number("editor.tabSize")
-                .map_or(2, |size| size.clamp(1.0, 16.0) as usize),
-            hard_tabs: self
-                .settings
-                .get("editor.insertSpaces")
-                .and_then(Value::as_bool)
-                == Some(false),
+            tab_size,
+            hard_tabs: insert_spaces == Some(false),
         }
     }
 
