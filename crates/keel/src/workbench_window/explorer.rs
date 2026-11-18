@@ -627,7 +627,12 @@ impl Workbench {
     // -----------------------------------------------------------------
     // Drawing
 
-    pub(super) fn render_explorer(&self, colors: Colors, cx: &mut Context<Self>) -> AnyElement {
+    pub(super) fn render_explorer(
+        &self,
+        colors: Colors,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
         let strings = self.strings();
         let Some(root) = self.project.root.clone() else {
             return note(strings.no_folder.to_owned(), colors).into_any_element();
@@ -779,7 +784,7 @@ impl Workbench {
                         tree.child(note(strings.explorer_empty.to_owned(), colors))
                     }),
             )
-            .children(self.render_npm_scripts(colors, cx))
+            .children(self.render_npm_scripts(colors, window, cx))
             .into_any_element()
     }
 

@@ -103,6 +103,57 @@ fn shots() -> Vec<Shot> {
             window.close_all_dialogs(cx);
             workbench.open_page(settings_view::PageKind::Settings, window, cx);
         }));
+        shots.push(shot(tag("menu"), |workbench, window, cx| {
+            // A right click on the first tab opens its menu.
+            let look = workbench.look;
+            let position = point(
+                px(look.gap() * 2. + workbench.sidebar_width + 44.),
+                px(look.toolbar_height() + look.gap() + look.bar_height() / 2.),
+            );
+            window.dispatch_event(
+                gpui::PlatformInput::MouseDown(gpui::MouseDownEvent {
+                    button: gpui::MouseButton::Right,
+                    position,
+                    modifiers: Default::default(),
+                    click_count: 1,
+                    first_mouse: false,
+                }),
+                cx,
+            );
+            window.dispatch_event(
+                gpui::PlatformInput::MouseUp(gpui::MouseUpEvent {
+                    button: gpui::MouseButton::Right,
+                    position,
+                    modifiers: Default::default(),
+                    click_count: 1,
+                }),
+                cx,
+            );
+        }));
+    }
+    // Last, with every tab closed: the welcome page.
+    for (style, theme) in [("floating", "Mezzanotte"), ("flat", "Chiaro")] {
+        let name: &'static str = Box::leak(
+            format!("{style}-{theme}-welcome")
+                .to_lowercase()
+                .into_boxed_str(),
+        );
+        shots.push(shot(name, move |workbench, window, cx| {
+            set_theme(theme, window, cx);
+            set_style(workbench, style, window, cx);
+            workbench.layout.agent = false;
+            for _ in 0..64 {
+                let Some(group) = workbench
+                    .groups
+                    .iter()
+                    .rposition(|group| !group.tabs.is_empty())
+                else {
+                    break;
+                };
+                let last = workbench.groups[group].tabs.len() - 1;
+                workbench.close_tab(group, last, window, cx);
+            }
+        }));
     }
     shots
 }

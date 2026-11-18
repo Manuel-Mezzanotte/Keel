@@ -51,7 +51,8 @@ gpui_kit_assets::icon_assets!(
         Layers,
         LayoutPanelLeft,
         Palette,
-        Gauge
+        Gauge,
+        Command
     ]
 );
 
@@ -123,7 +124,8 @@ mod tests {
                 else {
                     continue;
                 };
-                if KeelAssets.load(&icon.path()).unwrap().is_none() && !missing.contains(&name) {
+                let loads = matches!(KeelAssets.load(&icon.path()), Ok(Some(_)));
+                if !loads && !missing.contains(&name) {
                     missing.push(name);
                 }
             }

@@ -14,7 +14,9 @@ use gpui_component::menu::DropdownMenu as _;
 use gpui_component::{Disableable as _, Icon, Sizable as _};
 use gpui_kit_assets::IconName;
 
-use super::shell::{Colors, empty_state, key_hint, own_clicks, section_header, view_header};
+use super::shell::{
+    Colors, chevron_turn, empty_state, key_hint, own_clicks, section_header, view_header,
+};
 use super::*;
 
 /// The key context around the commit message, for Cmd+Enter.
@@ -828,11 +830,11 @@ impl Workbench {
                     uniform_list(
                         "scm-files",
                         rows.len(),
-                        cx.processor(move |this, range: Range<usize>, _, cx| {
+                        cx.processor(move |this, range: Range<usize>, window, cx| {
                             let rows = this.scm.rows();
                             range
                                 .filter_map(|index| rows.get(index).copied())
-                                .map(|row| this.render_scm_row(row, colors, cx))
+                                .map(|row| this.render_scm_row(row, colors, window, cx))
                                 .collect::<Vec<_>>()
                         }),
                     )
@@ -860,7 +862,13 @@ impl Workbench {
             .into_any_element()
     }
 
-    fn render_scm_row(&self, row: Row, colors: Colors, cx: &mut Context<Self>) -> AnyElement {
+    fn render_scm_row(
+        &self,
+        row: Row,
+        colors: Colors,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
         let strings = self.strings();
         let small = |id: ElementId, icon: IconName, tooltip: &'static str| {
             Button::new(id)
@@ -911,10 +919,17 @@ impl Workbench {
                     Section::Conflicts => Vec::new(),
                 };
                 let open = !self.scm.collapsed.contains(&section);
+                let turn = chevron_turn(
+                    ElementId::Name(format!("scm-turn-{section:?}").into()),
+                    open,
+                    self.look,
+                    window,
+                    cx,
+                );
                 section_header(
                     ElementId::Name(format!("scm-title-{section:?}").into()),
                     title,
-                    open,
+                    turn,
                     colors,
                 )
                 .group("scm-title")

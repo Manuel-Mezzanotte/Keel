@@ -141,7 +141,7 @@ impl Workbench {
             window,
             cx,
         );
-        let header = section_header("scm-graph-header", strings.scm_graph, open, colors)
+        let header = section_header("scm-graph-header", strings.scm_graph, unfolded, colors)
             .h(px(HEADER_HEIGHT))
             .on_click(cx.listener(|this, _, _, cx| {
                 this.graph_collapsed = !this.graph_collapsed;
@@ -383,6 +383,17 @@ mod tests {
     use super::*;
 
     #[test]
+    fn the_graph_keeps_its_commits_and_the_view_its_message() {
+        // Dragged too low, it keeps a few commits in sight.
+        assert_eq!(graph_height_within(10., 900.), GRAPH_MIN_HEIGHT);
+        // Dragged too high, the message and the changes keep their room.
+        assert_eq!(graph_height_within(880., 900.), 900. - ROOM_FOR_CHANGES);
+        assert_eq!(graph_height_within(300., 900.), 300.);
+        // A short view still leaves the graph its least height.
+        assert_eq!(graph_height_within(300., 200.), GRAPH_MIN_HEIGHT);
+    }
+
+    #[test]
     fn dates_as_mail_lists_them() {
         let now = 1_800_000_000;
         assert_eq!(relative_time(now - 20, now, true), "ora");
@@ -463,14 +474,16 @@ mod tests {
             cx.update(|window, _| window.refresh());
             cx.run_until_parked();
         }
-        // Closed to its header, and remembered so.
+        // Closed to its header, and remembered so, with its height.
         view.update(cx, |view, _| {
             view.graph_collapsed = true;
             view.npm_collapsed = true;
             view.sidebar_width = 320.;
+            view.scm_graph_height = 180.;
         });
         let state = view.read_with(cx, |view, _| view.window_state());
         assert_eq!(state.collapsed, ["npm-scripts", "git-graph"]);
         assert_eq!(state.sidebar_width, Some(320.));
+        assert_eq!(state.graph_height, Some(180.));
     }
 }

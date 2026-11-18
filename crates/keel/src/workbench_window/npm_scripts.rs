@@ -10,7 +10,7 @@ use gpui_component::menu::DropdownMenu as _;
 use gpui_component::{Icon, Sizable as _};
 use gpui_kit_assets::IconName;
 
-use super::shell::{Colors, own_clicks, section_header};
+use super::shell::{Colors, chevron_turn, own_clicks, section_header};
 use super::terminal_view;
 use super::*;
 
@@ -157,7 +157,12 @@ impl Workbench {
     }
 
     /// The scripts under the Explorer's tree; a click runs one.
-    pub(super) fn render_npm_scripts(&self, colors: Colors, cx: &mut Context<Self>) -> Option<Div> {
+    pub(super) fn render_npm_scripts(
+        &self,
+        colors: Colors,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> Option<Div> {
         let scripts = self.npm_scripts.as_ref()?;
         // `npm.enableScriptExplorer`, as in VS Code, turns the section off.
         if self
@@ -170,6 +175,7 @@ impl Workbench {
         }
         let strings = self.strings();
         let open = !self.npm_collapsed;
+        let turn = chevron_turn("npm-turn", open, self.look, window, cx);
         let rows = scripts
             .scripts
             .iter()
@@ -204,7 +210,7 @@ impl Workbench {
                     )
             });
         let hide = strings.npm_hide;
-        let header = section_header("npm-header", strings.npm_scripts, open, colors)
+        let header = section_header("npm-header", strings.npm_scripts, turn, colors)
             .on_click(cx.listener(|this, _: &ClickEvent, _, cx| {
                 this.npm_collapsed = !this.npm_collapsed;
                 this.session_changed(cx);

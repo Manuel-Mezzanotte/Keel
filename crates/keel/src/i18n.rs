@@ -593,6 +593,14 @@ pub struct Strings {
     pub pick_move: &'static str,
     pub pick_choose: &'static str,
     pub pick_close: &'static str,
+    /// The first list of the welcome page.
+    pub welcome_start: &'static str,
+    pub welcome_go_to_file: &'static str,
+    pub welcome_commands: &'static str,
+    pub welcome_claude: &'static str,
+    pub welcome_settings: &'static str,
+    /// Under Keel's name on the welcome page, with no project open.
+    pub welcome_tagline: &'static str,
 }
 
 impl Strings {
@@ -1610,6 +1618,12 @@ pub const ITALIAN: Strings = Strings {
     pick_move: "per muoverti",
     pick_choose: "per scegliere",
     pick_close: "per chiudere",
+    welcome_start: "Inizia",
+    welcome_go_to_file: "Vai a un file",
+    welcome_commands: "Tutti i comandi",
+    welcome_claude: "Apri Claude Code",
+    welcome_settings: "Impostazioni",
+    welcome_tagline: "Il tuo editor, veloce e leggero.",
 };
 
 pub const ENGLISH: Strings = Strings {
@@ -2149,6 +2163,12 @@ pub const ENGLISH: Strings = Strings {
     pick_move: "to move",
     pick_choose: "to choose",
     pick_close: "to close",
+    welcome_start: "Start",
+    welcome_go_to_file: "Go to File",
+    welcome_commands: "All Commands",
+    welcome_claude: "Open Claude Code",
+    welcome_settings: "Settings",
+    welcome_tagline: "Your editor, fast and light.",
 };
 
 #[cfg(test)]

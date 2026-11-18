@@ -246,13 +246,32 @@ pub(super) fn keys_for(action: &dyn gpui::Action, window: &Window) -> Option<Str
     Some(super::keybindings_view::readable(&text))
 }
 
+/// How far a section's chevron has turned, 0 closed to 1 open, gliding
+/// when the section opens or closes.
+pub(super) fn chevron_turn(
+    id: impl Into<gpui::ElementId>,
+    open: bool,
+    look: Look,
+    window: &mut Window,
+    cx: &mut App,
+) -> f32 {
+    look::glide(
+        id,
+        if open { 1. } else { 0. },
+        look.duration(180),
+        window,
+        cx,
+    )
+}
+
 /// The header of a section of the sidebar, as Finder's: a chevron that
-/// closes and opens it (the whole row is the button), the title, and on the
-/// right whatever `actions` the section has.
+/// closes and opens it (the whole row is the button), turned `turn` of the
+/// way from pointing right (closed) to pointing down (open), the title, and
+/// on the right whatever actions the section has.
 pub(super) fn section_header(
     id: impl Into<gpui::ElementId>,
     title: &str,
-    open: bool,
+    turn: f32,
     colors: Colors,
 ) -> gpui::Stateful<Div> {
     div()
@@ -269,13 +288,12 @@ pub(super) fn section_header(
         .font_weight(FontWeight::SEMIBOLD)
         .text_color(colors.faint)
         .child(
-            Icon::new(if open {
-                IconName::ChevronDown
-            } else {
-                IconName::ChevronRight
-            })
-            .xsmall()
-            .text_color(colors.faint),
+            Icon::new(IconName::ChevronRight)
+                .xsmall()
+                .rotate(gpui::radians(
+                    turn.clamp(0., 1.) * std::f32::consts::FRAC_PI_2,
+                ))
+                .text_color(colors.faint),
         )
         .child(
             div()
@@ -712,7 +730,9 @@ impl Workbench {
         let look = self.look;
         let switch = self.render_side_switch(colors, window, cx);
         let content: AnyElement = match self.layout.side_view {
-            SideView::Explorer if self.project.root.is_some() => self.render_explorer(colors, cx),
+            SideView::Explorer if self.project.root.is_some() => {
+                self.render_explorer(colors, window, cx)
+            }
             SideView::Explorer => self.render_open_editors(colors, cx).into_any_element(),
             SideView::Search => self.render_search(colors, window, cx),
             SideView::SourceControl => self.render_source_control(colors, window, cx),
@@ -876,37 +896,69 @@ impl Workbench {
             .children(rows)
     }
 
-    /// What the editors' panel shows with no file open: how to start, and
-    /// the recent projects.
-    fn render_welcome(&self, colors: Colors, cx: &mut Context<Self>) -> AnyElement {
+    /// What the editors' panel shows with no file open: how to start, with
+    /// the keys of each way, and the recent projects.
+    fn render_welcome(
+        &self,
+        colors: Colors,
+        window: &Window,
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
         let strings = self.strings();
-        let start = |id: &'static str, icon: IconName, label: &'static str, keys: &'static str| {
-            div()
-                .id(id)
-                .h(px(32.))
-                .px_2()
-                .flex()
-                .items_center()
-                .gap_2p5()
-                .rounded(px(8.))
-                .text_sm()
-                .text_color(colors.text)
-                .cursor_pointer()
-                .hover(|row| row.bg(colors.hover))
-                .child(Icon::new(icon).small().text_color(colors.accent))
-                .child(label)
-                .child(
-                    div()
-                        .ml_auto()
-                        .text_xs()
-                        .text_color(colors.faint)
-                        .child(keys),
-                )
+        let has_project = self.project.root.is_some();
+        let start = |id: &'static str,
+                     icon: IconName,
+                     label: &'static str,
+                     action: Box<dyn gpui::Action>| {
+            let keys = keys_for(action.as_ref(), window);
+            tool_row(id, icon, label, keys, colors)
+                .h(px(34.))
+                .on_click(move |_, window, cx| window.dispatch_action(action.boxed_clone(), cx))
         };
+        let mut actions: Vec<gpui::Stateful<Div>> = Vec::new();
+        if has_project {
+            actions.push(start(
+                "welcome-go-to-file",
+                IconName::Search,
+                strings.welcome_go_to_file,
+                Box::new(QuickOpen),
+            ));
+        }
+        actions.push(start(
+            "welcome-open",
+            IconName::FolderOpen,
+            strings.welcome_open,
+            Box::new(Open),
+        ));
+        actions.push(start(
+            "welcome-new-file",
+            IconName::FilePlus,
+            strings.welcome_new_file,
+            Box::new(NewFile),
+        ));
+        actions.push(start(
+            "welcome-commands",
+            IconName::Command,
+            strings.welcome_commands,
+            Box::new(ShowCommands),
+        ));
+        actions.push(start(
+            "welcome-claude",
+            IconName::Sparkles,
+            strings.welcome_claude,
+            Box::new(super::OpenClaudeCode),
+        ));
+        actions.push(start(
+            "welcome-settings",
+            IconName::Settings,
+            strings.welcome_settings,
+            Box::new(OpenSettings),
+        ));
         let recent = crate::recent::projects(cx);
-        let recent_rows = recent
+        let recent_rows: Vec<_> = recent
             .into_iter()
-            .take(8)
+            .filter(|project| Some(project) != self.project.root.as_ref())
+            .take(6)
             .enumerate()
             .map(|(index, project)| {
                 let name = project
@@ -919,15 +971,16 @@ impl Workbench {
                     .unwrap_or_default();
                 div()
                     .id(("recent-project", index))
-                    .h(px(30.))
+                    .h(px(34.))
                     .px_2()
                     .flex()
                     .items_center()
-                    .gap_2p5()
-                    .rounded(px(8.))
+                    .gap_2()
+                    .rounded(px(7.))
                     .text_sm()
                     .cursor_pointer()
                     .hover(|row| row.bg(colors.hover))
+                    .active(|row| row.bg(colors.selected))
                     .on_click(cx.listener(move |_, _, window, cx| {
                         window.dispatch_action(
                             Box::new(OpenProject {
@@ -937,7 +990,7 @@ impl Workbench {
                         )
                     }))
                     .child(Icon::new(IconName::Folder).small().text_color(colors.muted))
-                    .child(div().text_color(colors.text).child(name))
+                    .child(div().flex_none().text_color(colors.text).child(name))
                     .child(
                         div()
                             .min_w_0()
@@ -946,9 +999,94 @@ impl Workbench {
                             .text_color(colors.faint)
                             .child(location),
                     )
+            })
+            .collect();
+        let title = if has_project {
+            self.project.name.clone()
+        } else {
+            "Keel".to_owned()
+        };
+        let subtitle = match (&self.project.branch, has_project) {
+            (Some(branch), true) => branch.clone(),
+            _ => strings.welcome_tagline.to_owned(),
+        };
+        let duration = self.look.duration(260);
+        let page = div()
+            .w(px(420.))
+            .max_w_full()
+            .px_4()
+            .flex()
+            .flex_col()
+            .gap_6()
+            .child(
+                div()
+                    .flex()
+                    .items_center()
+                    .gap_3()
+                    .child(
+                        div()
+                            .size(px(52.))
+                            .flex_none()
+                            .rounded(px(14.))
+                            .flex()
+                            .items_center()
+                            .justify_center()
+                            .bg(colors.accent.opacity(0.12))
+                            .child(
+                                svg()
+                                    .path(crate::assets::LOGO)
+                                    .size(px(30.))
+                                    .text_color(colors.accent),
+                            ),
+                    )
+                    .child(
+                        div()
+                            .min_w_0()
+                            .flex()
+                            .flex_col()
+                            .child(
+                                div()
+                                    .text_xl()
+                                    .font_weight(FontWeight::SEMIBOLD)
+                                    .text_color(colors.text)
+                                    .truncate()
+                                    .child(title),
+                            )
+                            .child(
+                                div()
+                                    .text_sm()
+                                    .text_color(colors.muted)
+                                    .truncate()
+                                    .child(subtitle),
+                            ),
+                    ),
+            )
+            .child(
+                div()
+                    .flex()
+                    .flex_col()
+                    .child(heading(strings.welcome_start, colors))
+                    .children(actions),
+            )
+            .when(!recent_rows.is_empty(), |welcome| {
+                welcome.child(
+                    div()
+                        .flex()
+                        .flex_col()
+                        .child(heading(strings.recent_projects, colors))
+                        .children(recent_rows),
+                )
             });
-        let recent_rows: Vec<_> = recent_rows.collect();
-
+        let page: AnyElement = if duration.is_zero() {
+            page.into_any_element()
+        } else {
+            page.with_animation(
+                "welcome-in",
+                Animation::new(duration).with_easing(look::settle),
+                |page, delta| page.opacity(delta).mt(px(10. * (1. - delta))),
+            )
+            .into_any_element()
+        };
         div()
             .id("welcome")
             .flex_1()
@@ -958,74 +1096,7 @@ impl Workbench {
             .flex_col()
             .items_center()
             .justify_center()
-            .child(
-                div()
-                    .w(px(400.))
-                    .max_w_full()
-                    .px_4()
-                    .flex()
-                    .flex_col()
-                    .gap_6()
-                    .child(
-                        div()
-                            .flex()
-                            .items_center()
-                            .gap_3()
-                            .child(
-                                svg()
-                                    .path(crate::assets::LOGO)
-                                    .size(px(40.))
-                                    .text_color(colors.muted),
-                            )
-                            .child(
-                                div()
-                                    .text_xl()
-                                    .font_weight(FontWeight::SEMIBOLD)
-                                    .text_color(colors.text)
-                                    .child(if self.project.root.is_some() {
-                                        self.project.name.clone()
-                                    } else {
-                                        "Keel".to_owned()
-                                    }),
-                            ),
-                    )
-                    .child(
-                        div()
-                            .flex()
-                            .flex_col()
-                            .child(
-                                start(
-                                    "welcome-open",
-                                    IconName::FolderOpen,
-                                    strings.welcome_open,
-                                    "⌘O",
-                                )
-                                .on_click(cx.listener(
-                                    |_, _, window, cx| window.dispatch_action(Box::new(Open), cx),
-                                )),
-                            )
-                            .child(
-                                start(
-                                    "welcome-new-file",
-                                    IconName::FilePlus,
-                                    strings.welcome_new_file,
-                                    "⌘N",
-                                )
-                                .on_click(
-                                    cx.listener(|this, _, window, cx| this.new_file(window, cx)),
-                                ),
-                            ),
-                    )
-                    .when(!recent_rows.is_empty(), |welcome| {
-                        welcome.child(
-                            div()
-                                .flex()
-                                .flex_col()
-                                .child(heading(strings.recent_projects, colors))
-                                .children(recent_rows),
-                        )
-                    }),
-            )
+            .child(page)
             .into_any_element()
     }
 
@@ -1501,7 +1572,7 @@ impl Workbench {
         });
 
         let content = if self.panes.is_empty() {
-            self.render_welcome(colors, cx)
+            self.render_welcome(colors, window, cx)
         } else {
             div()
                 .flex_1()
@@ -2362,6 +2433,81 @@ mod tests {
             let (_, last) = view.output.last().unwrap();
             assert!(last.starts_with("Keel could not open"), "{last}");
         });
+    }
+
+    /// The two styles: floating panels keep a gap from the window's edge
+    /// and from each other, flat ones touch them; the setting changes the
+    /// window at once and the toolbar's height with it.
+    #[gpui::test]
+    fn the_flat_style_puts_the_panels_edge_to_edge(cx: &mut TestAppContext) {
+        set_up(cx);
+        let folder = tempfile::tempdir().unwrap();
+        let settings = english(folder.path());
+        let (view, cx) =
+            cx.add_window_view(|window, cx| Workbench::new(None, settings, None, window, cx));
+        let sidebar_at = |cx: &mut VisualTestContext| {
+            cx.update(|window, _| window.refresh());
+            cx.run_until_parked();
+            cx.debug_bounds("sidebar").expect("the sidebar is drawn")
+        };
+        let floating = sidebar_at(cx);
+        assert_eq!(f32::from(floating.left()), 8.);
+        assert_eq!(f32::from(floating.top()), 52. + 0.);
+
+        view.update_in(cx, |view, window, cx| {
+            view.change_setting(
+                crate::workbench_window::look::STYLE_SETTING,
+                Some(json!("flat")),
+                window,
+                cx,
+            )
+        });
+        assert!(view.read_with(cx, |view, _| view.look.flat()));
+        let flat = sidebar_at(cx);
+        assert_eq!(f32::from(flat.left()), 0.);
+        assert_eq!(f32::from(flat.top()), 40.);
+        // As wide as before: only the frame around it changed.
+        assert_eq!(flat.size.width, floating.size.width);
+    }
+
+    /// The sidebar slides out over a moment, then is not drawn at all; it
+    /// slides back in from the same edge.
+    #[gpui::test]
+    fn the_sidebar_slides_out_and_back(cx: &mut TestAppContext) {
+        set_up(cx);
+        let folder = tempfile::tempdir().unwrap();
+        let settings = english(folder.path());
+        let (view, cx) =
+            cx.add_window_view(|window, cx| Workbench::new(None, settings, None, window, cx));
+        view.update(cx, |view, _| view.look.motion = true);
+        let frame = |cx: &mut VisualTestContext| {
+            cx.update(|window, _| window.refresh());
+            cx.run_until_parked();
+        };
+        frame(cx);
+        let shown = cx.debug_bounds("sidebar").unwrap();
+
+        cx.simulate_keystrokes("cmd-b");
+        frame(cx);
+        cx.executor()
+            .advance_clock(Duration::from_millis(SLIDE_MS / 3));
+        frame(cx);
+        // On its way: still drawn, partly past the window's left edge.
+        let sliding = cx
+            .debug_bounds("sidebar")
+            .expect("still drawn while it slides");
+        assert!(sliding.left() < shown.left(), "{sliding:?}");
+        cx.executor()
+            .advance_clock(Duration::from_millis(SLIDE_MS * 2));
+        frame(cx);
+        assert!(cx.debug_bounds("sidebar").is_none(), "gone once it is out");
+
+        cx.simulate_keystrokes("cmd-b");
+        frame(cx);
+        cx.executor()
+            .advance_clock(Duration::from_millis(SLIDE_MS * 2));
+        frame(cx);
+        assert_eq!(cx.debug_bounds("sidebar"), Some(shown));
     }
 
     #[test]

@@ -16,7 +16,9 @@ use gpui_component::text::{TextView, TextViewState};
 use gpui_component::{ActiveTheme as _, Disableable as _, Icon, Sizable as _};
 use gpui_kit_assets::IconName;
 
-use super::shell::{Colors, empty_state, heading, note, section_header, tool_row, view_header};
+use super::shell::{
+    Colors, chevron_turn, empty_state, heading, note, section_header, tool_row, view_header,
+};
 use super::*;
 use crate::extension_state::Scope;
 
@@ -1197,11 +1199,18 @@ impl Workbench {
         }
 
         let installed_open = !self.store.installed_collapsed;
+        let turn = chevron_turn(
+            "extensions-installed-turn",
+            installed_open,
+            self.look,
+            window,
+            cx,
+        );
         view = view.child(
             section_header(
                 "extensions-installed",
                 strings.installed_extensions,
-                installed_open,
+                turn,
                 colors,
             )
             .on_click(cx.listener(|this, _, _, cx| {
@@ -1238,12 +1247,13 @@ impl Workbench {
             .collect();
         if !recommended.is_empty() {
             let open = !self.store.recommended_collapsed;
+            let turn = chevron_turn("extensions-recommended-turn", open, self.look, window, cx);
             view = view.child(
                 div().pt_2().child(
                     section_header(
                         "extensions-recommended",
                         strings.extensions_recommended,
-                        open,
+                        turn,
                         colors,
                     )
                     .on_click(cx.listener(|this, _, _, cx| {
@@ -1682,6 +1692,34 @@ mod tests {
     use crate::extension_state::ExtensionState;
 
     const ID: &str = "manuel-local.vsauto-ghost";
+
+    /// The project's recommendations, as VS Code reads them: comments
+    /// allowed, unwanted ones left out, each id once and in lower case.
+    #[test]
+    fn the_project_recommends_extensions() {
+        let folder = tempfile::tempdir().unwrap();
+        assert!(recommendations(folder.path()).is_empty());
+        std::fs::create_dir_all(folder.path().join(".vscode")).unwrap();
+        std::fs::write(
+            folder.path().join(".vscode/extensions.json"),
+            r#"{
+                // Formatting and lint.
+                "recommendations": [
+                    "esbenp.prettier-vscode",
+                    "dbaeumer.vscode-eslint",
+                    "ESBENP.prettier-vscode",
+                    "not-an-id",
+                    "ms-python.python",
+                ],
+                "unwantedRecommendations": ["ms-python.python"]
+            }"#,
+        )
+        .unwrap();
+        assert_eq!(
+            recommendations(folder.path()),
+            ["esbenp.prettier-vscode", "dbaeumer.vscode-eslint"]
+        );
+    }
 
     fn wait_until(
         cx: &mut VisualTestContext,
