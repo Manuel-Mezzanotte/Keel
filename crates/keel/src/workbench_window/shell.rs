@@ -751,6 +751,36 @@ impl Workbench {
 
     /// A tab: pinned, preview in italics, a dot for unsaved changes, and a
     /// close button on the tab in view or under the pointer.
+    /// The icon in front of a tab's name: the file's, as in the Explorer,
+    /// or a symbol for the pages Keel draws.
+    fn tab_icon(&self, document: &OpenDocument, colors: Colors, cx: &App) -> Option<AnyElement> {
+        let symbol = |name: IconName| {
+            Some(
+                Icon::new(name)
+                    .small()
+                    .flex_none()
+                    .text_color(colors.muted)
+                    .into_any_element(),
+            )
+        };
+        match &document.backing {
+            Backing::Page(super::settings_view::PageKind::Settings) => symbol(IconName::Settings),
+            Backing::Page(super::settings_view::PageKind::Keybindings) => {
+                symbol(IconName::Keyboard)
+            }
+            Backing::ExtensionDetails(_) => symbol(IconName::Blocks),
+            Backing::Graph(_) => symbol(IconName::GitGraph),
+            Backing::Untitled => Some(self.file_icon_element(Path::new("untitled.txt"), cx)),
+            _ => {
+                let path = document
+                    .disk_path()
+                    .map(Path::to_path_buf)
+                    .unwrap_or_else(|| PathBuf::from(document.name()));
+                Some(self.file_icon_element(&path, cx))
+            }
+        }
+    }
+
     fn render_tab(
         &self,
         group: usize,
@@ -766,6 +796,10 @@ impl Workbench {
             .get(&tab.uri)
             .map(|document| (self.display_name(document), document.modified))
             .unwrap_or_default();
+        let icon = self
+            .documents
+            .get(&tab.uri)
+            .and_then(|document| self.tab_icon(document, colors, cx));
         let in_view = self.groups[group].active == index;
         let focused_group = group == self.active;
         let hover_group: gpui::SharedString = format!("tab-{group}-{index}").into();
@@ -897,6 +931,7 @@ impl Workbench {
             .when(tab.pinned, |row| {
                 row.child(Icon::new(IconName::Pin).xsmall().text_color(colors.faint))
             })
+            .children(icon)
             .child(
                 div()
                     .whitespace_nowrap()

@@ -986,7 +986,7 @@ impl Workbench {
                     }
                 }
                 let open_path = path.clone();
-                let (icon, icon_color) = super::explorer::file_icon(&name);
+                let icon = self.file_icon_element(Path::new(&path), cx);
                 div()
                     .id(id.clone())
                     .group("scm-row")
@@ -1005,9 +1005,7 @@ impl Workbench {
                     .on_click(cx.listener(move |this, _: &ClickEvent, window, cx| {
                         this.open_change(&open_path, section, window, cx)
                     }))
-                    .child(Icon::new(icon).small().text_color(
-                        icon_color.map_or(colors.muted, |color| gpui::rgb(color).into()),
-                    ))
+                    .child(icon)
                     // The name keeps its room; the folder gives way first.
                     .child(
                         div()

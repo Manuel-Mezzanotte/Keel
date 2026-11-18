@@ -30,7 +30,7 @@ impl Workbench {
 
     /// Recently used files first, then the rest of the project, as
     /// relative paths.
-    fn quick_open_paths(&self) -> Vec<String> {
+    pub(super) fn quick_open_paths(&self) -> Vec<String> {
         let Some(root) = &self.project.root else {
             return Vec::new();
         };
@@ -87,7 +87,22 @@ impl Workbench {
             })
             .collect();
         let placeholder = Some(self.strings().quick_open_placeholder.to_owned());
-        let chosen = quick_pick::show_with(None, placeholder, items, Matching::Path, window, cx);
+        // Each file with its icon, as in the Explorer.
+        let workbench = cx.entity().downgrade();
+        let icon: quick_pick::IconFor = Rc::new(move |item, cx| {
+            let path = item.keywords.first()?;
+            let workbench = workbench.upgrade()?;
+            Some(workbench.read(cx).file_icon_element(Path::new(path), cx))
+        });
+        let chosen = quick_pick::show_with(
+            None,
+            placeholder,
+            items,
+            Matching::Path,
+            Some(icon),
+            window,
+            cx,
+        );
         cx.spawn_in(window, async move |this, cx| {
             let Ok(Some(choice)) = chosen.await else {
                 return;

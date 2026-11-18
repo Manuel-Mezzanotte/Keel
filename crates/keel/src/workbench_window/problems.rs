@@ -568,6 +568,7 @@ impl Workbench {
                 .xsmall()
                 .text_color(colors.faint),
             )
+            .child(self.file_icon_element(&shown, cx))
             .child(div().flex_none().text_color(colors.text).child(name))
             .child(
                 div()

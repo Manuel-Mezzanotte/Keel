@@ -896,11 +896,7 @@ impl Workbench {
             .text_color(colors.accent)
             .into_any_element()
         } else {
-            let (icon, color) = file_icon(&name);
-            Icon::new(icon)
-                .small()
-                .text_color(color.map_or(colors.muted, |color| gpui::rgb(color).into()))
-                .into_any_element()
+            self.file_icon_element(&path, cx)
         };
         let label = if renaming {
             match &self.tree_edit {

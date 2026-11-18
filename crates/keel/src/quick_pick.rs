@@ -7,7 +7,7 @@ use std::rc::Rc;
 
 use files::fuzzy;
 use futures::channel::oneshot;
-use gpui::{App, AppContext as _, ParentElement as _, Styled as _, Window, div, px};
+use gpui::{AnyElement, App, AppContext as _, ParentElement as _, Styled as _, Window, div, px};
 use gpui_component::command::{Command, CommandItem, CommandState};
 use gpui_component::{ActiveTheme as _, WindowExt as _};
 
@@ -34,6 +34,10 @@ impl PickItem {
     }
 }
 
+/// Draws the icon in front of an entry, such as a file's. Called only for
+/// the entries on screen, so a long list costs nothing more to open.
+pub type IconFor = Rc<dyn Fn(&PickItem, &App) -> Option<AnyElement>>;
+
 /// How entries are matched.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Matching {
@@ -59,7 +63,7 @@ pub fn show(
     window: &mut Window,
     cx: &mut App,
 ) -> oneshot::Receiver<Option<usize>> {
-    let chosen = show_with(title, placeholder, items, Matching::Text, window, cx);
+    let chosen = show_with(title, placeholder, items, Matching::Text, None, window, cx);
     let (sender, receiver) = oneshot::channel();
     cx.spawn(async move |_| {
         let choice = chosen.await.ok().flatten().map(|choice| choice.index);
@@ -76,6 +80,7 @@ pub fn show_with(
     placeholder: Option<String>,
     items: Vec<PickItem>,
     matching: Matching,
+    icon: Option<IconFor>,
     window: &mut Window,
     cx: &mut App,
 ) -> oneshot::Receiver<Option<Choice>> {
@@ -107,7 +112,7 @@ pub fn show_with(
         let rows: Vec<CommandItem> = shown
             .borrow()
             .iter()
-            .map(|&index| row(&items[index]))
+            .map(|&index| row(&items[index], icon.as_ref()))
             .collect();
         let command = Command::new(&state)
             .filterable(false)
@@ -192,7 +197,12 @@ pub fn show_dynamic(
         let close = finish.clone();
         let chosen_items = items.clone();
         let request = request.clone();
-        let rows: Vec<CommandItem> = items.borrow().iter().take(SHOWN).map(row).collect();
+        let rows: Vec<CommandItem> = items
+            .borrow()
+            .iter()
+            .take(SHOWN)
+            .map(|item| row(item, None))
+            .collect();
         let command = Command::new(&state)
             .filterable(false)
             .items(rows)
@@ -214,29 +224,39 @@ pub fn show_dynamic(
     receiver
 }
 
-fn row(item: &PickItem) -> CommandItem {
+fn row(item: &PickItem, icon: Option<&IconFor>) -> CommandItem {
     let entry = CommandItem::new()
         .label(item.label.clone())
         .keywords(item.keywords.clone());
-    let Some(detail) = item.detail.clone() else {
+    if item.detail.is_none() && icon.is_none() {
         return entry;
-    };
-    let label = item.label.clone();
+    }
+    let shown = item.clone();
+    let icon = icon.cloned();
     entry.child(move |_, cx| {
+        let picture = icon.as_ref().and_then(|icon| icon(&shown, cx));
         let theme = cx.theme();
         div()
             .flex()
-            .items_baseline()
+            .items_center()
             .gap_2()
             .min_w_0()
-            .child(div().flex_none().child(label.clone()))
+            .children(picture)
             .child(
                 div()
+                    .flex()
+                    .items_baseline()
+                    .gap_2()
                     .min_w_0()
-                    .truncate()
-                    .text_xs()
-                    .text_color(theme.muted_foreground)
-                    .child(detail.clone()),
+                    .child(div().flex_none().child(shown.label.clone()))
+                    .children(shown.detail.clone().map(|detail| {
+                        div()
+                            .min_w_0()
+                            .truncate()
+                            .text_xs()
+                            .text_color(theme.muted_foreground)
+                            .child(detail)
+                    })),
             )
     })
 }

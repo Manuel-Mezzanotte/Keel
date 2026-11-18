@@ -249,6 +249,43 @@ impl Workbench {
         theme.icon(entry, light).map(Path::to_path_buf)
     }
 
+    /// A file's icon wherever Keel lists files (tabs, Source Control,
+    /// Search, Problems, Quick Open): the icon theme's picture when one is
+    /// chosen, otherwise Keel's own symbol, as in the Explorer.
+    pub(super) fn file_icon_element(&self, path: &Path, cx: &App) -> gpui::AnyElement {
+        use gpui_component::Sizable as _;
+        let name = path
+            .file_name()
+            .and_then(|name| name.to_str())
+            .unwrap_or_default()
+            .to_owned();
+        let themed = self.themed_icon(path, false, false, cx);
+        // For the tests, which look for them without a screenshot.
+        let selector = format!(
+            "icon:{}:{name}",
+            if themed.is_some() { "theme" } else { "keel" }
+        );
+        let icon = match themed {
+            Some(picture) => gpui::img(picture).size(gpui::px(16.)).into_any_element(),
+            None => {
+                let (icon, color) = super::explorer::file_icon(&name);
+                gpui_component::Icon::new(icon)
+                    .small()
+                    .text_color(
+                        color.map_or(cx.theme().muted_foreground, |color| gpui::rgb(color).into()),
+                    )
+                    .into_any_element()
+            }
+        };
+        gpui::div()
+            .debug_selector(|| selector)
+            .flex_none()
+            .flex()
+            .items_center()
+            .child(icon)
+            .into_any_element()
+    }
+
     /// The theme picker: Keel's themes, then those of the extensions.
     pub(super) fn theme_names(&self) -> Vec<String> {
         let mut names: Vec<String> = crate::theme::NAMES
@@ -479,6 +516,74 @@ mod tests {
         });
         let saved = std::fs::read_to_string(config.path().join("settings.json")).unwrap();
         assert!(saved.contains("Ghost Night"), "{saved}");
+    }
+
+    /// The chosen icon theme reaches every list of files, not only the
+    /// Explorer: tabs and Quick Open here; Keel's icons come back without it.
+    #[gpui::test]
+    fn the_icon_theme_reaches_tabs_and_quick_open(cx: &mut TestAppContext) {
+        cx.executor().allow_parking();
+        cx.update(|cx| {
+            gpui_component::init(cx);
+            language::register_grammars();
+            crate::theme::init(cx);
+            init(cx);
+        });
+        let data = tempfile::tempdir().unwrap();
+        write_extension(data.path());
+        let project = tempfile::tempdir().unwrap();
+        let project = std::fs::canonicalize(project.path()).unwrap();
+        std::fs::create_dir_all(project.join(".git")).unwrap();
+        let path = project.join("spooky.ghost");
+        std::fs::write(&path, "boo\n").unwrap();
+        std::fs::write(project.join("notes.md"), "# Notes\n").unwrap();
+        let config = tempfile::tempdir().unwrap();
+        std::fs::write(
+            config.path().join("settings.json"),
+            r#"{ "workbench.iconTheme": "ghost-icons" }"#,
+        )
+        .unwrap();
+        let settings = Settings::load(config.path().join("settings.json"), None);
+        let mut setup = crate::windows::extension_setup(data.path()).unwrap();
+        setup.marketplace = None;
+        let document = Document::open(&path).unwrap();
+        let mut workbench = None;
+        let (_root, cx) = cx.add_window_view(|window, cx| {
+            let view =
+                cx.new(|cx| Workbench::new(Some(document), settings, Some(setup), window, cx));
+            workbench = Some(view.clone());
+            gpui_component::Root::new(view, window, cx)
+        });
+        let view = workbench.unwrap();
+        let draw = |cx: &mut gpui::VisualTestContext| {
+            cx.update(|window, _| window.refresh());
+            cx.run_until_parked();
+        };
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
+        while view.read_with(cx, |view, _| view.quick_open_paths().len()) < 2 {
+            assert!(std::time::Instant::now() < deadline, "the project's files");
+            cx.run_until_parked();
+            std::thread::sleep(std::time::Duration::from_millis(20));
+        }
+        draw(cx);
+        assert!(
+            cx.debug_bounds("icon:theme:spooky.ghost").is_some(),
+            "the tab"
+        );
+
+        cx.simulate_keystrokes("cmd-p");
+        draw(cx);
+        assert!(
+            cx.debug_bounds("icon:theme:notes.md").is_some(),
+            "Quick Open"
+        );
+        cx.simulate_keystrokes("escape");
+        draw(cx);
+
+        view.update(cx, |view, cx| view.set_icon_theme(None, cx));
+        draw(cx);
+        assert!(cx.debug_bounds("icon:theme:spooky.ghost").is_none());
+        assert!(cx.debug_bounds("icon:keel:spooky.ghost").is_some());
     }
 
     #[gpui::test]

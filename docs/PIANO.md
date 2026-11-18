@@ -1384,7 +1384,7 @@ Apri Keel su GestionaleHospitality. La prima volta i server si installano da sol
   - l'icona di un file si cerca per nome intero, poi per estensione dalla più lunga (`app.test.ts` prova `test.ts` e poi `ts`), poi per linguaggio;
   - le cartelle hanno l'icona per nome, aperte o chiuse;
   - con un tema chiaro valgono le varianti chiare del tema di icone;
-  - per ora le icone cambiano nell'Esplora risorse; le schede restano senza icona come prima.
+  - per ora le icone cambiano nell'Esplora risorse; le schede restano senza icona come prima (dal 18 novembre valgono ovunque, vedi «Estensioni: impostazioni, temi e icone»).
 - **Linguaggi delle estensioni:**
   - un file che Keel non conosce prende il linguaggio dall'estensione che lo dichiara, per nome o per estensione;
   - così le estensioni e i language server di quel linguaggio lo ricevono;
@@ -1907,6 +1907,10 @@ La prima volta che apri un file di un linguaggio, Keel scarica il suo server: ne
   - se porta anche temi di icone (o solo quelli, come Material Icon Theme), subito dopo si apre la lista delle icone;
   - non succede per gli aggiornamenti né per le estensioni che arrivano insieme da «Importa da Cursor»;
   - l'ingranaggio e la scheda dell'estensione hanno in cima «Imposta tema colori» e «Imposta tema icona file», che riaprono le stesse liste.
+- **Icone dei file ovunque:**
+  - il tema di icone scelto (o le icone di Keel) ora vale anche nelle schede, in Controllo versione, nei risultati di Cerca, in Problemi e nell'apertura rapida (Cmd+P), non solo nell'Esplora risorse;
+  - le schede delle pagine di Keel hanno un simbolo: ingranaggio per le Impostazioni, tastiera per le Scorciatoie, blocchi per le estensioni, il grafico per Git Graph;
+  - nell'apertura rapida l'icona si calcola solo per le righe sullo schermo, così la lista si apre subito anche con molti file.
 
 **Le tue prove a mano della fase 12**
 1. **Crash:** in un terminale lancia `kill -9` sul processo di Keel (`pgrep -x keel`), poi riapri Keel. Nella barra di stato compare «Keel non si è chiuso normalmente l'ultima volta», e le modifiche non salvate sono tornate.
