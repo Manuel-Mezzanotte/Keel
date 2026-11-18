@@ -57,6 +57,36 @@ pub fn default_ide_dir() -> Option<PathBuf> {
     std::env::var_os("HOME").map(|home| PathBuf::from(home).join(".claude/ide"))
 }
 
+/// Removes the announcements of this IDE (by `ideName`) left by processes
+/// that are gone, such as a Keel that was killed: Claude Code would offer
+/// them in `/ide`. Other IDEs' files are left alone.
+pub fn remove_stale_locks(ide_dir: &std::path::Path, ide_name: &str) {
+    let Ok(entries) = std::fs::read_dir(ide_dir) else {
+        return;
+    };
+    for entry in entries.flatten() {
+        let path = entry.path();
+        if path.extension().is_none_or(|extension| extension != "lock") {
+            continue;
+        }
+        let Ok(text) = std::fs::read_to_string(&path) else {
+            continue;
+        };
+        let Ok(lock) = serde_json::from_str::<serde_json::Value>(&text) else {
+            continue;
+        };
+        let Some(pid) = lock["pid"].as_i64() else {
+            continue;
+        };
+        // SAFETY: signal 0 only asks whether the process exists.
+        let alive = unsafe { libc::kill(pid as libc::pid_t, 0) } == 0
+            || std::io::Error::last_os_error().raw_os_error() == Some(libc::EPERM);
+        if lock["ideName"] == ide_name && !alive {
+            let _ = std::fs::remove_file(&path);
+        }
+    }
+}
+
 /// Something Claude Code did.
 #[derive(Debug)]
 pub enum IdeEvent {
@@ -140,6 +170,7 @@ impl IdeServer {
                 .mode(0o700)
                 .create(&options.ide_dir)?;
         }
+        remove_stale_locks(&options.ide_dir, &options.ide_name);
         let lock_file = options.ide_dir.join(format!("{port}.lock"));
         write_private(&lock_file, &lock_contents(&options, &token))?;
 
@@ -764,6 +795,30 @@ mod tests {
             times[times.len() / 2],
             times[times.len() - 1]
         );
+    }
+
+    #[test]
+    fn stale_announcements_of_this_ide_go() {
+        let dir = tempfile::tempdir().unwrap();
+        let write = |name: &str, ide: &str, pid: i64| {
+            std::fs::write(
+                dir.path().join(name),
+                serde_json::json!({ "pid": pid, "ideName": ide }).to_string(),
+            )
+            .unwrap();
+        };
+        // A pid no process has on macOS (above its limit).
+        write("1.lock", "Keel", 99_999_999);
+        write("2.lock", "Cursor", 99_999_999);
+        write("3.lock", "Keel", std::process::id() as i64);
+        remove_stale_locks(dir.path(), "Keel");
+        let mut left: Vec<String> = std::fs::read_dir(dir.path())
+            .unwrap()
+            .flatten()
+            .map(|entry| entry.file_name().to_string_lossy().into_owned())
+            .collect();
+        left.sort();
+        assert_eq!(left, ["2.lock", "3.lock"]);
     }
 
     #[test]

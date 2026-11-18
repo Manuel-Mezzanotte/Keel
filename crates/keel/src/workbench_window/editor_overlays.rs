@@ -174,12 +174,23 @@ pub(super) struct MinimapLine {
 pub(super) fn measure_lines(text: &gpui_component::Rope) -> Vec<MinimapLine> {
     text.iter_lines()
         .map(|line| {
-            let line = line.to_string();
-            let line = line.trim_end_matches(['\n', '\r']);
-            let indent = line.len() - line.trim_start().len();
+            // Counted on the characters, without copying the line.
+            let mut indent = 0usize;
+            let mut length = 0usize;
+            let mut started = false;
+            for character in line.chars() {
+                match character {
+                    '\n' | '\r' => break,
+                    ' ' | '\t' if !started => indent += 1,
+                    _ => {
+                        started = true;
+                        length += 1;
+                    }
+                }
+            }
             MinimapLine {
                 indent: indent.min(u16::MAX as usize) as u16,
-                length: line.trim_start().chars().count().min(u16::MAX as usize) as u16,
+                length: length.min(u16::MAX as usize) as u16,
             }
         })
         .collect()
@@ -216,6 +227,8 @@ pub(super) struct Minimap {
     lines: Rc<Vec<MinimapLine>>,
     dirty: bool,
     built: Option<Instant>,
+    /// The measuring under way; a newer one replaces it.
+    measuring: gpui::Task<()>,
     _subscriptions: Vec<Subscription>,
 }
 
@@ -236,6 +249,7 @@ impl Minimap {
             lines: Rc::default(),
             dirty: true,
             built: None,
+            measuring: gpui::Task::ready(()),
             _subscriptions: vec![observe, changes],
         }
     }
@@ -257,9 +271,20 @@ impl Minimap {
             .detach();
             return;
         }
-        self.lines = Rc::new(measure_lines(self.editor.read(cx).text()));
+        // Away from the interface: a long file takes tens of milliseconds.
+        let text = self.editor.read(cx).text().clone();
         self.dirty = false;
         self.built = Some(Instant::now());
+        self.measuring = cx.spawn(async move |this, cx| {
+            let lines = cx
+                .background_spawn(async move { measure_lines(&text) })
+                .await;
+            this.update(cx, |this, cx| {
+                this.lines = Rc::new(lines);
+                cx.notify();
+            })
+            .ok();
+        });
     }
 
     /// Scrolls the editor so the line under `y` of the minimap is in the
@@ -416,5 +441,26 @@ mod tests {
             200_000
         ];
         assert!(minimap_rows(&many, 500.).len() <= 500);
+    }
+
+    /// How long measuring the lines takes on 200,000 of them.
+    /// Run with `cargo test -p keel --release -- --ignored --nocapture minimap_timing`.
+    #[test]
+    #[ignore]
+    fn minimap_timing() {
+        let text: String = (0..200_000)
+            .map(|i| format!("    const riga{i} = {i};\n"))
+            .collect();
+        let rope = gpui_component::Rope::from(text.as_str());
+        let started = Instant::now();
+        let lines = measure_lines(&rope);
+        let measured = started.elapsed();
+        let started = Instant::now();
+        let rows = minimap_rows(&lines, 900.);
+        println!(
+            "200,000 lines: measured in {measured:?}, {} rows in {:?}",
+            rows.len(),
+            started.elapsed()
+        );
     }
 }

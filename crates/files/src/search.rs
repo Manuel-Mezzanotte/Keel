@@ -214,6 +214,11 @@ fn search_file(path: &Path, pattern: &Regex) -> Option<Vec<LineMatch>> {
         return None;
     }
     let text = String::from_utf8(bytes).ok()?;
+    // Most files have no match: one pass over the whole text says so,
+    // before splitting it into lines.
+    if !pattern.is_match(&text) {
+        return None;
+    }
     let lines = matching_lines(&text, pattern);
     (!lines.is_empty()).then_some(lines)
 }
