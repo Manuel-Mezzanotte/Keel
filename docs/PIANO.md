@@ -127,7 +127,7 @@ Da confermare con le misure della fase 0. Si misura con lo stesso script su Keel
 | 9 | Estensioni | grande | fatta; restano le tue prove a mano |
 | 10 | IA: Claude Code | media | fatta; restano le tue prove a mano |
 | 11 | Altri linguaggi | media | fatta; restano le tue prove a mano |
-| 12 | Rifinitura, prestazioni e affidabilità | grande | da fare |
+| 12 | Rifinitura, prestazioni e affidabilità | grande | in corso |
 
 Due traguardi: dopo la **fase 0** si decide se continuare; dopo la **fase 6** Keel è usabile tutti i giorni per i progetti web, con Cursor di riserva.
 
@@ -1809,6 +1809,20 @@ La prima volta che apri un file di un linguaggio, Keel scarica il suo server: ne
 
 **Fatto quando**
 - Usi Keel per qualche settimana al posto di Cursor senza dover tornare indietro.
+
+**Sottofasi**
+
+| Sottofase | Cosa | Stato |
+|---|---|---|
+| 12.1 | Affidabilità: registro locale dei crash e avviso alla ripartenza; prova di ripresa dopo un crash vero (`kill -9`) con le modifiche non salvate; salvataggi che rispettano permessi e collegamenti | da fare |
+| 12.2 | Editor, i rimasti della fase 2: pieghe da tastiera, comandi sulle righe con più cursori, regex e parola intera in Cmd+F, più file insieme da `keel`, trascinare le schede | da fare |
+| 12.3 | Sticky scroll e minimappa, disegnati da Keel | da fare |
+| 12.4 | Impostazioni con interfaccia grafica ed editor delle scorciatoie | da fare |
+| 12.5 | Importa da Cursor impostazioni, scorciatoie e progetti recenti | da fare |
+| 12.6 | Rifinitura: animazioni, schermate vuote, coerenza di temi e icone, accessibilità di base, revisione dei testi in italiano e in inglese | da fare |
+| 12.7 | Prestazioni: file e progetti enormi, sessione lunga senza perdite di memoria, misure finali contro Cursor; resoconto | da fare |
+
+**Già fatto nelle fasi precedenti:** i salvataggi sicuri (file temporaneo, poi rinomina) e le copie delle modifiche non salvate, che tornano dopo un crash o Cmd+Q (fase 2.6).
 
 ---
 
