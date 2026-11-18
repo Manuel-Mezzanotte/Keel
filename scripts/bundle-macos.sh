@@ -24,6 +24,9 @@ mkdir -p "$app/Contents/MacOS" "$app/Contents/Resources"
 # app keeps its own copy until it quits, instead of crashing.
 cp target/release/keel "$app/Contents/MacOS/keel.new"
 mv -f "$app/Contents/MacOS/keel.new" "$app/Contents/MacOS/keel"
+# The icon: Assets.car for macOS 26 and later, which draw it in Liquid
+# Glass as their own; Keel.icns for the earlier versions.
+cp assets/brand/Assets.car "$app/Contents/Resources/Assets.car"
 cp assets/brand/Keel.icns "$app/Contents/Resources/Keel.icns"
 
 cat > "$app/Contents/Info.plist" <<PLIST
@@ -40,6 +43,8 @@ cat > "$app/Contents/Info.plist" <<PLIST
   <key>CFBundleExecutable</key>
   <string>keel</string>
   <key>CFBundleIconFile</key>
+  <string>Keel</string>
+  <key>CFBundleIconName</key>
   <string>Keel</string>
   <key>CFBundlePackageType</key>
   <string>APPL</string>

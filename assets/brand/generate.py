@@ -5,205 +5,195 @@ The geometry in this file is the single source of truth for the logo. The
 outputs are committed next to this file, so a normal build never runs this
 script. Run it again only after changing the logo:
 
-    python3 assets/brand/generate.py
+    python3 -B assets/brand/generate.py
 
-Requires ImageMagick (`magick`) and `iconutil` (part of macOS).
+Requires Xcode (for `actool`) and `sips`, both on macOS.
 
 The logo is a paper boat folded from a page of code: the boat stands for
 the name, the coloured lines are Keel's syntax colours. The tile uses the
-midnight blues of Sail, Manuel's browser, so the two apps look like one
-family: Sail is the sail, Keel is the boat.
+blues of Sail, Manuel's browser, so the two apps look like one family:
+Sail is the sail, Keel is the boat.
+
+What it writes:
+- `keel-mark.svg`, the boat in one colour, drawn inside Keel;
+- `Keel.icon`, the app icon in Icon Composer's format: the boat in glass,
+  its lines of code and the water, in layers on a gradient, with a light
+  and a dark version. macOS 26 and later draw it as their own icons, in
+  Liquid Glass; an icon in the old format gets shrunk into a dark square;
+- `Assets.car` and `Keel.icns`, the icon compiled by `actool`: macOS 26 and
+  later read the first, older versions the second;
+- `keel-icon-1024.png`, the icon as a picture, for documents.
 """
 
+import json
 import shutil
 import subprocess
 import tempfile
 from pathlib import Path
 
 OUT = Path(__file__).resolve().parent
+CANVAS = 1024
 
-# Apple's icon grid: a 1024 canvas with an 824 tile whose corners are 185.4.
-APPLE_MARGIN = 100
-TILE = 1024 - 2 * APPLE_MARGIN
-RADIUS = 185.4
-# Sail's "blu-notte" palette: gradient top and bottom.
-TILE_TOP = '#1E2B47'
-TILE_BOTTOM = '#070B14'
+# Sail's gradient for the light version, from the top down; the dark one
+# is Keel's midnight, so the icon stays blue in dark mode instead of black.
+LIGHT_FILL = ['display-p3:0.05490,0.11373,0.36863,1.00000',
+              'display-p3:0.33333,0.40784,0.85098,1.00000']
+DARK_FILL = ['srgb:0.06275,0.10588,0.27059,1.00000',
+             'srgb:0.13333,0.21961,0.52941,1.00000']
 
-# The boat on the 1024 canvas: a sail and a hull, each folded in two, with
-# the light coming from the left.
-SAIL_TOP = (512, 220)
-SAIL_BASE = 548
-SAIL_HALF = 160
-HULL_TOP = 548
-HULL_BOTTOM = 760
-HULL_HALF_TOP = 362
-HULL_HALF_BOTTOM = 226
+# The boat, centred on the 1024 canvas: a sail and a hull, each folded in
+# two, with the light coming from the left.
+CX = 512
+SAIL_TOP, SAIL_BASE, SAIL_HALF = 214, 556, 170
+HULL_TOP, HULL_BOTTOM = 556, 772
+HULL_HALF_TOP, HULL_HALF_BOTTOM = 372, 232
 
-FACETS = {
-    'sail-left': (f'M512 {SAIL_TOP[1]} L {512 - SAIL_HALF} {SAIL_BASE} H 512 Z', '#FFFFFF'),
-    'sail-right': (f'M512 {SAIL_TOP[1]} L 512 {SAIL_BASE} H {512 + SAIL_HALF} Z', '#B3C8EC'),
-    'hull-left': (f'M{512 - HULL_HALF_TOP} {HULL_TOP} H 512 V {HULL_BOTTOM} '
-                  f'H {512 - HULL_HALF_BOTTOM} Z', '#E4EDFB'),
-    'hull-right': (f'M512 {HULL_TOP} H {512 + HULL_HALF_TOP} L {512 + HULL_HALF_BOTTOM} '
-                   f'{HULL_BOTTOM} H 512 Z', '#86A3D8'),
-}
-
-PINK, BLUE, GREEN, VIOLET = '#FF5FA2', '#3B82F6', '#1F9D7A', '#8B5CF6'
-SHADE = '#24365E'
-# The lines of code printed on the paper: (facet, x, y, width, colour,
-# opacity). Each facet clips its lines, as a fold would.
-CODE = [
-    ('sail-left', 430, 380, 90, PINK, 0.85),
-    ('sail-left', 400, 420, 60, BLUE, 0.85),
-    ('sail-left', 470, 420, 50, GREEN, 0.85),
-    ('sail-left', 380, 460, 140, VIOLET, 0.7),
-    ('sail-left', 360, 500, 70, PINK, 0.85),
-    ('sail-left', 440, 500, 80, BLUE, 0.8),
-    ('sail-right', 520, 380, 40, SHADE, 0.32),
-    ('sail-right', 520, 420, 90, SHADE, 0.32),
-    ('sail-right', 520, 460, 70, SHADE, 0.32),
-    ('sail-right', 520, 500, 110, SHADE, 0.32),
-    ('hull-left', 200, 590, 120, BLUE, 0.75),
-    ('hull-left', 330, 590, 90, PINK, 0.8),
-    ('hull-left', 260, 630, 160, GREEN, 0.75),
-    ('hull-left', 260, 670, 70, VIOLET, 0.7),
-    ('hull-left', 340, 670, 130, BLUE, 0.7),
-    ('hull-left', 300, 710, 100, PINK, 0.75),
-    ('hull-right', 540, 590, 150, SHADE, 0.28),
-    ('hull-right', 540, 630, 220, SHADE, 0.28),
-    ('hull-right', 540, 670, 120, SHADE, 0.28),
-    ('hull-right', 540, 710, 160, SHADE, 0.28),
+FACETS = [
+    # Sail, lit and shaded.
+    (f'M{CX} {SAIL_TOP} L {CX - SAIL_HALF} {SAIL_BASE} H {CX} Z', '#FFFFFF'),
+    (f'M{CX} {SAIL_TOP} L {CX} {SAIL_BASE} H {CX + SAIL_HALF} Z', '#C7D6F6'),
+    # Hull, lit and shaded.
+    (f'M{CX - HULL_HALF_TOP} {HULL_TOP} H {CX} V {HULL_BOTTOM} '
+     f'H {CX - HULL_HALF_BOTTOM} Z', '#EEF3FD'),
+    (f'M{CX} {HULL_TOP} H {CX + HULL_HALF_TOP} L {CX + HULL_HALF_BOTTOM} '
+     f'{HULL_BOTTOM} H {CX} Z', '#9FB6E8'),
 ]
-LINE_HEIGHT = 20
 
-# Two strokes of water under the boat.
-WATER = [(286, 738, 800, 0.5), (360, 664, 846, 0.25)]
-WATER_COLOUR = '#6EA8FE'
-WATER_WIDTH = 18
+PINK, BLUE, GREEN, VIOLET = '#FF4F9A', '#2F74F5', '#14A37F', '#7C4DF2'
+SHADE = '#2A3F72'
+LINE_HEIGHT = 22
+# The lines of code printed on the lit side, (x, y, width, colour). They
+# end at the fold and stay inside the paper, so nothing needs clipping.
+CODE = [
+    (CX - 86, 384, 86, PINK), (CX - 120, 428, 52, BLUE), (CX - 60, 428, 60, GREEN),
+    (CX - 150, 472, 150, VIOLET), (CX - 176, 516, 70, PINK), (CX - 96, 516, 96, BLUE),
+    (CX - 300, 600, 130, BLUE), (CX - 160, 600, 112, PINK),
+    (CX - 250, 646, 210, GREEN),
+    (CX - 236, 692, 80, VIOLET), (CX - 146, 692, 146, BLUE),
+    (CX - 200, 738, 112, PINK),
+]
+# The shaded side's lines, as print seen through the fold.
+SHADED_CODE = [(CX + 14, 384, 46), (CX + 14, 428, 96), (CX + 14, 472, 74),
+               (CX + 14, 516, 118), (CX + 14, 600, 160), (CX + 14, 646, 230),
+               (CX + 14, 692, 128), (CX + 14, 738, 150)]
+
+# Two strokes of water under the boat: (left, y, right, opacity).
+WATER = [(300, 812, 724, 0.9), (380, 864, 644, 0.55)]
+WATER_HEIGHT = 20
 
 
-def svg(width, height, body, view_box='0 0 1024 1024'):
+def svg(width, height, body, view_box=f'0 0 {CANVAS} {CANVAS}'):
     return (f'<svg width="{width}" height="{height}" viewBox="{view_box}" '
             f'fill="none" xmlns="http://www.w3.org/2000/svg">{body}</svg>\n')
 
 
-def boat():
-    """The boat with its code and the water, in flat colours."""
-    clips = ''.join(f'<clipPath id="{name}"><path d="{path}"/></clipPath>'
-                    for name, (path, _) in FACETS.items())
-    facets = ''.join(f'<path d="{path}" fill="{colour}"/>' for path, colour in FACETS.values())
-    code = ''
-    for facet in FACETS:
-        lines = ''.join(
-            f'<rect x="{x}" y="{y}" width="{width}" height="{LINE_HEIGHT}" '
-            f'rx="{LINE_HEIGHT // 2}" fill="{colour}" fill-opacity="{opacity}"/>'
-            for name, x, y, width, colour, opacity in CODE if name == facet)
-        code += f'<g clip-path="url(#{facet})">{lines}</g>'
-    # Rounded bars rather than strokes with round caps: ImageMagick draws
-    # the caps over the line, which darkens the ends of see-through strokes.
-    half = WATER_WIDTH / 2
-    water = ''.join(
-        f'<rect x="{left - half}" y="{y - half}" width="{right - left + WATER_WIDTH}" '
-        f'height="{WATER_WIDTH}" rx="{half}" fill="{WATER_COLOUR}" fill-opacity="{opacity}"/>'
-        for left, right, y, opacity in WATER)
-    return f'<defs>{clips}</defs>{facets}{code}{water}'
+def bars(items):
+    return ''.join(
+        f'<rect x="{x}" y="{y}" width="{width}" height="{LINE_HEIGHT}" '
+        f'rx="{LINE_HEIGHT / 2}" fill="{colour}"/>'
+        for x, y, width, colour in items)
 
 
-def tile_edge():
-    """A faint light line along the tile's edge."""
-    inset = 1.5
-    return (f'<rect x="{APPLE_MARGIN + inset}" y="{APPLE_MARGIN + inset}" '
-            f'width="{TILE - 2 * inset}" height="{TILE - 2 * inset}" rx="{RADIUS - inset}" '
-            f'stroke="#FFFFFF" stroke-opacity="0.08" stroke-width="3"/>')
+def boat_layer():
+    return svg(CANVAS, CANVAS,
+               ''.join(f'<path d="{path}" fill="{colour}"/>' for path, colour in FACETS))
+
+
+def code_layer():
+    shaded = [(x, y, width, SHADE) for x, y, width in SHADED_CODE]
+    return svg(CANVAS, CANVAS, bars(CODE) + bars(shaded))
+
+
+def water_layer():
+    half = WATER_HEIGHT / 2
+    return svg(CANVAS, CANVAS, ''.join(
+        f'<rect x="{left}" y="{y}" width="{right - left}" height="{WATER_HEIGHT}" '
+        f'rx="{half}" fill="#FFFFFF" fill-opacity="{opacity}"/>'
+        for left, y, right, opacity in WATER))
 
 
 def mark_svg():
     """The boat's outline in one colour, for use inside Keel: sail and hull
-    with a gap between them, so it reads at 16 px."""
+    with a gap between them, so it reads at 16 px. It keeps the first
+    proportions, which the toolbar and the welcome page are drawn for."""
+    sail_top, sail_base, sail_half = 220, 548, 160
+    hull_top, hull_bottom, half_top, half_bottom = 548, 760, 362, 226
     gap = 28
-    sail = f'M512 {SAIL_TOP[1]} L {512 - SAIL_HALF} {SAIL_BASE} H {512 + SAIL_HALF} Z'
-    hull = (f'M{512 - HULL_HALF_TOP} {HULL_TOP + gap} H {512 + HULL_HALF_TOP} '
-            f'L {512 + HULL_HALF_BOTTOM} {HULL_BOTTOM} H {512 - HULL_HALF_BOTTOM} Z')
+    sail = f'M512 {sail_top} L {512 - sail_half} {sail_base} H {512 + sail_half} Z'
+    hull = (f'M{512 - half_top} {hull_top + gap} H {512 + half_top} '
+            f'L {512 + half_bottom} {hull_bottom} H {512 - half_bottom} Z')
     body = f'<path d="{sail}" fill="currentColor"/><path d="{hull}" fill="currentColor"/>'
     return svg(24, 24, body, view_box='130 108 764 764')
 
 
-def icon_svg():
-    """The vector master: tile and boat on Apple's 1024 grid."""
-    defs = ('<defs><linearGradient id="tile" x1="0" y1="0" x2="0" y2="1">'
-            f'<stop offset="0" stop-color="{TILE_TOP}"/>'
-            f'<stop offset="1" stop-color="{TILE_BOTTOM}"/></linearGradient>'
-            '<linearGradient id="sheen" x1="0" y1="0" x2="0" y2="1">'
-            '<stop offset="0" stop-color="#FFFFFF" stop-opacity="0.10"/>'
-            '<stop offset="0.5" stop-color="#FFFFFF" stop-opacity="0"/></linearGradient></defs>')
-    tile = (f'<rect x="{APPLE_MARGIN}" y="{APPLE_MARGIN}" width="{TILE}" height="{TILE}" '
-            f'rx="{RADIUS}" fill="url(#tile)"/>'
-            f'<rect x="{APPLE_MARGIN}" y="{APPLE_MARGIN}" width="{TILE}" height="{TILE}" '
-            f'rx="{RADIUS}" fill="url(#sheen)"/>')
-    return svg(1024, 1024, defs + tile + tile_edge() + boat())
+def icon_document():
+    """Icon Composer's description of the icon: the background, then the
+    groups from the front: the code, the boat in glass, the water."""
+    return {
+        'fill-specializations': [
+            {'value': {'linear-gradient': LIGHT_FILL}},
+            {'appearance': 'dark', 'value': {'linear-gradient': DARK_FILL}},
+        ],
+        'groups': [
+            {
+                'layers': [{'image-name': 'code.svg', 'name': 'code', 'glass': False}],
+                'shadow': {'kind': 'neutral', 'opacity': 0},
+                'translucency': {'enabled': False, 'value': 0},
+            },
+            {
+                'layers': [{'image-name': 'boat.svg', 'name': 'boat', 'glass': True}],
+                'shadow': {'kind': 'neutral', 'opacity': 0.35},
+                'specular': 'inside',
+                'translucency': {'enabled': True, 'value': 0.2},
+            },
+            {
+                'layers': [{'image-name': 'water.svg', 'name': 'water', 'glass': True,
+                            'opacity': 0.7}],
+                'shadow': {'kind': 'neutral', 'opacity': 0.1},
+                'translucency': {'enabled': True, 'value': 0.5},
+            },
+        ],
+        'supported-platforms': {'squares': ['macOS']},
+    }
 
 
-def magick(*args):
-    subprocess.run(['magick', *map(str, args)], check=True)
+def write_icon(folder):
+    shutil.rmtree(folder, ignore_errors=True)
+    assets = folder / 'Assets'
+    assets.mkdir(parents=True)
+    (assets / 'boat.svg').write_text(boat_layer())
+    (assets / 'code.svg').write_text(code_layer())
+    (assets / 'water.svg').write_text(water_layer())
+    (folder / 'icon.json').write_text(json.dumps(icon_document(), indent=2) + '\n')
 
 
-def icon_png(out, supersample=4):
-    """The 1024 icon. ImageMagick's SVG renderer ignores gradients, so the
-    tile and its sheen are drawn with ImageMagick and the boat on top."""
-    canvas = 1024
-    big = canvas * supersample
-    tile_px = TILE * supersample
-    radius = RADIUS * supersample
-    offset = APPLE_MARGIN * supersample
+def compile_icon(icon, out):
+    """`actool`, as Xcode runs it for an app: Assets.car for macOS 26 and
+    later, Keel.icns for the earlier versions."""
     with tempfile.TemporaryDirectory() as tmp:
-        glyph_svg = Path(tmp) / 'glyph.svg'
-        glyph_svg.write_text(svg(big, big, tile_edge() + boat()))
-        glyph_png = Path(tmp) / 'glyph.png'
-        # ImageMagick reads SVG sizes at 96 dpi; force the exact size anyway.
-        magick('-background', 'none', '-density', 96, glyph_svg,
-               '-resize', f'{big}x{big}!', glyph_png)
-        flat = Path(tmp) / 'flat.png'
-        magick('-size', f'{big}x{big}', 'xc:none',
-               '(', '-size', f'{tile_px}x{tile_px}', f'gradient:{TILE_TOP}-{TILE_BOTTOM}',
-               '(', '-size', f'{tile_px}x{tile_px // 2}', 'gradient:#FFFFFF1A-#FFFFFF00',
-               '-background', 'none', '-extent', f'{tile_px}x{tile_px}', ')',
-               '-compose', 'Over', '-composite',
-               '(', '-size', f'{tile_px}x{tile_px}', 'xc:black', '-fill', 'white',
-               '-draw', f'roundrectangle 0,0 {tile_px - 1},{tile_px - 1} {radius},{radius}', ')',
-               '-alpha', 'off', '-compose', 'CopyOpacity', '-composite', ')',
-               '-geometry', f'+{offset}+{offset}', '-compose', 'Over', '-composite',
-               glyph_png, '-compose', 'Over', '-composite',
-               '-filter', 'Box', '-resize', f'{canvas}x{canvas}', flat)
-        # The soft shadow under the tile, as Sail's icon has.
-        magick(flat, '(', '+clone', '-fill', 'black', '-colorize', '100',
-               '-channel', 'A', '-evaluate', 'multiply', 0.30, '+channel',
-               '-blur', '0x12', ')', '-geometry', '+0+10',
-               '-compose', 'DstOver', '-composite', out)
-
-
-def icns(master, out):
-    with tempfile.TemporaryDirectory() as tmp:
-        iconset = Path(tmp) / 'Keel.iconset'
-        iconset.mkdir()
-        for points in (16, 32, 128, 256, 512):
-            for factor in (1, 2):
-                pixels = points * factor
-                suffix = '' if factor == 1 else '@2x'
-                magick(master, '-filter', 'Lanczos', '-resize', f'{pixels}x{pixels}',
-                       iconset / f'icon_{points}x{points}{suffix}.png')
-        subprocess.run(['iconutil', '-c', 'icns', iconset, '-o', out], check=True)
+        subprocess.run(
+            ['xcrun', 'actool', icon, '--compile', tmp,
+             '--output-format', 'human-readable-text', '--errors', '--warnings',
+             '--output-partial-info-plist', Path(tmp) / 'partial.plist',
+             '--app-icon', 'Keel', '--include-all-app-icons',
+             '--enable-on-demand-resources', 'NO', '--development-region', 'it',
+             '--target-device', 'mac', '--minimum-deployment-target', '13.0',
+             '--platform', 'macosx'],
+            check=True, stdout=subprocess.DEVNULL)
+        for name in ('Assets.car', 'Keel.icns'):
+            shutil.copy(Path(tmp) / name, out / name)
 
 
 def main():
-    if not shutil.which('magick'):
-        raise SystemExit('ImageMagick is missing: brew install imagemagick')
+    if not shutil.which('xcrun'):
+        raise SystemExit('Xcode is missing: its actool compiles the icon')
     (OUT / 'keel-mark.svg').write_text(mark_svg())
-    (OUT / 'keel-icon.svg').write_text(icon_svg())
-    master = OUT / 'keel-icon-1024.png'
-    icon_png(master)
-    icns(master, OUT / 'Keel.icns')
-    print(f'Wrote the mark, the icon and Keel.icns in {OUT}')
+    write_icon(OUT / 'Keel.icon')
+    compile_icon(OUT / 'Keel.icon', OUT)
+    subprocess.run(['sips', '-s', 'format', 'png', '-z', str(CANVAS), str(CANVAS),
+                    OUT / 'Keel.icns', '--out', OUT / 'keel-icon-1024.png'],
+                   check=True, stdout=subprocess.DEVNULL)
+    print(f'Wrote the mark, Keel.icon, Assets.car and Keel.icns in {OUT}')
 
 
 if __name__ == '__main__':
