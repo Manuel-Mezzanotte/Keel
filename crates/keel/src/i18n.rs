@@ -93,6 +93,14 @@ pub struct Strings {
     pub command_open_settings: &'static str,
     pub command_open_settings_json: &'static str,
     pub command_open_keybindings: &'static str,
+    pub command_import_cursor_settings: &'static str,
+    pub cursor_not_found: &'static str,
+    pub cursor_nothing_new: &'static str,
+    cursor_import_question_text: &'static str,
+    pub cursor_import_detail: &'static str,
+    pub cursor_import_button: &'static str,
+    cursor_imported_text: &'static str,
+    pub cursor_import_problems: &'static str,
     pub search_commands: &'static str,
     pub toggle_sidebar: &'static str,
     pub toggle_panel: &'static str,
@@ -643,6 +651,7 @@ impl Strings {
             "workbench.action.openSettings" => self.command_open_settings,
             "workbench.action.openSettingsJson" => self.command_open_settings_json,
             "workbench.action.openGlobalKeybindings" => self.command_open_keybindings,
+            "keel.settings.importFromCursor" => self.command_import_cursor_settings,
             "editor.fold" => self.command_fold,
             "editor.unfold" => self.command_unfold,
             "editor.foldAll" => self.command_fold_all,
@@ -956,6 +965,20 @@ impl Strings {
         }
     }
 
+    pub fn cursor_import_question(&self, settings: usize, keys: usize, projects: usize) -> String {
+        self.cursor_import_question_text
+            .replace("{settings}", &settings.to_string())
+            .replace("{keys}", &keys.to_string())
+            .replace("{projects}", &projects.to_string())
+    }
+
+    pub fn cursor_imported(&self, settings: usize, keys: usize, projects: usize) -> String {
+        self.cursor_imported_text
+            .replace("{settings}", &settings.to_string())
+            .replace("{keys}", &keys.to_string())
+            .replace("{projects}", &projects.to_string())
+    }
+
     pub fn lsp_failed(&self, name: &str, error: &str) -> String {
         self.lsp_failed_text
             .replace("{name}", name)
@@ -1035,6 +1058,14 @@ pub const ITALIAN: Strings = Strings {
     command_open_settings: "Preferenze: Apri le impostazioni",
     command_open_settings_json: "Preferenze: Apri le impostazioni (JSON)",
     command_open_keybindings: "Preferenze: Apri le scorciatoie da tastiera",
+    command_import_cursor_settings: "Preferenze: Importa impostazioni, scorciatoie e progetti recenti da Cursor",
+    cursor_not_found: "Cursor non è installato su questo Mac",
+    cursor_nothing_new: "Da Cursor non c'è niente di nuovo da importare",
+    cursor_import_question_text: "Da Cursor: {settings} impostazioni, {keys} scorciatoie e {projects} progetti recenti. Li importo?",
+    cursor_import_detail: "Le impostazioni e le scorciatoie che hai già in Keel restano come sono; i tuoi progetti recenti restano per primi.",
+    cursor_import_button: "Importa",
+    cursor_imported_text: "Importate da Cursor {settings} impostazioni, {keys} scorciatoie e {projects} progetti recenti",
+    cursor_import_problems: "Qualcosa non è entrato: i dettagli sono nell'Output.",
     search_commands: "Cerca comandi",
     toggle_sidebar: "Mostra o nascondi la barra laterale",
     toggle_panel: "Mostra o nascondi il pannello",
@@ -1527,6 +1558,14 @@ pub const ENGLISH: Strings = Strings {
     command_open_settings: "Preferences: Open Settings",
     command_open_settings_json: "Preferences: Open Settings (JSON)",
     command_open_keybindings: "Preferences: Open Keyboard Shortcuts",
+    command_import_cursor_settings: "Preferences: Import Settings, Shortcuts and Recent Projects from Cursor",
+    cursor_not_found: "Cursor is not installed on this Mac",
+    cursor_nothing_new: "Cursor has nothing new to import",
+    cursor_import_question_text: "From Cursor: {settings} settings, {keys} shortcuts and {projects} recent projects. Import them?",
+    cursor_import_detail: "Settings and shortcuts you already have in Keel stay as they are; your recent projects stay first.",
+    cursor_import_button: "Import",
+    cursor_imported_text: "Imported from Cursor {settings} settings, {keys} shortcuts and {projects} recent projects",
+    cursor_import_problems: "Some did not go in: the details are in the Output.",
     search_commands: "Search commands",
     toggle_sidebar: "Show or hide the sidebar",
     toggle_panel: "Show or hide the panel",

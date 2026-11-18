@@ -1534,6 +1534,9 @@ impl Render for Workbench {
             .on_action(cx.listener(|this, _: &OpenSettings, window, cx| {
                 this.open_page(super::settings_view::PageKind::Settings, window, cx)
             }))
+            .on_action(cx.listener(|this, _: &ImportCursorSettings, window, cx| {
+                this.import_cursor_settings(window, cx)
+            }))
             .on_action(cx.listener(|this, _: &OpenSettingsJson, window, cx| {
                 this.open_settings_json(window, cx)
             }))

@@ -274,6 +274,35 @@ impl Workbench {
         cx.notify();
     }
 
+    /// Binds the user's entries for Keel's commands now, as at the start:
+    /// for keys imported from Cursor.
+    pub(super) fn bind_user_keybindings(&mut self, cx: &mut Context<Self>) {
+        let mut bindings = Vec::new();
+        for binding in &self.keys.user {
+            let Some(command) = COMMANDS
+                .iter()
+                .find(|command| command.id == binding.command)
+            else {
+                continue;
+            };
+            let context = command
+                .context
+                .and_then(|context| gpui::KeyBindingContextPredicate::parse(context).ok())
+                .map(std::rc::Rc::new);
+            let action: Box<dyn gpui::Action> = if binding.removes {
+                Box::new(gpui::Unbind((command.action)().name().into()))
+            } else {
+                (command.action)()
+            };
+            if let Ok(binding) =
+                KeyBinding::load(&binding.keystrokes, action, context, true, None, cx)
+            {
+                bindings.push(binding);
+            }
+        }
+        cx.bind_keys(bindings);
+    }
+
     pub(super) fn render_keybindings_page(
         &self,
         colors: Colors,

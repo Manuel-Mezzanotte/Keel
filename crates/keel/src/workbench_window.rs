@@ -12,6 +12,7 @@ mod code_navigation;
 mod commit_view;
 mod contributions;
 mod cursor_import;
+mod cursor_settings;
 mod diff_view;
 mod disk;
 mod editing;
@@ -156,7 +157,8 @@ actions!(
         OpenRecent,
         OpenSettings,
         OpenSettingsJson,
-        OpenKeybindings
+        OpenKeybindings,
+        ImportCursorSettings
     ]
 );
 

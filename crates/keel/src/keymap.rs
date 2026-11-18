@@ -43,11 +43,13 @@ use crate::workbench_window::{
     GoToTypeDefinition, RenameSymbol, RevealDefinition,
 };
 use crate::workbench_window::{GoToLine, QuickOpen};
+use crate::workbench_window::{
+    ImportCursorSettings, OpenKeybindings, OpenSettings, OpenSettingsJson,
+};
 use crate::workbench_window::{NextChange, PreviousChange, RevertChange, StageChange};
 use crate::workbench_window::{
     NextProblem, PreviousProblem, RestartLanguageServers, TriggerParameterHints,
 };
-use crate::workbench_window::{OpenKeybindings, OpenSettings, OpenSettingsJson};
 use crate::workbench_window::{ShowMarkdownPreview, ShowMarkdownPreviewToSide};
 
 /// A Keel command: its VS Code name, the action it runs and its default key.
@@ -95,6 +97,12 @@ pub const COMMANDS: &[KeelCommand] = &[
     KeelCommand {
         id: "workbench.action.openSettingsJson",
         action: || Box::new(OpenSettingsJson),
+        default_key: None,
+        context: None,
+    },
+    KeelCommand {
+        id: "keel.settings.importFromCursor",
+        action: || Box::new(ImportCursorSettings),
         default_key: None,
         context: None,
     },

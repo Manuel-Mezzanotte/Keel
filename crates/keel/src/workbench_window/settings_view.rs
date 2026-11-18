@@ -473,6 +473,13 @@ impl Workbench {
             cx.notify();
             return;
         }
+        self.apply_setting(key, window, cx);
+        self.language_settings_changed();
+        cx.notify();
+    }
+
+    /// Applies a setting that changed to what the window keeps from it.
+    pub(super) fn apply_setting(&mut self, key: &str, window: &mut Window, cx: &mut Context<Self>) {
         match key {
             "editor.fontSize" => self.zoom(0., cx),
             "editor.wordWrap" => {
@@ -496,8 +503,6 @@ impl Workbench {
             "editor.tabSize" | "editor.insertSpaces" => self.apply_tab_size(cx),
             _ => {}
         }
-        self.language_settings_changed();
-        cx.notify();
     }
 
     /// Gives every open editor the indentation of its language again.

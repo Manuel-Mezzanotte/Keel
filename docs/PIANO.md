@@ -1818,11 +1818,26 @@ La prima volta che apri un file di un linguaggio, Keel scarica il suo server: ne
 | 12.2 | Editor, i rimasti della fase 2: pieghe da tastiera, comandi sulle righe con più cursori, regex e parola intera in Cmd+F, più file insieme da `keel`, trascinare le schede | fatta |
 | 12.3 | Sticky scroll e minimappa, disegnati da Keel | fatta |
 | 12.4 | Impostazioni con interfaccia grafica ed editor delle scorciatoie | fatta |
-| 12.5 | Importa da Cursor impostazioni, scorciatoie e progetti recenti | da fare |
+| 12.5 | Importa da Cursor impostazioni, scorciatoie e progetti recenti | fatta |
 | 12.6 | Rifinitura: animazioni, schermate vuote, coerenza di temi e icone, accessibilità di base, revisione dei testi in italiano e in inglese | da fare |
 | 12.7 | Prestazioni: file e progetti enormi, sessione lunga senza perdite di memoria, misure finali contro Cursor; resoconto | da fare |
 
 **Già fatto nelle fasi precedenti:** i salvataggi sicuri (file temporaneo, poi rinomina) e le copie delle modifiche non salvate, che tornano dopo un crash o Cmd+Q (fase 2.6).
+
+**Note sulla 12.5**
+- **Nuovo comando** nella tavolozza: «Preferenze: Importa impostazioni, scorciatoie e progetti recenti da Cursor». Le estensioni si importavano già dalla fase 9.
+- **Cosa legge**, senza mai scrivere nei file di Cursor:
+  - `settings.json` e `keybindings.json` da `~/Library/Application Support/Cursor/User`;
+  - i progetti recenti dal database di Cursor (`state.vscdb`), con il `sqlite3` di macOS in sola lettura.
+- **Prima chiede**, per esempio: «Da Cursor: 16 impostazioni, 4 scorciatoie e 7 progetti recenti. Li importo?».
+- **Non sovrascrive niente:**
+  - le impostazioni che hai già in Keel restano;
+  - le scorciatoie già presenti non si doppiano;
+  - i progetti recenti di Keel restano per primi e quelli di Cursor vengono dopo;
+  - le cartelle che non esistono più restano fuori.
+- **Lasciate fuori** le impostazioni di Cursor stesso (`cursor.*`, `telemetry.*`, `update.*`) e il tema e le icone, che in Keel hanno nomi diversi.
+- Le impostazioni importate valgono subito, e così le scorciatoie dei comandi di Keel. Quelle dei comandi delle estensioni valgono dalla prossima apertura.
+- **Prova sui tuoi file veri**, solo in lettura e verso un Keel vuoto: entrerebbero 16 impostazioni (VSAuto, salvataggio automatico, minimappa…), 4 scorciatoie e 7 progetti recenti su 12 (gli altri 5 non ci sono più).
 
 **Note sulla 12.4**
 - **Scheda «Impostazioni» (Cmd+,)** con la pagina di impostazioni di gpui-component: le pagine a sinistra (Aspetto, Editor, File e finestre, Terminale, Linguaggi, Estensioni) e la ricerca in alto.

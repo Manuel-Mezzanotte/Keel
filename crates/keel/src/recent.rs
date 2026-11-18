@@ -55,6 +55,18 @@ impl RecentProjects {
         self.save()
     }
 
+    /// Adds projects after the ones already there, as older ones: those
+    /// imported from Cursor.
+    pub fn add_older(&mut self, projects: &[PathBuf]) -> io::Result<()> {
+        for project in projects {
+            if !self.projects.contains(project) {
+                self.projects.push(project.clone());
+            }
+        }
+        self.projects.truncate(LIMIT);
+        self.save()
+    }
+
     fn save(&self) -> io::Result<()> {
         if let Some(folder) = self.file.parent() {
             fs::create_dir_all(folder)?;
@@ -89,6 +101,16 @@ pub fn remember(project: &Path, cx: &mut App) {
         return;
     }
     if let Err(error) = cx.global_mut::<RecentProjects>().add(project) {
+        eprintln!("keel: could not save the recent projects: {error}");
+    }
+}
+
+/// Adds older projects to the list, as those imported from Cursor.
+pub fn add_older(projects: &[PathBuf], cx: &mut App) {
+    if !cx.has_global::<RecentProjects>() {
+        return;
+    }
+    if let Err(error) = cx.global_mut::<RecentProjects>().add_older(projects) {
         eprintln!("keel: could not save the recent projects: {error}");
     }
 }
