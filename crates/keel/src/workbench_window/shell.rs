@@ -157,6 +157,16 @@ pub(super) fn section_header(
         )
 }
 
+/// Buttons inside a clickable row, such as a section's header: their
+/// clicks stay theirs and do not also close the section.
+pub(super) fn own_clicks(id: impl Into<gpui::ElementId>) -> gpui::Stateful<Div> {
+    div()
+        .id(id)
+        .flex()
+        .items_center()
+        .on_click(|_, _, cx| cx.stop_propagation())
+}
+
 /// A short note for a part of the window that comes in a later phase.
 pub(super) fn note(text: String, colors: Colors) -> Div {
     div()

@@ -151,7 +151,7 @@ pub(super) fn excludes(settings: &Settings) -> Vec<String> {
 }
 
 /// The icon and colour of a file, from its name.
-fn file_icon(name: &str) -> (IconName, Option<u32>) {
+pub(super) fn file_icon(name: &str) -> (IconName, Option<u32>) {
     let extension = name
         .rsplit_once('.')
         .map(|(_, extension)| extension.to_ascii_lowercase());

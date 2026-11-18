@@ -7,17 +7,59 @@ use std::ops::Range;
 use git::graph::GraphRow;
 use git::{Commit, LogOptions, RefLabel};
 use gpui::{AnyElement, StatefulInteractiveElement as _, Task, canvas, uniform_list};
-use gpui_component::ActiveTheme as _;
+use gpui_component::button::ButtonVariants as _;
+use gpui_component::{ActiveTheme as _, Sizable as _};
 
-use super::git_graph::{LANE_WIDTH, PALETTE, format_date, paint_graph_row, render_ref};
-use super::shell::{Colors, section_header};
+use super::git_graph::{PALETTE, format_date, lane_color, paint_graph_row};
+use super::shell::{Colors, own_clicks, section_header};
 use super::*;
 
 /// How many commits the section shows; Git Graph has them all.
 const SIDEBAR_COMMITS: usize = 150;
-const ROW_HEIGHT: f32 = 22.;
+const ROW_HEIGHT: f32 = 24.;
+/// Narrower lanes than Git Graph's, for the sidebar.
+const LANE_WIDTH: f32 = 10.;
 /// Lanes past these are cut, to leave room for the messages.
-const MOST_LANES: usize = 8;
+const MOST_LANES: usize = 5;
+
+/// How long ago, as Apple's Mail lists dates: `ora`, `5 min`, `3 h`,
+/// `2 g`, `4 sett`, `3 mesi`, `2 anni`.
+pub(super) fn relative_time(seconds: i64, now: i64, italian: bool) -> String {
+    let elapsed = (now - seconds).max(0);
+    let (minute, hour, day) = (60, 3600, 86_400);
+    let pick = |it: &str, en: &str| {
+        if italian {
+            it.to_owned()
+        } else {
+            en.to_owned()
+        }
+    };
+    match elapsed {
+        e if e < minute => pick("ora", "now"),
+        e if e < hour => format!("{} min", e / minute),
+        e if e < day => format!("{} h", e / hour),
+        e if e < 7 * day => format!("{} {}", e / day, pick("g", "d")),
+        e if e < 30 * day => format!("{} {}", e / (7 * day), pick("sett", "w")),
+        e if e < 365 * day => {
+            let months = e / (30 * day);
+            let unit = match (italian, months) {
+                (true, 1) => "mese",
+                (true, _) => "mesi",
+                (false, _) => "mo",
+            };
+            format!("{months} {unit}")
+        }
+        e => {
+            let years = e / (365 * day);
+            let unit = match (italian, years) {
+                (true, 1) => "anno",
+                (true, _) => "anni",
+                (false, _) => "y",
+            };
+            format!("{years} {unit}")
+        }
+    }
+}
 
 #[derive(Default)]
 pub(super) struct SidebarGraph {
@@ -61,13 +103,26 @@ impl Workbench {
     pub(super) fn render_scm_graph(&self, colors: Colors, cx: &mut Context<Self>) -> AnyElement {
         let strings = self.strings();
         let open = !self.graph_collapsed;
-        let header = section_header("scm-graph-header", strings.scm_graph, open, colors).on_click(
-            cx.listener(|this, _, _, cx| {
+        let header = section_header("scm-graph-header", strings.scm_graph, open, colors)
+            .on_click(cx.listener(|this, _, _, cx| {
                 this.graph_collapsed = !this.graph_collapsed;
                 this.session_changed(cx);
                 cx.notify();
-            }),
-        );
+            }))
+            .child(
+                own_clicks("scm-graph-actions").child(
+                    gpui_component::button::Button::new("scm-open-graph")
+                        .ghost()
+                        .xsmall()
+                        .icon(gpui_component::Icon::new(
+                            gpui_kit_assets::IconName::GitGraph,
+                        ))
+                        .tooltip(strings.command_git_graph)
+                        .on_click(
+                            cx.listener(|this, _, window, cx| this.open_git_graph(window, cx)),
+                        ),
+                ),
+            );
         let count = self.scm_graph.commits.len();
         div()
             .flex()
@@ -108,12 +163,14 @@ impl Workbench {
         };
         let row = self.scm_graph.rows.get(index).cloned();
         let lane = row.as_ref().map_or(0, |row| row.color);
-        let is_head = commit
-            .refs
-            .iter()
-            .any(|label| matches!(label, RefLabel::Head(_) | RefLabel::DetachedHead));
+        let head = commit.refs.iter().find_map(|label| match label {
+            RefLabel::Head(name) => Some(name.clone()),
+            RefLabel::DetachedHead => Some("HEAD".to_owned()),
+            _ => None,
+        });
+        let is_head = head.is_some();
         let background = cx.theme().background;
-        let lanes_width = self.scm_graph.lanes.min(MOST_LANES) as f32 * LANE_WIDTH + LANE_WIDTH;
+        let lanes_width = self.scm_graph.lanes.min(MOST_LANES) as f32 * LANE_WIDTH + 8.;
         let graph = div()
             .w(px(lanes_width))
             .h_full()
@@ -124,39 +181,52 @@ impl Workbench {
                     |_, _, _| {},
                     move |bounds, _, window, _| {
                         if let Some(row) = &row {
-                            paint_graph_row(bounds, row, is_head, false, background, window);
+                            paint_graph_row(
+                                bounds, row, is_head, false, background, LANE_WIDTH, window,
+                            );
                         }
                     },
                 )
                 .size_full(),
             );
-        // Branches first; the rest is in the tooltip and in Git Graph.
-        let labels = commit
-            .refs
-            .iter()
-            .filter(|label| {
-                matches!(
-                    label,
-                    RefLabel::Head(_) | RefLabel::DetachedHead | RefLabel::Branch(_)
-                )
-            })
-            .take(1)
-            .map(|label| render_ref(label, lane, colors));
+        let italian = self.language == UiLanguage::Italian;
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map_or(0, |elapsed| elapsed.as_secs() as i64);
+        let when = relative_time(commit.time, now, italian);
         let details = format!(
             "{}\n{} · {} · {}",
             commit.subject,
             commit.author,
-            format_date(commit.time, self.language == UiLanguage::Italian),
+            format_date(commit.time, italian),
             commit.short_hash()
         );
+        // Only the branch you are on gets its name, as a small capsule.
+        let pill = head.map(|name| {
+            let color = lane_color(lane);
+            div()
+                .flex_none()
+                .max_w(px(110.))
+                .h(px(16.))
+                .px_1p5()
+                .flex()
+                .items_center()
+                .rounded_full()
+                .bg(color.opacity(0.16))
+                .text_size(px(10.5))
+                .font_weight(FontWeight::SEMIBOLD)
+                .text_color(color)
+                .child(div().min_w_0().truncate().child(name))
+        });
         let hash = commit.hash.clone();
         div()
             .id(("scm-graph-row", index))
             .h(px(ROW_HEIGHT))
-            .pr_1()
+            .mx_1()
+            .pr_1p5()
             .flex()
             .items_center()
-            .gap_1()
+            .gap_1p5()
             .rounded(px(6.))
             .text_sm()
             .cursor_pointer()
@@ -169,14 +239,28 @@ impl Workbench {
                 this.select_commit(&hash, window, cx);
             }))
             .child(graph)
-            .children(labels)
             .child(
                 div()
                     .flex_1()
                     .min_w_0()
-                    .truncate()
-                    .text_color(colors.text)
-                    .child(commit.subject.clone()),
+                    .flex()
+                    .items_center()
+                    .gap_1()
+                    .children(pill)
+                    .child(
+                        div()
+                            .min_w_0()
+                            .truncate()
+                            .text_color(if is_head { colors.text } else { colors.muted })
+                            .child(commit.subject.clone()),
+                    ),
+            )
+            .child(
+                div()
+                    .flex_none()
+                    .text_xs()
+                    .text_color(colors.faint)
+                    .child(when),
             )
             .into_any_element()
     }
@@ -192,6 +276,21 @@ mod tests {
     use gpui::TestAppContext;
 
     use super::*;
+
+    #[test]
+    fn dates_as_mail_lists_them() {
+        let now = 1_800_000_000;
+        assert_eq!(relative_time(now - 20, now, true), "ora");
+        assert_eq!(relative_time(now - 5 * 60, now, true), "5 min");
+        assert_eq!(relative_time(now - 3 * 3600, now, true), "3 h");
+        assert_eq!(relative_time(now - 2 * 86_400, now, true), "2 g");
+        assert_eq!(relative_time(now - 15 * 86_400, now, true), "2 sett");
+        assert_eq!(relative_time(now - 40 * 86_400, now, true), "1 mese");
+        assert_eq!(relative_time(now - 800 * 86_400, now, true), "2 anni");
+        assert_eq!(relative_time(now - 2 * 86_400, now, false), "2 d");
+        // A clock behind the commit is not "in the future".
+        assert_eq!(relative_time(now + 100, now, true), "ora");
+    }
 
     fn remember_search_for_test(view: &mut Workbench) {
         super::super::search_view::remember_search(&mut view.search.recent, "booking");
@@ -247,7 +346,10 @@ mod tests {
         }
         assert_eq!(subjects, ["secondo", "primo"]);
         // Both views draw with their new parts.
-        for view_kind in [crate::layout::SideView::SourceControl, crate::layout::SideView::Search] {
+        for view_kind in [
+            crate::layout::SideView::SourceControl,
+            crate::layout::SideView::Search,
+        ] {
             view.update(cx, |view, cx| {
                 view.layout.select_side_view(view_kind);
                 remember_search_for_test(view);

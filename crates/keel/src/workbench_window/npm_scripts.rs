@@ -10,7 +10,7 @@ use gpui_component::menu::DropdownMenu as _;
 use gpui_component::{Icon, Sizable as _};
 use gpui_kit_assets::IconName;
 
-use super::shell::{Colors, section_header};
+use super::shell::{Colors, own_clicks, section_header};
 use super::terminal_view;
 use super::*;
 
@@ -211,15 +211,19 @@ impl Workbench {
                 cx.notify();
             }))
             .child(
-                Button::new("npm-more")
-                    .ghost()
-                    .xsmall()
-                    .icon(Icon::new(IconName::Ellipsis))
-                    .dropdown_menu(move |menu, _, _| {
-                        menu.item(gpui_component::menu::PopupMenuItem::new(hide).on_click(
-                            |_, window, cx| window.dispatch_action(Box::new(HideNpmScripts), cx),
-                        ))
-                    }),
+                own_clicks("npm-actions").child(
+                    Button::new("npm-more")
+                        .ghost()
+                        .xsmall()
+                        .icon(Icon::new(IconName::Ellipsis))
+                        .dropdown_menu(move |menu, _, _| {
+                            menu.item(gpui_component::menu::PopupMenuItem::new(hide).on_click(
+                                |_, window, cx| {
+                                    window.dispatch_action(Box::new(HideNpmScripts), cx)
+                                },
+                            ))
+                        }),
+                ),
             );
         Some(
             div()

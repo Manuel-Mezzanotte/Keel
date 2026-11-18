@@ -1871,6 +1871,18 @@ La prima volta che apri un file di un linguaggio, Keel scarica il suo server: ne
   - i titoli delle sezioni non vanno più a capo;
   - testi d'esempio più corti nei campi stretti («Cerca su Open VSX», «Includi (src, \*.ts)», «Escludi»);
   - la vista Estensioni vuota dice da dove partire.
+- **Controllo versione rifatto** (seconda prova):
+  - **In alto una sola scheda**, come i compositori di Apple: il messaggio sopra; sotto una riga sottile con il ramo, le frecce di sincronizzazione (un clic sincronizza, o pubblica il ramo) e un piccolo «Commit».
+  - **Le righe dei file** hanno l'icona del tipo di file, il nome, la cartella attenuata e a destra un'etichetta colorata dello stato (M, U, D…), sempre nello stesso punto.
+    - Le azioni (apri, scarta, aggiungi) compaiono sopra la fine della riga al passaggio del mouse, senza spostare niente.
+    - Prima i pulsanti nascosti occupavano spazio e spingevano la lettera dello stato, che a righe alterne non si vedeva.
+  - **Sezioni chiudibili** con la freccia (In stage, Modifiche, Conflitti), con il conteggio in una capsula. Le modifiche sono alte quanto le loro righe; il grafico prende il resto.
+  - **Grafico compatto:**
+    - corsie da 10 punti invece di 14, al massimo 5;
+    - solo il ramo attuale ha la sua capsula colorata;
+    - a destra la data relativa, come in Mail («3 h», «2 g», «4 sett»);
+    - il pulsante di Git Graph sta nell'intestazione della sezione.
+  - I pulsanti dentro le intestazioni (come «…» degli Script npm) non chiudono più anche la sezione.
 - **App e DMG:** ricostruendo l'app mentre la usi, il Keel aperto non si chiude più. Prima lo script copiava sopra l'eseguibile in uso; ora ne scrive uno nuovo e lo sostituisce in un colpo solo.
 
 **Le tue prove a mano della fase 12**

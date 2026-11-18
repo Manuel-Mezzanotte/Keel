@@ -541,7 +541,15 @@ impl Workbench {
             |_, _, _| {},
             move |bounds, _, window, _| {
                 if let Some(row) = &row {
-                    paint_graph_row(bounds, row, is_head, uncommitted, background, window);
+                    paint_graph_row(
+                        bounds,
+                        row,
+                        is_head,
+                        uncommitted,
+                        background,
+                        LANE_WIDTH,
+                        window,
+                    );
                 }
             },
         )
@@ -678,9 +686,10 @@ pub(super) fn paint_graph_row(
     is_head: bool,
     uncommitted: bool,
     background: Hsla,
+    lane_width: f32,
     window: &mut Window,
 ) {
-    let x = |column: usize| bounds.origin.x + px(LANE_WIDTH * column as f32 + LANE_WIDTH / 2. + 4.);
+    let x = |column: usize| bounds.origin.x + px(lane_width * column as f32 + lane_width / 2. + 4.);
     let top = bounds.origin.y;
     let middle = top + bounds.size.height / 2.;
     let bottom = top + bounds.size.height;
@@ -713,7 +722,7 @@ pub(super) fn paint_graph_row(
         }
     }
     let color = lane_color(row.color);
-    let radius = px(4.);
+    let radius = px((lane_width * 0.3).clamp(3., 4.));
     let center = place(GraphPoint::Dot);
     let dot = Bounds::new(
         point(center.x - radius, center.y - radius),

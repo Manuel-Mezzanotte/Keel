@@ -14,7 +14,7 @@ use gpui_component::menu::DropdownMenu as _;
 use gpui_component::{Disableable as _, Icon, Sizable as _};
 use gpui_kit_assets::IconName;
 
-use super::shell::{Colors, heading, note};
+use super::shell::{Colors, heading, note, own_clicks, section_header};
 use super::*;
 
 /// The key context around the commit message, for Cmd+Enter.
@@ -48,7 +48,7 @@ pub(crate) fn bindings() -> Vec<KeyBinding> {
 }
 
 /// Which list of the view a file is in.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub(super) enum Section {
     Conflicts,
     Staged,
@@ -69,6 +69,8 @@ pub(super) struct SourceControl {
     message: Entity<TextareaState>,
     /// What git is doing now, such as "Push", shown while it runs.
     pub(super) busy: Option<&'static str>,
+    /// Sections closed to their header.
+    pub(super) collapsed: std::collections::HashSet<Section>,
     refresh_task: Task<()>,
     operation: Task<()>,
     _message_grows: Subscription,
@@ -109,6 +111,7 @@ impl SourceControl {
             status: git::Status::default(),
             message,
             busy: None,
+            collapsed: Default::default(),
             refresh_task: Task::ready(()),
             operation: Task::ready(()),
             _message_grows: message_grows,
@@ -134,7 +137,9 @@ impl SourceControl {
                 continue;
             }
             rows.push(Row::Title(section, files.len()));
-            rows.extend(files.into_iter().map(|index| Row::File(section, index)));
+            if !self.collapsed.contains(&section) {
+                rows.extend(files.into_iter().map(|index| Row::File(section, index)));
+            }
         }
         rows
     }
@@ -643,14 +648,6 @@ impl Workbench {
                     .child(heading(strings.view_source_control, colors)),
             )
             .child(
-                Button::new("scm-graph")
-                    .ghost()
-                    .xsmall()
-                    .icon(Icon::new(IconName::GitGraph))
-                    .tooltip(strings.command_git_graph)
-                    .on_click(cx.listener(|this, _, window, cx| this.open_git_graph(window, cx))),
-            )
-            .child(
                 Button::new("scm-refresh")
                     .ghost()
                     .xsmall()
@@ -686,55 +683,87 @@ impl Workbench {
             .branch
             .clone()
             .unwrap_or_else(|| self.scm.status.head.clone().unwrap_or_default());
-        // One field, one frame: the text area draws none of its own.
-        let message = div()
-            .key_context(MESSAGE_CONTEXT)
-            .mx_1()
-            .px_2()
-            .py_1()
-            .rounded(px(8.))
-            .border_1()
-            .border_color(colors.border)
-            .bg(colors.editor)
-            .text_sm()
-            .child(Textarea::new(&self.scm.message).appearance(false));
         let nothing = self.scm.status.files.is_empty();
         let busy = self.scm.busy.is_some();
+        // Ahead and behind, or "publish" for a branch with no upstream.
+        let sync = self.sync_text().map(|text| {
+            let label = if text == "↑" {
+                strings.scm_publish.to_owned()
+            } else {
+                text
+            };
+            Button::new("scm-sync")
+                .ghost()
+                .xsmall()
+                .label(label)
+                .tooltip(strings.scm_sync)
+                .disabled(busy)
+                .on_click(cx.listener(|this, _, window, cx| {
+                    let action = if this.scm.status.upstream.is_none() {
+                        RemoteAction::Push
+                    } else {
+                        RemoteAction::Sync
+                    };
+                    this.remote_command(action, window, cx)
+                }))
+        });
         let commit = Button::new("scm-commit")
             .primary()
-            .small()
-            .w_full()
+            .xsmall()
             .icon(Icon::new(IconName::Check))
             .label(strings.scm_commit)
             .tooltip(strings.scm_commit_on(&branch))
             .disabled(busy || nothing)
             .on_click(cx.listener(|this, _, window, cx| this.commit(false, window, cx)));
-        let sync = (nothing && !busy)
-            .then(|| self.sync_text())
-            .flatten()
-            .map(|text| {
-                let label = if text == "↑" {
-                    strings.scm_publish.to_owned()
-                } else {
-                    format!("{} {text}", strings.scm_sync)
-                };
-                Button::new("scm-sync")
-                    .small()
-                    .w_full()
-                    .icon(Icon::new(IconName::RefreshCw))
-                    .label(label)
-                    .on_click(cx.listener(|this, _, window, cx| {
-                        let action = if this.scm.status.upstream.is_none() {
-                            RemoteAction::Push
-                        } else {
-                            RemoteAction::Sync
-                        };
-                        this.remote_command(action, window, cx)
-                    }))
-            });
+        // One card, as a message composer: the text on top, under a hairline
+        // the branch, its sync and the button.
+        let composer = div()
+            .key_context(MESSAGE_CONTEXT)
+            .mx_1()
+            .flex()
+            .flex_col()
+            .rounded(px(10.))
+            .border_1()
+            .border_color(colors.border)
+            .bg(colors.editor)
+            .child(
+                div()
+                    .px_2p5()
+                    .pt_2()
+                    .pb_1p5()
+                    .text_sm()
+                    .child(Textarea::new(&self.scm.message).appearance(false)),
+            )
+            .child(div().mx_2().h(px(1.)).bg(colors.border.opacity(0.6)))
+            .child(
+                div()
+                    .h(px(34.))
+                    .pl_2p5()
+                    .pr_1()
+                    .flex()
+                    .items_center()
+                    .gap_1()
+                    .child(
+                        Icon::new(IconName::GitBranch)
+                            .xsmall()
+                            .text_color(colors.faint),
+                    )
+                    .child(
+                        div()
+                            .flex_1()
+                            .min_w_0()
+                            .truncate()
+                            .text_xs()
+                            .text_color(colors.muted)
+                            .child(branch.clone()),
+                    )
+                    .children(sync)
+                    .child(commit),
+            );
 
         let rows = self.scm.rows();
         let no_rows = rows.is_empty();
+        let rows_height = rows.len() as f32 * 24. + 4.;
         let list: AnyElement = if rows.is_empty() {
             note(strings.scm_clean.to_owned(), colors).into_any_element()
         } else {
@@ -759,22 +788,15 @@ impl Workbench {
             .flex_col()
             .gap_2()
             .child(header)
-            .child(message)
+            .child(composer)
+            // The changes are as tall as their rows, and give way only to
+            // leave the graph its room; the graph takes the rest.
             .child(
                 div()
-                    .mx_2()
-                    .flex()
-                    .flex_col()
-                    .gap_1()
-                    .child(commit)
-                    .children(sync),
-            )
-            // The changes take the room they need, the graph the rest.
-            .child(
-                div()
-                    .min_h_0()
                     .when(no_rows, |changes| changes.flex_none())
-                    .when(!no_rows, |changes| changes.flex_1().min_h(px(80.)))
+                    .when(!no_rows, |changes| {
+                        changes.h(px(rows_height)).min_h(px(48.)).flex_shrink(1.)
+                    })
                     .child(list),
             )
             .child(self.render_scm_graph(colors, cx))
@@ -831,34 +853,44 @@ impl Workbench {
                     ],
                     Section::Conflicts => Vec::new(),
                 };
-                div()
-                    .id(ElementId::Name(format!("scm-title-{section:?}").into()))
-                    .group("scm-title")
-                    .h(px(26.))
-                    .px_2()
-                    .flex()
-                    .items_center()
-                    .gap_1()
-                    .text_xs()
-                    .font_weight(FontWeight::SEMIBOLD)
-                    .text_color(colors.faint)
-                    .child(div().flex_1().child(title.to_uppercase()))
-                    .child(
-                        div()
-                            .flex()
-                            .invisible()
-                            .group_hover("scm-title", |buttons| buttons.visible())
-                            .children(buttons),
-                    )
-                    .child(
-                        div()
-                            .px_1p5()
-                            .rounded_full()
-                            .bg(colors.hover)
-                            .text_color(colors.muted)
-                            .child(count.to_string()),
-                    )
-                    .into_any_element()
+                let open = !self.scm.collapsed.contains(&section);
+                section_header(
+                    ElementId::Name(format!("scm-title-{section:?}").into()),
+                    title,
+                    open,
+                    colors,
+                )
+                .group("scm-title")
+                // Every row of the list is as tall as the others.
+                .h(px(24.))
+                .on_click(cx.listener(move |this, _, _, cx| {
+                    if !this.scm.collapsed.remove(&section) {
+                        this.scm.collapsed.insert(section);
+                    }
+                    cx.notify();
+                }))
+                .child(
+                    own_clicks(ElementId::Name(
+                        format!("scm-title-actions-{section:?}").into(),
+                    ))
+                    .invisible()
+                    .group_hover("scm-title", |buttons| buttons.visible())
+                    .children(buttons),
+                )
+                .child(
+                    div()
+                        .min_w(px(18.))
+                        .h(px(16.))
+                        .px_1()
+                        .flex()
+                        .items_center()
+                        .justify_center()
+                        .rounded_full()
+                        .bg(colors.hover)
+                        .text_color(colors.muted)
+                        .child(count.to_string()),
+                )
+                .into_any_element()
             }
             Row::File(section, index) => {
                 let Some(file) = self.scm.status.files.get(index) else {
@@ -952,12 +984,14 @@ impl Workbench {
                     }
                 }
                 let open_path = path.clone();
+                let (icon, icon_color) = super::explorer::file_icon(&name);
                 div()
-                    .id(id)
+                    .id(id.clone())
                     .group("scm-row")
-                    .h(px(26.))
+                    .relative()
+                    .h(px(24.))
                     .mx_1()
-                    .pl_3()
+                    .pl_2()
                     .pr_1()
                     .flex()
                     .items_center()
@@ -969,38 +1003,66 @@ impl Workbench {
                     .on_click(cx.listener(move |this, _: &ClickEvent, window, cx| {
                         this.open_change(&open_path, section, window, cx)
                     }))
-                    .child(
-                        div()
-                            .flex_none()
-                            .truncate()
-                            .text_color(if deleted { colors.muted } else { colors.text })
-                            .when(deleted, |name| name.line_through())
-                            .child(name),
-                    )
+                    .child(Icon::new(icon).small().text_color(
+                        icon_color.map_or(colors.muted, |color| gpui::rgb(color).into()),
+                    ))
+                    // The name keeps its room; the folder gives way first.
                     .child(
                         div()
                             .flex_1()
                             .min_w_0()
-                            .truncate()
-                            .text_xs()
-                            .text_color(colors.faint)
-                            .child(folder),
+                            .flex()
+                            .items_center()
+                            .gap_1p5()
+                            .overflow_hidden()
+                            .child(
+                                div()
+                                    .min_w_0()
+                                    .truncate()
+                                    .text_color(if deleted { colors.muted } else { colors.text })
+                                    .when(deleted, |name| name.line_through())
+                                    .child(name),
+                            )
+                            .child(
+                                div()
+                                    .flex_1()
+                                    .min_w(px(24.))
+                                    .truncate()
+                                    .text_xs()
+                                    .text_color(colors.faint)
+                                    .child(folder),
+                            ),
                     )
+                    // The state, always in the same place on the right.
                     .child(
                         div()
+                            .size(px(16.))
+                            .flex_none()
                             .flex()
+                            .items_center()
+                            .justify_center()
+                            .rounded(px(4.))
+                            .bg(color.opacity(0.16))
+                            .text_size(px(10.))
+                            .font_weight(FontWeight::BOLD)
+                            .text_color(color)
+                            .child(letter),
+                    )
+                    // On hover the actions cover the end of the row, so
+                    // nothing moves.
+                    .child(
+                        own_clicks((id, "actions"))
+                            .absolute()
+                            .top_0()
+                            .bottom_0()
+                            .right(px(22.))
+                            .pl_1()
+                            .gap_0p5()
+                            .rounded(px(6.))
+                            .bg(colors.hover)
                             .invisible()
                             .group_hover("scm-row", |buttons| buttons.visible())
                             .children(buttons),
-                    )
-                    .child(
-                        div()
-                            .w(px(14.))
-                            .flex_none()
-                            .text_xs()
-                            .font_weight(FontWeight::SEMIBOLD)
-                            .text_color(color)
-                            .child(letter),
                     )
                     .into_any_element()
             }
@@ -1115,6 +1177,12 @@ mod tests {
         view.read_with(cx, |view, _| {
             assert_eq!(view.git_change_count(), 2);
             assert_eq!(view.file_paths(Section::Changes), ["a.txt", "b.txt"]);
+        });
+        // A closed section keeps its title and count, without its files.
+        view.update(cx, |view, _| {
+            view.scm.collapsed.insert(Section::Changes);
+            assert_eq!(view.scm.rows(), [Row::Title(Section::Changes, 2)]);
+            view.scm.collapsed.clear();
         });
 
         view.update_in(cx, |view, window, cx| {
