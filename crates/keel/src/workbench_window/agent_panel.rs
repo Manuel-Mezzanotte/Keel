@@ -24,7 +24,7 @@ use gpui_component::text::{TextView, TextViewState};
 use gpui_component::{ActiveTheme as _, Disableable as _, Icon, Selectable as _, Sizable as _};
 use gpui_kit_assets::IconName;
 
-use super::shell::{Colors, chevron_turn, empty_state, heading};
+use super::shell::{Colors, chevron_turn, empty_state, heading, keys_for, tool_row};
 use super::*;
 
 actions!(keel, [OpenAgent, NewAgentConversation, AddToAgent]);
@@ -200,7 +200,7 @@ impl AgentPanel {
         }
     }
 
-    fn reset_thread(&mut self) {
+    pub(super) fn reset_thread(&mut self) {
         self.thread = Thread::default();
         self.markdown.clear();
         self.open_thoughts.clear();
@@ -733,13 +733,17 @@ impl Workbench {
         let opened = agent.new_session(&self.agent_folder());
         cx.spawn_in(window, async move |this, cx| {
             let session = opened.await;
-            this.update(cx, |this, cx| {
+            this.update_in(cx, |this, window, cx| {
                 match session {
                     Ok(session) => {
                         this.agent_panel.session = session["sessionId"].as_str().map(str::to_owned);
                         let (modes, mode) = modes_of(&session);
                         this.agent_panel.modes = modes;
                         this.agent_panel.mode = mode;
+                        // A message written while the chat was opening.
+                        if let Some(blocks) = this.agent_panel.waiting.take() {
+                            this.prompt_agent(blocks, window, cx);
+                        }
                     }
                     Err(error) => this.agent_panel.notice = Some(format!("{error:#}")),
                 }
@@ -1113,7 +1117,35 @@ impl Workbench {
             .enumerate()
             .map(|(index, chat)| self.render_chat_row(("agent-recent", index), chat, colors, cx))
             .collect();
-        let _ = window;
+        // What else the panel does, with the keys.
+        let tool = |id: &'static str,
+                    icon: IconName,
+                    label: &'static str,
+                    action: Box<dyn gpui::Action>| {
+            let keys = keys_for(action.as_ref(), window);
+            tool_row(id, icon, label, keys, colors)
+                .on_click(move |_, window, cx| window.dispatch_action(action.boxed_clone(), cx))
+        };
+        let tools = [
+            tool(
+                "agent-tool-new",
+                IconName::Plus,
+                strings.agent_new_chat,
+                Box::new(NewAgentConversation),
+            ),
+            tool(
+                "agent-tool-file",
+                IconName::AtSign,
+                strings.agent_add_file,
+                Box::new(AddToAgent),
+            ),
+            tool(
+                "agent-tool-terminal",
+                IconName::SquareTerminal,
+                strings.open_claude_code,
+                Box::new(super::OpenClaudeCode),
+            ),
+        ];
         div()
             .id("agent-home")
             .flex_1()
@@ -1197,6 +1229,13 @@ impl Workbench {
                         .children(recent),
                 )
             })
+            .child(
+                div()
+                    .flex()
+                    .flex_col()
+                    .child(heading(strings.extensions_tools, colors))
+                    .children(tools),
+            )
             .into_any_element()
     }
 
@@ -2172,6 +2211,17 @@ mod tests {
         });
         view.read_with(cx, |view, _| {
             assert!(view.agent_panel.thread.entries.is_empty())
+        });
+        // A message written while a new chat opens goes once it is open.
+        view.update_in(cx, |view, window, cx| {
+            view.new_agent_conversation(window, cx);
+            view.agent_panel
+                .input
+                .update(cx, |input, cx| input.set_value("di nuovo", window, cx));
+            view.send_to_agent(window, cx);
+        });
+        wait_until(cx, "the answer in the new chat", |cx| {
+            last_answer(&view, cx).as_deref() == Some("You said: di nuovo")
         });
         view.update_in(cx, |view, window, cx| {
             view.load_agent_conversation("session-1".to_owned(), window, cx)

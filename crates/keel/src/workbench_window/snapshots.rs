@@ -174,6 +174,62 @@ fn shots() -> Vec<Shot> {
             }
         }));
     }
+    // The Claude panel: its start with the project's real chats, read
+    // from disk, then a chat with the tests' fake agent, so nothing is
+    // sent to Claude.
+    for (round, (style, theme)) in [("floating", "Mezzanotte"), ("flat", "Chiaro")]
+        .into_iter()
+        .enumerate()
+    {
+        let name = |what: &str| -> &'static str {
+            Box::leak(
+                format!("{style}-{theme}-{what}")
+                    .to_lowercase()
+                    .into_boxed_str(),
+            )
+        };
+        shots.push(shot(name("claude-home"), move |workbench, window, cx| {
+            window.close_all_dialogs(cx);
+            set_theme(theme, window, cx);
+            set_style(workbench, style, window, cx);
+            workbench.layout.panel = false;
+            workbench.layout.agent = true;
+            workbench.agent_panel.view = agent_panel::AgentView::Agent;
+            workbench.agent_panel.show_chats = false;
+            // The last round's edit is still asked: it ends here.
+            workbench.cancel_agent(cx);
+            workbench.agent_panel.reset_thread();
+            workbench.agent_panel.session = None;
+            cx.notify();
+        }));
+        shots.push(shot(name("claude-chats"), |workbench, _, cx| {
+            workbench.agent_panel.show_chats = true;
+            cx.notify();
+        }));
+        shots.push(shot(name("claude-chat"), move |workbench, window, cx| {
+            workbench.agent_panel.show_chats = false;
+            if round == 0 {
+                workbench.agent_panel.fake = true;
+                workbench.open_agent(window, cx);
+            } else {
+                workbench.new_agent_conversation(window, cx);
+            }
+            workbench.agent_panel.input.update(cx, |input, cx| {
+                input.set_value("Come è organizzato il pannello di destra?", window, cx)
+            });
+            workbench.send_to_agent(window, cx);
+        }));
+        shots.push(shot(name("claude-tools"), |workbench, window, cx| {
+            // A file of the snapshots' own data folder: the edit is only
+            // asked, never allowed.
+            let file = paths::data_dir().join("prezzi.ts");
+            let _ = std::fs::write(&file, "const price = 90;\n");
+            workbench.agent_panel.input.update(cx, |input, cx| {
+                input.set_value(format!("edit {} 90 95", file.display()), window, cx)
+            });
+            workbench.send_to_agent(window, cx);
+        }));
+    }
     // Last, with every tab closed: the welcome page.
     for (style, theme) in [("floating", "Mezzanotte"), ("flat", "Chiaro")] {
         let name: &'static str = Box::leak(

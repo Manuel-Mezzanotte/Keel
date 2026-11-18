@@ -65,7 +65,7 @@ pub fn chats(claude: &Path, cwd: &Path, most: usize) -> Vec<Chat> {
             Some((seconds, path))
         })
         .collect();
-    files.sort_by(|a, b| b.0.cmp(&a.0));
+    files.sort_by_key(|(updated, _)| std::cmp::Reverse(*updated));
     files
         .into_iter()
         .filter_map(|(updated, path)| {
