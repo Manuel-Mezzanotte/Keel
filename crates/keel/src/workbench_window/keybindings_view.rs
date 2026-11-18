@@ -359,6 +359,7 @@ impl Workbench {
                         let id = command.id;
                         div()
                             .id(("keybinding", index))
+                            .w_full()
                             .h(px(30.))
                             .px_3()
                             .flex()

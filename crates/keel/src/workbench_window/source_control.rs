@@ -778,6 +778,7 @@ impl Workbench {
                         .collect::<Vec<_>>()
                 }),
             )
+            .px_1()
             .size_full()
             .into_any_element()
         };
@@ -861,8 +862,9 @@ impl Workbench {
                     colors,
                 )
                 .group("scm-title")
-                // Every row of the list is as tall as the others.
+                // Every row of the list is as tall and as wide as the others.
                 .h(px(24.))
+                .w_full()
                 .on_click(cx.listener(move |this, _, _, cx| {
                     if !this.scm.collapsed.remove(&section) {
                         this.scm.collapsed.insert(section);
@@ -990,7 +992,7 @@ impl Workbench {
                     .group("scm-row")
                     .relative()
                     .h(px(24.))
-                    .mx_1()
+                    .w_full()
                     .pl_2()
                     .pr_1()
                     .flex()
@@ -1036,6 +1038,7 @@ impl Workbench {
                     // The state, always in the same place on the right.
                     .child(
                         div()
+                            .debug_selector(|| format!("scm-badge-{path}"))
                             .size(px(16.))
                             .flex_none()
                             .flex()
@@ -1127,6 +1130,85 @@ mod tests {
             .unwrap()
             .status;
         assert!(status.success(), "git {args:?}");
+    }
+
+    /// The rows follow the sidebar's width: the state of every file sits
+    /// at its right edge, for short and long names, narrow or wide.
+    #[gpui::test]
+    fn rows_follow_the_width_of_the_sidebar(cx: &mut TestAppContext) {
+        cx.executor().allow_parking();
+        cx.update(|cx| {
+            gpui_component::init(cx);
+            crate::workbench_window::init(cx);
+        });
+        let folder = tempfile::tempdir().unwrap();
+        let root = fs::canonicalize(folder.path()).unwrap();
+        git(&root, &["init", "-q", "-b", "main"]);
+        git(&root, &["config", "user.name", "Test"]);
+        git(&root, &["config", "user.email", "test@example.com"]);
+        git(&root, &["config", "commit.gpgsign", "false"]);
+        let long = "una-cartella-davvero-lunga/con-un-nome-di-file-molto-molto-lungo.ts";
+        fs::create_dir_all(root.join("una-cartella-davvero-lunga")).unwrap();
+        for file in ["a.ts", long] {
+            fs::write(root.join(file), "uno\n").unwrap();
+        }
+        git(&root, &["add", "."]);
+        git(&root, &["commit", "-q", "-m", "first"]);
+        for file in ["a.ts", long] {
+            fs::write(root.join(file), "due\n").unwrap();
+        }
+        let settings = Settings::load("/nonexistent/keel-test/settings.json", None);
+        let opening = Opening::new(Some(root.clone()), None);
+        let (view, cx) =
+            cx.add_window_view(|window, cx| Workbench::new(opening, settings, None, window, cx));
+        view.update(cx, |view, _| {
+            view.layout
+                .select_side_view(crate::layout::SideView::SourceControl)
+        });
+        let selector = |path: &str| -> &'static str {
+            Box::leak(format!("scm-badge-{path}").into_boxed_str())
+        };
+        let (short, long_badge) = (selector("a.ts"), selector(long));
+        let mut ready = false;
+        for _ in 0..100 {
+            cx.executor().advance_clock(REFRESH_PAUSE * 2);
+            cx.update(|window, _| window.refresh());
+            cx.run_until_parked();
+            if cx.debug_bounds(short).is_some()
+                && cx.debug_bounds(long_badge).is_some()
+                && cx.debug_bounds("scm-graph-when-0").is_some()
+            {
+                ready = true;
+                break;
+            }
+            std::thread::sleep(Duration::from_millis(20));
+        }
+        assert!(ready, "the two changed files and the commit are listed");
+        for width in [240., 420.] {
+            view.update(cx, |view, cx| {
+                view.sidebar_width = width;
+                cx.notify();
+            });
+            cx.update(|window, _| window.refresh());
+            cx.run_until_parked();
+            let sidebar = cx.debug_bounds("sidebar").unwrap();
+            let (a, b) = (
+                cx.debug_bounds(short).unwrap(),
+                cx.debug_bounds(long_badge).unwrap(),
+            );
+            assert_eq!(f32::from(sidebar.size.width), width);
+            // Both at the same place, inside the sidebar, near its edge.
+            assert_eq!(a.right(), b.right(), "aligned at {width}");
+            let gap = f32::from(sidebar.right() - a.right());
+            assert!((0. ..30.).contains(&gap), "{gap} from the edge at {width}");
+            // The date of the commit in the graph too.
+            let when = cx.debug_bounds("scm-graph-when-0").unwrap();
+            let gap = f32::from(sidebar.right() - when.right());
+            assert!(
+                (0. ..30.).contains(&gap),
+                "date {gap} from the edge at {width}"
+            );
+        }
     }
 
     #[gpui::test]

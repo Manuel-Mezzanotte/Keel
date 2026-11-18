@@ -520,6 +520,7 @@ impl Workbench {
                 }
             }));
         div()
+            .debug_selector(|| "sidebar".to_owned())
             .relative()
             .h_full()
             .flex_none()

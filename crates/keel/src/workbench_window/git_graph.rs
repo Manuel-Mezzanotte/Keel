@@ -565,6 +565,7 @@ impl Workbench {
         let row = div()
             .id(("graph-row", index))
             .h(px(ROW_HEIGHT))
+            .w_full()
             .px_2()
             .flex()
             .items_center()

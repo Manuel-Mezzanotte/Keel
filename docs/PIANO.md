@@ -1883,6 +1883,11 @@ La prima volta che apri un file di un linguaggio, Keel scarica il suo server: ne
     - a destra la data relativa, come in Mail («3 h», «2 g», «4 sett»);
     - il pulsante di Git Graph sta nell'intestazione della sezione.
   - I pulsanti dentro le intestazioni (come «…» degli Script npm) non chiudono più anche la sezione.
+- **Le righe seguono la larghezza della barra laterale** (terza prova):
+  - In tutte le liste a righe (Controllo versione, grafico, Cerca, Problemi, Scorciatoie, Git Graph) ogni riga ora è larga quanto la lista.
+  - Prima era larga quanto il suo contenuto: i nomi lunghi spingevano l'etichetta dello stato e la data fuori dalla barra, e allargandola o stringendola non cambiava niente.
+  - Ora i nomi lunghi si accorciano con «…», e l'etichetta dello stato e la data restano sul bordo destro, a qualsiasi larghezza.
+  - Un test misura la finestra vera: a 240 e a 420 punti le etichette di un nome corto e di uno lungo stanno nello stesso punto, vicino al bordo. Senza la correzione cadevano a 135 e a 601 punti.
 - **App e DMG:** ricostruendo l'app mentre la usi, il Keel aperto non si chiude più. Prima lo script copiava sopra l'eseguibile in uso; ora ne scrive uno nuovo e lo sostituisce in un colpo solo.
 
 **Le tue prove a mano della fase 12**

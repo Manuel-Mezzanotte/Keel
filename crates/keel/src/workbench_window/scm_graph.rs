@@ -145,6 +145,7 @@ impl Workbench {
                                 .collect::<Vec<_>>()
                         }),
                     )
+                    .px_1()
                     .flex_1()
                     .min_h_0(),
                 )
@@ -222,7 +223,7 @@ impl Workbench {
         div()
             .id(("scm-graph-row", index))
             .h(px(ROW_HEIGHT))
-            .mx_1()
+            .w_full()
             .pr_1p5()
             .flex()
             .items_center()
@@ -257,6 +258,7 @@ impl Workbench {
             )
             .child(
                 div()
+                    .debug_selector(|| format!("scm-graph-when-{index}"))
                     .flex_none()
                     .text_xs()
                     .text_color(colors.faint)
