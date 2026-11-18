@@ -672,11 +672,24 @@ impl Workbench {
     /// The folder a server for `uri` works in: the project, or the file's
     /// own folder in a window without one.
     fn server_root(&self, uri: &str) -> Option<PathBuf> {
-        if let Some(root) = &self.project.root {
-            return Some(root.clone());
-        }
         let path = Uri::parse(uri)?.file_path()?;
-        path.parent().map(Path::to_path_buf)
+        let folder = path.parent()?;
+        // A real project: `.git`, `.vscode` or `.keel` at its top.
+        let marked = |root: &Path| {
+            [".git", ".vscode", ".keel"]
+                .iter()
+                .any(|name| root.join(name).exists())
+        };
+        match &self.project.root {
+            // A file opened alone, outside any project, is its own
+            // "project": servers work from the nearest build file instead,
+            // such as a `pom.xml` above `src/main/java/...`.
+            Some(root) if root == folder && !marked(root) => {
+                Some(servers::build_root(folder).unwrap_or_else(|| root.clone()))
+            }
+            Some(root) => Some(root.clone()),
+            None => Some(servers::build_root(folder).unwrap_or_else(|| folder.to_path_buf())),
+        }
     }
 
     /// `keel.languageServers.disabled` lists servers by id, such as `"eslint"`.

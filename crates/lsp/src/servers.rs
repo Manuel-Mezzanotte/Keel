@@ -816,11 +816,30 @@ pub fn python_interpreter(root: &Path, user: &Value) -> Option<PathBuf> {
             return Some(path);
         }
     }
-    let in_project = [".venv", "venv", "env"]
-        .iter()
-        .map(|name| root.join(name))
-        .find(|venv| venv.join("pyvenv.cfg").exists() && venv.join("bin/python").exists());
-    if let Some(venv) = in_project {
+    let venv_in = |folder: &Path| {
+        [".venv", "venv", "env"]
+            .iter()
+            .map(|name| folder.join(name))
+            .find(|venv| venv.join("pyvenv.cfg").exists() && venv.join("bin/python").exists())
+    };
+    if let Some(venv) = venv_in(root) {
+        return Some(venv.join("bin/python"));
+    }
+    // A project with its Python in a folder, such as `backend/.venv`.
+    let mut folders: Vec<PathBuf> = std::fs::read_dir(root)
+        .into_iter()
+        .flatten()
+        .flatten()
+        .map(|entry| entry.path())
+        .filter(|path| {
+            path.is_dir()
+                && !path
+                    .file_name()
+                    .is_some_and(|name| name.to_string_lossy().starts_with('.'))
+        })
+        .collect();
+    folders.sort();
+    if let Some(venv) = folders.iter().find_map(|folder| venv_in(folder)) {
         return Some(venv.join("bin/python"));
     }
     poetry_environment(root).map(|venv| venv.join("bin/python"))
@@ -900,6 +919,49 @@ pub fn initialization_options(
         "taplo" => Some(json!({ "configurationSection": "evenBetterToml" })),
         _ => None,
     }
+}
+
+/// Files that mark the top of a project for its tools.
+const BUILD_MARKERS: &[&str] = &[
+    "pom.xml",
+    "build.gradle",
+    "build.gradle.kts",
+    "settings.gradle",
+    "settings.gradle.kts",
+    "CMakeLists.txt",
+    "compile_commands.json",
+    "Makefile",
+    "pyproject.toml",
+    "setup.py",
+    "requirements.txt",
+    "Cargo.toml",
+    "package.json",
+    "go.mod",
+];
+
+/// Where servers work for a file outside a recognized project (no `.git`,
+/// `.vscode` or `.keel` above it): the nearest folder with a build file,
+/// a `.sln` or a `.csproj`, as the language clients of editors look for
+/// it. `None` when there is none up to the home folder.
+pub fn build_root(file_dir: &Path) -> Option<PathBuf> {
+    let home = std::env::var_os("HOME").map(PathBuf::from);
+    for folder in file_dir.ancestors() {
+        if home.as_deref() == Some(folder) {
+            return None;
+        }
+        let marked = BUILD_MARKERS.iter().any(|name| folder.join(name).exists())
+            || std::fs::read_dir(folder).is_ok_and(|entries| {
+                entries.flatten().any(|entry| {
+                    let name = entry.file_name();
+                    let name = name.to_string_lossy();
+                    name.ends_with(".sln") || name.ends_with(".slnx") || name.ends_with(".csproj")
+                })
+            });
+        if marked {
+            return Some(folder.to_path_buf());
+        }
+    }
+    None
 }
 
 /// The servers for a file of `language_id` in the project at `root`.
@@ -1898,6 +1960,17 @@ mod tests {
             json!(venv_python)
         );
 
+        // An environment in a folder of the project, when the top has none.
+        let nested = tempfile::tempdir().unwrap();
+        let backend = nested.path().join("backend/.venv");
+        std::fs::create_dir_all(backend.join("bin")).unwrap();
+        std::fs::write(backend.join("bin/python"), "").unwrap();
+        std::fs::write(backend.join("pyvenv.cfg"), "").unwrap();
+        assert_eq!(
+            python_interpreter(nested.path(), &json!({})),
+            Some(backend.join("bin/python"))
+        );
+
         // The user's choice wins, also relative to the project.
         let chosen = json!({ "python": { "defaultInterpreterPath": "env/bin/python" } });
         assert_eq!(settings(chosen)["python"]["pythonPath"], json!(env_python));
@@ -2035,6 +2108,21 @@ mod tests {
             servers_for("shellscript", Path::new("/p"))[0].helpers,
             ["shellcheck", "shfmt"]
         );
+    }
+
+    #[test]
+    fn a_file_outside_a_project_works_from_its_build_file() {
+        let root = tempfile::tempdir().unwrap();
+        let root = std::fs::canonicalize(root.path()).unwrap();
+        let deep = root.join("src/main/java/eu/prova");
+        std::fs::create_dir_all(&deep).unwrap();
+        assert_eq!(build_root(&deep), None);
+        std::fs::write(root.join("pom.xml"), "<project/>").unwrap();
+        assert_eq!(build_root(&deep), Some(root.clone()));
+        let csharp = root.join("app");
+        std::fs::create_dir_all(&csharp).unwrap();
+        std::fs::write(csharp.join("App.csproj"), "<Project/>").unwrap();
+        assert_eq!(build_root(&csharp), Some(csharp.clone()));
     }
 
     #[test]

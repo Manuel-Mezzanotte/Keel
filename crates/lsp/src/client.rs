@@ -424,10 +424,24 @@ impl Drop for Response {
     }
 }
 
+fn trace_enabled() -> bool {
+    static TRACE: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+    *TRACE.get_or_init(|| std::env::var_os("KEEL_LSP_TRACE").is_some())
+}
+
 /// Requests Keel answers without asking the editor.
 fn dispatch(shared: &Shared, message: Value, on_event: &(dyn Fn(ServerEvent) + Send + Sync)) {
     let method = message["method"].as_str().map(str::to_owned);
     let id = message.get("id").cloned();
+    // `KEEL_LSP_TRACE=1` prints what servers ask or say, by name only.
+    if let Some(method) = &method
+        && trace_enabled()
+    {
+        eprintln!(
+            "[lsp] {}{method}",
+            if id.is_some() { "request " } else { "" }
+        );
+    }
     match (method, id) {
         // A response to one of Keel's requests.
         (None, Some(id)) => {
