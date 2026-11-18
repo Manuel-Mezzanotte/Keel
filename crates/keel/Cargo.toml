@@ -10,6 +10,11 @@ publish.workspace = true
 name = "keel"
 path = "src/main.rs"
 
+[features]
+# Draws the window off screen into PNG files, to look at the interface
+# without showing anything: `scripts/snapshots.sh`. Never in a release.
+snapshots = ["gpui/test-support", "gpui_platform/test-support"]
+
 [dependencies]
 ai.workspace = true
 anyhow.workspace = true

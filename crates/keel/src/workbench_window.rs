@@ -42,6 +42,8 @@ mod search_view;
 mod settings_view;
 mod shell;
 mod signature_help;
+#[cfg(feature = "snapshots")]
+pub(crate) mod snapshots;
 mod source_control;
 mod tabs;
 mod terminal_view;

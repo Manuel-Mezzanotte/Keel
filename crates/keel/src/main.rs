@@ -75,6 +75,16 @@ fn main() -> ExitCode {
                 .iter()
                 .map(|path| paths::normalize(path))
                 .collect();
+            #[cfg(feature = "snapshots")]
+            if let Some(out) = std::env::var_os("KEEL_SNAPSHOTS") {
+                let mut paths_to_open = paths_to_open.into_iter();
+                workbench_window::snapshots::run(
+                    out.into(),
+                    paths_to_open.next(),
+                    paths_to_open.next(),
+                );
+                return ExitCode::SUCCESS;
+            }
             let socket = instance::socket_path(&paths::data_dir());
             // A Keel already running opens the paths in its windows.
             let first = (!paths_to_open.is_empty()).then(|| paths_to_open.remove(0));
