@@ -132,10 +132,10 @@ Dopo le prime prove dell'app vera (18 novembre) sono arrivati altri giri di rito
   - icone del tema di icone in ogni lista;
   - etichette «Funziona in parte» e «Non funziona in Keel»;
 - correzione dei controlli della pagina Impostazioni, che non salvavano (`8fbd01c`);
-- **nuovo aspetto** (sera del 18 novembre): due stili della finestra, «Pannelli sospesi» e «Piatto», scelti dalla nuova pagina Impostazioni → Interfaccia (`keel.interfaceStyle`); animazioni di pannelli, selettore e sezioni (`keel.animations`); Controllo versione con messaggio più grande, pulsante Commit largo e grafico ridimensionabile; Cerca, Estensioni e benvenuto senza spazi vuoti; pulsanti più grandi; Cmd+P e tavolozza su una superficie sola. Il dettaglio è in `PIANO.md`, «Nuovo aspetto».
+- **nuovo aspetto** (sera del 18 novembre): due stili della finestra, «Pannelli sospesi» e «Piatto», scelti dalla nuova pagina Impostazioni → Interfaccia (`keel.interfaceStyle`); animazioni di pannelli, selettore e sezioni (`keel.animations`); Controllo versione con messaggio più grande, pulsante Commit largo e grafico ridimensionabile; Cerca, Estensioni e benvenuto senza spazi vuoti; pulsanti più grandi; Cmd+P e tavolozza su una superficie sola. Il dettaglio è in `PIANO.md`, «Nuovo aspetto». Poi l'icona nel formato di Icon Composer, senza il riquadro nero di macOS, e il pannello di Claude che si apre sulla chat con le chat di Claude Code del progetto («Icona nuova e pannello di Claude»).
 
 Stato dei controlli all'ultimo commit:
-- tutti i test passano, 201 solo nell'app;
+- tutti i test passano, 201 solo nell'app e 15 nel crate `ai`;
 - clippy non segnala niente;
 - con un progetto web aperto Keel occupa circa 130–150 MB e mostra la prima schermata in circa 400 ms.
 

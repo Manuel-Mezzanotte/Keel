@@ -301,7 +301,7 @@ Il confronto non è alla pari: Cursor aveva anche albero dei file, terminale, se
   Sono anche nel menu Vista. Sostituisci, nell'editor, passa da Cmd+Shift+F a Cmd+Alt+F, come in VS Code.
 - **Per ora Keel non ricorda la disposizione:** riparte con barra laterale e Claude Code aperti. Il ripristino arriva nella fase 2, insieme a schede e file.
 - **Il marchio** è una barchetta di carta piegata da un foglio di codice: la barca del nome, con i colori della sintassi di Keel sulla carta. Sta sul riquadro blu notte di Sail, sulla griglia delle icone di Apple, così Keel e Sail sembrano della stessa famiglia: Sail è la vela, Keel la barchetta. L'hai scelta il 15 novembre tra una decina di proposte; nella barra in alto c'è la sua sagoma in un solo colore.
-  - `assets/brand/generate.py` contiene la forma e rifà marchio, icona e `Keel.icns`.
+  - `assets/brand/generate.py` contiene la forma e rifà marchio, icona (`Keel.icon`, `Assets.car`) e `Keel.icns`; dal 19 novembre l'icona è nel formato di Icon Composer.
   - `scripts/bundle-macos.sh` crea `target/release/Keel.app` con l'icona, da usare sul Mac come le altre app. Non è firmata per altri computer: la pubblicazione resta per la fine.
 - **Misure dopo la 1.6:** 132 MB con VSAuto Ghost e un file TSX aperto, prima schermata in 419 ms. Sono uguali a prima della nuova disposizione.
 
@@ -1955,6 +1955,29 @@ La prima volta che apri un file di un linguaggio, Keel scarica il suo server: ne
 - **Come l'ho guardato:** con `scripts/snapshots.sh <cartella>` Keel disegna la sua finestra fuori dallo schermo e la salva in immagini PNG, nei due stili e in Mezzanotte e Chiaro, con ogni vista, il pannello, Cmd+P, un menu, Impostazioni e il benvenuto. Non si apre niente sullo schermo e non serve il permesso di registrazione: è Keel stesso che si disegna. Usa una cartella dati sua, con i language server spenti, e c'è solo compilando con `--features snapshots`.
 - **Prove automatiche:** lo stile piatto mette la barra laterale contro il bordo e sotto una barra di 40 punti; la barra laterale esce scorrendo, sparisce e torna uguale; l'altezza del grafico ha i suoi limiti e si ricorda; i consigli del progetto si leggono con i commenti e senza quelli indesiderati; le icone usate si caricano. Nei test le animazioni sono spente, perché il loro orologio si muove solo quando lo dicono loro.
 - **Non ancora:** la casella «Search…» della pagina Impostazioni resta in inglese, perché viene da gpui-component, che non ha l'italiano.
+
+**Icona nuova e pannello di Claude** (19 novembre)
+- **L'icona non sta più nel riquadro nero.** Dal macOS 26 il sistema rimpicciolisce le icone del vecchio formato e le chiude in un quadrato scuro: era il bordo nero nel Dock.
+  - Ora l'icona è nel formato di Icon Composer (`assets/brand/Keel.icon`), lo stesso dell'icona di Sail. `actool` di Xcode la compila in `Assets.car`, che macOS 26 e successivi leggono e disegnano in Liquid Glass come le loro; per i macOS precedenti c'è ancora `Keel.icns`.
+  - La barchetta è un po' più grande, in vetro, con le righe di codice e l'acqua su livelli propri, sul blu sfumato di Sail. In modalità scura il fondo resta blu notte invece di diventare nero.
+  - `assets/brand/generate.py` scrive i livelli e li compila; serve Xcode. Il disegno con ImageMagick non c'è più.
+  - Controllato facendo disegnare a macOS stesso l'icona dell'app, prima e dopo.
+- **Il pannello di Claude si apre sulla chat**, non più sul terminale. È il tuo Claude Code, con il tuo login e le tue chat, attraverso l'adattatore ACP; il terminale resta a un clic, con il suo simbolo nell'intestazione, e con Cmd+Esc.
+  - **Intestazione:** il segno di Claude, con un punto verde mentre è collegato, il titolo della chat, l'orologio per tutte le chat, «+» per una nuova, e chat e terminale come due simboli.
+  - **Prima del primo messaggio:** cosa è Claude qui, lo stato (installazione, avvio, apertura della chat), le chat recenti del progetto e gli strumenti con i loro tasti: nuova chat, aggiungi il file aperto, Claude Code nel terminale.
+  - **Tutte le chat:** dall'orologio, per giorno (oggi, ieri, ultimi 7 giorni, più vecchie), con un campo per cercarle. Un clic apre la chat da dove era, anche se l'hai cominciata nel terminale o in un'altra app di Claude.
+  - **L'elenco compare subito**, senza avviare Claude, che pesa circa 460 MB: Keel legge solo titolo e data dai file che Claude Code tiene in `~/.claude/projects`. Quando Claude parte, l'elenco viene dal suo `session/list`. I file sono di Claude Code e il loro formato non è pubblico: quello che Keel non capisce lo salta.
+  - **Scegliendo una chat** con Claude spento, Claude parte e apre quella chat invece di una nuova.
+  - **La conversazione:** i tuoi messaggi in una bolla colorata a destra, quelli di Claude sotto il suo nome; ragionamento e strumenti si aprono con una freccia che ruota; uno strumento in corso ha un cerchio che gira, una modifica mostra subito la differenza, e «apri il file» va al punto giusto; mentre Claude lavora ci sono tre puntini che respirano; il piano ha una barra di avanzamento; i permessi stanno in una scheda.
+  - **Il campo** è una scheda come quella del commit: si accende mentre scrivi, sotto ha @, la modalità e il pulsante tondo per inviare, che diventa «Interrompi» durante una risposta.
+  - **Corretto:** un messaggio scritto mentre una chat nuova si apriva restava in attesa per sempre; ora parte appena la chat è aperta.
+- **Prove automatiche:** l'elenco delle chat da file finti (titolo dato, primo messaggio vero, file senza conversazione, file lunghi letti solo agli estremi), le date dell'agente, il messaggio scritto durante l'apertura; le icone nuove del pannello caricate. Le immagini del pannello si fanno con l'agente finto dei test, quindi niente arriva a Claude.
+- **Non ancora:** i comandi `/` di Claude nel campo e le immagini incollate, come prima.
+
+**Le tue prove a mano dell'icona e del pannello**
+1. Rifai l'app (`scripts/make-dmg.sh`) e mettila in Applicazioni: nel Dock l'icona deve essere grande quanto le altre, senza riquadro nero, chiara col Mac in chiaro e blu notte in scuro.
+2. Apri un progetto in cui hai usato Claude Code: nel pannello a destra compaiono subito le chat recenti. Aprine una: Claude parte e la ricarica.
+3. Scrivi un messaggio in una chat nuova, poi prova l'orologio, la ricerca nelle chat e il passaggio al terminale e ritorno.
 
 **Le tue prove a mano del nuovo aspetto**
 1. Apri Impostazioni (Cmd+,) → Interfaccia e passa da «Pannelli sospesi» a «Piatto» e ritorno, con Mezzanotte e con Chiaro. Guarda i semafori: devono restare al centro della barra in alto in tutti e due gli stili.
