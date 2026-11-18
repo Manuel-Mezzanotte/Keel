@@ -542,7 +542,7 @@ impl Workbench {
                     .child(
                         Button::new(("kill-terminal", group))
                             .ghost()
-                            .xsmall()
+                            .small()
                             .icon(Icon::new(IconName::X).xsmall())
                             .tooltip(strings.terminal_kill)
                             .on_click(cx.listener(move |this, _, window, cx| {
@@ -567,7 +567,7 @@ impl Workbench {
             .child(
                 Button::new("new-terminal")
                     .ghost()
-                    .xsmall()
+                    .small()
                     .icon(Icon::new(IconName::Plus))
                     .tooltip(strings.terminal_new)
                     .on_click(cx.listener(|this, _, window, cx| this.new_terminal(window, cx))),
@@ -575,7 +575,7 @@ impl Workbench {
             .child(
                 Button::new("split-terminal")
                     .ghost()
-                    .xsmall()
+                    .small()
                     .icon(Icon::new(IconName::Columns2))
                     .tooltip(strings.terminal_split)
                     .on_click(cx.listener(|this, _, window, cx| {

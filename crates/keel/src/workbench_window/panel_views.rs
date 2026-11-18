@@ -48,7 +48,7 @@ impl Workbench {
         let channel = |id: &'static str, label: &'static str, which: OutputChannel| {
             Button::new(id)
                 .ghost()
-                .xsmall()
+                .small()
                 .label(label)
                 .selected(self.output_channel == which)
                 .on_click(cx.listener(move |this, _, _, cx| {
@@ -75,7 +75,7 @@ impl Workbench {
             .child(
                 Button::new("output-clear")
                     .ghost()
-                    .xsmall()
+                    .small()
                     .icon(Icon::new(IconName::Trash))
                     .tooltip(strings.output_clear)
                     .on_click(cx.listener(|this, _, _, cx| {
@@ -218,7 +218,7 @@ impl Workbench {
                 .child(
                     Button::new(("open-port", number as usize))
                         .ghost()
-                        .xsmall()
+                        .small()
                         .icon(Icon::new(IconName::Globe))
                         .tooltip(strings.open_in_browser)
                         .on_click(cx.listener(move |this, _, _, cx| this.open_port(number, cx))),

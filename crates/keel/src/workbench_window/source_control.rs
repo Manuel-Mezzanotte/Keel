@@ -870,10 +870,11 @@ impl Workbench {
         cx: &mut Context<Self>,
     ) -> AnyElement {
         let strings = self.strings();
+        // As large as the rows allow, so they are easy to hit.
         let small = |id: ElementId, icon: IconName, tooltip: &'static str| {
             Button::new(id)
                 .ghost()
-                .xsmall()
+                .with_size(gpui_component::Size::Size(px(22.)))
                 .icon(Icon::new(icon))
                 .tooltip(tooltip)
         };

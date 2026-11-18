@@ -259,7 +259,7 @@ impl Workbench {
             .child(
                 Button::new("claude-diff-split")
                     .ghost()
-                    .xsmall()
+                    .small()
                     .label(strings.diff_side_by_side)
                     .selected(self.diff_split)
                     .on_click(cx.listener(|this, _, _, cx| this.set_diff_split(true, cx))),
@@ -267,7 +267,7 @@ impl Workbench {
             .child(
                 Button::new("claude-diff-unified")
                     .ghost()
-                    .xsmall()
+                    .small()
                     .label(strings.diff_inline)
                     .selected(!self.diff_split)
                     .on_click(cx.listener(|this, _, _, cx| this.set_diff_split(false, cx))),
@@ -277,7 +277,7 @@ impl Workbench {
                     .child(
                         Button::new("claude-diff-reject")
                             .ghost()
-                            .xsmall()
+                            .small()
                             .icon(Icon::new(IconName::X))
                             .label(strings.claude_reject)
                             .on_click(cx.listener(move |this, _, window, cx| {
@@ -287,7 +287,7 @@ impl Workbench {
                     .child(
                         Button::new("claude-diff-accept")
                             .primary()
-                            .xsmall()
+                            .small()
                             .icon(Icon::new(IconName::Check))
                             .label(strings.claude_accept)
                             .on_click(cx.listener(move |this, _, window, cx| {

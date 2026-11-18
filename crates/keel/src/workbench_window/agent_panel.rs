@@ -861,7 +861,7 @@ impl Workbench {
             .child(
                 Button::new("agent-history")
                     .ghost()
-                    .xsmall()
+                    .small()
                     .icon(Icon::new(IconName::Clock))
                     .tooltip(strings.agent_history)
                     .disabled(history.is_empty())
@@ -886,7 +886,7 @@ impl Workbench {
             .child(
                 Button::new("agent-new")
                     .ghost()
-                    .xsmall()
+                    .small()
                     .icon(Icon::new(IconName::Plus))
                     .tooltip(strings.agent_new)
                     .on_click(
@@ -1234,7 +1234,7 @@ impl Workbench {
         for (number, (id, name, kind)) in permission.options.iter().enumerate() {
             let option = id.clone();
             let button = Button::new(("agent-permission", index * 16 + number))
-                .xsmall()
+                .small()
                 .label(name.clone());
             let button = if kind.starts_with("allow") && number == 0 {
                 button.primary()
@@ -1278,7 +1278,7 @@ impl Workbench {
                     .child(
                         Button::new(("agent-attachment", index))
                             .ghost()
-                            .xsmall()
+                            .small()
                             .icon(Icon::new(IconName::X).xsmall())
                             .on_click(cx.listener(move |this, _, _, cx| {
                                 if index < this.agent_panel.attachments.len() {
@@ -1302,7 +1302,7 @@ impl Workbench {
         let send: AnyElement = if panel.running {
             Button::new("agent-stop")
                 .ghost()
-                .xsmall()
+                .small()
                 .icon(Icon::new(IconName::Square))
                 .tooltip(strings.agent_stop)
                 .on_click(cx.listener(|this, _, _, cx| this.cancel_agent(cx)))
@@ -1310,7 +1310,7 @@ impl Workbench {
         } else {
             Button::new("agent-send")
                 .primary()
-                .xsmall()
+                .small()
                 .icon(Icon::new(IconName::ArrowUp))
                 .tooltip(strings.agent_send)
                 .on_click(cx.listener(|this, _, window, cx| this.send_to_agent(window, cx)))
@@ -1339,7 +1339,7 @@ impl Workbench {
                     .child(
                         Button::new("agent-add-file")
                             .ghost()
-                            .xsmall()
+                            .small()
                             .label("@")
                             .tooltip(strings.agent_add_file)
                             .on_click(
@@ -1350,7 +1350,7 @@ impl Workbench {
                         row.child(
                             Button::new("agent-mode")
                                 .ghost()
-                                .xsmall()
+                                .small()
                                 .label(mode_name)
                                 .dropdown_menu(move |mut menu, _, _| {
                                     for (value, name) in &modes {

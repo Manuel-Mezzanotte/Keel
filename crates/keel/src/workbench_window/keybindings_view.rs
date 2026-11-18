@@ -411,7 +411,7 @@ impl Workbench {
                             .child(
                                 Button::new(("keybinding-change", index))
                                     .ghost()
-                                    .xsmall()
+                                    .small()
                                     .icon(Icon::new(IconName::Pencil))
                                     .tooltip(strings.keybindings_change)
                                     .on_click(cx.listener(move |this, _, window, cx| {
@@ -421,7 +421,7 @@ impl Workbench {
                             .children(custom.then(|| {
                                 Button::new(("keybinding-reset", index))
                                     .ghost()
-                                    .xsmall()
+                                    .small()
                                     .icon(Icon::new(IconName::Undo2))
                                     .tooltip(strings.keybindings_reset)
                                     .on_click(cx.listener(move |this, _, window, cx| {

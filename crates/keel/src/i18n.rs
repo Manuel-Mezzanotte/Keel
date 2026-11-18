@@ -601,6 +601,12 @@ pub struct Strings {
     pub welcome_settings: &'static str,
     /// Under Keel's name on the welcome page, with no project open.
     pub welcome_tagline: &'static str,
+    /// The sidebar's views before a folder is open.
+    pub no_folder_title: &'static str,
+    pub open_folder: &'static str,
+    pub search_no_folder: &'static str,
+    /// The empty Claude Code panel.
+    pub claude_code_title: &'static str,
 }
 
 impl Strings {
@@ -1624,6 +1630,10 @@ pub const ITALIAN: Strings = Strings {
     welcome_claude: "Apri Claude Code",
     welcome_settings: "Impostazioni",
     welcome_tagline: "Il tuo editor, veloce e leggero.",
+    no_folder_title: "Nessuna cartella aperta",
+    open_folder: "Apri una cartella…",
+    search_no_folder: "Apri una cartella per cercare in tutti i suoi file.",
+    claude_code_title: "Claude Code, qui accanto",
 };
 
 pub const ENGLISH: Strings = Strings {
@@ -2169,6 +2179,10 @@ pub const ENGLISH: Strings = Strings {
     welcome_claude: "Open Claude Code",
     welcome_settings: "Settings",
     welcome_tagline: "Your editor, fast and light.",
+    no_folder_title: "No Folder Open",
+    open_folder: "Open a Folder…",
+    search_no_folder: "Open a folder to search all of its files.",
+    claude_code_title: "Claude Code, Right Here",
 };
 
 #[cfg(test)]

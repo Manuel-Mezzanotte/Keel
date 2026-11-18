@@ -18,7 +18,7 @@ use gpui_component::input::{Input, InputState};
 use gpui_component::{Disableable as _, Icon, Selectable as _, Sizable as _};
 use gpui_kit_assets::IconName;
 
-use super::shell::{Colors, empty_state, heading, keys_for, note, tool_row, view_header};
+use super::shell::{Colors, empty_state, heading, keys_for, tool_row, view_header};
 use super::tabs::OpenAs;
 use super::*;
 
@@ -449,7 +449,12 @@ impl Workbench {
         if self.project.root.is_none() {
             return div()
                 .child(view_header(strings.view_search, colors))
-                .child(note(strings.no_folder.to_owned(), colors))
+                .child(empty_state(
+                    IconName::TextSearch,
+                    strings.no_folder_title,
+                    strings.search_no_folder,
+                    colors,
+                ))
                 .into_any_element();
         }
         let view = &self.search;

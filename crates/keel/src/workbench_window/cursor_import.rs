@@ -205,7 +205,7 @@ impl Workbench {
                 header.child(
                     Button::new("cursor-install-all")
                         .primary()
-                        .xsmall()
+                        .small()
                         .label(strings.cursor_install_all(to_install))
                         .on_click(cx.listener(|this, _, window, cx| {
                             this.install_all_from_cursor(window, cx)
@@ -215,7 +215,7 @@ impl Workbench {
             .child(
                 Button::new("cursor-close")
                     .ghost()
-                    .xsmall()
+                    .small()
                     .icon(Icon::new(IconName::X))
                     .tooltip(strings.cursor_close)
                     .on_click(cx.listener(|this, _, _, cx| {
@@ -311,7 +311,7 @@ impl Workbench {
             ),
         };
         let button = (group(&entry.verdict) == 0).then(|| {
-            let button = Button::new(("cursor-install", index)).xsmall();
+            let button = Button::new(("cursor-install", index)).small();
             if installed {
                 button
                     .ghost()

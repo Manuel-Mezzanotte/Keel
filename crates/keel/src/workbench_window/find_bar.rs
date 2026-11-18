@@ -292,7 +292,7 @@ impl Workbench {
         let switch = |id: &'static str, icon: IconName, on: bool, tooltip: &'static str| {
             Button::new(id)
                 .ghost()
-                .xsmall()
+                .small()
                 .icon(Icon::new(icon))
                 .selected(on)
                 .tooltip(tooltip)
@@ -337,7 +337,7 @@ impl Workbench {
         let button = |id: &'static str, icon: IconName, tooltip: &'static str| {
             Button::new(id)
                 .ghost()
-                .xsmall()
+                .small()
                 .icon(Icon::new(icon))
                 .tooltip(tooltip)
         };

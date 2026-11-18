@@ -275,7 +275,7 @@ impl Workbench {
             toolbar = toolbar.child(
                 Button::new("diff-save-resolution")
                     .primary()
-                    .xsmall()
+                    .small()
                     .icon(Icon::new(IconName::Check))
                     .label(strings.diff_save_resolution)
                     .disabled(!resolved)
@@ -288,7 +288,7 @@ impl Workbench {
                 .child(
                     Button::new("diff-split")
                         .ghost()
-                        .xsmall()
+                        .small()
                         .label(strings.diff_side_by_side)
                         .selected(self.diff_split)
                         .on_click(cx.listener(|this, _, _, cx| this.set_diff_split(true, cx))),
@@ -296,7 +296,7 @@ impl Workbench {
                 .child(
                     Button::new("diff-unified")
                         .ghost()
-                        .xsmall()
+                        .small()
                         .label(strings.diff_inline)
                         .selected(!self.diff_split)
                         .on_click(cx.listener(|this, _, _, cx| this.set_diff_split(false, cx))),
@@ -307,7 +307,7 @@ impl Workbench {
                 toolbar.child(match source {
                     DiffSource::Staged => Button::new("diff-unstage")
                         .ghost()
-                        .xsmall()
+                        .small()
                         .icon(Icon::new(IconName::Minus))
                         .tooltip(strings.scm_unstage)
                         .on_click(cx.listener(move |this, _, window, cx| {
@@ -315,7 +315,7 @@ impl Workbench {
                         })),
                     _ => Button::new("diff-stage")
                         .ghost()
-                        .xsmall()
+                        .small()
                         .icon(Icon::new(IconName::Plus))
                         .tooltip(strings.scm_stage)
                         .on_click(cx.listener(move |this, _, window, cx| {
@@ -328,7 +328,7 @@ impl Workbench {
         toolbar = toolbar.child(
             Button::new("diff-open-file")
                 .ghost()
-                .xsmall()
+                .small()
                 .icon(Icon::new(IconName::File))
                 .tooltip(strings.scm_open_file)
                 .on_click(cx.listener(move |this, _, window, cx| {

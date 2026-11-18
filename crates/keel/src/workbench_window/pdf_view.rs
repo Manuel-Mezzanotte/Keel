@@ -458,7 +458,7 @@ impl Workbench {
         let button = |id: &'static str, icon: IconName, tooltip: &'static str| {
             Button::new(id)
                 .ghost()
-                .xsmall()
+                .small()
                 .icon(Icon::new(icon))
                 .tooltip(tooltip)
         };
@@ -498,7 +498,7 @@ impl Workbench {
                 let uri = uri.to_owned();
                 Button::new("pdf-zoom-fit")
                     .ghost()
-                    .xsmall()
+                    .small()
                     .label(zoom_text)
                     .tooltip(strings.image_fit)
                     .on_click(cx.listener(move |this, _, _, cx| this.zoom_pdf(&uri, None, cx)))

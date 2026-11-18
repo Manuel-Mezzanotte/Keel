@@ -380,7 +380,7 @@ impl Workbench {
             .child(
                 Button::new("graph-branches")
                     .ghost()
-                    .xsmall()
+                    .small()
                     .label(branch_label)
                     .icon(Icon::new(IconName::ChevronDown))
                     .on_click(
@@ -399,7 +399,7 @@ impl Workbench {
             .child(
                 Button::new("graph-previous")
                     .ghost()
-                    .xsmall()
+                    .small()
                     .icon(Icon::new(IconName::ChevronUp))
                     .tooltip(strings.find_previous)
                     .on_click(cx.listener(|this, _, _, cx| this.next_graph_match(false, cx))),
@@ -407,7 +407,7 @@ impl Workbench {
             .child(
                 Button::new("graph-next")
                     .ghost()
-                    .xsmall()
+                    .small()
                     .icon(Icon::new(IconName::ChevronDown))
                     .tooltip(strings.find_next)
                     .on_click(cx.listener(|this, _, _, cx| this.next_graph_match(true, cx))),
@@ -415,7 +415,7 @@ impl Workbench {
             .child(
                 Button::new("graph-fetch")
                     .ghost()
-                    .xsmall()
+                    .small()
                     .icon(Icon::new(IconName::ArrowDown))
                     .tooltip(strings.scm_fetch)
                     .on_click(cx.listener(|_, _, window, cx| {
@@ -425,7 +425,7 @@ impl Workbench {
             .child(
                 Button::new("graph-refresh")
                     .ghost()
-                    .xsmall()
+                    .small()
                     .icon(Icon::new(IconName::RefreshCw))
                     .tooltip(strings.scm_refresh)
                     .on_click(cx.listener(|this, _, _, cx| this.reload_git_graph(cx))),

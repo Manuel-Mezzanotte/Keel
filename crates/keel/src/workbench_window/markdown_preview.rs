@@ -528,7 +528,7 @@ impl Workbench {
         Some(
             Button::new(("markdown-preview", group))
                 .ghost()
-                .xsmall()
+                .small()
                 .icon(Icon::new(IconName::Columns2))
                 .tooltip(self.strings().command_markdown_preview_side)
                 .on_click(cx.listener(move |this, _, window, cx| {

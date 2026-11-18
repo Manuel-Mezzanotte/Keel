@@ -1274,11 +1274,14 @@ impl Workbench {
         }
 
         // The tools, in sight rather than behind "…".
+        // The settings row goes without its keys: its label needs the room.
         let tool = |id: &'static str,
                     icon: IconName,
                     label: &'static str,
                     action: Box<dyn gpui::Action>| {
-            let keys = super::shell::keys_for(action.as_ref(), window);
+            let keys = (id != "extensions-tool-settings")
+                .then(|| super::shell::keys_for(action.as_ref(), window))
+                .flatten();
             tool_row(id, icon, label, keys, colors)
                 .on_click(move |_, window, cx| window.dispatch_action(action.boxed_clone(), cx))
         };

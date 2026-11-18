@@ -844,7 +844,10 @@ impl Workbench {
         cx.notify();
     }
 
+    /// The Explorer with no folder open: the files open in the window, and
+    /// how to open a folder.
     fn render_open_editors(&self, colors: Colors, cx: &mut Context<Self>) -> Div {
+        let strings = self.strings();
         let mut documents: Vec<(String, String, bool)> = self
             .documents
             .values()
@@ -858,6 +861,7 @@ impl Workbench {
             .collect();
         documents.sort_by_key(|(uri, name, _)| (name.to_lowercase(), uri.clone()));
         let active = self.panes.get(self.active).map(|pane| pane.uri.clone());
+        let has_documents = !documents.is_empty();
         let rows =
             documents
                 .into_iter()
@@ -866,7 +870,7 @@ impl Workbench {
                     let is_active = active.as_deref() == Some(uri.as_str());
                     div()
                         .id(("open-editor", index))
-                        .h(px(24.))
+                        .h(px(26.))
                         .px_2()
                         .flex()
                         .items_center()
@@ -892,8 +896,27 @@ impl Workbench {
                         })
                 });
         div()
-            .child(heading(self.strings().open_editors, colors))
-            .children(rows)
+            .flex()
+            .flex_col()
+            .when(has_documents, |view| {
+                view.child(view_header(strings.open_editors, colors))
+                    .children(rows)
+            })
+            .child(empty_state(
+                IconName::FolderOpen,
+                strings.no_folder_title,
+                strings.no_folder,
+                colors,
+            ))
+            .child(
+                div().px_2().flex().justify_center().child(
+                    Button::new("sidebar-open-folder")
+                        .primary()
+                        .icon(Icon::new(IconName::FolderOpen))
+                        .label(strings.open_folder)
+                        .on_click(|_, window, cx| window.dispatch_action(Box::new(Open), cx)),
+                ),
+            )
     }
 
     /// What the editors' panel shows with no file open: how to start, with
@@ -1841,25 +1864,22 @@ impl Workbench {
                 .flex_col()
                 .items_center()
                 .justify_center()
-                .gap_3()
-                .px_6()
-                .text_color(colors.faint)
-                .child(Icon::new(IconName::Sparkles).large())
+                .gap_1()
+                .px_4()
+                .child(empty_state(
+                    IconName::Sparkles,
+                    strings.claude_code_title,
+                    strings.claude_code_hint,
+                    colors,
+                ))
                 .child(
                     Button::new("open-claude-code")
                         .primary()
-                        .small()
+                        .icon(Icon::new(IconName::SquareTerminal))
                         .label(strings.open_claude_code)
                         .on_click(
                             cx.listener(|this, _, window, cx| this.open_claude_code(window, cx)),
                         ),
-                )
-                .child(
-                    div()
-                        .text_xs()
-                        .text_center()
-                        .text_color(colors.muted)
-                        .child(strings.claude_code_hint),
                 ),
         };
         let card = panel(look, colors.panel, colors, colors.dark)

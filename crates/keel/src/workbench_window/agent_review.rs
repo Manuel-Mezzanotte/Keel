@@ -236,7 +236,7 @@ impl Workbench {
                 .child(
                     Button::new("agent-reject-all")
                         .ghost()
-                        .xsmall()
+                        .small()
                         .label(strings.agent_reject_all)
                         .on_click(cx.listener(|this, _, window, cx| {
                             this.reject_all_agent_changes(window, cx)
@@ -245,7 +245,7 @@ impl Workbench {
                 .child(
                     Button::new("agent-accept-all")
                         .primary()
-                        .xsmall()
+                        .small()
                         .label(strings.agent_accept_all)
                         .on_click(cx.listener(|this, _, window, cx| {
                             this.accept_all_agent_changes(window, cx)
@@ -292,7 +292,7 @@ impl Workbench {
                     .child(
                         Button::new(("agent-change-reject", index))
                             .ghost()
-                            .xsmall()
+                            .small()
                             .icon(Icon::new(IconName::Undo2).xsmall())
                             .tooltip(strings.claude_reject)
                             .on_click(cx.listener(move |this, _, window, cx| {
@@ -303,7 +303,7 @@ impl Workbench {
                     .child(
                         Button::new(("agent-change-accept", index))
                             .ghost()
-                            .xsmall()
+                            .small()
                             .icon(Icon::new(IconName::Check).xsmall())
                             .tooltip(strings.claude_accept)
                             .on_click(cx.listener(move |this, _, window, cx| {
@@ -369,7 +369,7 @@ impl Workbench {
                     .child(
                         Button::new("agent-tab-reject")
                             .ghost()
-                            .xsmall()
+                            .small()
                             .icon(Icon::new(IconName::Undo2))
                             .label(strings.claude_reject)
                             .on_click(cx.listener(move |this, _, window, cx| {
@@ -379,7 +379,7 @@ impl Workbench {
                     .child(
                         Button::new("agent-tab-accept")
                             .primary()
-                            .xsmall()
+                            .small()
                             .icon(Icon::new(IconName::Check))
                             .label(strings.claude_accept)
                             .on_click(cx.listener(move |this, _, window, cx| {

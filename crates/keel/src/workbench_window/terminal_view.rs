@@ -528,7 +528,7 @@ impl TerminalView {
         let switch = |id: &'static str, icon: IconName, on: bool, tooltip: &'static str| {
             Button::new(id)
                 .ghost()
-                .xsmall()
+                .small()
                 .icon(Icon::new(icon))
                 .selected(on)
                 .tooltip(tooltip)
@@ -582,7 +582,7 @@ impl TerminalView {
                 .child(
                     Button::new("terminal-find-older")
                         .ghost()
-                        .xsmall()
+                        .small()
                         .icon(Icon::new(IconName::ArrowUp))
                         .tooltip(strings.find_older)
                         .on_click(cx.listener(|this, _, _, cx| this.find_again(Some(true), cx))),
@@ -590,7 +590,7 @@ impl TerminalView {
                 .child(
                     Button::new("terminal-find-newer")
                         .ghost()
-                        .xsmall()
+                        .small()
                         .icon(Icon::new(IconName::ArrowDown))
                         .tooltip(strings.find_newer)
                         .on_click(cx.listener(|this, _, _, cx| this.find_again(Some(false), cx))),
@@ -598,7 +598,7 @@ impl TerminalView {
                 .child(
                     Button::new("terminal-find-close")
                         .ghost()
-                        .xsmall()
+                        .small()
                         .icon(Icon::new(IconName::X))
                         .tooltip(strings.close_find)
                         .on_click(cx.listener(|this, _, window, cx| this.close_find(window, cx))),

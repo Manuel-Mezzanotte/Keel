@@ -131,6 +131,49 @@ fn shots() -> Vec<Shot> {
             );
         }));
     }
+    // The editors' other pages and the panel's terminal, in one style each.
+    for (style, theme) in [("floating", "Mezzanotte"), ("flat", "Chiaro")] {
+        let name = |what: &str| -> &'static str {
+            Box::leak(
+                format!("{style}-{theme}-{what}")
+                    .to_lowercase()
+                    .into_boxed_str(),
+            )
+        };
+        shots.push(shot(name("find"), move |workbench, window, cx| {
+            window.close_all_dialogs(cx);
+            set_theme(theme, window, cx);
+            set_style(workbench, style, window, cx);
+            // Back to the code, with the find bar open on it.
+            let code = workbench
+                .groups
+                .first()
+                .and_then(|group| group.tabs.iter().position(|tab| tab.uri.ends_with(".rs")));
+            if let Some(index) = code {
+                workbench.activate_tab(0, index, true, window, cx);
+            }
+            workbench.open_find(true, window, cx);
+        }));
+        shots.push(shot(name("terminal"), |workbench, window, cx| {
+            workbench.show_terminal(window, cx);
+        }));
+        shots.push(shot(name("graph"), |workbench, window, cx| {
+            workbench.layout.panel = false;
+            workbench.open_git_graph(window, cx);
+        }));
+        shots.push(shot(name("diff"), |workbench, window, cx| {
+            let changed = workbench
+                .scm
+                .status
+                .files
+                .iter()
+                .find(|file| file.is_changed())
+                .map(|file| file.path.clone());
+            if let Some(path) = changed {
+                workbench.open_change(&path, source_control::Section::Changes, window, cx);
+            }
+        }));
+    }
     // Last, with every tab closed: the welcome page.
     for (style, theme) in [("floating", "Mezzanotte"), ("flat", "Chiaro")] {
         let name: &'static str = Box::leak(
@@ -249,6 +292,11 @@ pub(crate) fn run(out: PathBuf, project: Option<PathBuf>, file: Option<PathBuf>)
                 .map(str::to_owned)
                 .collect();
             for shot in shots() {
+                // Esc first, outside the window's own update: it closes a
+                // menu the last picture left open.
+                let _ = cx.update_window(handle, |_, window, cx| {
+                    window.dispatch_keystroke(gpui::Keystroke::parse("escape").unwrap(), cx);
+                });
                 let _ = cx.update_window(handle, |_, window, cx| {
                     workbench.update(cx, |workbench, cx| (shot.prepare)(workbench, window, cx))
                 });
