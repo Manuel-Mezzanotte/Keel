@@ -16,7 +16,7 @@ use gpui_component::text::{TextView, TextViewState};
 use gpui_component::{ActiveTheme as _, Disableable as _, Icon, Sizable as _};
 use gpui_kit_assets::IconName;
 
-use super::shell::{Colors, heading, note};
+use super::shell::{Colors, empty_state, heading, note, section_header, tool_row, view_header};
 use super::*;
 use crate::extension_state::Scope;
 
@@ -63,6 +63,11 @@ pub(super) struct ExtensionStore {
     /// by lower-case id; worked out in the background.
     pub(super) limits: HashMap<String, Vec<cursor::Blocker>>,
     limits_task: Task<()>,
+    /// What the project's `.vscode/extensions.json` recommends.
+    pub(super) recommended: Vec<String>,
+    /// The lists closed to their header.
+    installed_collapsed: bool,
+    recommended_collapsed: bool,
 }
 
 impl ExtensionStore {
@@ -94,6 +99,9 @@ impl ExtensionStore {
             cursor_dir: None,
             limits: HashMap::new(),
             limits_task: Task::ready(()),
+            recommended: Vec::new(),
+            installed_collapsed: false,
+            recommended_collapsed: false,
         };
         (store, events)
     }
@@ -193,18 +201,90 @@ fn readme(extension: &InstalledExtension) -> String {
         .unwrap_or_default()
 }
 
+/// The size of the extensions' icons in the lists.
+const ICON_SIZE: f32 = 36.;
+
 /// The square shown for an extension without an icon.
 fn placeholder_icon(colors: Colors) -> AnyElement {
     div()
-        .size(px(32.))
+        .size(px(ICON_SIZE))
         .flex_none()
         .flex()
         .items_center()
         .justify_center()
-        .rounded(px(6.))
+        .rounded(px(9.))
         .bg(colors.hover)
         .child(Icon::new(IconName::Blocks).text_color(colors.muted))
         .into_any_element()
+}
+
+/// The number next to a list's title.
+fn count_badge(count: usize, colors: Colors) -> gpui::Div {
+    div()
+        .min_w(px(18.))
+        .h(px(16.))
+        .px_1()
+        .flex()
+        .items_center()
+        .justify_center()
+        .rounded_full()
+        .bg(colors.hover)
+        .text_color(colors.muted)
+        .child(count.to_string())
+}
+
+/// A small label in a capsule of its own color, such as "Off".
+fn pill(text: &str, color: Hsla) -> gpui::Div {
+    div()
+        .px(px(5.))
+        .rounded(px(4.))
+        .bg(color.opacity(0.14))
+        .text_color(color)
+        .truncate()
+        .child(text.to_owned())
+}
+
+/// An extension's icon from a file, with the corners of the placeholder.
+fn icon_image(path: PathBuf) -> AnyElement {
+    img(path)
+        .size(px(ICON_SIZE))
+        .flex_none()
+        .rounded(px(9.))
+        .into_any_element()
+}
+
+/// The extensions a project asks for in `.vscode/extensions.json`, as VS
+/// Code reads them: `recommendations` less `unwantedRecommendations`, by
+/// lower-case id.
+pub(super) fn recommendations(root: &Path) -> Vec<String> {
+    let Ok(text) = std::fs::read_to_string(root.join(".vscode/extensions.json")) else {
+        return Vec::new();
+    };
+    let Ok(file) = settings::jsonc::parse(&text) else {
+        return Vec::new();
+    };
+    let ids = |key: &str| -> Vec<String> {
+        file[key]
+            .as_array()
+            .into_iter()
+            .flatten()
+            .filter_map(Value::as_str)
+            .map(key_of)
+            .filter(|id| id.contains('.'))
+            .collect()
+    };
+    let unwanted = ids("unwantedRecommendations");
+    let mut wanted = Vec::new();
+    for id in ids("recommendations") {
+        if !unwanted.contains(&id) && !wanted.contains(&id) {
+            wanted.push(id);
+        }
+    }
+    wanted
+}
+
+fn key_of(id: &str) -> String {
+    id.trim().to_lowercase()
 }
 
 /// A line about what an extension adds: commands, themes, snippets...
@@ -794,13 +874,17 @@ impl Workbench {
 
     /// The search box, and while it holds text the results from Open VSX
     /// in place of the installed extensions.
-    fn render_extension_search(&self) -> Option<AnyElement> {
+    fn render_extension_search(&self, colors: Colors) -> Option<AnyElement> {
         self.store.client.as_ref()?;
         Some(
             div()
-                .px_2()
+                .px_1()
                 .pb_1()
-                .child(Input::new(&self.store.input).small())
+                .child(
+                    Input::new(&self.store.input)
+                        .prefix(Icon::new(IconName::Search).small().text_color(colors.faint))
+                        .cleanable(true),
+                )
                 .into_any_element(),
         )
     }
@@ -845,15 +929,12 @@ impl Workbench {
         let strings = self.strings();
         let id = listing.id();
         let icon: AnyElement = match self.store.icons.get(&key(&id)) {
-            Some(path) => img(path.clone())
-                .size(px(32.))
-                .flex_none()
-                .into_any_element(),
+            Some(path) => icon_image(path.clone()),
             None => placeholder_icon(colors),
         };
         let installed = self.installed_version(&id);
         let installing = self.store.installing.contains(&key(&id));
-        let button = Button::new(("open-vsx-install", index)).xsmall();
+        let button = Button::new(("open-vsx-install", index)).small();
         let button = if installing {
             button
                 .ghost()
@@ -875,11 +956,11 @@ impl Workbench {
         div()
             .id(("open-vsx", index))
             .px_2()
-            .py_1p5()
+            .py(px(7.))
             .flex()
             .items_center()
-            .gap_2()
-            .rounded(px(6.))
+            .gap_2p5()
+            .rounded(px(8.))
             .hover(|row| row.bg(colors.hover))
             .child(icon)
             .child(
@@ -1006,23 +1087,30 @@ impl Workbench {
         items
     }
 
-    pub(super) fn render_extensions(&self, colors: Colors, cx: &mut Context<Self>) -> AnyElement {
+    pub(super) fn render_extensions(
+        &self,
+        colors: Colors,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
         let strings = self.strings();
         let focus = self.focus_handle.clone();
         let has_updates = !self.store.updates.is_empty();
-        let header = div()
-            .flex()
-            .items_center()
+        let header = view_header(strings.view_extensions, colors)
             .child(
-                div()
-                    .flex_1()
-                    .min_w_0()
-                    .child(heading(strings.view_extensions, colors)),
+                Button::new("extensions-check")
+                    .ghost()
+                    .small()
+                    .icon(Icon::new(IconName::RefreshCw))
+                    .tooltip(strings.extensions_check_updates)
+                    .on_click(cx.listener(|this, _, window, cx| {
+                        this.check_extension_updates(true, window, cx)
+                    })),
             )
             .child(
                 Button::new("extensions-more")
                     .ghost()
-                    .xsmall()
+                    .small()
                     .icon(Icon::new(IconName::Ellipsis))
                     .dropdown_menu(move |menu, _, _| {
                         menu.action_context(focus.clone())
@@ -1045,8 +1133,8 @@ impl Workbench {
                             .menu(strings.extensions_restart, Box::new(RestartExtensions))
                     }),
             );
-        let mut view = div().flex().flex_col().gap_1().child(header);
-        view = view.children(self.render_extension_search());
+        let mut view = div().flex().flex_col().gap_1().pb_3().child(header);
+        view = view.children(self.render_extension_search(colors));
         if let Some(report) = self
             .store
             .cursor
@@ -1062,21 +1150,232 @@ impl Workbench {
                 .child(self.render_open_vsx_results(colors, cx))
                 .into_any_element();
         }
-        view = view.child(heading(strings.installed_extensions, colors));
-        if self.installed.is_empty() {
-            return view
-                .child(note(strings.no_extensions.to_owned(), colors))
-                .into_any_element();
+        // Updates found: one click takes them all.
+        if has_updates {
+            view = view.child(
+                div()
+                    .mx_1()
+                    .my_1()
+                    .px_2p5()
+                    .py_2()
+                    .flex()
+                    .items_center()
+                    .gap_2()
+                    .rounded(px(9.))
+                    .bg(colors.accent.opacity(0.1))
+                    .border_1()
+                    .border_color(colors.accent.opacity(0.25))
+                    .child(
+                        Icon::new(IconName::Download)
+                            .small()
+                            .text_color(colors.accent),
+                    )
+                    .child(
+                        div()
+                            .flex_1()
+                            .min_w_0()
+                            .truncate()
+                            .text_sm()
+                            .text_color(colors.text)
+                            .child(format!(
+                                "{} · {}",
+                                strings.extensions_updates_available,
+                                self.store.updates.len()
+                            )),
+                    )
+                    .child(
+                        Button::new("extensions-update-all")
+                            .primary()
+                            .small()
+                            .label(strings.extension_update)
+                            .tooltip(strings.extensions_update_all)
+                            .on_click(cx.listener(|this, _, window, cx| {
+                                this.update_all_extensions(window, cx)
+                            })),
+                    ),
+            );
         }
-        let mut installed: Vec<&InstalledExtension> = self.installed.iter().collect();
-        installed.sort_by_key(|extension| display_name(extension).to_lowercase());
-        view.children(
-            installed
-                .into_iter()
-                .enumerate()
-                .map(|(index, extension)| self.render_extension_row(index, extension, colors, cx)),
-        )
-        .into_any_element()
+
+        let installed_open = !self.store.installed_collapsed;
+        view = view.child(
+            section_header(
+                "extensions-installed",
+                strings.installed_extensions,
+                installed_open,
+                colors,
+            )
+            .on_click(cx.listener(|this, _, _, cx| {
+                this.store.installed_collapsed = !this.store.installed_collapsed;
+                cx.notify();
+            }))
+            .child(count_badge(self.installed.len(), colors)),
+        );
+        if installed_open {
+            if self.installed.is_empty() {
+                view = view.child(empty_state(
+                    IconName::Blocks,
+                    strings.extensions_empty_title,
+                    strings.extensions_empty_hint,
+                    colors,
+                ));
+            } else {
+                let mut installed: Vec<&InstalledExtension> = self.installed.iter().collect();
+                installed.sort_by_key(|extension| display_name(extension).to_lowercase());
+                view =
+                    view.children(installed.into_iter().enumerate().map(|(index, extension)| {
+                        self.render_extension_row(index, extension, colors, cx)
+                    }));
+            }
+        }
+
+        // What the project recommends and is not installed yet.
+        let recommended: Vec<String> = self
+            .store
+            .recommended
+            .iter()
+            .filter(|id| self.installed_version(id).is_none())
+            .cloned()
+            .collect();
+        if !recommended.is_empty() {
+            let open = !self.store.recommended_collapsed;
+            view = view.child(
+                div().pt_2().child(
+                    section_header(
+                        "extensions-recommended",
+                        strings.extensions_recommended,
+                        open,
+                        colors,
+                    )
+                    .on_click(cx.listener(|this, _, _, cx| {
+                        this.store.recommended_collapsed = !this.store.recommended_collapsed;
+                        cx.notify();
+                    }))
+                    .child(count_badge(recommended.len(), colors)),
+                ),
+            );
+            if open {
+                view = view.children(
+                    recommended
+                        .into_iter()
+                        .enumerate()
+                        .map(|(index, id)| self.render_recommended_row(index, id, colors, cx)),
+                );
+            }
+        }
+
+        // The tools, in sight rather than behind "…".
+        let tool = |id: &'static str,
+                    icon: IconName,
+                    label: &'static str,
+                    action: Box<dyn gpui::Action>| {
+            let keys = super::shell::keys_for(action.as_ref(), window);
+            tool_row(id, icon, label, keys, colors)
+                .on_click(move |_, window, cx| window.dispatch_action(action.boxed_clone(), cx))
+        };
+        view = view
+            .child(
+                div()
+                    .pt_3()
+                    .child(heading(strings.extensions_tools, colors)),
+            )
+            .child(div().px_1().flex().flex_col().children([
+                tool(
+                    "extensions-tool-vsix",
+                    IconName::PackagePlus,
+                    strings.extensions_tool_vsix,
+                    Box::new(InstallFromVsix),
+                ),
+                tool(
+                    "extensions-tool-cursor",
+                    IconName::Import,
+                    strings.extensions_import_cursor,
+                    Box::new(super::cursor_import::ImportFromCursor),
+                ),
+                tool(
+                    "extensions-tool-settings",
+                    IconName::Settings,
+                    strings.extensions_tool_settings,
+                    Box::new(OpenSettings),
+                ),
+                tool(
+                    "extensions-tool-restart",
+                    IconName::RotateCcw,
+                    strings.extensions_restart,
+                    Box::new(RestartExtensions),
+                ),
+            ]))
+            .child(
+                div()
+                    .px_2()
+                    .pt_3()
+                    .text_xs()
+                    .text_color(colors.faint)
+                    .child(strings.extensions_footnote),
+            );
+        view.into_any_element()
+    }
+
+    /// An extension the project recommends: its id, and Install.
+    fn render_recommended_row(
+        &self,
+        index: usize,
+        id: String,
+        colors: Colors,
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
+        let strings = self.strings();
+        let installing = self.store.installing.contains(&key(&id));
+        let (publisher, name) = id.split_once('.').unwrap_or(("", id.as_str()));
+        let (publisher, name) = (publisher.to_owned(), name.to_owned());
+        let install = self.store.client.as_ref().map(|_| {
+            let id = id.clone();
+            Button::new(("extension-recommended-install", index))
+                .primary()
+                .small()
+                .label(if installing {
+                    strings.extension_installing
+                } else {
+                    strings.extension_install
+                })
+                .disabled(installing)
+                .on_click(cx.listener(move |this, _, window, cx| {
+                    this.install_from_open_vsx(&id, window, cx)
+                }))
+        });
+        div()
+            .id(("extension-recommended", index))
+            .px_2()
+            .py_1p5()
+            .flex()
+            .items_center()
+            .gap_2p5()
+            .rounded(px(8.))
+            .hover(|row| row.bg(colors.hover))
+            .child(placeholder_icon(colors))
+            .child(
+                div()
+                    .flex_1()
+                    .min_w_0()
+                    .flex()
+                    .flex_col()
+                    .child(
+                        div()
+                            .truncate()
+                            .text_sm()
+                            .font_weight(gpui::FontWeight::MEDIUM)
+                            .text_color(colors.text)
+                            .child(name),
+                    )
+                    .child(
+                        div()
+                            .truncate()
+                            .text_xs()
+                            .text_color(colors.faint)
+                            .child(publisher),
+                    ),
+            )
+            .children(install)
+            .into_any_element()
     }
 
     fn render_extension_row(
@@ -1090,7 +1389,7 @@ impl Workbench {
         let enabled = self.extension_enabled(&id);
         let strings = self.strings();
         let icon: AnyElement = match icon_path(extension) {
-            Some(path) => img(path).size(px(32.)).flex_none().into_any_element(),
+            Some(path) => icon_image(path),
             None => placeholder_icon(colors),
         };
         let items = self.extension_menu_items(&id);
@@ -1102,47 +1401,37 @@ impl Workbench {
         let installing = self.store.installing.contains(&key(&id));
         let focus = self.focus_handle.clone();
         let opened = id.clone();
+        let limits = self.extension_limits(&id);
         div()
             .id(("extension", index))
             .px_2()
-            .py_1p5()
+            .py(px(7.))
             .flex()
             .items_center()
-            .gap_2()
-            .rounded(px(6.))
+            .gap_2p5()
+            .rounded(px(8.))
             .cursor_pointer()
             .hover(|row| row.bg(colors.hover))
-            .when(!enabled, |row| row.opacity(0.55))
+            .active(|row| row.bg(colors.selected))
             .on_click(cx.listener(move |this, _, window, cx| {
                 this.open_extension_details(&opened, window, cx)
             }))
-            .child(icon)
+            .child(div().when(!enabled, |icon| icon.opacity(0.5)).child(icon))
             .child(
                 div()
                     .flex_1()
                     .min_w_0()
                     .flex()
                     .flex_col()
+                    .gap(px(1.))
+                    // The name keeps the whole width: the version goes under it.
                     .child(
                         div()
-                            .flex()
-                            .items_baseline()
-                            .gap_1p5()
-                            .child(
-                                div()
-                                    .min_w_0()
-                                    .truncate()
-                                    .text_sm()
-                                    .text_color(colors.text)
-                                    .child(display_name(extension)),
-                            )
-                            .child(
-                                div()
-                                    .flex_none()
-                                    .text_xs()
-                                    .text_color(colors.faint)
-                                    .child(extension.manifest.version.clone()),
-                            ),
+                            .truncate()
+                            .text_sm()
+                            .font_weight(gpui::FontWeight::MEDIUM)
+                            .text_color(if enabled { colors.text } else { colors.muted })
+                            .child(display_name(extension)),
                     )
                     .child(
                         div()
@@ -1154,33 +1443,50 @@ impl Workbench {
                     .child(
                         div()
                             .flex()
-                            .gap_1p5()
+                            .items_center()
+                            .gap_1()
+                            .min_w_0()
                             .text_xs()
                             .text_color(colors.faint)
-                            .child(extension.manifest.publisher.clone())
+                            .child(
+                                div()
+                                    .min_w_0()
+                                    .truncate()
+                                    .child(extension.manifest.publisher.clone()),
+                            )
+                            .child(
+                                div()
+                                    .flex_none()
+                                    .child(format!("· {}", extension.manifest.version)),
+                            )
                             .when(!enabled, |line| {
-                                line.child(strings.extension_disabled_badge)
-                            })
-                            .when_some(self.extension_limits(&id), |line, (works, why)| {
                                 line.child(
-                                    div()
-                                        .id(("extension-limits", index))
-                                        .min_w_0()
-                                        .truncate()
-                                        .text_color(if works {
-                                            colors.faint
-                                        } else {
-                                            cx.theme().warning
-                                        })
-                                        .child(if works {
+                                    pill(strings.extension_disabled_badge, colors.muted)
+                                        .flex_none(),
+                                )
+                            })
+                            .when_some(limits, |line, (works, why)| {
+                                line.child(
+                                    pill(
+                                        if works {
                                             strings.extension_partly_working
                                         } else {
                                             strings.extension_not_working
-                                        })
-                                        .tooltip(move |window, cx| {
+                                        },
+                                        if works {
+                                            colors.muted
+                                        } else {
+                                            cx.theme().warning
+                                        },
+                                    )
+                                    .id(("extension-limits", index))
+                                    .min_w_0()
+                                    .tooltip(
+                                        move |window, cx| {
                                             gpui_component::tooltip::Tooltip::new(why.clone())
                                                 .build(window, cx)
-                                        }),
+                                        },
+                                    ),
                                 )
                             }),
                     ),
@@ -1190,7 +1496,7 @@ impl Workbench {
                 row.child(
                     Button::new(("extension-update", index))
                         .primary()
-                        .xsmall()
+                        .small()
                         .label(strings.extension_update)
                         .tooltip(version)
                         .on_click(cx.listener(move |this, _, window, cx| {
@@ -1210,7 +1516,7 @@ impl Workbench {
             .child(
                 Button::new(("extension-menu", index))
                     .ghost()
-                    .xsmall()
+                    .small()
                     .icon(Icon::new(IconName::Settings))
                     .dropdown_menu(move |menu, _, _| {
                         let mut menu = menu.action_context(focus.clone());

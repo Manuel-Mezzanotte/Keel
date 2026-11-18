@@ -243,7 +243,8 @@ fn open_window(root: Option<PathBuf>, file: Option<PathBuf>, cx: &mut App) {
 
     let created: Rc<RefCell<Option<WeakEntity<Workbench>>>> = Rc::default();
     let opening = Opening::new(root.clone(), file).with_data_dir(data.clone());
-    let opened = cx.open_window(window_options(bounds), {
+    let look = crate::workbench_window::look::Look::from_settings(&settings);
+    let opened = cx.open_window(window_options(bounds, look), {
         let created = created.clone();
         move |window, cx| {
             let view = cx.new(|cx| {

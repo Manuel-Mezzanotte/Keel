@@ -214,7 +214,7 @@ impl Workbench {
                 own_clicks("npm-actions").child(
                     Button::new("npm-more")
                         .ghost()
-                        .xsmall()
+                        .small()
                         .icon(Icon::new(IconName::Ellipsis))
                         .dropdown_menu(move |menu, _, _| {
                             menu.item(gpui_component::menu::PopupMenuItem::new(hide).on_click(

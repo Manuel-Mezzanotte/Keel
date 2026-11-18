@@ -75,6 +75,7 @@ impl Workbench {
             panel_height: Some(self.panel_height),
             agent_width: Some(self.agent_width),
             sidebar_width: Some(self.sidebar_width),
+            graph_height: Some(self.scm_graph_height),
             collapsed: self.collapsed_sections(),
             recent_searches: self.search.recent.clone(),
         }
@@ -217,6 +218,9 @@ impl Workbench {
         }
         if let Some(width) = state.sidebar_width.filter(|width| width.is_finite()) {
             self.sidebar_width = width.clamp(180., 600.);
+        }
+        if let Some(height) = state.graph_height.filter(|height| height.is_finite()) {
+            self.scm_graph_height = height.clamp(96., 2000.);
         }
         self.npm_collapsed = state
             .collapsed

@@ -126,16 +126,21 @@ impl Workbench {
 
     /// The strip on the left edge of Claude Code's panel that changes its
     /// width.
+    /// The handle on the panel's left edge: the gap before it in the
+    /// floating style, the line itself in the flat one.
     pub(super) fn render_agent_resize(&self, colors: Colors) -> impl IntoElement {
+        let flat = self.look.flat();
         div()
             .id("agent-resize")
             .absolute()
-            .left(px(-5.))
+            .left_0()
             .top_0()
             .bottom_0()
-            .w(px(6.))
+            .w(px(if flat { 5. } else { self.look.gap() }))
             .cursor_col_resize()
-            .hover(move |handle| handle.bg(colors.accent.opacity(0.4)))
+            .when(flat, |handle| {
+                handle.hover(move |handle| handle.bg(colors.accent.opacity(0.35)))
+            })
             .on_drag(AgentResize, |resize, _, _, cx| cx.new(|_| resize.clone()))
     }
 
@@ -146,7 +151,7 @@ impl Workbench {
         cx: &mut Context<Self>,
     ) {
         let bounds = event.bounds;
-        let width = f32::from(bounds.right() - event.event.position.x) - super::shell::GAP;
+        let width = f32::from(bounds.right() - event.event.position.x) - self.look.gap();
         let room = f32::from(bounds.size.width) * 0.7;
         self.agent_width = width.clamp(AGENT_MIN_WIDTH, room.max(AGENT_MIN_WIDTH));
         self.session_changed(cx);

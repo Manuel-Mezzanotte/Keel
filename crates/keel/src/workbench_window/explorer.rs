@@ -15,7 +15,7 @@ use gpui_component::menu::ContextMenuExt as _;
 use gpui_component::{Icon, Sizable as _};
 use gpui_kit_assets::IconName;
 
-use super::shell::{Colors, heading, note};
+use super::shell::{Colors, note, view_header};
 use super::*;
 
 const ROW_HEIGHT: f32 = 24.;
@@ -635,21 +635,11 @@ impl Workbench {
         let toolbar_button = |id: &'static str, icon: IconName, tooltip: &'static str| {
             Button::new(id)
                 .ghost()
-                .xsmall()
+                .small()
                 .icon(Icon::new(icon))
                 .tooltip(tooltip)
         };
-        let header = div()
-            .flex_none()
-            .flex()
-            .items_center()
-            .child(
-                div()
-                    .flex_1()
-                    .min_w_0()
-                    .truncate()
-                    .child(heading(&self.project.name, colors)),
-            )
+        let header = view_header(&self.project.name, colors)
             .child(
                 toolbar_button(
                     "explorer-new-file",

@@ -48,6 +48,9 @@ pub struct WindowState {
     pub agent_width: Option<f32>,
     #[serde(default)]
     pub sidebar_width: Option<f32>,
+    /// The height of Source Control's Graph section.
+    #[serde(default)]
+    pub graph_height: Option<f32>,
     /// Sections of the sidebar closed to their header, such as
     /// `"npm-scripts"`.
     #[serde(default)]

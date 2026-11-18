@@ -24,9 +24,11 @@ mod find_bar;
 mod git_graph;
 mod git_gutter;
 mod host_watchdog;
+mod interface_page;
 mod keybindings_view;
 mod language_features;
 mod language_servers;
+pub(crate) mod look;
 mod markdown_preview;
 mod navigation;
 mod npm_scripts;
@@ -393,6 +395,8 @@ pub struct Workbench {
     font_size: f32,
     project: Project,
     layout: Layout,
+    /// The window's style and whether things move, from the settings.
+    look: look::Look,
     /// Every installed extension, on or off.
     installed: Vec<InstalledExtension>,
     /// Which extensions are turned off, everywhere or in a project.
@@ -482,6 +486,8 @@ pub struct Workbench {
     npm_collapsed: bool,
     /// The Graph section of Source Control is closed to its header.
     graph_collapsed: bool,
+    /// The Graph section's height, dragged from the line above it.
+    scm_graph_height: f32,
     /// The latest commits, for the Graph section of Source Control.
     scm_graph: scm_graph::SidebarGraph,
     /// The language servers of the open files.
@@ -596,6 +602,7 @@ impl Workbench {
             .string("editor.wordWrap")
             .is_some_and(|wrap| wrap != "off");
         let font_size = editing::font_size_setting(&settings);
+        let look = look::Look::from_settings(&settings);
         let scm = source_control::SourceControl::new(
             project.root.as_deref(),
             language.strings(),
@@ -620,6 +627,7 @@ impl Workbench {
             font_size,
             project,
             layout: Layout::default(),
+            look,
             installed: Vec::new(),
             extension_state: Default::default(),
             extension_data: None,
@@ -668,6 +676,7 @@ impl Workbench {
             npm_scripts: None,
             npm_collapsed: false,
             graph_collapsed: false,
+            scm_graph_height: scm_graph::GRAPH_HEIGHT,
             scm_graph: Default::default(),
             scm,
             diff_split: true,
@@ -690,6 +699,9 @@ impl Workbench {
         };
         workbench.build_tree();
         workbench.refresh_npm_scripts();
+        if let Some(root) = workbench.project.root.as_deref() {
+            workbench.store.recommended = extensions_view::recommendations(root);
+        }
         workbench.diff_split = workbench
             .settings
             .get("diffEditor.renderSideBySide")

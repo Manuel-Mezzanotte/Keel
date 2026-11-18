@@ -21,6 +21,30 @@ const ROW_HEIGHT: f32 = 24.;
 const LANE_WIDTH: f32 = 10.;
 /// Lanes past these are cut, to leave room for the messages.
 const MOST_LANES: usize = 5;
+/// The section's header, and its height at first.
+const HEADER_HEIGHT: f32 = 30.;
+pub(super) const GRAPH_HEIGHT: f32 = 300.;
+/// The least the graph keeps, and the room it leaves the rest of the view.
+const GRAPH_MIN_HEIGHT: f32 = 96.;
+const ROOM_FOR_CHANGES: f32 = 230.;
+
+/// The handle above the Graph section.
+#[derive(Clone)]
+pub(super) struct ScmGraphResize;
+
+impl gpui::Render for ScmGraphResize {
+    fn render(&mut self, _: &mut Window, _: &mut Context<Self>) -> impl IntoElement {
+        gpui::Empty
+    }
+}
+
+/// The graph's height for a drag to `height` in a view `view` tall: never
+/// so low that it hides its commits, never so high that the message and
+/// the changes have no room.
+pub(super) fn graph_height_within(height: f32, view: f32) -> f32 {
+    let most = (view - ROOM_FOR_CHANGES).max(GRAPH_MIN_HEIGHT);
+    height.clamp(GRAPH_MIN_HEIGHT, most)
+}
 
 /// How long ago, as Apple's Mail lists dates: `ora`, `5 min`, `3 h`,
 /// `2 g`, `4 sett`, `3 mesi`, `2 anni`.
@@ -99,11 +123,26 @@ impl Workbench {
         }));
     }
 
-    /// The section: its header, and the commits when it is open.
-    pub(super) fn render_scm_graph(&self, colors: Colors, cx: &mut Context<Self>) -> AnyElement {
+    /// The section: its header, and the commits when it is open. It keeps
+    /// the height it was dragged to; closed, only its header stays, at the
+    /// bottom of the view.
+    pub(super) fn render_scm_graph(
+        &self,
+        colors: Colors,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
         let strings = self.strings();
         let open = !self.graph_collapsed;
+        let unfolded = super::look::glide(
+            "scm-graph-open",
+            if open { 1. } else { 0. },
+            self.look.duration(220),
+            window,
+            cx,
+        );
         let header = section_header("scm-graph-header", strings.scm_graph, open, colors)
+            .h(px(HEADER_HEIGHT))
             .on_click(cx.listener(|this, _, _, cx| {
                 this.graph_collapsed = !this.graph_collapsed;
                 this.session_changed(cx);
@@ -113,7 +152,7 @@ impl Workbench {
                 own_clicks("scm-graph-actions").child(
                     gpui_component::button::Button::new("scm-open-graph")
                         .ghost()
-                        .xsmall()
+                        .small()
                         .icon(gpui_component::Icon::new(
                             gpui_kit_assets::IconName::GitGraph,
                         ))
@@ -124,33 +163,97 @@ impl Workbench {
                 ),
             );
         let count = self.scm_graph.commits.len();
+        let list_height = (self.scm_graph_height - HEADER_HEIGHT).max(0.);
+        let height = HEADER_HEIGHT + list_height * unfolded;
+        // The line above the section is its handle: drag it up and down.
+        let handle = div()
+            .id("scm-graph-resize")
+            .absolute()
+            .top(px(-3.))
+            .left_0()
+            .right_0()
+            .h(px(7.))
+            .cursor_row_resize()
+            .flex()
+            .items_center()
+            .group("scm-graph-handle")
+            .child(
+                div()
+                    .w_full()
+                    .h(px(2.))
+                    .group_hover("scm-graph-handle", |line| {
+                        line.bg(colors.accent.opacity(0.6))
+                    }),
+            )
+            .tooltip(move |window, cx| {
+                gpui_component::tooltip::Tooltip::new(strings.scm_graph_resize).build(window, cx)
+            })
+            .on_drag(ScmGraphResize, |resize, _, _, cx| {
+                cx.new(|_| resize.clone())
+            })
+            .on_click(cx.listener(|this, event: &gpui::ClickEvent, _, cx| {
+                if event.click_count() >= 2 {
+                    this.scm_graph_height = GRAPH_HEIGHT;
+                    this.session_changed(cx);
+                    cx.notify();
+                }
+            }));
+        let list = uniform_list(
+            "scm-graph-rows",
+            count,
+            cx.processor(|this, range: Range<usize>, _, cx| {
+                let colors = Colors::new(cx);
+                range
+                    .map(|index| this.render_scm_graph_row(index, colors, cx))
+                    .collect::<Vec<_>>()
+            }),
+        )
+        .px_1()
+        .size_full();
         div()
+            .relative()
             .flex()
             .flex_col()
             .border_t_1()
             .border_color(colors.border)
-            .pt_1()
-            .when(open, |section| section.flex_1().min_h(px(120.)))
-            .when(!open, |section| section.flex_none())
+            .pt_0p5()
+            // In a short window the graph gives way before the changes.
+            .flex_shrink(1.)
+            .min_h(px(HEADER_HEIGHT))
+            .h(px(height))
             .child(header)
-            .when(open, |section| {
+            .when(unfolded > 0., |section| {
                 section.child(
-                    uniform_list(
-                        "scm-graph-rows",
-                        count,
-                        cx.processor(|this, range: Range<usize>, _, cx| {
-                            let colors = Colors::new(cx);
-                            range
-                                .map(|index| this.render_scm_graph_row(index, colors, cx))
-                                .collect::<Vec<_>>()
-                        }),
-                    )
-                    .px_1()
-                    .flex_1()
-                    .min_h_0(),
+                    div()
+                        .overflow_hidden()
+                        .when(unfolded < 1., |rows| {
+                            rows.flex_none().h(px(list_height * unfolded))
+                        })
+                        .when(unfolded >= 1., |rows| rows.flex_1().min_h_0())
+                        .child(
+                            div()
+                                .h(px(list_height))
+                                .when(unfolded >= 1., |rows| rows.h_full())
+                                .child(list),
+                        ),
                 )
             })
+            .when(open, |section| section.child(handle))
             .into_any_element()
+    }
+
+    /// Follows the drag of the line above the graph; `bounds` is the whole
+    /// Source Control view.
+    pub(super) fn resize_scm_graph(
+        &mut self,
+        event: &gpui::DragMoveEvent<ScmGraphResize>,
+        cx: &mut Context<Self>,
+    ) {
+        let bounds = event.bounds;
+        let height = f32::from(bounds.bottom() - event.event.position.y);
+        self.scm_graph_height = graph_height_within(height, f32::from(bounds.size.height));
+        self.session_changed(cx);
+        cx.notify();
     }
 
     fn render_scm_graph_row(

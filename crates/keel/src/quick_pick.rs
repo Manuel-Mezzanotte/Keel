@@ -7,12 +7,87 @@ use std::rc::Rc;
 
 use files::fuzzy;
 use futures::channel::oneshot;
-use gpui::{AnyElement, App, AppContext as _, ParentElement as _, Styled as _, Window, div, px};
+use gpui::{
+    AnyElement, App, AppContext as _, IntoElement, ParentElement as _, Styled as _, Window, div, px,
+};
 use gpui_component::command::{Command, CommandItem, CommandState};
+use gpui_component::dialog::{Dialog, DialogEntrance};
 use gpui_component::{ActiveTheme as _, WindowExt as _};
 
 /// The most entries shown at once; typing narrows the rest down.
 const SHOWN: usize = 200;
+/// The list's width, and how far from the window's top it opens: just
+/// under the toolbar, as Spotlight under the menu bar.
+const WIDTH: f32 = 640.;
+const TOP: f32 = 60.;
+/// How tall the list grows before it scrolls.
+const LIST_HEIGHT: f32 = 400.;
+
+/// One surface for the field and the list, with no frame inside a frame and
+/// no close button: Esc and a click outside close it.
+fn frame(dialog: Dialog, cx: &App) -> Dialog {
+    let theme = cx.theme();
+    dialog
+        .w(px(WIDTH))
+        .margin_top(px(TOP))
+        .close_button(false)
+        .entrance(DialogEntrance::FadeSlide)
+        .p_0()
+        .bg(theme.popover)
+        .rounded(px(12.))
+        .overflow_hidden()
+}
+
+/// What the list is for, in small letters over its field.
+fn title_row(title: String, cx: &App) -> impl IntoElement + use<> {
+    div()
+        .px_3()
+        .pt_2p5()
+        .text_xs()
+        .font_weight(gpui::FontWeight::SEMIBOLD)
+        .text_color(cx.theme().muted_foreground)
+        .child(title)
+}
+
+/// The keys of the list under it, as Raycast and Spotlight show them.
+fn key_hints(cx: &App) -> impl IntoElement + use<> {
+    let theme = cx.theme();
+    let strings = crate::menus::language(cx).strings();
+    let key = |keys: &'static str| {
+        div()
+            .h(px(18.))
+            .px(px(5.))
+            .flex()
+            .items_center()
+            .rounded(px(5.))
+            .border_1()
+            .border_color(theme.border)
+            .text_color(theme.foreground.opacity(0.8))
+            .child(keys)
+    };
+    let hint = |keys: &'static str, what: &'static str| {
+        div()
+            .flex()
+            .items_center()
+            .gap_1p5()
+            .child(key(keys))
+            .child(what)
+    };
+    div()
+        .flex_none()
+        .h(px(34.))
+        .px_3()
+        .flex()
+        .items_center()
+        .gap_4()
+        .border_t_1()
+        .border_color(theme.border)
+        .text_xs()
+        .text_color(theme.muted_foreground)
+        .child(hint("↑↓", strings.pick_move))
+        .child(hint("↩", strings.pick_choose))
+        .child(hint("esc", strings.pick_close))
+}
 
 /// One entry of the list.
 #[derive(Clone, Debug)]
@@ -115,6 +190,9 @@ pub fn show_with(
             .map(|&index| row(&items[index], icon.as_ref()))
             .collect();
         let command = Command::new(&state)
+            .bordered(false)
+            .max_h(px(LIST_HEIGHT))
+            .footer(|_, _, cx| key_hints(cx))
             .filterable(false)
             .items(rows)
             .placeholder(placeholder.clone().unwrap_or_default())
@@ -135,14 +213,14 @@ pub fn show_with(
             })
             // The dialog closes itself after a cancel.
             .on_cancel(move |_, _| cancel(None));
-        let dialog = dialog
-            .w(px(600.))
+        // The title sits over the field, inside the same surface.
+        let command = match title.clone() {
+            Some(title) => command.header(move |_, _, cx| title_row(title.clone(), cx)),
+            None => command,
+        };
+        frame(dialog, cx)
             .on_close(move |_, _, _| close(None))
-            .child(command);
-        match &title {
-            Some(title) => dialog.title(title.clone()),
-            None => dialog,
-        }
+            .child(command)
     });
     receiver
 }
@@ -204,6 +282,9 @@ pub fn show_dynamic(
             .map(|item| row(item, None))
             .collect();
         let command = Command::new(&state)
+            .bordered(false)
+            .max_h(px(LIST_HEIGHT))
+            .footer(|_, _, cx| key_hints(cx))
             .filterable(false)
             .items(rows)
             .placeholder(placeholder.clone().unwrap_or_default())
@@ -216,8 +297,7 @@ pub fn show_dynamic(
                 window.close_dialog(cx);
             })
             .on_cancel(move |_, _| cancel(None));
-        dialog
-            .w(px(600.))
+        frame(dialog, cx)
             .on_close(move |_, _, _| close(None))
             .child(command)
     });

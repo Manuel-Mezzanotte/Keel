@@ -71,6 +71,31 @@ const ON_OFF: &[(&str, &str, &str)] = &[("off", "Spento", "Off"), ("on", "Acceso
 /// Every setting the window offers, as VS Code names them.
 pub(super) const CATALOG: &[Entry] = &[
     Entry {
+        key: super::look::STYLE_SETTING,
+        page: Page::Appearance,
+        kind: Kind::Choice(&[
+            ("floating", "Pannelli sospesi", "Floating Panels"),
+            ("flat", "Piatto", "Flat"),
+        ]),
+        default: "\"floating\"",
+        title: ("Stile della finestra", "Window Style"),
+        description: (
+            "Pannelli arrotondati sospesi sullo sfondo, oppure piatti e divisi da linee sottili.",
+            "Rounded panels floating on the background, or flat ones divided by thin lines.",
+        ),
+    },
+    Entry {
+        key: super::look::MOTION_SETTING,
+        page: Page::Appearance,
+        kind: Kind::Switch,
+        default: "true",
+        title: ("Animazioni", "Animations"),
+        description: (
+            "I pannelli scorrono, le viste compaiono, le finestre si aprono con garbo. Riduci movimento di macOS le spegne comunque.",
+            "Panels slide, views fade in, overlays open gently. macOS's Reduce Motion turns them off anyway.",
+        ),
+    },
+    Entry {
         key: "keel.language",
         page: Page::Appearance,
         kind: Kind::Choice(&[
@@ -573,6 +598,13 @@ impl Workbench {
                 crate::theme::apply(&choice, Some(window), cx);
             }
             "editor.tabSize" | "editor.insertSpaces" => self.apply_tab_size(cx),
+            super::look::STYLE_SETTING | super::look::MOTION_SETTING => {
+                self.look = super::look::Look::from_settings(&self.settings);
+                // The toolbar's height changes with the style: the traffic
+                // lights stay in its middle.
+                window.set_traffic_light_position(self.look.traffic_lights());
+                cx.notify();
+            }
             "workbench.iconTheme" => self.reload_icon_theme(),
             _ => {}
         }
@@ -618,7 +650,7 @@ impl Workbench {
         let handle = window.window_handle();
         let item = |field: Field| self.setting_item(field, italian, &workbench, handle);
         let pages = [
-            (Page::Appearance, ("Aspetto", "Appearance")),
+            (Page::Appearance, ("Interfaccia", "Interface")),
             (Page::Editor, ("Editor", "Editor")),
             (Page::Files, ("File e finestre", "Files and Windows")),
             (Page::Terminal, ("Terminale", "Terminal")),
@@ -628,14 +660,16 @@ impl Workbench {
         let mut all: Vec<SettingPage> = pages
             .into_iter()
             .map(|(page, title)| {
+                let page_of = SettingPage::new(pick(title)).resettable(true);
+                if page == Page::Appearance {
+                    return page_of.groups(self.interface_groups(italian, &workbench, handle));
+                }
                 let items: Vec<SettingItem> = CATALOG
                     .iter()
                     .filter(|entry| entry.page == page)
                     .map(|entry| item(Field::from_entry(entry, italian)))
                     .collect();
-                SettingPage::new(pick(title))
-                    .resettable(true)
-                    .group(SettingGroup::new().items(items))
+                page_of.group(SettingGroup::new().items(items))
             })
             .collect();
         // Then a page for each running extension with settings of its own,
@@ -693,6 +727,61 @@ impl Workbench {
             )
             .child(div().flex_1().min_h_0().child(settings))
             .into_any_element()
+    }
+
+    /// The Interface page in groups: the window's style drawn small, the
+    /// themes as pictures with the settings that pick them, the movements,
+    /// and the rest.
+    fn interface_groups(
+        &self,
+        italian: bool,
+        workbench: &WeakEntity<Workbench>,
+        handle: AnyWindowHandle,
+    ) -> Vec<SettingGroup> {
+        let pick = |pair: (&'static str, &'static str)| if italian { pair.0 } else { pair.1 };
+        let entry_item = |key: &str| {
+            CATALOG.iter().find(|entry| entry.key == key).map(|entry| {
+                self.setting_item(
+                    Field::from_entry(entry, italian),
+                    italian,
+                    workbench,
+                    handle,
+                )
+            })
+        };
+        let style = super::interface_page::style_picker(workbench, handle, italian);
+        let themes = super::interface_page::theme_picker(workbench, handle);
+        vec![
+            SettingGroup::new()
+                .title(pick(("Stile della finestra", "Window Style")))
+                .description(pick((
+                    "Lo stesso Keel, disegnato in due modi. Cambia al volo, in ogni finestra.",
+                    "The same Keel, drawn two ways. It changes at once, in every window.",
+                )))
+                .item(style),
+            SettingGroup::new()
+                .title(pick(("Tema", "Theme")))
+                .item(themes)
+                .items(
+                    [
+                        "window.autoDetectColorScheme",
+                        "workbench.preferredDarkColorTheme",
+                        "workbench.preferredLightColorTheme",
+                    ]
+                    .into_iter()
+                    .filter_map(entry_item),
+                ),
+            SettingGroup::new()
+                .title(pick(("Movimento", "Motion")))
+                .items(entry_item(super::look::MOTION_SETTING)),
+            SettingGroup::new()
+                .title(pick(("Generale", "General")))
+                .items(
+                    ["keel.language", "breadcrumbs.enabled"]
+                        .into_iter()
+                        .filter_map(entry_item),
+                ),
+        ]
     }
 
     /// The running extensions that declare settings, by name: their id,

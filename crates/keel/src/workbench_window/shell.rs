@@ -1,26 +1,28 @@
-//! The layout of sketch D: rounded panels floating on the window's
-//! background, a unified toolbar beside the traffic lights, the sidebar, the
-//! editors with the bottom panel, Claude Code on the right, the status bar.
+//! The window's frame, in either style of [`super::look`]: the toolbar
+//! beside the traffic lights, the sidebar, the editors with the bottom
+//! panel, Claude Code on the right and the status bar. In the floating
+//! style they are rounded panels on the window's background (sketch D); in
+//! the flat one they touch, divided by hairlines.
 
 use gpui::{
-    AnyElement, Bounds, Div, FontWeight, Pixels, Render, StatefulInteractiveElement as _,
-    TitlebarOptions, WindowBounds, WindowOptions, point, size, svg,
+    Animation, AnimationExt as _, AnyElement, Bounds, Div, FontWeight, OperatingSystem, Pixels,
+    Render, SharedString, StatefulInteractiveElement as _, TitlebarOptions, WindowBounds,
+    WindowOptions, relative, size, svg,
 };
 use gpui_component::button::{Button, ButtonVariants as _};
 use gpui_component::menu::ContextMenuExt as _;
 use gpui_component::{Icon, Selectable as _, Sizable as _, TitleBar};
 use gpui_kit_assets::IconName;
 
+use super::look::{self, Look};
 use super::*;
 
-const TOOLBAR_HEIGHT: f32 = 52.;
-/// The space between the panels and around them.
-pub(super) const GAP: f32 = 8.;
-const RADIUS: f32 = 12.;
 /// The sidebar's width at first, and the range it can be dragged to.
 pub(super) const SIDEBAR_WIDTH: f32 = 240.;
 const SIDEBAR_MIN_WIDTH: f32 = 180.;
 const SIDEBAR_MAX_WIDTH: f32 = 600.;
+/// How long the sidebar and the panels take to slide in and out.
+const SLIDE_MS: u64 = 220;
 
 /// The handle on the sidebar's right edge.
 #[derive(Clone)]
@@ -31,20 +33,17 @@ impl Render for SidebarResize {
         gpui::Empty
     }
 }
-const STATUS_HEIGHT: f32 = 24.;
-/// Where the traffic lights sit, centred in the toolbar.
-const TRAFFIC_LIGHTS_X: f32 = 18.;
-const TRAFFIC_LIGHTS_Y: f32 = (TOOLBAR_HEIGHT - 14.) / 2.;
 /// Room for the traffic lights before the toolbar's content.
 const TRAFFIC_LIGHTS_WIDTH: f32 = 88.;
 
-/// The window: the toolbar is drawn by Keel, with macOS's traffic lights.
-pub(crate) fn window_options(bounds: Bounds<Pixels>) -> WindowOptions {
+/// The window: the toolbar is drawn by Keel, with macOS's traffic lights
+/// centred in it.
+pub(crate) fn window_options(bounds: Bounds<Pixels>, look: Look) -> WindowOptions {
     WindowOptions {
         titlebar: Some(TitlebarOptions {
             title: Some("Keel".into()),
             appears_transparent: true,
-            traffic_light_position: Some(point(px(TRAFFIC_LIGHTS_X), px(TRAFFIC_LIGHTS_Y))),
+            traffic_light_position: Some(look.traffic_lights()),
         }),
         // Keel's toolbar moves the window itself, as gpui-component expects.
         app_owns_titlebar_drag: true,
@@ -70,6 +69,8 @@ pub(super) struct Colors {
     pub(super) accent: Hsla,
     pub(super) selected: Hsla,
     pub(super) hover: Hsla,
+    /// A dark theme, for the shades that depend on it.
+    pub(super) dark: bool,
 }
 
 impl Colors {
@@ -86,21 +87,33 @@ impl Colors {
             accent: theme.primary,
             selected: theme.list_active,
             hover: theme.secondary_hover,
+            dark: theme.is_dark(),
         }
+    }
+
+    /// The same colors with the window's background of `look`.
+    pub(super) fn with_look(mut self, look: Look) -> Self {
+        self.desk = look.desk(self, self.dark);
+        self
     }
 }
 
-/// A rounded panel floating on the window's background.
-fn floating(background: Hsla, border: Hsla) -> Div {
+/// One of the window's panels: rounded and floating on the window's
+/// background, or flat, touching its neighbours.
+fn panel(look: Look, background: Hsla, colors: Colors, dark: bool) -> Div {
     div()
         .h_full()
         .flex()
         .flex_col()
         .overflow_hidden()
-        .rounded(px(RADIUS))
-        .border_1()
-        .border_color(border)
         .bg(background)
+        .when(!look.flat(), |panel| {
+            panel
+                .rounded(px(look.radius()))
+                .border_1()
+                .border_color(colors.border)
+                .shadow(look.panel_shadow(dark))
+        })
 }
 
 pub(super) fn heading(text: &str, colors: Colors) -> Div {
@@ -115,6 +128,122 @@ pub(super) fn heading(text: &str, colors: Colors) -> Div {
         .font_weight(FontWeight::SEMIBOLD)
         .text_color(colors.faint)
         .child(text.to_uppercase())
+}
+
+/// The title row on top of a view of the sidebar: its name on the left,
+/// its buttons on the right, as tall in every view.
+pub(super) fn view_header(title: &str, colors: Colors) -> Div {
+    div()
+        .flex_none()
+        .h(px(30.))
+        .pl_2()
+        .flex()
+        .items_center()
+        .gap_0p5()
+        .child(
+            div()
+                .flex_1()
+                .min_w_0()
+                .truncate()
+                .text_xs()
+                .font_weight(FontWeight::SEMIBOLD)
+                .text_color(colors.faint)
+                .child(title.to_uppercase()),
+        )
+}
+
+/// A key in the style macOS draws them in menus, such as `⌘P`.
+pub(super) fn key_hint(keys: impl Into<SharedString>, colors: Colors) -> Div {
+    div()
+        .flex_none()
+        .h(px(18.))
+        .px(px(5.))
+        .flex()
+        .items_center()
+        .rounded(px(5.))
+        .border_1()
+        .border_color(colors.border)
+        .text_size(px(11.))
+        .text_color(colors.faint)
+        .child(keys.into())
+}
+
+/// An empty view's picture and words: a symbol in a soft circle, a title
+/// and a line that says what to do.
+pub(super) fn empty_state(icon: IconName, title: &str, hint: &str, colors: Colors) -> Div {
+    div()
+        .flex_none()
+        .px_4()
+        .py_5()
+        .flex()
+        .flex_col()
+        .items_center()
+        .gap_2()
+        .text_center()
+        .child(
+            div()
+                .size(px(44.))
+                .rounded_full()
+                .flex()
+                .items_center()
+                .justify_center()
+                .bg(colors.accent.opacity(0.12))
+                .child(Icon::new(icon).size(px(20.)).text_color(colors.accent)),
+        )
+        .child(
+            div()
+                .pt_1()
+                .text_sm()
+                .font_weight(FontWeight::SEMIBOLD)
+                .text_color(colors.text)
+                .child(title.to_owned()),
+        )
+        .child(
+            div()
+                .text_xs()
+                .text_color(colors.muted)
+                .child(hint.to_owned()),
+        )
+}
+
+/// A row that runs a command, with its symbol and its keys: for the tools
+/// the empty views offer.
+pub(super) fn tool_row(
+    id: impl Into<gpui::ElementId>,
+    icon: IconName,
+    label: &str,
+    keys: Option<String>,
+    colors: Colors,
+) -> gpui::Stateful<Div> {
+    div()
+        .id(id)
+        .h(px(30.))
+        .px_2()
+        .flex()
+        .items_center()
+        .gap_2()
+        .rounded(px(7.))
+        .text_sm()
+        .text_color(colors.text)
+        .cursor_pointer()
+        .hover(|row| row.bg(colors.hover))
+        .active(|row| row.bg(colors.selected))
+        .child(Icon::new(icon).small().text_color(colors.muted))
+        .child(div().flex_1().min_w_0().truncate().child(label.to_owned()))
+        .children(keys.map(|keys| key_hint(keys, colors)))
+}
+
+/// The keys of an action as people read them on a Mac, such as `⇧⌘O`: the
+/// ones the window answers to now, the user's included.
+pub(super) fn keys_for(action: &dyn gpui::Action, window: &Window) -> Option<String> {
+    let binding = window.highest_precedence_binding_for_action(action)?;
+    let text = binding
+        .keystrokes()
+        .iter()
+        .map(|keystroke| keystroke.inner().unparse(OperatingSystem::Mac))
+        .collect::<Vec<_>>()
+        .join(" ");
+    Some(super::keybindings_view::readable(&text))
 }
 
 /// The header of a section of the sidebar, as Finder's: a chevron that
@@ -295,6 +424,7 @@ impl Workbench {
 
     fn render_toolbar(&self, colors: Colors, window: &Window, cx: &mut Context<Self>) -> TitleBar {
         let strings = self.strings();
+        let look = self.look;
         let project = div()
             .flex_none()
             .flex()
@@ -315,79 +445,100 @@ impl Workbench {
                             .text_sm()
                             .font_weight(FontWeight::SEMIBOLD)
                             .text_color(colors.text)
+                            .line_height(px(17.))
                             .child(self.project.name.clone()),
                     )
                     .when_some(self.project.branch.clone(), |project, branch| {
-                        project.child(div().text_xs().text_color(colors.muted).child(branch))
+                        project.child(
+                            div()
+                                .text_xs()
+                                .line_height(px(14.))
+                                .text_color(colors.muted)
+                                .child(branch),
+                        )
                     }),
             );
 
+        let has_project = self.project.root.is_some();
+        let keys = if has_project {
+            keys_for(&QuickOpen, window)
+        } else {
+            keys_for(&ShowCommands, window)
+        };
         let search = div()
             .id("toolbar-search")
             .w_full()
-            .max_w(px(420.))
-            .h(px(28.))
-            .px_2p5()
+            .max_w(px(if look.flat() { 520. } else { 460. }))
+            .h(px(if look.flat() { 28. } else { 32. }))
+            .pl_2p5()
+            .pr(px(6.))
             .flex()
             .items_center()
             .gap_2()
-            .rounded(px(8.))
+            .rounded(px(if look.flat() { 7. } else { 9. }))
             .border_1()
             .border_color(colors.border)
-            .bg(colors.editor)
+            .bg(if look.flat() {
+                colors.editor
+            } else {
+                colors.panel
+            })
             .text_sm()
             .text_color(colors.faint)
             .cursor_pointer()
-            .hover(|search| search.text_color(colors.muted))
+            .hover(|search| {
+                search
+                    .text_color(colors.muted)
+                    .border_color(colors.accent.opacity(0.5))
+            })
             .on_click(cx.listener(|this, _, window, cx| this.quick_open(window, cx)))
             .child(Icon::new(IconName::Search).small())
-            .child(if self.project.root.is_some() {
+            .child(div().flex_1().min_w_0().truncate().child(if has_project {
                 strings.search_files
             } else {
                 strings.search_commands
-            })
-            .child(
-                div()
-                    .ml_auto()
-                    .text_xs()
-                    .child(if self.project.root.is_some() {
-                        "⌘P"
-                    } else {
-                        "⇧⌘P"
-                    }),
-            );
+            }))
+            .children(keys.map(|keys| key_hint(keys, colors)));
 
+        let toggle = |id: &'static str, icon: IconName, on: bool, tooltip: &'static str| {
+            Button::new(id)
+                .ghost()
+                .with_size(gpui_component::Size::Medium)
+                .icon(Icon::new(icon))
+                .selected(on)
+                .tooltip(tooltip)
+        };
         let toggles = div()
             .flex_none()
             .flex()
             .items_center()
-            .gap_1()
+            .gap_0p5()
             .child(
-                Button::new("toggle-sidebar")
-                    .ghost()
-                    .small()
-                    .icon(Icon::new(IconName::PanelLeft))
-                    .selected(self.layout.sidebar)
-                    .tooltip(strings.toggle_sidebar)
-                    .on_click(cx.listener(|this, _, _, cx| this.toggle_sidebar(cx))),
+                toggle(
+                    "toggle-sidebar",
+                    IconName::PanelLeft,
+                    self.layout.sidebar,
+                    strings.toggle_sidebar,
+                )
+                .on_click(cx.listener(|this, _, _, cx| this.toggle_sidebar(cx))),
             )
             .child(
-                Button::new("toggle-panel")
-                    .ghost()
-                    .small()
-                    .icon(Icon::new(IconName::PanelBottom))
-                    .selected(self.layout.panel)
-                    .tooltip(strings.toggle_panel)
-                    .on_click(cx.listener(|this, _, _, cx| this.toggle_panel(cx))),
+                toggle(
+                    "toggle-panel",
+                    IconName::PanelBottom,
+                    self.layout.panel,
+                    strings.toggle_panel,
+                )
+                .on_click(cx.listener(|this, _, _, cx| this.toggle_panel(cx))),
             )
             .child(
-                Button::new("toggle-agent")
-                    .ghost()
-                    .small()
-                    .icon(Icon::new(IconName::PanelRight))
-                    .selected(self.layout.agent)
-                    .tooltip(strings.toggle_agent)
-                    .on_click(cx.listener(|this, _, _, cx| this.toggle_agent(cx))),
+                toggle(
+                    "toggle-agent",
+                    IconName::PanelRight,
+                    self.layout.agent,
+                    strings.toggle_agent,
+                )
+                .on_click(cx.listener(|this, _, _, cx| this.toggle_agent(cx))),
             );
 
         let left = if window.is_fullscreen() {
@@ -397,12 +548,16 @@ impl Workbench {
         };
         let custom = self.custom_colors(cx);
         TitleBar::new()
-            .h(px(TOOLBAR_HEIGHT))
+            .h(px(look.toolbar_height()))
             .pl(left)
-            .pr(px(12.))
+            .pr(px(if look.flat() { 8. } else { 10. }))
             .bg(custom.title_background.unwrap_or(colors.desk))
             .when_some(custom.title_foreground, |bar, color| bar.text_color(color))
-            .border_color(gpui::transparent_black())
+            .border_color(if look.flat() {
+                colors.border
+            } else {
+                gpui::transparent_black()
+            })
             .child(project)
             .child(
                 div()
@@ -416,101 +571,213 @@ impl Workbench {
             .child(toggles)
     }
 
-    fn render_sidebar(&self, colors: Colors, cx: &mut Context<Self>) -> Div {
+    /// The switch on top of the sidebar: a capsule with a sliding thumb in
+    /// the floating style, a row of tabs with a sliding underline in the
+    /// flat one.
+    fn render_side_switch(
+        &self,
+        colors: Colors,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> Div {
         let strings = self.strings();
-        let switch = div()
-            .flex_none()
-            .flex()
-            .gap(px(2.))
-            .p(px(3.))
-            .rounded(px(9.))
-            .border_1()
-            .border_color(colors.border)
-            .bg(colors.editor)
-            .children(SideView::ALL.into_iter().enumerate().map(|(index, view)| {
-                let count = match view {
-                    SideView::SourceControl => self.git_change_count(),
-                    _ => 0,
-                };
-                div()
-                    .relative()
-                    .flex_1()
-                    .flex()
-                    .child(
-                        Button::new(("side-view", index))
-                            .ghost()
-                            .small()
-                            .flex_1()
-                            .icon(Icon::new(side_view_icon(view)))
-                            .selected(view == self.layout.side_view)
-                            .tooltip(side_view_title(view, strings))
-                            .on_click(cx.listener(move |this, _, _, cx| {
-                                this.layout.select_side_view(view);
-                                cx.notify();
-                            })),
+        let look = self.look;
+        let views = SideView::ALL.len() as f32;
+        let chosen = SideView::ALL
+            .iter()
+            .position(|view| *view == self.layout.side_view)
+            .unwrap_or(0) as f32;
+        // Where the thumb is now, gliding to the chosen view.
+        let at = look::glide("side-switch", chosen, look.duration(240), window, cx);
+        let segments = SideView::ALL.into_iter().enumerate().map(|(index, view)| {
+            let count = match view {
+                SideView::SourceControl => self.git_change_count(),
+                _ => 0,
+            };
+            let on = view == self.layout.side_view;
+            div()
+                .id(("side-view", index))
+                .relative()
+                .flex_1()
+                .h_full()
+                .flex()
+                .items_center()
+                .justify_center()
+                .rounded(px(7.))
+                .cursor_pointer()
+                .text_color(if on { colors.text } else { colors.muted })
+                .when(!on, |segment| {
+                    segment.hover(|segment| segment.text_color(colors.text))
+                })
+                .tooltip(move |window, cx| {
+                    gpui_component::tooltip::Tooltip::new(side_view_title(view, strings))
+                        .build(window, cx)
+                })
+                .on_click(cx.listener(move |this, _, _, cx| {
+                    this.layout.select_side_view(view);
+                    cx.notify();
+                }))
+                .child(Icon::new(side_view_icon(view)).with_size(gpui_component::Size::Medium))
+                .when(count > 0, |segment| {
+                    segment.child(
+                        div()
+                            .absolute()
+                            .top(px(if look.flat() { 3. } else { 0. }))
+                            .left(relative(0.5))
+                            .ml(px(5.))
+                            .min_w(px(15.))
+                            .h(px(15.))
+                            .px(px(3.))
+                            .rounded_full()
+                            .flex()
+                            .items_center()
+                            .justify_center()
+                            .bg(colors.accent)
+                            .text_color(cx.theme().primary_foreground)
+                            .text_size(px(9.5))
+                            .font_weight(FontWeight::SEMIBOLD)
+                            .child(if count > 999 {
+                                "999+".to_owned()
+                            } else {
+                                count.to_string()
+                            }),
                     )
-                    .when(count > 0, |button| {
-                        button.child(
+                })
+        });
+        if look.flat() {
+            // Tabs as tall as the editors' tab strip, so the lines meet.
+            return div()
+                .flex_none()
+                .h(px(look.bar_height()))
+                .px_1()
+                .border_b_1()
+                .border_color(colors.border)
+                .child(
+                    div()
+                        .relative()
+                        .size_full()
+                        .flex()
+                        .children(segments)
+                        .child(
                             div()
                                 .absolute()
-                                .top(px(-4.))
-                                .right(px(-2.))
-                                .min_w(px(15.))
-                                .h(px(15.))
-                                .px(px(3.))
-                                .rounded_full()
+                                .bottom_0()
+                                .h(px(2.))
+                                .left(relative(at / views))
+                                .w(relative(1. / views))
                                 .flex()
-                                .items_center()
                                 .justify_center()
-                                .bg(colors.accent)
-                                .text_color(cx.theme().primary_foreground)
-                                .text_size(px(9.5))
-                                .font_weight(FontWeight::SEMIBOLD)
-                                .child(if count > 999 {
-                                    "999+".to_owned()
-                                } else {
-                                    count.to_string()
-                                }),
-                        )
-                    })
-            }));
+                                .child(div().w(px(22.)).h_full().rounded_full().bg(colors.accent)),
+                        ),
+                );
+        }
+        div()
+            .flex_none()
+            .h(px(34.))
+            .p(px(3.))
+            .rounded(px(10.))
+            .bg(colors.desk)
+            .border_1()
+            .border_color(colors.border.opacity(0.6))
+            .child(
+                div()
+                    .relative()
+                    .size_full()
+                    .flex()
+                    // The thumb under the chosen view, raised as macOS's
+                    // segmented controls.
+                    .child(
+                        div()
+                            .absolute()
+                            .top_0()
+                            .bottom_0()
+                            .left(relative(at / views))
+                            .w(relative(1. / views))
+                            .rounded(px(7.))
+                            .bg(colors.selected)
+                            .border_1()
+                            .border_color(colors.accent.opacity(0.18)),
+                    )
+                    .children(segments),
+            )
+    }
 
+    fn render_sidebar(
+        &self,
+        colors: Colors,
+        open: f32,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> Div {
+        let look = self.look;
+        let switch = self.render_side_switch(colors, window, cx);
         let content: AnyElement = match self.layout.side_view {
             SideView::Explorer if self.project.root.is_some() => self.render_explorer(colors, cx),
             SideView::Explorer => self.render_open_editors(colors, cx).into_any_element(),
-            SideView::Search => self.render_search(colors, cx),
-            SideView::SourceControl => self.render_source_control(colors, cx),
-            SideView::Extensions => self.render_extensions(colors, cx),
+            SideView::Search => self.render_search(colors, window, cx),
+            SideView::SourceControl => self.render_source_control(colors, window, cx),
+            SideView::Extensions => self.render_extensions(colors, window, cx),
+        };
+        let view_index = SideView::ALL
+            .iter()
+            .position(|view| *view == self.layout.side_view)
+            .unwrap_or(0);
+        // A new view fades in, rising a little.
+        let duration = look.duration(180);
+        let content = div()
+            .id("sidebar-content")
+            .flex_1()
+            .min_h_0()
+            .when(look.flat(), |content| content.px_2().pt_1())
+            // The Explorer scrolls its own list, the other views as a whole.
+            .when(
+                !matches!(
+                    self.layout.side_view,
+                    SideView::Explorer | SideView::Search | SideView::SourceControl
+                ) || self.project.root.is_none(),
+                |content| content.overflow_y_scroll(),
+            )
+            .child(content);
+        let content: AnyElement = if duration.is_zero() {
+            content.into_any_element()
+        } else {
+            content
+                .with_animation(
+                    ("sidebar-view-in", view_index),
+                    Animation::new(duration).with_easing(look::settle),
+                    |content, delta| {
+                        content
+                            .opacity(0.35 + 0.65 * delta)
+                            .mt(px(4. * (1. - delta)))
+                    },
+                )
+                .into_any_element()
         };
 
-        let sidebar = floating(colors.panel, colors.border)
-            .size_full()
-            .p_2()
-            .gap_2()
+        let sidebar = panel(look, colors.panel, colors, colors.dark)
+            .debug_selector(|| "sidebar".to_owned())
+            .flex_none()
+            .w(px(self.sidebar_width))
+            .when(!look.flat(), |sidebar| sidebar.p_2().gap_2())
+            .when(look.flat(), |sidebar| {
+                sidebar.border_r_1().border_color(colors.border)
+            })
             .child(switch)
-            .child(
-                // The Explorer scrolls its own list, the other views as a whole.
-                div()
-                    .id("sidebar-content")
-                    .flex_1()
-                    .min_h_0()
-                    .when(
-                        !matches!(self.layout.side_view, SideView::Explorer | SideView::Search)
-                            || self.project.root.is_none(),
-                        |content| content.overflow_y_scroll(),
-                    )
-                    .child(content),
-            );
-        // The handle sits in the gap on its right, as Finder's sidebar edge:
-        // drag to resize, double-click to go back to the first width.
+            .child(content);
+        // Drag the edge to resize, double-click it to go back to the first
+        // width. In the floating style the handle is the gap on the right,
+        // as Finder's sidebar edge; in the flat one, the line itself.
         let handle = div()
             .id("sidebar-resize")
             .absolute()
             .top_0()
             .bottom_0()
-            .right(px(-GAP + 1.))
-            .w(px(GAP - 2.))
+            .right_0()
+            .w(px(if look.flat() { 5. } else { look.gap() }))
             .cursor_col_resize()
+            .when(look.flat(), |handle| {
+                handle.hover(|handle| handle.bg(colors.accent.opacity(0.35)))
+            })
             .on_drag(SidebarResize, |resize, _, _, cx| cx.new(|_| resize.clone()))
             .on_click(cx.listener(|this, event: &gpui::ClickEvent, _, cx| {
                 if event.click_count() >= 2 {
@@ -519,14 +786,27 @@ impl Workbench {
                     cx.notify();
                 }
             }));
+        let full = self.sidebar_width + look.gap();
+        // Slides in from the left edge: the room grows, the panel keeps its
+        // width and is uncovered from its right side.
         div()
-            .debug_selector(|| "sidebar".to_owned())
-            .relative()
             .h_full()
             .flex_none()
-            .w(px(self.sidebar_width))
-            .child(sidebar)
-            .child(handle)
+            .w(px(full * open))
+            .overflow_hidden()
+            .flex()
+            .justify_end()
+            .child(
+                div()
+                    .relative()
+                    .flex_none()
+                    .w(px(full))
+                    .h_full()
+                    .pr(px(look.gap()))
+                    .when(open < 1., |room| room.opacity(0.4 + 0.6 * open))
+                    .child(sidebar)
+                    .child(handle),
+            )
     }
 
     /// Follows the drag of the sidebar's edge; `bounds` is the row of
@@ -537,7 +817,7 @@ impl Workbench {
         cx: &mut Context<Self>,
     ) {
         let bounds = event.bounds;
-        let width = f32::from(event.event.position.x - bounds.left()) - GAP;
+        let width = f32::from(event.event.position.x - bounds.left()) - self.look.gap();
         let room = (f32::from(bounds.size.width) * 0.5).max(SIDEBAR_MIN_WIDTH);
         self.sidebar_width = width.clamp(SIDEBAR_MIN_WIDTH, SIDEBAR_MAX_WIDTH.min(room));
         self.session_changed(cx);
@@ -802,6 +1082,7 @@ impl Workbench {
             .and_then(|document| self.tab_icon(document, colors, cx));
         let in_view = self.groups[group].active == index;
         let focused_group = group == self.active;
+        let flat = self.look.flat();
         let hover_group: gpui::SharedString = format!("tab-{group}-{index}").into();
         let close = Button::new(("close-tab", group * 1000 + index))
             .ghost()
@@ -888,18 +1169,48 @@ impl Workbench {
                 }),
             )
             .flex_none()
-            .h(px(28.))
-            .pl_3()
-            .pr_1()
+            .relative()
             .flex()
             .items_center()
-            .gap_1()
-            .rounded(px(8.))
+            .gap_1p5()
             .text_sm()
             .text_color(if in_view { colors.text } else { colors.muted })
-            .when(in_view && focused_group, |tab| tab.bg(colors.selected))
-            .when(in_view && !focused_group, |tab| tab.bg(colors.hover))
-            .when(!in_view, |tab| tab.hover(|tab| tab.bg(colors.hover)))
+            .when(!flat, |tab| {
+                // A capsule, as Safari's tabs.
+                tab.h(px(30.))
+                    .pl(px(10.))
+                    .pr_1()
+                    .rounded(px(8.))
+                    .when(in_view && focused_group, |tab| tab.bg(colors.selected))
+                    .when(in_view && !focused_group, |tab| tab.bg(colors.hover))
+                    .when(!in_view, |tab| tab.hover(|tab| tab.bg(colors.hover)))
+            })
+            .when(flat, |tab| {
+                // A cell of the strip, as VS Code's: the one in view has the
+                // editor's color and no line under it, so it opens onto the
+                // editor; the focused group's is marked on top.
+                tab.h_full()
+                    .pl_3()
+                    .pr_1p5()
+                    .border_r_1()
+                    .border_color(colors.border)
+                    .when(in_view, |tab| tab.bg(colors.editor))
+                    .when(!in_view, |tab| {
+                        tab.border_b_1()
+                            .hover(|tab| tab.bg(colors.hover.opacity(0.5)))
+                    })
+                    .when(in_view && focused_group, |tab| {
+                        tab.child(
+                            div()
+                                .absolute()
+                                .top_0()
+                                .left_0()
+                                .right_0()
+                                .h(px(2.))
+                                .bg(colors.accent),
+                        )
+                    })
+            })
             .cursor_pointer()
             .on_click(
                 cx.listener(move |this, event: &gpui::ClickEvent, window, cx| {
@@ -1029,7 +1340,15 @@ impl Workbench {
         )
     }
 
-    fn render_editors(&self, colors: Colors, window: &mut Window, cx: &mut Context<Self>) -> Div {
+    fn render_editors(
+        &self,
+        colors: Colors,
+        panel_open: f32,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> Div {
+        let look = self.look;
+        let flat = look.flat();
         let panes = self.panes.iter().enumerate().map(|(index, pane)| {
             let tabs: Vec<AnyElement> = self.groups[index]
                 .tabs
@@ -1048,21 +1367,21 @@ impl Workbench {
                 })
                 .child(
                     div()
-                        .h(px(38.))
+                        .h(px(look.bar_height()))
                         .flex_none()
-                        .pr_2()
                         .flex()
                         .items_center()
+                        .when(!flat, |strip| strip.pr_2())
+                        .when(flat, |strip| strip.bg(colors.panel))
                         .child(
                             div()
                                 .id(("tab-strip", index))
                                 .h_full()
                                 .flex_1()
                                 .min_w_0()
-                                .px_2()
                                 .flex()
                                 .items_center()
-                                .gap_0p5()
+                                .when(!flat, |strip| strip.px_2().gap_0p5())
                                 .overflow_x_scroll()
                                 // Dropped after the last tab: at the end.
                                 .on_drop(cx.listener(
@@ -1081,9 +1400,29 @@ impl Workbench {
                                         )
                                     },
                                 ))
-                                .children(tabs),
+                                .children(tabs)
+                                // The strip's line goes on after the last tab.
+                                .when(flat, |strip| {
+                                    strip.child(
+                                        div()
+                                            .flex_1()
+                                            .min_w(px(8.))
+                                            .h_full()
+                                            .border_b_1()
+                                            .border_color(colors.border),
+                                    )
+                                }),
                         )
-                        .children(self.render_preview_button(index, cx)),
+                        .children(self.render_preview_button(index, cx).map(|button| {
+                            div()
+                                .flex_none()
+                                .h_full()
+                                .px_1()
+                                .flex()
+                                .items_center()
+                                .when(flat, |area| area.border_b_1().border_color(colors.border))
+                                .child(button)
+                        })),
                 )
                 .when_some(
                     self.render_breadcrumbs(index, colors, cx),
@@ -1173,19 +1512,19 @@ impl Workbench {
                 .into_any_element()
         };
         let panel_takes_all = self.layout.panel && self.panel_maximized;
-        floating(colors.editor, colors.border)
+        panel(look, colors.editor, colors, colors.dark)
             .flex_1()
             .min_w_0()
             .when(!panel_takes_all, |main| main.child(content))
-            .when(self.layout.panel, |main| {
-                main.child(self.render_bottom_panel(colors, cx))
+            .when(panel_open > 0., |main| {
+                main.child(self.render_bottom_panel(colors, panel_open, cx))
             })
             .on_drag_move::<super::terminals::PanelResize>(
                 cx.listener(|this, event, _, cx| this.resize_panel(event, cx)),
             )
     }
 
-    fn render_bottom_panel(&self, colors: Colors, cx: &mut Context<Self>) -> Div {
+    fn render_bottom_panel(&self, colors: Colors, open: f32, cx: &mut Context<Self>) -> Div {
         let strings = self.strings();
         let tabs = PanelView::ALL
             .into_iter()
@@ -1203,6 +1542,14 @@ impl Workbench {
                     .when(is_active, |tab| {
                         tab.border_b_2().border_color(colors.accent)
                     })
+                    // The tab in front sits on its line; the others keep its
+                    // room, so the names do not jump.
+                    .when(!is_active, |tab| {
+                        tab.border_b_2()
+                            .border_color(gpui::transparent_black())
+                            .hover(|tab| tab.text_color(colors.muted))
+                    })
+                    .pt(px(2.))
                     .cursor_pointer()
                     .on_click(cx.listener(move |this, _, window, cx| {
                         if view == PanelView::Terminal {
@@ -1246,68 +1593,61 @@ impl Workbench {
         };
         let fills = self.layout.panel_view == PanelView::Terminal;
         let maximized = self.panel_maximized;
-        div()
-            .relative()
-            .when(maximized, |panel| panel.flex_1().min_h_0())
-            .when(!maximized, |panel| {
-                panel.h(px(self.panel_height)).flex_none()
-            })
+        let button = |id: &'static str, icon: IconName, tooltip: &'static str| {
+            Button::new(id)
+                .ghost()
+                .small()
+                .icon(Icon::new(icon))
+                .tooltip(tooltip)
+        };
+        let header = div()
+            .h(px(self.look.bar_height()))
+            .flex_none()
+            .pl_3()
+            .pr_1p5()
             .flex()
-            .flex_col()
-            .border_t_1()
-            .border_color(colors.border)
+            .items_center()
+            .gap_4()
+            .children(tabs)
+            .map(|header| match self.layout.panel_view {
+                PanelView::Terminal => header.child(self.render_terminal_header(colors, cx)),
+                PanelView::Output => header.child(self.render_output_header(cx)),
+                _ => header.child(div().ml_auto()),
+            })
             .child(
                 div()
-                    .h(px(34.))
-                    .flex_none()
-                    .px_3p5()
                     .flex()
                     .items_center()
-                    .gap_5()
-                    .children(tabs)
-                    .map(|header| match self.layout.panel_view {
-                        PanelView::Terminal => {
-                            header.child(self.render_terminal_header(colors, cx))
-                        }
-                        PanelView::Output => header.child(self.render_output_header(cx)),
-                        _ => header.child(div().ml_auto()),
-                    })
+                    .gap_0p5()
                     .child(
-                        div()
-                            .flex()
-                            .items_center()
-                            .gap_1()
-                            .child(
-                                Button::new("maximize-panel")
-                                    .ghost()
-                                    .xsmall()
-                                    .icon(Icon::new(if maximized {
-                                        IconName::Minimize
-                                    } else {
-                                        IconName::Maximize
-                                    }))
-                                    .tooltip(if maximized {
-                                        strings.restore_panel
-                                    } else {
-                                        strings.maximize_panel
-                                    })
-                                    .on_click(cx.listener(|this, _, _, cx| {
-                                        this.toggle_maximized_panel(cx)
-                                    })),
-                            )
-                            .child(
-                                Button::new("close-panel")
-                                    .ghost()
-                                    .xsmall()
-                                    .icon(Icon::new(IconName::X))
-                                    .tooltip(strings.toggle_panel)
-                                    .on_click(cx.listener(|this, _, _, cx| this.toggle_panel(cx))),
-                            ),
+                        button(
+                            "maximize-panel",
+                            if maximized {
+                                IconName::Minimize
+                            } else {
+                                IconName::Maximize
+                            },
+                            if maximized {
+                                strings.restore_panel
+                            } else {
+                                strings.maximize_panel
+                            },
+                        )
+                        .on_click(cx.listener(|this, _, _, cx| this.toggle_maximized_panel(cx))),
+                    )
+                    .child(
+                        button("close-panel", IconName::X, strings.toggle_panel)
+                            .on_click(cx.listener(|this, _, _, cx| this.toggle_panel(cx))),
                     ),
-            )
-            .when(!maximized, |panel| {
-                panel.child(self.render_panel_resize(colors))
-            })
+            );
+        let body = div()
+            .flex()
+            .flex_col()
+            .when(maximized, |body| body.flex_1().min_h_0())
+            // While it slides, the panel keeps its height: the terminal
+            // inside is not resized at every frame.
+            .when(!maximized, |body| body.flex_none().h(px(self.panel_height)))
+            .child(header)
             .child(if fills {
                 // A terminal fills the panel and scrolls on its own.
                 div().id("panel-content").flex_1().min_h_0().child(content)
@@ -1319,11 +1659,31 @@ impl Workbench {
                     .px_1p5()
                     .overflow_y_scroll()
                     .child(content)
+            });
+        div()
+            .relative()
+            .flex()
+            .flex_col()
+            .when(maximized, |panel| panel.flex_1().min_h_0())
+            // Slides up from the bottom edge, as a drawer.
+            .when(!maximized, |panel| {
+                panel
+                    .flex_none()
+                    .h(px(self.panel_height * open))
+                    .overflow_hidden()
+                    .justify_end()
+            })
+            .border_t_1()
+            .border_color(colors.border)
+            .child(body)
+            .when(!maximized, |panel| {
+                panel.child(self.render_panel_resize(colors))
             })
     }
 
-    fn render_agent(&self, colors: Colors, cx: &mut Context<Self>) -> Div {
+    fn render_agent(&self, colors: Colors, open: f32, cx: &mut Context<Self>) -> Div {
         let strings = self.strings();
+        let look = self.look;
         let terminal = self.render_agent_terminal();
         let running = terminal.is_some();
         let showing_agent = self.agent_panel.view == super::agent_panel::AgentView::Agent;
@@ -1331,7 +1691,7 @@ impl Workbench {
             |id: &'static str, label: &'static str, view: super::agent_panel::AgentView| {
                 Button::new(id)
                     .ghost()
-                    .xsmall()
+                    .small()
                     .label(label)
                     .selected(self.agent_panel.view == view)
                     .on_click(cx.listener(move |this, _, window, cx| {
@@ -1343,9 +1703,10 @@ impl Workbench {
                     }))
             };
         let header = div()
-            .h(px(44.))
+            .h(px(look.bar_height()))
             .flex_none()
-            .px_3()
+            .pl_3()
+            .pr_1p5()
             .flex()
             .items_center()
             .gap_1()
@@ -1383,7 +1744,7 @@ impl Workbench {
                     right.child(
                         Button::new("close-claude-code")
                             .ghost()
-                            .xsmall()
+                            .small()
                             .icon(Icon::new(IconName::X))
                             .tooltip(strings.close_claude_code)
                             .on_click(cx.listener(|this, _, window, cx| {
@@ -1430,18 +1791,33 @@ impl Workbench {
                         .child(strings.claude_code_hint),
                 ),
         };
-        div()
-            .relative()
-            .w(px(self.agent_width))
+        let card = panel(look, colors.panel, colors, colors.dark)
             .flex_none()
+            .w(px(self.agent_width))
+            .when(look.flat(), |card| {
+                card.border_l_1().border_color(colors.border)
+            })
+            .child(header)
+            .child(body);
+        let full = self.agent_width + look.gap();
+        // Slides in from the right edge, as the sidebar from the left.
+        div()
             .h_full()
+            .flex_none()
+            .w(px(full * open))
+            .overflow_hidden()
+            .flex()
             .child(
-                floating(colors.panel, colors.border)
-                    .size_full()
-                    .child(header)
-                    .child(body),
+                div()
+                    .relative()
+                    .flex_none()
+                    .w(px(full))
+                    .h_full()
+                    .pl(px(look.gap()))
+                    .when(open < 1., |room| room.opacity(0.4 + 0.6 * open))
+                    .child(card)
+                    .child(self.render_agent_resize(colors)),
             )
-            .child(self.render_agent_resize(colors))
     }
     pub(super) fn status_texts(&self, cx: &App) -> (Vec<String>, Vec<String>) {
         let strings = self.strings();
@@ -1528,18 +1904,24 @@ impl Workbench {
         let sync = self.sync_text();
         let has_repo = self.scm.repo.is_some();
         let custom = self.custom_colors(cx);
+        let look = self.look;
         div()
-            .h(px(STATUS_HEIGHT))
+            .h(px(look.status_height()))
             .flex_none()
-            .px_4()
+            .px(px(if look.flat() { 6. } else { 10. }))
             .flex()
             .items_center()
             .justify_between()
-            .gap_4()
+            .gap_3()
             .text_xs()
             .text_color(custom.status_foreground.unwrap_or(colors.muted))
+            .when(look.flat(), |bar| {
+                bar.bg(colors.panel)
+                    .border_t_1()
+                    .border_color(colors.border)
+            })
             .when_some(custom.status_background, |bar, color| bar.bg(color))
-            .child(div().flex().items_center().gap_4().min_w_0().children({
+            .child(div().flex().items_center().gap_1().min_w_0().children({
                 let mut items: Vec<AnyElement> = left
                     .into_iter()
                     .enumerate()
@@ -1547,6 +1929,9 @@ impl Workbench {
                         let is_branch = branch && index == 0;
                         div()
                             .id(("status-left", index))
+                            .h(px(20.))
+                            .px(px(6.))
+                            .rounded(px(5.))
                             .flex()
                             .items_center()
                             .gap_1()
@@ -1558,7 +1943,7 @@ impl Workbench {
                             .child(text)
                             .when(is_branch && has_repo, |item| {
                                 item.cursor_pointer()
-                                    .hover(|item| item.text_color(colors.accent))
+                                    .hover(|item| item.bg(colors.hover))
                                     .on_click(cx.listener(|this, _, window, cx| {
                                         this.choose_branch(window, cx)
                                     }))
@@ -1567,9 +1952,11 @@ impl Workbench {
                                 item.child(
                                     div()
                                         .id("status-sync")
-                                        .ml_2()
+                                        .ml_1()
+                                        .px_1()
+                                        .rounded(px(4.))
                                         .cursor_pointer()
-                                        .hover(|item| item.text_color(colors.accent))
+                                        .hover(|item| item.bg(colors.hover).text_color(colors.text))
                                         .on_click(cx.listener(|this, _, window, cx| {
                                             window.dispatch_action(Box::new(super::GitSync), cx);
                                             let _ = this;
@@ -1590,8 +1977,15 @@ impl Workbench {
                     .flex_none()
                     .flex()
                     .items_center()
-                    .gap_4()
-                    .children(right),
+                    .gap_1()
+                    .children(right.into_iter().map(|text| {
+                        div()
+                            .h(px(20.))
+                            .px(px(6.))
+                            .flex()
+                            .items_center()
+                            .child(text)
+                    })),
             )
     }
 }
@@ -1612,22 +2006,36 @@ impl Render for Workbench {
                 });
             }
         }
-        let colors = Colors::new(cx);
+        let look = self.look;
+        let colors = Colors::new(cx).with_look(look);
+        // How far each panel is open, gliding when it is shown or hidden.
+        // Sampled on every frame, hidden or not, to know where it was.
+        let slide = look.duration(SLIDE_MS);
+        let open = |shown: bool| if shown { 1. } else { 0. };
+        let sidebar_open =
+            look::glide("sidebar-open", open(self.layout.sidebar), slide, window, cx);
+        let agent_open = look::glide("agent-open", open(self.layout.agent), slide, window, cx);
+        let panel_open = look::glide("panel-open", open(self.layout.panel), slide, window, cx);
         let toolbar = self.render_toolbar(colors, window, cx);
+        let gap = look.gap();
         let body = div()
             .flex_1()
             .min_h_0()
             .flex()
             .flex_row()
-            .gap(px(GAP))
-            .px(px(GAP))
-            .pb(px(GAP))
-            .when(self.layout.sidebar, |body| {
-                body.child(self.render_sidebar(colors, cx))
+            // The gaps between the panels belong to the sidebar and to
+            // Claude Code, so they close with them.
+            .pl(px(if sidebar_open > 0. { 0. } else { gap }))
+            .pr(px(if agent_open > 0. { 0. } else { gap }))
+            .when(!look.flat(), |body| body.pb(px(gap)))
+            .when(sidebar_open > 0., |body| {
+                body.child(div().flex_none().w(px(gap)))
+                    .child(self.render_sidebar(colors, sidebar_open, window, cx))
             })
-            .child(self.render_editors(colors, window, cx))
-            .when(self.layout.agent, |body| {
-                body.child(self.render_agent(colors, cx))
+            .child(self.render_editors(colors, panel_open, window, cx))
+            .when(agent_open > 0., |body| {
+                body.child(self.render_agent(colors, agent_open, cx))
+                    .child(div().flex_none().w(px(gap)))
             })
             .on_drag_move::<super::claude_code::AgentResize>(
                 cx.listener(|this, event, _, cx| this.resize_agent(event, cx)),

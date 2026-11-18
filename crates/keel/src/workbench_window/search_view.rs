@@ -15,10 +15,10 @@ use gpui::{
 };
 use gpui_component::button::{Button, ButtonVariants as _};
 use gpui_component::input::{Input, InputState};
-use gpui_component::{Icon, Selectable as _, Sizable as _};
+use gpui_component::{Disableable as _, Icon, Selectable as _, Sizable as _};
 use gpui_kit_assets::IconName;
 
-use super::shell::{Colors, heading, note};
+use super::shell::{Colors, empty_state, heading, keys_for, note, tool_row, view_header};
 use super::tabs::OpenAs;
 use super::*;
 
@@ -439,11 +439,16 @@ impl Workbench {
     // -----------------------------------------------------------------
     // Drawing
 
-    pub(super) fn render_search(&self, colors: Colors, cx: &mut Context<Self>) -> AnyElement {
+    pub(super) fn render_search(
+        &self,
+        colors: Colors,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
         let strings = self.strings();
         if self.project.root.is_none() {
             return div()
-                .child(heading(strings.view_search, colors))
+                .child(view_header(strings.view_search, colors))
                 .child(note(strings.no_folder.to_owned(), colors))
                 .into_any_element();
         }
@@ -451,7 +456,7 @@ impl Workbench {
         let switch = |id: &'static str, icon: IconName, on: bool, tooltip: &'static str| {
             Button::new(id)
                 .ghost()
-                .xsmall()
+                .small()
                 .icon(Icon::new(icon))
                 .selected(on)
                 .tooltip(tooltip)
@@ -492,12 +497,11 @@ impl Workbench {
                     this.toggle_search_option(|view| &mut view.regex, cx)
                 })),
             );
+        let typed = !view.query.read(cx).value().is_empty();
         let summary = match (&view.error, view.searching, view.results.files.is_empty()) {
             (Some(error), _, _) => error.lines().last().unwrap_or_default().to_owned(),
             (None, true, true) => strings.searching.to_owned(),
-            (None, _, true) if !view.query.read(cx).value().is_empty() => {
-                strings.no_results.to_owned()
-            }
+            (None, _, true) if typed => strings.no_results.to_owned(),
             (None, _, true) => String::new(),
             (None, _, false) => {
                 let count = grouped(view.results.count(), self.language);
@@ -521,12 +525,49 @@ impl Workbench {
         )
         .size_full();
 
+        let header = view_header(strings.view_search, colors)
+            .child(
+                Button::new("search-again")
+                    .ghost()
+                    .small()
+                    .icon(Icon::new(IconName::RefreshCw))
+                    .tooltip(strings.search_again)
+                    .disabled(!typed)
+                    .on_click(cx.listener(|this, _, _, cx| this.run_search(cx))),
+            )
+            .child(
+                Button::new("search-clear")
+                    .ghost()
+                    .small()
+                    .icon(Icon::new(IconName::Eraser))
+                    .tooltip(strings.search_clear)
+                    .disabled(!typed)
+                    .on_click(cx.listener(|this, _, window, cx| {
+                        this.search
+                            .query
+                            .update(cx, |input, cx| input.set_value("", window, cx));
+                        this.run_search(cx);
+                    })),
+            )
+            .child(
+                Button::new("search-folders")
+                    .ghost()
+                    .small()
+                    .icon(Icon::new(IconName::Funnel))
+                    .selected(view.show_folders)
+                    .tooltip(strings.folders_toggle)
+                    .on_click(cx.listener(|this, _, _, cx| {
+                        this.search.show_folders = !this.search.show_folders;
+                        cx.notify();
+                    })),
+            );
+
         div()
             .size_full()
             .flex()
             .flex_col()
             .gap_1p5()
-            .child(heading(strings.view_search, colors))
+            .child(header)
             .child(
                 div()
                     .flex()
@@ -535,7 +576,8 @@ impl Workbench {
                     .child(
                         Button::new("search-toggle-replace")
                             .ghost()
-                            .xsmall()
+                            .small()
+                            .mt(px(4.))
                             .icon(Icon::new(if view.show_replace {
                                 IconName::ChevronDown
                             } else {
@@ -554,13 +596,13 @@ impl Workbench {
                             .flex()
                             .flex_col()
                             .gap_1()
-                            .child(Input::new(&view.query).small().suffix(switches))
+                            .child(Input::new(&view.query).suffix(switches))
                             .when(view.show_replace, |fields| {
                                 fields.child(
-                                    Input::new(&view.replace).small().suffix(
+                                    Input::new(&view.replace).suffix(
                                         Button::new("search-replace-all")
                                             .ghost()
-                                            .xsmall()
+                                            .small()
                                             .icon(Icon::new(IconName::ReplaceAll))
                                             .tooltip(strings.replace_all)
                                             .on_click(cx.listener(|this, _, window, cx| {
@@ -568,70 +610,67 @@ impl Workbench {
                                             })),
                                     ),
                                 )
+                            })
+                            .when(view.show_folders, |fields| {
+                                fields
+                                    .child(Input::new(&view.include).small())
+                                    .child(Input::new(&view.exclude).small())
                             }),
                     ),
             )
-            .child(
-                div().flex().justify_end().child(
-                    Button::new("search-folders")
-                        .ghost()
-                        .xsmall()
-                        .icon(Icon::new(IconName::Ellipsis))
-                        .selected(view.show_folders)
-                        .tooltip(strings.folders_toggle)
-                        .on_click(cx.listener(|this, _, _, cx| {
-                            this.search.show_folders = !this.search.show_folders;
-                            cx.notify();
-                        })),
-                ),
-            )
-            .when(view.show_folders, |panel| {
-                panel
-                    .child(Input::new(&view.include).small())
-                    .child(Input::new(&view.exclude).small())
+            .when(!summary.is_empty(), |panel| {
+                panel.child(
+                    div()
+                        .px_1()
+                        .pt_0p5()
+                        .text_xs()
+                        .text_color(if view.error.is_some() {
+                            cx.theme().danger
+                        } else {
+                            colors.muted
+                        })
+                        .child(summary),
+                )
             })
-            .child(
-                div()
-                    .px_1()
-                    .text_xs()
-                    .text_color(if view.error.is_some() {
-                        cx.theme().danger
-                    } else {
-                        colors.muted
-                    })
-                    .child(summary),
-            )
-            .when(view.query.read(cx).value().is_empty(), |panel| {
-                panel.child(self.render_search_start(colors, cx))
+            .when(!typed, |panel| {
+                panel.child(self.render_search_start(colors, window, cx))
             })
-            .child(div().flex_1().min_h_0().child(list))
+            .when(typed, |panel| {
+                panel.child(div().flex_1().min_h_0().child(list))
+            })
             .into_any_element()
     }
 
-    /// Before the first search: what the buttons do, and the latest
-    /// searches to run again.
-    fn render_search_start(&self, colors: Colors, cx: &mut Context<Self>) -> gpui::Div {
+    /// Before the first search: what to type, the latest searches to run
+    /// again, and the other ways of finding things, with their keys.
+    fn render_search_start(
+        &self,
+        colors: Colors,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> gpui::Stateful<gpui::Div> {
         let strings = self.strings();
         let recent = self.search.recent.iter().enumerate().map(|(index, text)| {
             let query = text.clone();
             div()
                 .id(("recent-search", index))
-                .h(px(24.))
+                .h(px(28.))
                 .px_2()
                 .flex()
                 .items_center()
                 .gap_2()
-                .rounded(px(6.))
+                .rounded(px(7.))
                 .text_sm()
                 .cursor_pointer()
                 .hover(|row| row.bg(colors.hover))
+                .active(|row| row.bg(colors.selected))
                 .on_click(cx.listener(move |this, _, window, cx| {
                     this.search
                         .query
                         .update(cx, |input, cx| input.set_value(query.clone(), window, cx));
                     this.run_search(cx);
                 }))
-                .child(Icon::new(IconName::Clock).xsmall().text_color(colors.faint))
+                .child(Icon::new(IconName::Clock).small().text_color(colors.faint))
                 .child(
                     div()
                         .min_w_0()
@@ -640,17 +679,54 @@ impl Workbench {
                         .child(text.clone()),
                 )
         });
+        let tool = |id: &'static str,
+                    icon: IconName,
+                    label: &'static str,
+                    action: Box<dyn gpui::Action>| {
+            let keys = keys_for(action.as_ref(), window);
+            tool_row(id, icon, label, keys, colors)
+                .on_click(move |_, window, cx| window.dispatch_action(action.boxed_clone(), cx))
+        };
+        let tools = [
+            tool(
+                "search-go-file",
+                IconName::File,
+                strings.search_go_file,
+                Box::new(QuickOpen),
+            ),
+            tool(
+                "search-go-symbol-project",
+                IconName::Hash,
+                strings.search_go_symbol_project,
+                Box::new(GoToSymbolInWorkspace),
+            ),
+            tool(
+                "search-go-symbol-file",
+                IconName::AtSign,
+                strings.search_go_symbol_file,
+                Box::new(GoToSymbolInFile),
+            ),
+            tool(
+                "search-go-line",
+                IconName::CornerDownRight,
+                strings.search_go_line,
+                Box::new(GoToLine),
+            ),
+        ];
         div()
+            .id("search-start")
+            .flex_1()
+            .min_h_0()
+            .overflow_y_scroll()
             .flex()
             .flex_col()
-            .gap_2()
-            .child(
-                div()
-                    .px_2()
-                    .text_xs()
-                    .text_color(colors.muted)
-                    .child(strings.search_hint),
-            )
+            .gap_1()
+            .child(empty_state(
+                IconName::TextSearch,
+                strings.search_start_title,
+                strings.search_hint,
+                colors,
+            ))
             .when(!self.search.recent.is_empty(), |start| {
                 start.child(
                     div()
@@ -664,7 +740,7 @@ impl Workbench {
                                 .child(
                                     Button::new("clear-recent-searches")
                                         .ghost()
-                                        .xsmall()
+                                        .small()
                                         .label(strings.search_recent_clear)
                                         .on_click(cx.listener(|this, _, _, cx| {
                                             this.search.recent.clear();
@@ -676,6 +752,14 @@ impl Workbench {
                         .children(recent),
                 )
             })
+            .child(
+                div()
+                    .pt_2()
+                    .flex()
+                    .flex_col()
+                    .child(heading(strings.search_go_to, colors))
+                    .children(tools),
+            )
     }
 
     fn render_result_rows(

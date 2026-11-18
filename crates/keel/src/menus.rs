@@ -24,6 +24,13 @@ struct MenuLanguage(UiLanguage);
 
 impl Global for MenuLanguage {}
 
+/// The language of the interface, as the menu bar was last built in;
+/// English before that.
+pub fn language(cx: &App) -> UiLanguage {
+    cx.try_global::<MenuLanguage>()
+        .map_or(UiLanguage::English, |language| language.0)
+}
+
 /// Builds the menu bar again, for example after the recent projects changed.
 pub fn refresh(cx: &mut App) {
     if let Some(language) = cx.try_global::<MenuLanguage>().map(|language| language.0) {

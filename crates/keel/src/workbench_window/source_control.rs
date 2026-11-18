@@ -8,13 +8,13 @@ use gpui::{
     AnyElement, ClickEvent, Div, ElementId, Entity, KeyBinding, StatefulInteractiveElement as _,
     uniform_list,
 };
-use gpui_component::button::{Button, ButtonVariants as _};
+use gpui_component::button::{Button, ButtonVariants as _, DropdownButton};
 use gpui_component::input::{Input, InputState, Textarea, TextareaState};
 use gpui_component::menu::DropdownMenu as _;
 use gpui_component::{Disableable as _, Icon, Sizable as _};
 use gpui_kit_assets::IconName;
 
-use super::shell::{Colors, heading, note, own_clicks, section_header};
+use super::shell::{Colors, empty_state, key_hint, own_clicks, section_header, view_header};
 use super::*;
 
 /// The key context around the commit message, for Cmd+Enter.
@@ -76,8 +76,10 @@ pub(super) struct SourceControl {
     _message_grows: Subscription,
 }
 
-/// The commit message grows with its text up to this many lines.
-const MESSAGE_ROWS: usize = 8;
+/// The commit message shows at least this many lines, and grows with its
+/// text up to `MESSAGE_ROWS`.
+const MESSAGE_MIN_ROWS: usize = 3;
+const MESSAGE_ROWS: usize = 10;
 
 impl SourceControl {
     pub(super) fn new(
@@ -91,7 +93,7 @@ impl SourceControl {
         let message = cx.new(|cx| {
             TextareaState::new(window, cx)
                 .placeholder(placeholder)
-                .rows(1)
+                .rows(MESSAGE_MIN_ROWS)
         });
         // gpui-component's own auto_grow redraws the field on every frame,
         // which kept the CPU busy while idle; counting lines is enough.
@@ -102,7 +104,7 @@ impl SourceControl {
                     .value()
                     .split('\n')
                     .count()
-                    .clamp(1, MESSAGE_ROWS);
+                    .clamp(MESSAGE_MIN_ROWS, MESSAGE_ROWS);
                 input.update(cx, |input, cx| input.set_rows(lines, cx));
             }
         });
@@ -627,38 +629,39 @@ impl Workbench {
     pub(super) fn render_source_control(
         &self,
         colors: Colors,
+        window: &mut Window,
         cx: &mut Context<Self>,
     ) -> AnyElement {
         let strings = self.strings();
         if self.scm.repo.is_none() {
             return div()
-                .child(heading(strings.view_source_control, colors))
-                .child(note(strings.scm_no_repository.to_owned(), colors))
+                .size_full()
+                .flex()
+                .flex_col()
+                .child(view_header(strings.view_source_control, colors))
+                .child(empty_state(
+                    IconName::GitBranch,
+                    strings.scm_no_repository,
+                    strings.scm_no_repository_hint,
+                    colors,
+                ))
                 .into_any_element();
         }
         let focus = self.focus_handle.clone();
-        let header = div()
-            .flex_none()
-            .flex()
-            .items_center()
-            .child(
-                div()
-                    .flex_1()
-                    .min_w_0()
-                    .child(heading(strings.view_source_control, colors)),
-            )
+        let header = view_header(strings.view_source_control, colors)
             .child(
                 Button::new("scm-refresh")
                     .ghost()
-                    .xsmall()
+                    .small()
                     .icon(Icon::new(IconName::RefreshCw))
                     .tooltip(strings.scm_refresh)
                     .on_click(cx.listener(|this, _, _, cx| this.refresh_git(cx))),
             )
-            .child(
+            .child({
+                let focus = focus.clone();
                 Button::new("scm-more")
                     .ghost()
-                    .xsmall()
+                    .small()
                     .icon(Icon::new(IconName::Ellipsis))
                     .dropdown_menu(move |menu, _, _| {
                         menu.action_context(focus.clone())
@@ -674,8 +677,8 @@ impl Workbench {
                             .separator()
                             .menu(strings.scm_stash, Box::new(GitStash))
                             .menu(strings.scm_stash_pop, Box::new(GitStashPop))
-                    }),
-            );
+                    })
+            });
 
         let branch = self
             .scm
@@ -685,6 +688,7 @@ impl Workbench {
             .unwrap_or_else(|| self.scm.status.head.clone().unwrap_or_default());
         let nothing = self.scm.status.files.is_empty();
         let busy = self.scm.busy.is_some();
+        let committing = self.scm.busy == Some(strings.scm_commit);
         // Ahead and behind, or "publish" for a branch with no upstream.
         let sync = self.sync_text().map(|text| {
             let label = if text == "↑" {
@@ -694,7 +698,8 @@ impl Workbench {
             };
             Button::new("scm-sync")
                 .ghost()
-                .xsmall()
+                .small()
+                .icon(Icon::new(IconName::RefreshCw))
                 .label(label)
                 .tooltip(strings.scm_sync)
                 .disabled(busy)
@@ -707,16 +712,43 @@ impl Workbench {
                     this.remote_command(action, window, cx)
                 }))
         });
-        let commit = Button::new("scm-commit")
-            .primary()
-            .xsmall()
-            .icon(Icon::new(IconName::Check))
-            .label(strings.scm_commit)
-            .tooltip(strings.scm_commit_on(&branch))
-            .disabled(busy || nothing)
-            .on_click(cx.listener(|this, _, window, cx| this.commit(false, window, cx)));
+        let branch_chip = div()
+            .id("scm-branch")
+            .flex_1()
+            .min_w_0()
+            .h(px(24.))
+            .px_1p5()
+            .flex()
+            .items_center()
+            .gap_1p5()
+            .rounded(px(6.))
+            .cursor_pointer()
+            .hover(|chip| chip.bg(colors.hover))
+            .tooltip(move |window, cx| {
+                gpui_component::tooltip::Tooltip::new(strings.scm_checkout).build(window, cx)
+            })
+            .on_click(cx.listener(|this, _, window, cx| this.choose_branch(window, cx)))
+            .child(
+                Icon::new(IconName::GitBranch)
+                    .small()
+                    .text_color(colors.faint),
+            )
+            .child(
+                div()
+                    .min_w_0()
+                    .truncate()
+                    .text_xs()
+                    .text_color(colors.muted)
+                    .child(branch.clone()),
+            );
+        let typing = self
+            .scm
+            .message
+            .read(cx)
+            .focus_handle(cx)
+            .is_focused(window);
         // One card, as a message composer: the text on top, under a hairline
-        // the branch, its sync and the button.
+        // the branch and its sync. The field lights up while typing.
         let composer = div()
             .key_context(MESSAGE_CONTEXT)
             .mx_1()
@@ -724,63 +756,90 @@ impl Workbench {
             .flex_col()
             .rounded(px(10.))
             .border_1()
-            .border_color(colors.border)
+            .border_color(if typing {
+                colors.accent.opacity(0.7)
+            } else {
+                colors.border
+            })
             .bg(colors.editor)
             .child(
                 div()
-                    .px_2p5()
-                    .pt_2()
-                    .pb_1p5()
+                    .px_0p5()
+                    .pt_1()
                     .text_sm()
                     .child(Textarea::new(&self.scm.message).appearance(false)),
             )
-            .child(div().mx_2().h(px(1.)).bg(colors.border.opacity(0.6)))
             .child(
                 div()
                     .h(px(34.))
-                    .pl_2p5()
-                    .pr_1()
+                    .px_1()
                     .flex()
                     .items_center()
                     .gap_1()
-                    .child(
-                        Icon::new(IconName::GitBranch)
-                            .xsmall()
-                            .text_color(colors.faint),
-                    )
-                    .child(
-                        div()
-                            .flex_1()
-                            .min_w_0()
-                            .truncate()
-                            .text_xs()
-                            .text_color(colors.muted)
-                            .child(branch.clone()),
-                    )
+                    .border_t_1()
+                    .border_color(colors.border.opacity(0.6))
+                    .child(branch_chip)
                     .children(sync)
-                    .child(commit),
+                    .child(div().pr_1().child(key_hint("⌘↩", colors))),
             );
+        let commit = DropdownButton::new("scm-commit-split")
+            .primary()
+            .mx_1()
+            .button(
+                Button::new("scm-commit")
+                    .flex_1()
+                    .icon(Icon::new(IconName::Check))
+                    .label(strings.scm_commit)
+                    .tooltip(strings.scm_commit_on(&branch))
+                    .loading(committing)
+                    .disabled(busy || nothing)
+                    .on_click(cx.listener(|this, _, window, cx| this.commit(false, window, cx))),
+            )
+            .menu_accessibility_label(strings.scm_more_commit)
+            .dropdown_menu(move |menu, _, _| {
+                menu.action_context(focus.clone())
+                    .menu(strings.scm_commit_amend, Box::new(CommitAmend))
+                    .separator()
+                    .menu(strings.scm_push, Box::new(GitPush))
+                    .menu(strings.scm_pull, Box::new(GitPull))
+                    .menu(strings.scm_sync, Box::new(GitSync))
+            });
 
         let rows = self.scm.rows();
-        let no_rows = rows.is_empty();
-        let rows_height = rows.len() as f32 * 24. + 4.;
-        let list: AnyElement = if rows.is_empty() {
-            note(strings.scm_clean.to_owned(), colors).into_any_element()
+        let changes: AnyElement = if rows.is_empty() {
+            div()
+                .flex_1()
+                .min_h(px(60.))
+                .flex()
+                .flex_col()
+                .justify_center()
+                .child(empty_state(
+                    IconName::CircleCheck,
+                    strings.scm_clean,
+                    strings.scm_clean_hint,
+                    colors,
+                ))
+                .into_any_element()
         } else {
-            uniform_list(
-                "scm-files",
-                rows.len(),
-                cx.processor(move |this, range: Range<usize>, _, cx| {
-                    let rows = this.scm.rows();
-                    range
-                        .filter_map(|index| rows.get(index).copied())
-                        .map(|row| this.render_scm_row(row, colors, cx))
-                        .collect::<Vec<_>>()
-                }),
-            )
-            .px_1()
-            .size_full()
-            .into_any_element()
+            div()
+                .flex_1()
+                .min_h(px(60.))
+                .child(
+                    uniform_list(
+                        "scm-files",
+                        rows.len(),
+                        cx.processor(move |this, range: Range<usize>, _, cx| {
+                            let rows = this.scm.rows();
+                            range
+                                .filter_map(|index| rows.get(index).copied())
+                                .map(|row| this.render_scm_row(row, colors, cx))
+                                .collect::<Vec<_>>()
+                        }),
+                    )
+                    .px_1()
+                    .size_full(),
+                )
+                .into_any_element()
         };
 
         div()
@@ -788,19 +847,16 @@ impl Workbench {
             .flex()
             .flex_col()
             .gap_2()
+            .on_drag_move::<scm_graph::ScmGraphResize>(
+                cx.listener(|this, event, _, cx| this.resize_scm_graph(event, cx)),
+            )
             .child(header)
             .child(composer)
-            // The changes are as tall as their rows, and give way only to
-            // leave the graph its room; the graph takes the rest.
-            .child(
-                div()
-                    .when(no_rows, |changes| changes.flex_none())
-                    .when(!no_rows, |changes| {
-                        changes.h(px(rows_height)).min_h(px(48.)).flex_shrink(1.)
-                    })
-                    .child(list),
-            )
-            .child(self.render_scm_graph(colors, cx))
+            .child(commit)
+            // The changes take the room the graph leaves; the graph keeps
+            // the height it was dragged to.
+            .child(changes)
+            .child(self.render_scm_graph(colors, window, cx))
             .into_any_element()
     }
 
