@@ -1988,6 +1988,11 @@ Da fare dopo, solo se servono:
 
 ## Non in questo piano: la pubblicazione
 
+**Per provarla come un'app vera** (18 novembre 2026): `scripts/make-dmg.sh` costruisce Keel.app con la sua icona e la mette in `target/release/Keel-<versione>.dmg`, insieme alla scorciatoia ad Applicazioni da cui trascinarla. L'app si apre anche da Finder con «Apri con → Keel», per file di testo, codice e cartelle.
+- È firmata solo per questo Mac (firma «ad-hoc»), non da uno sviluppatore registrato da Apple. Dal DMG fatto qui si apre normalmente.
+- Una copia scaricata da internet, la prima volta, va aperta con il tasto destro → Apri, oppure da Impostazioni di Sistema → Privacy e sicurezza → «Apri comunque».
+- Per firmarla e farla controllare da Apple serve un account sviluppatore (99 dollari l'anno): è la pubblicazione vera, ancora da decidere.
+
 Firma e notarizzazione di Apple, aggiornamenti automatici, un eventuale sito: ci pensiamo alla fine, dopo i tuoi test.
 
 ## Come lavoriamo
