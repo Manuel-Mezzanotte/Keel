@@ -876,6 +876,33 @@ impl Field {
     }
 }
 
+/// What a control calls with a new value.
+pub(super) type Write = std::rc::Rc<dyn Fn(Value, &mut App)>;
+
+/// The [`Write`] of a setting. Controls call it while the window is
+/// handling the click or the key, and a window can't be entered again
+/// from inside itself: the change waits until the window is done.
+pub(super) fn writer(
+    workbench: &WeakEntity<Workbench>,
+    handle: AnyWindowHandle,
+    key: SharedString,
+) -> Write {
+    let workbench = workbench.clone();
+    std::rc::Rc::new(move |value: Value, cx: &mut App| {
+        let workbench = workbench.clone();
+        let key = key.clone();
+        cx.defer(move |cx| {
+            let _ = handle.update(cx, |_, window, cx| {
+                workbench
+                    .update(cx, |workbench, cx| {
+                        workbench.change_setting(&key, Some(value), window, cx)
+                    })
+                    .ok();
+            });
+        });
+    })
+}
+
 /// The item of one setting. Resetting it takes it out of the user's file,
 /// so the default counts again, as VS Code's "Reset Setting".
 fn item(
@@ -916,13 +943,7 @@ fn item(
             },
         )
     };
-    let write = {
-        let change = change.clone();
-        std::rc::Rc::new(move |value: Value, cx: &mut App| {
-            let change = change.clone();
-            let _ = handle.update(cx, |_, window, cx| change(Some(value), window, cx));
-        })
-    };
+    let write = writer(workbench, handle, key.clone());
     let is_set = {
         let workbench = workbench.clone();
         let key = key.clone();
@@ -1230,9 +1251,12 @@ mod tests {
             assert_eq!(view.settings_jump_page(), Some(6), "after Keel's six pages");
         });
 
-        // From the page.
-        view.update_in(cx, |view, window, cx| {
-            view.change_setting("ghost.speed", Some(json!("fast")), window, cx)
+        // From the page: its controls write while the window is handling
+        // the click, as here.
+        let workbench = view.downgrade();
+        cx.update(|window, cx| {
+            let write = writer(&workbench, window.window_handle(), "ghost.speed".into());
+            write(json!("fast"), cx);
         });
         wait(cx, &seen("fast"), "the change from the page");
 
