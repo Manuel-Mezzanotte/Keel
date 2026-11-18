@@ -533,16 +533,21 @@ impl Workbench {
             }
         });
 
-        let status_message = settings.warnings.first().cloned();
-        let output = settings
-            .warnings
-            .iter()
-            .map(|warning| (panel_views::OutputChannel::Keel, warning.clone()))
-            .collect();
         let language = UiLanguage::from_setting(
             settings.string("keel.language"),
             UiLanguage::system_locale().as_deref(),
         );
+        let mut warnings = settings.warnings.clone();
+        // The first window says when the last run ended abruptly. Tests
+        // never start the watch, so there is nothing to say.
+        if let Some(unclean) = crate::crash::take_notice() {
+            warnings.insert(0, language.strings().unclean_exit(unclean.log.as_deref()));
+        }
+        let status_message = warnings.first().cloned();
+        let output = warnings
+            .iter()
+            .map(|warning| (panel_views::OutputChannel::Keel, warning.clone()))
+            .collect();
         let (store, store_events) =
             extensions_view::ExtensionStore::new(language.strings(), window, cx);
         subscriptions.push(store_events);

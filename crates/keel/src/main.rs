@@ -2,6 +2,7 @@
 
 mod assets;
 mod cli;
+mod crash;
 #[cfg(test)]
 mod editor_checks;
 mod extension_state;
@@ -82,6 +83,16 @@ fn main() -> ExitCode {
 }
 
 fn run(path: Option<PathBuf>, socket: PathBuf) {
+    // Before anything else, so a crash at the start is kept too.
+    if let Some(unclean) = crash::start(&paths::data_dir()) {
+        eprintln!(
+            "keel: the last run did not end normally{}",
+            unclean
+                .log
+                .map(|log| format!("; crash log: {}", log.display()))
+                .unwrap_or_default()
+        );
+    }
     // Paths to open arrive from other `keel` commands and from Finder.
     let (requests, mut incoming) = mpsc::unbounded::<instance::OpenRequest>();
     let from_finder = requests.clone();
@@ -114,6 +125,11 @@ fn run(path: Option<PathBuf>, socket: PathBuf) {
         for warning in &warnings {
             eprintln!("keel: {warning}");
         }
+        cx.on_app_quit(|_| {
+            crash::finish();
+            async {}
+        })
+        .detach();
         recent::init(paths::recent_projects_file(&data), cx);
         windows::init(cx);
 

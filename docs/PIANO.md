@@ -1814,7 +1814,7 @@ La prima volta che apri un file di un linguaggio, Keel scarica il suo server: ne
 
 | Sottofase | Cosa | Stato |
 |---|---|---|
-| 12.1 | Affidabilità: registro locale dei crash e avviso alla ripartenza; prova di ripresa dopo un crash vero (`kill -9`) con le modifiche non salvate; salvataggi che rispettano permessi e collegamenti | da fare |
+| 12.1 | Affidabilità: registro locale dei crash e avviso alla ripartenza; prova di ripresa dopo un crash vero (`kill -9`) con le modifiche non salvate; salvataggi che rispettano permessi e collegamenti | fatta |
 | 12.2 | Editor, i rimasti della fase 2: pieghe da tastiera, comandi sulle righe con più cursori, regex e parola intera in Cmd+F, più file insieme da `keel`, trascinare le schede | da fare |
 | 12.3 | Sticky scroll e minimappa, disegnati da Keel | da fare |
 | 12.4 | Impostazioni con interfaccia grafica ed editor delle scorciatoie | da fare |
@@ -1823,6 +1823,20 @@ La prima volta che apri un file di un linguaggio, Keel scarica il suo server: ne
 | 12.7 | Prestazioni: file e progetti enormi, sessione lunga senza perdite di memoria, misure finali contro Cursor; resoconto | da fare |
 
 **Già fatto nelle fasi precedenti:** i salvataggi sicuri (file temporaneo, poi rinomina) e le copie delle modifiche non salvate, che tornano dopo un crash o Cmd+Q (fase 2.6).
+
+**Note sulla 12.1**
+- **Registro dei crash, solo su questo Mac.** Se Keel va in errore, scrive `crashes/crash-<data>-<pid>.log` nella sua cartella dati. Dentro ci sono la versione di Keel e di macOS, il thread, il messaggio, il punto del codice e il backtrace. Tiene gli ultimi 20 registri. Niente viene mandato fuori.
+- **Chiusure brusche.** Ogni Keel in esecuzione lascia un segno in `running/`, che toglie quando esce normalmente.
+  - Se alla ripartenza c'è un segno di un processo che non esiste più, l'ultima volta Keel si è chiuso male: per un errore, per `kill -9` o perché il Mac si è spento.
+  - La prima finestra lo dice nella barra di stato e nell'Output, con il percorso del registro se c'è.
+  - Le modifiche non salvate tornano comunque dalle copie in `backups/`.
+- **Uscite che contano come normali:** Cmd+Q, la chiusura dell'ultima finestra e il SIGTERM. Il SIGTERM è la richiesta educata che usano `kill` e il logout di macOS.
+- **Provato con Keel vero:**
+  - dopo `kill -9` il giro seguente lo segnala;
+  - dopo un SIGTERM non segnala niente;
+  - un errore vero, in un processo di prova, scrive il registro con il messaggio e il file giusto;
+  - dopo `kill -9` non resta nessun language server orfano: escono da soli quando si chiude il loro canale.
+- **Salvataggi:** collegamenti simbolici e permessi erano già rispettati. In più, un file scrivibile in una cartella non scrivibile ora si salva scrivendolo direttamente, come fa sempre VS Code. Prima falliva, perché il file temporaneo non si poteva creare.
 
 ---
 

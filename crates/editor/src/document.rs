@@ -143,7 +143,23 @@ fn resolve_symlink(path: &Path) -> io::Result<PathBuf> {
     }
 }
 
+/// Writes through a temporary file; in a folder Keel cannot write to, but
+/// with a file it can, writes the file in place, as VS Code always does.
 fn write_atomically(path: &Path, contents: &[u8]) -> io::Result<()> {
+    match write_through_temporary(path, contents) {
+        Err(error) if error.kind() == io::ErrorKind::PermissionDenied && path.exists() => {
+            let mut file = fs::OpenOptions::new()
+                .write(true)
+                .truncate(true)
+                .open(path)?;
+            file.write_all(contents)?;
+            file.sync_all()
+        }
+        result => result,
+    }
+}
+
+fn write_through_temporary(path: &Path, contents: &[u8]) -> io::Result<()> {
     let folder = match path.parent() {
         Some(parent) if !parent.as_os_str().is_empty() => parent,
         _ => Path::new("."),
@@ -174,6 +190,22 @@ fn write_atomically(path: &Path, contents: &[u8]) -> io::Result<()> {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn a_file_in_a_read_only_folder_is_written_in_place() {
+        use std::os::unix::fs::PermissionsExt as _;
+        let folder = tempfile::tempdir().unwrap();
+        let path = folder.path().join("config.txt");
+        std::fs::write(&path, "prima\n").unwrap();
+        let mut document = super::Document::open(&path).unwrap();
+        std::fs::set_permissions(folder.path(), std::fs::Permissions::from_mode(0o555)).unwrap();
+        let saved = document.save("dopo\n");
+        std::fs::set_permissions(folder.path(), std::fs::Permissions::from_mode(0o755)).unwrap();
+        saved.unwrap();
+        assert_eq!(std::fs::read_to_string(&path).unwrap(), "dopo\n");
+        let left: Vec<_> = std::fs::read_dir(folder.path()).unwrap().collect();
+        assert_eq!(left.len(), 1, "no temporary file left");
+    }
+
     use super::*;
 
     #[test]

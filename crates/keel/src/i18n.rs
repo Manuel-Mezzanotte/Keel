@@ -332,6 +332,8 @@ pub struct Strings {
     pub lsp_started: &'static str,
     pub lsp_installing_text: &'static str,
     pub lsp_failed_text: &'static str,
+    pub unclean_exit_text: &'static str,
+    pub unclean_exit_log_text: &'static str,
     pub prerequisite_missing_text: &'static str,
     pub prerequisite_detail_text: &'static str,
     pub install_in_terminal: &'static str,
@@ -914,6 +916,16 @@ impl Strings {
         self.install_terminal_name_text.replace("{what}", what)
     }
 
+    /// The last run ended abruptly; `log` is its crash log, if any.
+    pub fn unclean_exit(&self, log: Option<&std::path::Path>) -> String {
+        match log {
+            Some(log) => self
+                .unclean_exit_log_text
+                .replace("{log}", &log.display().to_string()),
+            None => self.unclean_exit_text.to_owned(),
+        }
+    }
+
     pub fn lsp_failed(&self, name: &str, error: &str) -> String {
         self.lsp_failed_text
             .replace("{name}", name)
@@ -1235,6 +1247,8 @@ pub const ITALIAN: Strings = Strings {
     lsp_started: "avviato",
     lsp_installing_text: "Installo il server {name}…",
     lsp_failed_text: "Il server {name} non è partito: {error}",
+    unclean_exit_text: "Keel non si è chiuso normalmente l'ultima volta. Le modifiche non salvate, se c'erano, sono tornate.",
+    unclean_exit_log_text: "Keel si è chiuso per un errore l'ultima volta. Le modifiche non salvate, se c'erano, sono tornate. Registro dell'errore: {log}",
     prerequisite_missing_text: "Per il server {server} serve {what}, che non è installato.",
     prerequisite_detail_text: "Keel può aprire un terminale con il comando:\n{command}\n\nQuando ha finito, usa «Linguaggi: Riavvia i language server» dalla tavolozza.",
     install_in_terminal: "Installa nel terminale",
@@ -1707,6 +1721,8 @@ pub const ENGLISH: Strings = Strings {
     lsp_started: "started",
     lsp_installing_text: "Installing the {name} server…",
     lsp_failed_text: "The {name} server did not start: {error}",
+    unclean_exit_text: "Keel did not quit normally last time. Unsaved changes, if any, are back.",
+    unclean_exit_log_text: "Keel crashed last time. Unsaved changes, if any, are back. Crash log: {log}",
     prerequisite_missing_text: "The {server} server needs {what}, which is not installed.",
     prerequisite_detail_text: "Keel can open a terminal with the command:\n{command}\n\nWhen it is done, run “Languages: Restart Language Servers” from the palette.",
     install_in_terminal: "Install in Terminal",
