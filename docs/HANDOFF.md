@@ -135,7 +135,7 @@ Dopo le prime prove dell'app vera (18 novembre) sono arrivati altri giri di rito
 - **nuovo aspetto** (sera del 18 novembre): due stili della finestra, «Pannelli sospesi» e «Piatto», scelti dalla nuova pagina Impostazioni → Interfaccia (`keel.interfaceStyle`); animazioni di pannelli, selettore e sezioni (`keel.animations`); Controllo versione con messaggio più grande, pulsante Commit largo e grafico ridimensionabile; Cerca, Estensioni e benvenuto senza spazi vuoti; pulsanti più grandi; Cmd+P e tavolozza su una superficie sola. Il dettaglio è in `PIANO.md`, «Nuovo aspetto».
 
 Stato dei controlli all'ultimo commit:
-- tutti i test passano, 200 solo nell'app;
+- tutti i test passano, 201 solo nell'app;
 - clippy non segnala niente;
 - con un progetto web aperto Keel occupa circa 130–150 MB e mostra la prima schermata in circa 400 ms.
 
