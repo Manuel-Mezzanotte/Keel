@@ -126,7 +126,7 @@ Da confermare con le misure della fase 0. Si misura con lo stesso script su Keel
 | 8 | Grafico e storico git | media | fatta; restano le tue prove a mano |
 | 9 | Estensioni | grande | fatta; restano le tue prove a mano |
 | 10 | IA: Claude Code | media | fatta; restano le tue prove a mano |
-| 11 | Altri linguaggi | media | in corso |
+| 11 | Altri linguaggi | media | fatta; restano le tue prove a mano |
 | 12 | Rifinitura, prestazioni e affidabilità | grande | da fare |
 
 Due traguardi: dopo la **fase 0** si decide se continuare; dopo la **fase 6** Keel è usabile tutti i giorni per i progetti web, con Cursor di riserva.
@@ -1591,7 +1591,63 @@ Apri Keel su GestionaleHospitality. La prima volta i server si installano da sol
 | 11.4 | Java con `jdtls` (Maven e Gradle) e Spring Boot (`application.properties` e `.yml`) | fatta |
 | 11.5 | C e C++ con `clangd` (`compile_commands.json`, clang-format); C# con .NET | fatta |
 | 11.6 | Linguaggi di base: Bash e zsh (con ShellCheck e shfmt), Dockerfile, SQL, XML, Makefile | fatta |
-| 11.7 | Prove su un progetto per ogni linguaggio, misure e resoconto | da fare |
+| 11.7 | Prove su un progetto per ogni linguaggio, misure e resoconto | fatta |
+
+**Resoconto della fase 11**
+- **Il criterio era:** per ogni linguaggio un progetto di prova si comporta come in VS Code.
+  - **Come in VS Code:** i server sono quelli delle estensioni di VS Code più usate. Per Java, Spring Boot e XML sono proprio i loro pacchetti. Keel fa anche i passaggi che in VS Code fanno le estensioni:
+    - i comandi di jdtls;
+    - le domande di Spring Boot passate a jdtls;
+    - le classi delle librerie;
+    - l'ambiente virtuale di Python.
+  - **Provato con i server veri:**
+    - Python su Hondana;
+    - Java e Spring Boot su un progetto Maven creato con start.spring.io;
+    - C++ con CMake;
+    - C# con `dotnet new console`;
+    - un file per Bash, Dockerfile, XML e SQL.
+
+    Errori, completamenti, info, definizioni, riferimenti e formattazione funzionano (tempi nelle note di ogni sottofase).
+  - **Resta la tua prova a mano.**
+- **Misure** con Keel ottimizzato, aprendo un file dal comando `keel`, dopo 25–60 secondi:
+
+  | File | Keel | Server | Primo fotogramma |
+  |---|---|---|---|
+  | Hondana, `hondana/api.py` | 123 MB | basedpyright 192 MB, Ruff 15 MB | 530 ms |
+  | Spring Boot, `ProvaApplication.java` | 114–127 MB | jdtls 112–333 MB, Spring Boot 88–357 MB | 300–375 ms |
+  | C++, `main.cpp` | 133 MB | clangd 318 MB | 316 ms |
+  | C#, `Program.cs` | 111 MB | csharp-ls 125 MB | 328 ms |
+  | Bash, `deploy.sh` | 106–141 MB | Bash IDE fino a 630 MB nei primi secondi, poi 192 MB | 290–334 ms |
+
+  - **Keel resta sui 106–141 MB**, come nelle fasi 9 e 10. A riposo usa meno dello 0,5% di CPU.
+  - **I server pesano più di Keel**, come nella fase 6: sono gli stessi programmi di VS Code. jdtls e Spring Boot crescono mentre importano il progetto, poi Java restituisce memoria.
+  - Chiudendo Keel tutti i server si fermano.
+- **Sistemato durante le misure:**
+  - **Un file aperto da solo**, fuori da un progetto con `.git`, `.vscode` o `.keel`, faceva partire i server nella cartella del file: jdtls non vedeva il `pom.xml` e Spring Boot non partiva. Ora i server partono dal primo file di build risalendo (`pom.xml`, `build.gradle`, `CMakeLists.txt`, `*.csproj`, `pyproject.toml`…), come fanno i client dei linguaggi degli altri editor.
+  - **L'ambiente Python in una sottocartella** (Hondana ha `.venv` in `backend/`, mentre il progetto è `Hondana`): ora Keel lo cerca anche nelle cartelle di primo livello, come l'estensione Python di VS Code.
+  - **`KEEL_LSP_TRACE=1`** scrive nel terminale il nome di ogni messaggio dei server: serve per capire cosa succede senza aprire l'Output.
+- **Rimandati:**
+  - i completamenti di SQL;
+  - Gradle con un progetto vero;
+  - le funzioni dentro le classi di libreria (sono in sola lettura, senza info né salti);
+  - le impostazioni `java.jdt.ls.vmargs` per cambiare la memoria di jdtls.
+- **Test:** 355 automatici, tutti verdi per quattro volte di fila. Più 24 da lanciare a mano: server veri e misure, con la nuova prova di jdtls e Spring Boot insieme (`cargo test -p lsp --test real_spring -- --ignored`).
+
+**Le tue prove a mano della fase 11**
+
+La prima volta che apri un file di un linguaggio, Keel scarica il suo server: nella barra di stato compare «Installo il server…». jdtls pesa 133 MB, Spring Boot 83 MB, gli altri pochi MB.
+1. **Python:** apri Keel su Hondana e poi `backend/hondana/api.py`. Passa sopra a un `import fastapi`: l'info arriva dal `.venv` del progetto. Scrivi `x: int = "a"`: errore rosso. Ruff segnala gli import non usati; Maiusc+Alt+F formatta.
+2. **Java:** apri un tuo progetto Maven o Gradle (o creane uno con start.spring.io) e un file `.java`. La prima volta l'import del progetto richiede qualche decina di secondi (la barra di stato lo mostra), poi errori, completamenti e Cmd+. per gli import mancanti. F12 su una classe di Spring apre il suo sorgente in sola lettura.
+3. **Spring Boot:** nello stesso progetto apri `src/main/resources/application.properties` e scrivi `server.po`: compare `server.port`. Una proprietà sbagliata viene segnalata.
+4. **C e C++:** apri un progetto con `CMakeLists.txt`; se `build/compile_commands.json` non c'è, lancia `cmake -S . -B build -DCMAKE_EXPORT_COMPILE_COMMANDS=ON`. Errori, completamenti e F12 anche nelle intestazioni di sistema.
+5. **C#:** apri un file `.cs`. Senza .NET compare l'avviso «Per il server C# serve .NET 10»: prova «Installa nel terminale» (chiede la tua password), poi «Linguaggi: Riavvia i language server».
+6. **Linguaggi di base:**
+   - uno script `.sh` con una variabile senza virgolette: avviso di ShellCheck;
+   - un `Dockerfile` con `RUNN`: errore;
+   - un `pom.xml` con un tag chiuso male: errore;
+   - un file `.sql`: avvisi di stile e formattazione.
+7. **Makefile:** apri un `Makefile` e vai a capo dentro un target: il rientro è un tab (in basso a destra c'è «Tab»), non spazi.
+8. **Colori:** apri un file di ogni linguaggio. Python, Java, C, C++, C#, SQL, XML, Dockerfile, Makefile e `.properties` hanno i loro colori.
 
 **Decisioni prese all'inizio**
 - **I server sono quelli delle estensioni di VS Code** più usate, così il comportamento è lo stesso: Pylance si basa su Pyright (qui `basedpyright`, la sua versione libera); Java usa `jdtls` come l'estensione di Red Hat; XML usa `lemminx`, sempre di Red Hat.
