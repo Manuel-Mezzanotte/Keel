@@ -23,6 +23,7 @@ mod find_bar;
 mod git_graph;
 mod git_gutter;
 mod host_watchdog;
+mod keybindings_view;
 mod language_features;
 mod language_servers;
 mod markdown_preview;
@@ -34,6 +35,7 @@ mod pdf_view;
 mod problems;
 mod restore;
 mod search_view;
+mod settings_view;
 mod shell;
 mod signature_help;
 mod source_control;
@@ -151,7 +153,10 @@ actions!(
         NewFile,
         NewWindow,
         Open,
-        OpenRecent
+        OpenRecent,
+        OpenSettings,
+        OpenSettingsJson,
+        OpenKeybindings
     ]
 );
 
@@ -245,6 +250,8 @@ enum Backing {
     /// Read-only text a language server shows, such as a Java class of a
     /// library (`jdt:`).
     Library,
+    /// A page Keel draws, such as Settings.
+    Page(settings_view::PageKind),
     /// An image shown in a preview; extensions never see it.
     Image(PathBuf),
     /// A file's differences, drawn by gpui-component's diff view.
@@ -270,7 +277,8 @@ impl OpenDocument {
             | Backing::Pdf(_)
             | Backing::Graph(_)
             | Backing::ExtensionDetails(_)
-            | Backing::Library => None,
+            | Backing::Library
+            | Backing::Page(_) => None,
             Backing::Untitled | Backing::Extension => None,
         }
     }
@@ -366,6 +374,7 @@ pub struct Workbench {
     /// The Search view's fields, switches and results.
     search: search_view::SearchView,
     find: find_bar::FindBar,
+    keys: keybindings_view::KeybindingsView,
     /// Very large files the user agreed to open.
     large_files_ok: other_files::LargeFilesOk,
     /// Where the session and the backups are kept, if anywhere.
@@ -587,6 +596,7 @@ impl Workbench {
             large_files_ok: Default::default(),
             search: Self::create_search_view(window, cx, language.strings()),
             find: Self::create_find_bar(window, cx, language.strings()),
+            keys: Self::create_keybindings_view(window, cx, language.strings()),
             data_dir: None,
             restoring: false,
             session_task: Task::ready(()),
@@ -807,6 +817,15 @@ impl Workbench {
 
     /// The name shown for a document: its file name, or "Untitled 1".
     fn display_name(&self, document: &OpenDocument) -> String {
+        match document.backing {
+            Backing::Page(settings_view::PageKind::Settings) => {
+                return self.strings().settings_tab_title.to_owned();
+            }
+            Backing::Page(settings_view::PageKind::Keybindings) => {
+                return self.strings().keybindings_tab_title.to_owned();
+            }
+            _ => {}
+        }
         match document.uri.strip_prefix("untitled:Untitled-") {
             Some(number) => format!("{} {number}", self.strings().untitled),
             None => document.name(),
@@ -966,7 +985,8 @@ impl Workbench {
             | Backing::Pdf(_)
             | Backing::Graph(_)
             | Backing::ExtensionDetails(_)
-            | Backing::Library => false,
+            | Backing::Library
+            | Backing::Page(_) => false,
         };
         let params = json!({
             "uri": uri,
@@ -1174,7 +1194,8 @@ impl Workbench {
             | Backing::Pdf(_)
             | Backing::Graph(_)
             | Backing::ExtensionDetails(_)
-            | Backing::Library => {}
+            | Backing::Library
+            | Backing::Page(_) => {}
             Backing::Extension => {
                 if let Some(extensions) = &self.extensions {
                     let write = extensions
@@ -2171,8 +2192,7 @@ impl Workbench {
                 Ok(Value::Null)
             }
             "workbench.action.openSettings" => {
-                self.status_message = Some(self.strings().settings_unavailable.to_owned());
-                cx.notify();
+                self.open_page(settings_view::PageKind::Settings, window, cx);
                 Ok(Value::Null)
             }
             _ => Err(format!("command '{command}' not found")),

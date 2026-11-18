@@ -1817,12 +1817,29 @@ La prima volta che apri un file di un linguaggio, Keel scarica il suo server: ne
 | 12.1 | Affidabilità: registro locale dei crash e avviso alla ripartenza; prova di ripresa dopo un crash vero (`kill -9`) con le modifiche non salvate; salvataggi che rispettano permessi e collegamenti | fatta |
 | 12.2 | Editor, i rimasti della fase 2: pieghe da tastiera, comandi sulle righe con più cursori, regex e parola intera in Cmd+F, più file insieme da `keel`, trascinare le schede | fatta |
 | 12.3 | Sticky scroll e minimappa, disegnati da Keel | fatta |
-| 12.4 | Impostazioni con interfaccia grafica ed editor delle scorciatoie | da fare |
+| 12.4 | Impostazioni con interfaccia grafica ed editor delle scorciatoie | fatta |
 | 12.5 | Importa da Cursor impostazioni, scorciatoie e progetti recenti | da fare |
 | 12.6 | Rifinitura: animazioni, schermate vuote, coerenza di temi e icone, accessibilità di base, revisione dei testi in italiano e in inglese | da fare |
 | 12.7 | Prestazioni: file e progetti enormi, sessione lunga senza perdite di memoria, misure finali contro Cursor; resoconto | da fare |
 
 **Già fatto nelle fasi precedenti:** i salvataggi sicuri (file temporaneo, poi rinomina) e le copie delle modifiche non salvate, che tornano dopo un crash o Cmd+Q (fase 2.6).
+
+**Note sulla 12.4**
+- **Scheda «Impostazioni» (Cmd+,)** con la pagina di impostazioni di gpui-component: le pagine a sinistra (Aspetto, Editor, File e finestre, Terminale, Linguaggi, Estensioni) e la ricerca in alto.
+  - Contiene le 32 impostazioni che Keel legge davvero, con titolo e descrizione in italiano e inglese.
+  - Ogni impostazione ha il suo controllo: interruttore, menu, numero o testo. Accanto c'è il pulsante per tornare al valore predefinito.
+  - Una modifica si scrive subito nel tuo `settings.json` e vale subito nella finestra: dimensione del testo, a capo, lingua, tema e rientro si aggiornano al momento. Minimappa e sticky scroll valgono per i file aperti dopo.
+  - Le impostazioni che sono oggetti o elenchi (`files.exclude`, `editor.codeActionsOnSave`…) hanno il pulsante «Modifica in settings.json».
+  - Se il progetto cambia un'impostazione nelle sue, la descrizione lo dice.
+  - «Apri settings.json» in alto apre il file; nella tavolozza c'è «Preferenze: Apri le impostazioni (JSON)».
+- **`settings.json` con i commenti ora si può cambiare da Keel.** Prima Keel rifiutava, per non perderli. Ora cambia solo il testo della chiave toccata: commenti, ordine, righe vuote e rientro restano come li hai scritti. Vale anche per il tema scelto dalla tavolozza e per le impostazioni scritte dalle estensioni.
+- **Scheda «Scorciatoie da tastiera» (Cmd+K Cmd+S)**, come quella di VS Code.
+  - Elenca tutti i comandi di Keel con i loro tasti (scritti come sul Mac, per esempio ⇧⌘P), l'origine (Predefinita o Tua) e l'identificativo. Si cerca per nome, identificativo o tasto.
+  - **Cambiare:** il pulsante a forma di matita, poi i tasti (anche due di fila, come ⌘K ⌘S) e Invio; Esc annulla.
+  - La scorciatoia nuova va nel tuo `keybindings.json` nel formato di VS Code, insieme alla riga che toglie quella predefinita (`"-comando"`), lasciando intatti i commenti.
+  - **Vale subito:** il tasto nuovo funziona e il vecchio smette, senza riavviare.
+  - **Ripristinare:** la freccia indietro toglie le tue righe per quel comando e rimette il tasto predefinito.
+- **Non ancora:** le impostazioni del progetto dalla schermata (per ora si scrivono le tue); le altre finestre aperte vedono le modifiche solo alla prossima apertura.
 
 **Note sulla 12.3**
 - **Sticky scroll:** in cima all'editor restano le prime righe dei blocchi in cui ti trovi (funzione, classe, `if`…), al massimo 5, con il numero di riga. Un clic porta a quella riga. I blocchi sono gli stessi delle pieghe, cioè quelli della grammatica del linguaggio.

@@ -4,6 +4,7 @@
 //! From lowest to highest priority: Keel's defaults, the user's file, the
 //! project's `.vscode/settings.json`, the project's `.keel/settings.json`.
 
+pub mod edit;
 pub mod jsonc;
 
 use std::fs;
@@ -104,8 +105,8 @@ impl Settings {
         merged
     }
 
-    /// Sets or removes (`None`) a value in the user's file. A file with
-    /// comments is left alone, since rewriting it would lose them.
+    /// Sets or removes (`None`) a value in the user's file, changing only
+    /// that key: comments and the rest of the file stay as they are.
     pub fn update_user(&mut self, key: &str, value: Option<Value>) -> Result<()> {
         let file = self.user_file.clone();
         self.update_file(Source::User, &file, key, value)
@@ -147,15 +148,7 @@ impl Settings {
         value: Option<Value>,
     ) -> Result<()> {
         let existing = match fs::read_to_string(file) {
-            Ok(text) => {
-                if has_comments(&text) {
-                    bail!(
-                        "{} has comments; change {key} there by hand",
-                        file.display()
-                    );
-                }
-                text
-            }
+            Ok(text) => text,
             Err(error) if error.kind() == std::io::ErrorKind::NotFound => "{}".to_owned(),
             Err(error) => return Err(error.into()),
         };
@@ -165,6 +158,9 @@ impl Settings {
             Value::Object(values) => values,
             _ => bail!("{} must contain an object", file.display()),
         };
+        // Only this key changes in the text: comments and order stay.
+        let text = edit::set_key(&existing, key, value.as_ref())
+            .with_context(|| format!("changing {key} in {}", file.display()))?;
         match value {
             Some(value) => values.insert(key.to_owned(), value),
             None => values.remove(key),
@@ -172,7 +168,6 @@ impl Settings {
         if let Some(parent) = file.parent() {
             fs::create_dir_all(parent)?;
         }
-        let text = serde_json::to_string_pretty(&Value::Object(values.clone()))? + "\n";
         let temporary = file.with_extension("json.keel-save");
         fs::write(&temporary, text)?;
         fs::rename(&temporary, file)?;
@@ -336,16 +331,19 @@ mod tests {
     }
 
     #[test]
-    fn files_with_comments_are_not_rewritten() {
+    fn files_with_comments_keep_them() {
         let folder = tempfile::tempdir().unwrap();
         let user = folder.path().join("settings.json");
         write(&user, "{\n  // mio\n  \"editor.fontSize\": 15\n}\n");
         let mut settings = Settings::load(&user, None);
-        let error = settings
+        settings
             .update_user("editor.fontSize", Some(json!(16)))
-            .unwrap_err();
-        assert!(error.to_string().contains("has comments"), "{error}");
-        assert!(fs::read_to_string(&user).unwrap().contains("// mio"));
+            .unwrap();
+        assert_eq!(
+            fs::read_to_string(&user).unwrap(),
+            "{\n  // mio\n  \"editor.fontSize\": 16\n}\n"
+        );
+        assert_eq!(settings.number("editor.fontSize"), Some(16.));
     }
 
     #[test]

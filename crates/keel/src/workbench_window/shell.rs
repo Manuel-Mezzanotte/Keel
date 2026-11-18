@@ -974,6 +974,14 @@ impl Workbench {
                             .flex_1()
                             .min_h_0()
                             .child(self.render_pdf(&pane.uri, tab, colors, window, cx)),
+                        Some(Backing::Page(kind)) => div().flex_1().min_h_0().child(match kind {
+                            super::settings_view::PageKind::Settings => {
+                                self.render_settings_page(window, cx)
+                            }
+                            super::settings_view::PageKind::Keybindings => {
+                                self.render_keybindings_page(colors, cx)
+                            }
+                        }),
                         Some(Backing::Preview(tab)) => div()
                             .flex_1()
                             .min_h_0()
@@ -1523,6 +1531,16 @@ impl Render for Workbench {
             .on_action(
                 cx.listener(|this, _: &SelectTheme, window, cx| this.choose_theme(window, cx)),
             )
+            .on_action(cx.listener(|this, _: &OpenSettings, window, cx| {
+                this.open_page(super::settings_view::PageKind::Settings, window, cx)
+            }))
+            .on_action(cx.listener(|this, _: &OpenSettingsJson, window, cx| {
+                this.open_settings_json(window, cx)
+            }))
+            .on_action(cx.listener(|this, _: &OpenKeybindings, window, cx| {
+                this.reload_user_keybindings();
+                this.open_page(super::settings_view::PageKind::Keybindings, window, cx)
+            }))
             .on_action(
                 cx.listener(|this, _: &SelectLanguage, window, cx| {
                     this.choose_language(window, cx)

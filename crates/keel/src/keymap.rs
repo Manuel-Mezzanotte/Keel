@@ -47,6 +47,7 @@ use crate::workbench_window::{NextChange, PreviousChange, RevertChange, StageCha
 use crate::workbench_window::{
     NextProblem, PreviousProblem, RestartLanguageServers, TriggerParameterHints,
 };
+use crate::workbench_window::{OpenKeybindings, OpenSettings, OpenSettingsJson};
 use crate::workbench_window::{ShowMarkdownPreview, ShowMarkdownPreviewToSide};
 
 /// A Keel command: its VS Code name, the action it runs and its default key.
@@ -83,6 +84,24 @@ pub const COMMANDS: &[KeelCommand] = &[
         id: "workbench.action.showCommands",
         action: || Box::new(ShowCommands),
         default_key: Some("cmd+shift+p"),
+        context: None,
+    },
+    KeelCommand {
+        id: "workbench.action.openSettings",
+        action: || Box::new(OpenSettings),
+        default_key: Some("cmd+,"),
+        context: None,
+    },
+    KeelCommand {
+        id: "workbench.action.openSettingsJson",
+        action: || Box::new(OpenSettingsJson),
+        default_key: None,
+        context: None,
+    },
+    KeelCommand {
+        id: "workbench.action.openGlobalKeybindings",
+        action: || Box::new(OpenKeybindings),
+        default_key: Some("cmd+k cmd+s"),
         context: None,
     },
     KeelCommand {
@@ -998,7 +1017,7 @@ mod tests {
         let (bindings, warnings) =
             read_user_bindings(Path::new("/nonexistent/keel/keybindings.json"));
         assert!(bindings.is_empty() && warnings.is_empty());
-        assert_eq!(keel_bindings(&[]).len(), 73);
+        assert_eq!(keel_bindings(&[]).len(), 75);
     }
 
     #[test]

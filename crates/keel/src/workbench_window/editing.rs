@@ -194,7 +194,12 @@ impl Workbench {
         true
     }
 
-    fn set_word_wrap(&mut self, wrap: bool, window: &mut Window, cx: &mut Context<Self>) {
+    pub(super) fn set_word_wrap(
+        &mut self,
+        wrap: bool,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
         self.word_wrap = wrap;
         let editors: Vec<Entity<EditorState>> = self
             .panes
