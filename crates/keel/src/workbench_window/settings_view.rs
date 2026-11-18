@@ -349,6 +349,17 @@ pub(super) const CATALOG: &[Entry] = &[
         ),
     },
     Entry {
+        key: "npm.enableScriptExplorer",
+        page: Page::Files,
+        kind: Kind::Switch,
+        default: "true",
+        title: ("Script npm sotto i file", "NPM Scripts in the Explorer"),
+        description: (
+            "Mostra gli script di package.json sotto l'albero dei file.",
+            "Show package.json's scripts under the file tree.",
+        ),
+    },
+    Entry {
         key: "files.exclude",
         page: Page::Files,
         kind: Kind::Json,

@@ -138,7 +138,7 @@ mod tests {
 
             apply(&choice("Mezzanotte"), None, cx);
             assert!(cx.theme().is_dark());
-            assert_eq!(cx.theme().background, Hsla::from(rgb(0x070B14)));
+            assert_eq!(cx.theme().background, Hsla::from(rgb(0x0C1220)));
 
             apply(&choice("Chiaro"), None, cx);
             assert!(!cx.theme().is_dark());
@@ -149,7 +149,7 @@ mod tests {
 
             // An unknown name falls back to Mezzanotte.
             apply(&choice("Solarized"), None, cx);
-            assert_eq!(cx.theme().background, Hsla::from(rgb(0x070B14)));
+            assert_eq!(cx.theme().background, Hsla::from(rgb(0x0C1220)));
         });
     }
 

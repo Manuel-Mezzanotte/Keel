@@ -74,7 +74,22 @@ impl Workbench {
                 .unwrap_or_default(),
             panel_height: Some(self.panel_height),
             agent_width: Some(self.agent_width),
+            sidebar_width: Some(self.sidebar_width),
+            collapsed: self.collapsed_sections(),
+            recent_searches: self.search.recent.clone(),
         }
+    }
+
+    /// The sidebar sections closed to their header, for the session.
+    fn collapsed_sections(&self) -> Vec<String> {
+        [
+            ("npm-scripts", self.npm_collapsed),
+            ("git-graph", self.graph_collapsed),
+        ]
+        .into_iter()
+        .filter(|(_, closed)| *closed)
+        .map(|(name, _)| name.to_owned())
+        .collect()
     }
 
     pub(super) fn save_session_now(&self) {
@@ -200,6 +215,15 @@ impl Workbench {
         if let Some(width) = state.agent_width.filter(|width| width.is_finite()) {
             self.agent_width = width.max(240.);
         }
+        if let Some(width) = state.sidebar_width.filter(|width| width.is_finite()) {
+            self.sidebar_width = width.clamp(180., 600.);
+        }
+        self.npm_collapsed = state
+            .collapsed
+            .iter()
+            .any(|section| section == "npm-scripts");
+        self.search.recent = state.recent_searches.clone();
+        self.graph_collapsed = state.collapsed.iter().any(|section| section == "git-graph");
         if let Some(tree) = &mut self.tree {
             for folder in state.expanded.iter().filter(|folder| folder.is_dir()) {
                 tree.expand(folder);

@@ -46,6 +46,15 @@ pub struct WindowState {
     pub panel_height: Option<f32>,
     #[serde(default)]
     pub agent_width: Option<f32>,
+    #[serde(default)]
+    pub sidebar_width: Option<f32>,
+    /// Sections of the sidebar closed to their header, such as
+    /// `"npm-scripts"`.
+    #[serde(default)]
+    pub collapsed: Vec<String>,
+    /// The latest searches of the Search view.
+    #[serde(default)]
+    pub recent_searches: Vec<String>,
 }
 
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]

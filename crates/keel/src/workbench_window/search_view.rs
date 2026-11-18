@@ -49,6 +49,8 @@ pub(super) struct SearchView {
     searching: bool,
     /// Files whose lines are hidden, by relative path.
     collapsed: HashSet<String>,
+    /// The latest searches, newest first, to run again with a click.
+    pub(super) recent: Vec<String>,
     stop: Arc<AtomicBool>,
     task: Task<()>,
     _subscriptions: Vec<Subscription>,
@@ -76,6 +78,23 @@ impl SearchView {
             }
         }
     }
+}
+
+/// How many searches the view remembers.
+const RECENT_SEARCHES: usize = 8;
+
+/// Puts `text` first among the recent searches. A search that grew from
+/// one before it, as typing makes `boo` then `booking`, takes its place.
+/// Returns whether the list changed.
+pub(super) fn remember_search(recent: &mut Vec<String>, text: &str) -> bool {
+    let text = text.trim();
+    if text.is_empty() || recent.first().is_some_and(|first| first == text) {
+        return false;
+    }
+    recent.retain(|known| known != text && !text.starts_with(known.as_str()));
+    recent.insert(0, text.to_owned());
+    recent.truncate(RECENT_SEARCHES);
+    true
 }
 
 /// `7.310` in Italian, `7,310` in English.
@@ -147,6 +166,7 @@ impl Workbench {
             error: None,
             searching: false,
             collapsed: HashSet::new(),
+            recent: Vec::new(),
             stop: Arc::default(),
             task: Task::ready(()),
             _subscriptions: subscriptions,
@@ -214,6 +234,10 @@ impl Workbench {
                     Ok(results) => {
                         this.search.results = results;
                         this.search.error = None;
+                        let text = this.search.query.read(cx).value().to_string();
+                        if remember_search(&mut this.search.recent, &text) {
+                            this.session_changed(cx);
+                        }
                     }
                     Err(error) => {
                         this.search.results = Results::default();
@@ -577,8 +601,81 @@ impl Workbench {
                     })
                     .child(summary),
             )
+            .when(view.query.read(cx).value().is_empty(), |panel| {
+                panel.child(self.render_search_start(colors, cx))
+            })
             .child(div().flex_1().min_h_0().child(list))
             .into_any_element()
+    }
+
+    /// Before the first search: what the buttons do, and the latest
+    /// searches to run again.
+    fn render_search_start(&self, colors: Colors, cx: &mut Context<Self>) -> gpui::Div {
+        let strings = self.strings();
+        let recent = self.search.recent.iter().enumerate().map(|(index, text)| {
+            let query = text.clone();
+            div()
+                .id(("recent-search", index))
+                .h(px(24.))
+                .px_2()
+                .flex()
+                .items_center()
+                .gap_2()
+                .rounded(px(6.))
+                .text_sm()
+                .cursor_pointer()
+                .hover(|row| row.bg(colors.hover))
+                .on_click(cx.listener(move |this, _, window, cx| {
+                    this.search
+                        .query
+                        .update(cx, |input, cx| input.set_value(query.clone(), window, cx));
+                    this.run_search(cx);
+                }))
+                .child(Icon::new(IconName::Clock).xsmall().text_color(colors.faint))
+                .child(
+                    div()
+                        .min_w_0()
+                        .truncate()
+                        .text_color(colors.text)
+                        .child(text.clone()),
+                )
+        });
+        div()
+            .flex()
+            .flex_col()
+            .gap_2()
+            .child(
+                div()
+                    .px_2()
+                    .text_xs()
+                    .text_color(colors.muted)
+                    .child(strings.search_hint),
+            )
+            .when(!self.search.recent.is_empty(), |start| {
+                start.child(
+                    div()
+                        .flex()
+                        .flex_col()
+                        .child(
+                            div()
+                                .flex()
+                                .items_center()
+                                .child(div().flex_1().child(heading(strings.search_recent, colors)))
+                                .child(
+                                    Button::new("clear-recent-searches")
+                                        .ghost()
+                                        .xsmall()
+                                        .label(strings.search_recent_clear)
+                                        .on_click(cx.listener(|this, _, _, cx| {
+                                            this.search.recent.clear();
+                                            this.session_changed(cx);
+                                            cx.notify();
+                                        })),
+                                ),
+                        )
+                        .children(recent),
+                )
+            })
     }
 
     fn render_result_rows(
@@ -786,6 +883,20 @@ mod tests {
     use gpui::{TestAppContext, VisualTestContext};
 
     use super::*;
+
+    #[test]
+    fn recent_searches_keep_the_finished_words() {
+        let mut recent = Vec::new();
+        for typed in ["b", "boo", "booking", "useState", "booking"] {
+            remember_search(&mut recent, typed);
+        }
+        assert_eq!(recent, ["booking", "useState"]);
+        for index in 0..20 {
+            remember_search(&mut recent, &format!("x{index}y"));
+        }
+        assert_eq!(recent.len(), RECENT_SEARCHES);
+        assert!(!remember_search(&mut recent, "  "));
+    }
 
     #[test]
     fn numbers_group_their_thousands() {

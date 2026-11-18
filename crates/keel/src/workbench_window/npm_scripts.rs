@@ -5,14 +5,16 @@
 use std::path::Path;
 
 use gpui::{ClickEvent, Div, StatefulInteractiveElement as _};
+use gpui_component::button::{Button, ButtonVariants as _};
+use gpui_component::menu::DropdownMenu as _;
 use gpui_component::{Icon, Sizable as _};
 use gpui_kit_assets::IconName;
 
-use super::shell::{Colors, heading};
+use super::shell::{Colors, section_header};
 use super::terminal_view;
 use super::*;
 
-actions!(keel, [RunNpmScript]);
+actions!(keel, [RunNpmScript, HideNpmScripts]);
 
 /// The scripts of a `package.json` and how to run them.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
@@ -149,12 +151,25 @@ impl Workbench {
         root.on_action(
             cx.listener(|this, _: &RunNpmScript, window, cx| this.choose_npm_script(window, cx)),
         )
+        .on_action(cx.listener(|this, _: &HideNpmScripts, window, cx| {
+            this.change_setting("npm.enableScriptExplorer", Some(json!(false)), window, cx)
+        }))
     }
 
     /// The scripts under the Explorer's tree; a click runs one.
     pub(super) fn render_npm_scripts(&self, colors: Colors, cx: &mut Context<Self>) -> Option<Div> {
         let scripts = self.npm_scripts.as_ref()?;
+        // `npm.enableScriptExplorer`, as in VS Code, turns the section off.
+        if self
+            .settings
+            .get("npm.enableScriptExplorer")
+            .and_then(Value::as_bool)
+            == Some(false)
+        {
+            return None;
+        }
         let strings = self.strings();
+        let open = !self.npm_collapsed;
         let rows = scripts
             .scripts
             .iter()
@@ -188,6 +203,24 @@ impl Workbench {
                             .child(command.clone()),
                     )
             });
+        let hide = strings.npm_hide;
+        let header = section_header("npm-header", strings.npm_scripts, open, colors)
+            .on_click(cx.listener(|this, _: &ClickEvent, _, cx| {
+                this.npm_collapsed = !this.npm_collapsed;
+                this.session_changed(cx);
+                cx.notify();
+            }))
+            .child(
+                Button::new("npm-more")
+                    .ghost()
+                    .xsmall()
+                    .icon(Icon::new(IconName::Ellipsis))
+                    .dropdown_menu(move |menu, _, _| {
+                        menu.item(gpui_component::menu::PopupMenuItem::new(hide).on_click(
+                            |_, window, cx| window.dispatch_action(Box::new(HideNpmScripts), cx),
+                        ))
+                    }),
+            );
         Some(
             div()
                 .flex_none()
@@ -196,16 +229,19 @@ impl Workbench {
                 .flex_col()
                 .border_t_1()
                 .border_color(colors.border)
+                .pt_1()
                 .pb_1()
-                .child(heading(strings.npm_scripts, colors))
-                .child(
-                    div()
-                        .id("npm-scripts")
-                        .flex_1()
-                        .min_h_0()
-                        .overflow_y_scroll()
-                        .children(rows),
-                ),
+                .child(header)
+                .when(open, |section| {
+                    section.child(
+                        div()
+                            .id("npm-scripts")
+                            .flex_1()
+                            .min_h_0()
+                            .overflow_y_scroll()
+                            .children(rows),
+                    )
+                }),
         )
     }
 }

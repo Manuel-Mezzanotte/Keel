@@ -17,7 +17,20 @@ const TOOLBAR_HEIGHT: f32 = 52.;
 /// The space between the panels and around them.
 pub(super) const GAP: f32 = 8.;
 const RADIUS: f32 = 12.;
-const SIDEBAR_WIDTH: f32 = 240.;
+/// The sidebar's width at first, and the range it can be dragged to.
+pub(super) const SIDEBAR_WIDTH: f32 = 240.;
+const SIDEBAR_MIN_WIDTH: f32 = 180.;
+const SIDEBAR_MAX_WIDTH: f32 = 600.;
+
+/// The handle on the sidebar's right edge.
+#[derive(Clone)]
+pub(super) struct SidebarResize;
+
+impl Render for SidebarResize {
+    fn render(&mut self, _: &mut Window, _: &mut Context<Self>) -> impl IntoElement {
+        gpui::Empty
+    }
+}
 const STATUS_HEIGHT: f32 = 24.;
 /// Where the traffic lights sit, centred in the toolbar.
 const TRAFFIC_LIGHTS_X: f32 = 18.;
@@ -91,14 +104,57 @@ fn floating(background: Hsla, border: Hsla) -> Div {
 }
 
 pub(super) fn heading(text: &str, colors: Colors) -> Div {
+    // One line always: a narrow sidebar cuts the title, it never wraps it.
     div()
         .px_2()
         .pt_1()
         .pb_1()
+        .min_w_0()
+        .truncate()
         .text_xs()
         .font_weight(FontWeight::SEMIBOLD)
         .text_color(colors.faint)
         .child(text.to_uppercase())
+}
+
+/// The header of a section of the sidebar, as Finder's: a chevron that
+/// closes and opens it (the whole row is the button), the title, and on the
+/// right whatever `actions` the section has.
+pub(super) fn section_header(
+    id: impl Into<gpui::ElementId>,
+    title: &str,
+    open: bool,
+    colors: Colors,
+) -> gpui::Stateful<Div> {
+    div()
+        .id(id)
+        .h(px(26.))
+        .px_1()
+        .flex()
+        .items_center()
+        .gap_1()
+        .rounded(px(6.))
+        .cursor_pointer()
+        .hover(|row| row.bg(colors.hover))
+        .text_xs()
+        .font_weight(FontWeight::SEMIBOLD)
+        .text_color(colors.faint)
+        .child(
+            Icon::new(if open {
+                IconName::ChevronDown
+            } else {
+                IconName::ChevronRight
+            })
+            .xsmall()
+            .text_color(colors.faint),
+        )
+        .child(
+            div()
+                .flex_1()
+                .min_w_0()
+                .truncate()
+                .child(title.to_uppercase()),
+        )
 }
 
 /// A short note for a part of the window that comes in a later phase.
@@ -417,9 +473,8 @@ impl Workbench {
             SideView::Extensions => self.render_extensions(colors, cx),
         };
 
-        floating(colors.panel, colors.border)
-            .w(px(SIDEBAR_WIDTH))
-            .flex_none()
+        let sidebar = floating(colors.panel, colors.border)
+            .size_full()
             .p_2()
             .gap_2()
             .child(switch)
@@ -435,7 +490,47 @@ impl Workbench {
                         |content| content.overflow_y_scroll(),
                     )
                     .child(content),
-            )
+            );
+        // The handle sits in the gap on its right, as Finder's sidebar edge:
+        // drag to resize, double-click to go back to the first width.
+        let handle = div()
+            .id("sidebar-resize")
+            .absolute()
+            .top_0()
+            .bottom_0()
+            .right(px(-GAP + 1.))
+            .w(px(GAP - 2.))
+            .cursor_col_resize()
+            .on_drag(SidebarResize, |resize, _, _, cx| cx.new(|_| resize.clone()))
+            .on_click(cx.listener(|this, event: &gpui::ClickEvent, _, cx| {
+                if event.click_count() >= 2 {
+                    this.sidebar_width = SIDEBAR_WIDTH;
+                    this.session_changed(cx);
+                    cx.notify();
+                }
+            }));
+        div()
+            .relative()
+            .h_full()
+            .flex_none()
+            .w(px(self.sidebar_width))
+            .child(sidebar)
+            .child(handle)
+    }
+
+    /// Follows the drag of the sidebar's edge; `bounds` is the row of
+    /// panels, which starts one gap from the window's edge.
+    pub(super) fn resize_sidebar(
+        &mut self,
+        event: &gpui::DragMoveEvent<SidebarResize>,
+        cx: &mut Context<Self>,
+    ) {
+        let bounds = event.bounds;
+        let width = f32::from(event.event.position.x - bounds.left()) - GAP;
+        let room = (f32::from(bounds.size.width) * 0.5).max(SIDEBAR_MIN_WIDTH);
+        self.sidebar_width = width.clamp(SIDEBAR_MIN_WIDTH, SIDEBAR_MAX_WIDTH.min(room));
+        self.session_changed(cx);
+        cx.notify();
     }
 
     fn render_open_editors(&self, colors: Colors, cx: &mut Context<Self>) -> Div {
@@ -1490,6 +1585,9 @@ impl Render for Workbench {
             })
             .on_drag_move::<super::claude_code::AgentResize>(
                 cx.listener(|this, event, _, cx| this.resize_agent(event, cx)),
+            )
+            .on_drag_move::<SidebarResize>(
+                cx.listener(|this, event, _, cx| this.resize_sidebar(event, cx)),
             );
         let status = self.render_status_bar(colors, cx);
 

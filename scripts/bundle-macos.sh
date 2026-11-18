@@ -20,7 +20,10 @@ fi
 version="$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml | head -1)"
 app="target/release/Keel.app"
 mkdir -p "$app/Contents/MacOS" "$app/Contents/Resources"
-cp target/release/keel "$app/Contents/MacOS/keel"
+# A new file renamed over the old one: a Keel already running from this
+# app keeps its own copy until it quits, instead of crashing.
+cp target/release/keel "$app/Contents/MacOS/keel.new"
+mv -f "$app/Contents/MacOS/keel.new" "$app/Contents/MacOS/keel"
 cp assets/brand/Keel.icns "$app/Contents/Resources/Keel.icns"
 
 cat > "$app/Contents/Info.plist" <<PLIST

@@ -686,17 +686,18 @@ impl Workbench {
             .branch
             .clone()
             .unwrap_or_else(|| self.scm.status.head.clone().unwrap_or_default());
+        // One field, one frame: the text area draws none of its own.
         let message = div()
             .key_context(MESSAGE_CONTEXT)
-            .mx_2()
+            .mx_1()
             .px_2()
-            .py_1p5()
+            .py_1()
             .rounded(px(8.))
             .border_1()
             .border_color(colors.border)
             .bg(colors.editor)
             .text_sm()
-            .child(Textarea::new(&self.scm.message));
+            .child(Textarea::new(&self.scm.message).appearance(false));
         let nothing = self.scm.status.files.is_empty();
         let busy = self.scm.busy.is_some();
         let commit = Button::new("scm-commit")
@@ -704,7 +705,8 @@ impl Workbench {
             .small()
             .w_full()
             .icon(Icon::new(IconName::Check))
-            .label(strings.scm_commit_on(&branch))
+            .label(strings.scm_commit)
+            .tooltip(strings.scm_commit_on(&branch))
             .disabled(busy || nothing)
             .on_click(cx.listener(|this, _, window, cx| this.commit(false, window, cx)));
         let sync = (nothing && !busy)
@@ -732,6 +734,7 @@ impl Workbench {
             });
 
         let rows = self.scm.rows();
+        let no_rows = rows.is_empty();
         let list: AnyElement = if rows.is_empty() {
             note(strings.scm_clean.to_owned(), colors).into_any_element()
         } else {
@@ -766,7 +769,15 @@ impl Workbench {
                     .child(commit)
                     .children(sync),
             )
-            .child(div().flex_1().min_h_0().child(list))
+            // The changes take the room they need, the graph the rest.
+            .child(
+                div()
+                    .min_h_0()
+                    .when(no_rows, |changes| changes.flex_none())
+                    .when(!no_rows, |changes| changes.flex_1().min_h(px(80.)))
+                    .child(list),
+            )
+            .child(self.render_scm_graph(colors, cx))
             .into_any_element()
     }
 
@@ -1016,6 +1027,7 @@ impl Workbench {
     fn git_status_changed(&mut self, cx: &mut Context<Self>) {
         self.refresh_open_diffs(cx);
         self.git_graph_changed(cx);
+        self.reload_sidebar_graph(cx);
         // A commit or a checkout changes who wrote the lines.
         let blamed: Vec<String> = self.blame.keys().cloned().collect();
         for uri in blamed {

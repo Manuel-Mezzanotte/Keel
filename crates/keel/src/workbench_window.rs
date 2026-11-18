@@ -35,6 +35,7 @@ mod panel_views;
 mod pdf_view;
 mod problems;
 mod restore;
+mod scm_graph;
 mod search_view;
 mod settings_view;
 mod shell;
@@ -461,6 +462,8 @@ pub struct Workbench {
     panel_maximized: bool,
     /// Claude Code's panel on the right: its width and its terminal.
     agent_width: f32,
+    /// The sidebar's width, dragged from its edge.
+    sidebar_width: f32,
     agent_terminal: Option<claude_code::AgentTerminal>,
     /// The staged text of files, for the margin, by path in the repository.
     git_baselines: HashMap<String, Option<String>>,
@@ -472,6 +475,12 @@ pub struct Workbench {
     scm: source_control::SourceControl,
     /// The scripts of the project's `package.json`.
     npm_scripts: Option<npm_scripts::NpmScripts>,
+    /// The NPM Scripts section is closed to its header.
+    npm_collapsed: bool,
+    /// The Graph section of Source Control is closed to its header.
+    graph_collapsed: bool,
+    /// The latest commits, for the Graph section of Source Control.
+    scm_graph: scm_graph::SidebarGraph,
     /// The language servers of the open files.
     languages: language_servers::Languages,
     /// Their errors and warnings, as the Problems view lists them.
@@ -650,8 +659,12 @@ impl Workbench {
             panel_height: terminals::PANEL_HEIGHT,
             panel_maximized: false,
             agent_width: claude_code::AGENT_WIDTH,
+            sidebar_width: shell::SIDEBAR_WIDTH,
             agent_terminal: None,
             npm_scripts: None,
+            npm_collapsed: false,
+            graph_collapsed: false,
+            scm_graph: Default::default(),
             scm,
             diff_split: true,
             git_baselines: HashMap::new(),

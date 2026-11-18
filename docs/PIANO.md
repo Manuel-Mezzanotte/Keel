@@ -1850,6 +1850,29 @@ La prima volta che apri un file di un linguaggio, Keel scarica il suo server: ne
   - **Annunci per Claude Code rimasti** dei Keel chiusi bruscamente: in `~/.claude/ide` ce n'erano 18 dei miei Keel di misura. Claude Code li avrebbe offerti in `/ide`. Ora Keel, partendo, toglie gli annunci di Keel il cui processo non esiste più, come fa l'estensione di VS Code; quelli degli altri editor restano.
 - **Test:** 386 automatici, tutti verdi per tre volte di fila, più 26 da lanciare a mano.
 
+**Dopo la tua prima prova (18 novembre)**
+- **Mezzanotte più chiaro.** Tutte le tinte di blu notte sono salite di un gradino, con la stessa tinta: sfondo da `#070B14` a `#0C1220`, pannelli da `#0B1426` a `#111A2E`, bordi da `#1E2B47` a `#263453`. Per restare leggibili sono stati schiariti anche i commenti e i numeri di riga; il test del contrasto passa.
+- **Barra laterale ridimensionabile.** Si trascina il suo bordo destro (da 180 a 600 punti, al massimo metà finestra); un doppio clic la riporta a 240. La larghezza si ricorda per progetto.
+- **Script npm:** si chiudono e si aprono con la freccia, come le sezioni del Finder, e si nascondono dal «…» (`npm.enableScriptExplorer: false`, come in VS Code; si riaccendono da Impostazioni → File e finestre). Anche lo stato chiuso si ricorda.
+- **Controllo versione:**
+  - il titolo è «Controllo versione», su una riga;
+  - il messaggio di commit ha un solo campo con una sola cornice (prima c'era un riquadro con dentro un altro campo);
+  - il testo d'esempio è corto, «Messaggio del commit»;
+  - il pulsante dice solo «Commit»: ramo e ⌘↵ sono nel suggerimento.
+- **Sezione «Grafico» nel Controllo versione**, come quella di VS Code:
+  - mostra gli ultimi 150 commit con le corsie colorate e il ramo;
+  - passando sopra un commit si vedono autore, data e hash; un clic lo apre in Git Graph;
+  - le modifiche prendono lo spazio che serve, il grafico il resto;
+  - si chiude alla sua intestazione.
+- **Pagina Cerca:** prima di cercare spiega i tre pulsanti (Aa, parola intera, .\*) e ⇧⌘F, e mostra le ultime 8 ricerche, da rifare con un clic.
+  - Una ricerca che cresce mentre scrivi («boo», poi «booking») resta una sola.
+  - Le ricerche si ricordano per progetto e si cancellano con «Cancella».
+- **Dettagli:**
+  - i titoli delle sezioni non vanno più a capo;
+  - testi d'esempio più corti nei campi stretti («Cerca su Open VSX», «Includi (src, \*.ts)», «Escludi»);
+  - la vista Estensioni vuota dice da dove partire.
+- **App e DMG:** ricostruendo l'app mentre la usi, il Keel aperto non si chiude più. Prima lo script copiava sopra l'eseguibile in uso; ora ne scrive uno nuovo e lo sostituisce in un colpo solo.
+
 **Le tue prove a mano della fase 12**
 1. **Crash:** in un terminale lancia `kill -9` sul processo di Keel (`pgrep -x keel`), poi riapri Keel. Nella barra di stato compare «Keel non si è chiuso normalmente l'ultima volta», e le modifiche non salvate sono tornate.
 2. **Pieghe:** in un file con funzioni, Cmd+Alt+[ e Cmd+Alt+], poi Cmd+K Cmd+0 e Cmd+K Cmd+J.

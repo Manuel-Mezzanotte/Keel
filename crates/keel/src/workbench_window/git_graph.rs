@@ -28,7 +28,7 @@ pub(super) const GRAPH_URI: &str = "keel-git-graph:";
 /// How many commits are loaded at a time.
 const PAGE: usize = 500;
 const ROW_HEIGHT: f32 = 26.;
-const LANE_WIDTH: f32 = 14.;
+pub(super) const LANE_WIDTH: f32 = 14.;
 /// The hash of the row of changes not committed yet.
 const UNCOMMITTED: &str = "*";
 
@@ -644,7 +644,7 @@ impl Workbench {
 }
 
 /// A branch or tag next to a commit's message.
-fn render_ref(label: &RefLabel, lane: usize, colors: Colors) -> AnyElement {
+pub(super) fn render_ref(label: &RefLabel, lane: usize, colors: Colors) -> AnyElement {
     let color = lane_color(lane);
     let (icon, name, strong) = match label {
         RefLabel::Head(name) => (IconName::GitBranch, name.as_str(), true),
@@ -672,7 +672,7 @@ fn render_ref(label: &RefLabel, lane: usize, colors: Colors) -> AnyElement {
 }
 
 /// Paints one row of the graph: its lines, then the commit's dot.
-fn paint_graph_row(
+pub(super) fn paint_graph_row(
     bounds: Bounds<Pixels>,
     row: &GraphRow,
     is_head: bool,
