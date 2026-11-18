@@ -127,7 +127,7 @@ Da confermare con le misure della fase 0. Si misura con lo stesso script su Keel
 | 9 | Estensioni | grande | fatta; restano le tue prove a mano |
 | 10 | IA: Claude Code | media | fatta; restano le tue prove a mano |
 | 11 | Altri linguaggi | media | fatta; restano le tue prove a mano |
-| 12 | Rifinitura, prestazioni e affidabilità | grande | in corso |
+| 12 | Rifinitura, prestazioni e affidabilità | grande | fatta; restano le tue prove a mano |
 
 Due traguardi: dopo la **fase 0** si decide se continuare; dopo la **fase 6** Keel è usabile tutti i giorni per i progetti web, con Cursor di riserva.
 
@@ -1820,7 +1820,54 @@ La prima volta che apri un file di un linguaggio, Keel scarica il suo server: ne
 | 12.4 | Impostazioni con interfaccia grafica ed editor delle scorciatoie | fatta |
 | 12.5 | Importa da Cursor impostazioni, scorciatoie e progetti recenti | fatta |
 | 12.6 | Rifinitura: animazioni, schermate vuote, coerenza di temi e icone, accessibilità di base, revisione dei testi in italiano e in inglese | fatta |
-| 12.7 | Prestazioni: file e progetti enormi, sessione lunga senza perdite di memoria, misure finali contro Cursor; resoconto | da fare |
+| 12.7 | Prestazioni: file e progetti enormi, sessione lunga senza perdite di memoria, misure finali contro Cursor; resoconto | fatta |
+
+**Resoconto della fase 12**
+- **Il criterio era:** usi Keel per qualche settimana al posto di Cursor senza dover tornare indietro. Questo lo decidi tu usandolo. La fase ha fatto quello che serviva perché sia possibile:
+  - affidabilità (registro dei crash, chiusure brusche riconosciute);
+  - i comandi di editor che mancavano;
+  - impostazioni e scorciatoie con le loro schermate;
+  - l'importazione da Cursor;
+  - le misure finali.
+- **Misure finali** (Keel ottimizzato, 18 novembre 2026):
+
+  | Prova | Keel | Cursor |
+  |---|---|---|
+  | I due progetti di FilieraFacile aperti, due finestre | **112 MB** in 1 processo, primo fotogramma 455 ms | **2.886 MB** in 46 processi, così come lo stavi usando |
+  | — di cui finestre, processo principale, GPU e servizi | 112 MB | circa 1.400 MB (le sole finestre 821 MB) |
+  | — di cui estensioni | 0 (nessuna aperta) | 584 MB |
+  | CPU a riposo, 15 secondi | 0,00 s | — |
+  | File da 200.000 righe: apertura / un tasto | 383 ms / 1 ms | — |
+  | Vai al file su tutta MiniPCProgram (32.809 file, 1,48 milioni contando gli ignorati) | indice in 0,64 s, ricerca in 61 ms | — |
+  | Ricerca nel progetto di «booking» (8.100 risultati) | 0,74 s | 0,36 s (ripgrep di Cursor) |
+  | Ricerca nel progetto di «useState» | 0,37 s | 0,37 s |
+
+  - Il confronto con Cursor non è alla pari: Cursor aveva i file e i terminali che stavi usando. Non l'ho riavviato per misurarlo da vuoto, per non toccare le tue finestre. Già le sole finestre di Cursor pesano sette volte tutto Keel.
+  - La ricerca di Keel era più lenta: 1,24 s su «booking». Leggeva riga per riga anche i file dove non c'era niente; ora un primo controllo sul file intero li scarta subito, e il tempo è sceso a 0,74 s. Resta circa il doppio di ripgrep quando i risultati sono tanti.
+- **Sessione lunga senza perdite.** Ho comandato Keel dal collegamento IDE di Claude Code: 2.500 giri da 42 richieste, 105.000 in tutto, in 5 minuti. In ogni giro 40 file aperti a rotazione e una scheda di differenze creata e chiusa. La memoria va su e giù tra 137 e 198 MB e finisce più bassa di come era partita: nessuna perdita.
+- **Sistemato durante le misure:**
+  - **La minimappa ricalcolava le righe sul thread dell'interfaccia**: 46 ms su un file da 200.000 righe, ogni 250 ms mentre scrivi. Ora il calcolo gira in un thread di fondo e la scrittura resta a 1 ms a tasto.
+  - **Annunci per Claude Code rimasti** dei Keel chiusi bruscamente: in `~/.claude/ide` ce n'erano 18 dei miei Keel di misura. Claude Code li avrebbe offerti in `/ide`. Ora Keel, partendo, toglie gli annunci di Keel il cui processo non esiste più, come fa l'estensione di VS Code; quelli degli altri editor restano.
+- **Test:** 386 automatici, tutti verdi per tre volte di fila, più 26 da lanciare a mano.
+
+**Le tue prove a mano della fase 12**
+1. **Crash:** in un terminale lancia `kill -9` sul processo di Keel (`pgrep -x keel`), poi riapri Keel. Nella barra di stato compare «Keel non si è chiuso normalmente l'ultima volta», e le modifiche non salvate sono tornate.
+2. **Pieghe:** in un file con funzioni, Cmd+Alt+[ e Cmd+Alt+], poi Cmd+K Cmd+0 e Cmd+K Cmd+J.
+3. **Più cursori:** Alt+clic su tre righe, poi Cmd+/ e Alt+↓. Tutte le righe cambiano insieme, e Cmd+Z le rimette con un passo solo.
+4. **Cmd+F:**
+   - prova «Aa», «parola intera» e «.\*»;
+   - con la regex `(\w+)_due` sostituisci con `$1-tre`;
+   - scrivi una regex sbagliata come `(`: la barra la segnala in rosso.
+5. **Schede:** trascina una scheda in un altro punto, poi in un altro gruppo (Cmd+\ per dividere). Dal terminale `keel a.ts b.ts` apre entrambi.
+6. **Sticky scroll e minimappa:** scorri dentro una funzione lunga: la sua prima riga resta in alto, e un clic la riporta lì. Clicca e trascina sulla minimappa.
+7. **Impostazioni (Cmd+,):**
+   - cambia la dimensione del testo e il tema;
+   - apri `settings.json`: i tuoi commenti ci sono ancora;
+   - prova la ricerca in alto.
+8. **Scorciatoie (Cmd+K Cmd+S):** cambia quella di un comando, provala subito, poi riportala com'era con la freccia indietro.
+9. **Da Cursor:** dalla tavolozza «Preferenze: Importa impostazioni, scorciatoie e progetti recenti da Cursor». Leggi la domanda con i numeri e importa; i progetti di Cursor compaiono in File → Apri recenti.
+10. **Aspetto:** guarda i temi Chiaro e Nero con i commenti più scuri o più chiari, e la barra di ricerca che scivola dentro. Con «Riduci movimento» acceso in Impostazioni di Sistema → Accessibilità → Schermo non deve muoversi.
+11. **Settimane con Keel:** usalo al posto di Cursor e annota cosa ti fa tornare indietro: è il criterio della fase.
 
 **Già fatto nelle fasi precedenti:** i salvataggi sicuri (file temporaneo, poi rinomina) e le copie delle modifiche non salvate, che tornano dopo un crash o Cmd+Q (fase 2.6).
 
