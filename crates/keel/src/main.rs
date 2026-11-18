@@ -150,6 +150,7 @@ fn run(path: Option<PathBuf>, more: Vec<PathBuf>, socket: PathBuf) {
         .detach();
         recent::init(paths::recent_projects_file(&data), cx);
         windows::init(cx);
+        menus::init(cx);
 
         // The theme and the menus follow the user's settings; each window
         // reads its project's settings too.

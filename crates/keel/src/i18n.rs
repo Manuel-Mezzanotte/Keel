@@ -607,6 +607,12 @@ pub struct Strings {
     pub search_no_folder: &'static str,
     /// The empty Claude Code panel.
     pub claude_code_title: &'static str,
+    /// Keel's menu, as macOS apps name it.
+    pub menu_settings: &'static str,
+    pub menu_keybindings: &'static str,
+    pub menu_hide: &'static str,
+    pub menu_hide_others: &'static str,
+    pub menu_show_all: &'static str,
 }
 
 impl Strings {
@@ -1634,6 +1640,11 @@ pub const ITALIAN: Strings = Strings {
     open_folder: "Apri una cartella…",
     search_no_folder: "Apri una cartella per cercare in tutti i suoi file.",
     claude_code_title: "Claude Code, qui accanto",
+    menu_settings: "Impostazioni…",
+    menu_keybindings: "Scorciatoie da tastiera",
+    menu_hide: "Nascondi Keel",
+    menu_hide_others: "Nascondi altre",
+    menu_show_all: "Mostra tutte",
 };
 
 pub const ENGLISH: Strings = Strings {
@@ -2183,6 +2194,11 @@ pub const ENGLISH: Strings = Strings {
     open_folder: "Open a Folder…",
     search_no_folder: "Open a folder to search all of its files.",
     claude_code_title: "Claude Code, Right Here",
+    menu_settings: "Settings…",
+    menu_keybindings: "Keyboard Shortcuts",
+    menu_hide: "Hide Keel",
+    menu_hide_others: "Hide Others",
+    menu_show_all: "Show All",
 };
 
 #[cfg(test)]

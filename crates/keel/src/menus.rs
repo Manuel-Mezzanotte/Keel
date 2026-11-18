@@ -1,14 +1,15 @@
 //! Keel's menu bar on macOS, in the interface language.
 
-use gpui::{App, Global, Menu, MenuItem, OsAction, SystemMenuType};
+use gpui::{App, Global, KeyBinding, Menu, MenuItem, OsAction, SystemMenuType, actions};
 use gpui_component::input::{Copy, Cut, Paste, Redo, Replace, Search, SelectAll, Undo};
 
 use crate::i18n::UiLanguage;
 use crate::workbench_window::{CloseEditor, GoToLine, QuickOpen, ReopenClosedEditor, SplitEditor};
 use crate::workbench_window::{
-    CloseWindow, NewFile, NewWindow, Open, OpenProject, Quit, Save, SelectLanguage, SelectTheme,
-    ShowCommands, ShowExplorer, ShowExtensions, ShowSearch, ShowSourceControl, ToggleAgent,
-    ToggleOutput, TogglePanel, ToggleProblems, ToggleSidebar, ToggleTerminal,
+    CloseWindow, NewFile, NewWindow, Open, OpenKeybindings, OpenProject, OpenSettings, Quit, Save,
+    SelectLanguage, SelectTheme, ShowCommands, ShowExplorer, ShowExtensions, ShowSearch,
+    ShowSourceControl, ToggleAgent, ToggleOutput, TogglePanel, ToggleProblems, ToggleSidebar,
+    ToggleTerminal,
 };
 use crate::workbench_window::{
     CopyLinesDown, CopyLinesUp, MoveLinesDown, MoveLinesUp, ToggleBlockComment, ToggleLineComment,
@@ -18,6 +19,20 @@ use crate::workbench_window::{
     KillTerminal, NewTerminal, OpenClaudeCode, OpenClaudeCodeInPanel, RenameTerminal,
     SplitTerminal, ToggleMaximizedPanel,
 };
+
+actions!(keel, [HideKeel, HideOtherApps, ShowAllApps]);
+
+/// The actions every Mac app has in its menu, with macOS's keys: hide
+/// Keel, hide the other apps, show them all. They work with no window.
+pub fn init(cx: &mut App) {
+    cx.on_action(|_: &HideKeel, cx| cx.hide());
+    cx.on_action(|_: &HideOtherApps, cx| cx.hide_other_apps());
+    cx.on_action(|_: &ShowAllApps, cx| cx.unhide_other_apps());
+    cx.bind_keys([
+        KeyBinding::new("cmd-h", HideKeel, None),
+        KeyBinding::new("cmd-alt-h", HideOtherApps, None),
+    ]);
+}
 
 /// The language the menu bar was last built in.
 struct MenuLanguage(UiLanguage);
@@ -58,13 +73,20 @@ pub fn set(language: UiLanguage, cx: &mut App) {
         disabled: false,
     };
     cx.set_menus(vec![
+        // As every Mac app's: Settings first, then the system's items.
         menu(
             "Keel",
             vec![
+                MenuItem::action(strings.menu_settings, OpenSettings),
+                MenuItem::action(strings.menu_keybindings, OpenKeybindings),
                 MenuItem::action(strings.menu_theme, SelectTheme),
                 MenuItem::action(strings.menu_language, SelectLanguage),
                 MenuItem::separator(),
                 MenuItem::os_submenu(strings.menu_services, SystemMenuType::Services),
+                MenuItem::separator(),
+                MenuItem::action(strings.menu_hide, HideKeel),
+                MenuItem::action(strings.menu_hide_others, HideOtherApps),
+                MenuItem::action(strings.menu_show_all, ShowAllApps),
                 MenuItem::separator(),
                 MenuItem::action(strings.command_quit, Quit),
             ],
@@ -183,6 +205,63 @@ mod tests {
                 .map(|menu| menu.name.to_string())
                 .collect()
         })
+    }
+
+    /// Keel's menu is laid out as every Mac app's: Settings on top, the
+    /// system's items below, Quit last; ⌘H and ⌥⌘H hide, as everywhere.
+    #[gpui::test]
+    fn keels_menu_starts_with_settings_as_mac_apps_do(cx: &mut TestAppContext) {
+        cx.update(|cx| {
+            init(cx);
+            set(UiLanguage::Italian, cx);
+        });
+        let items: Vec<String> = cx.update(|cx| {
+            cx.get_menus().unwrap()[0]
+                .items
+                .iter()
+                .map(|item| match item {
+                    gpui::OwnedMenuItem::Action { name, .. } => name.clone(),
+                    gpui::OwnedMenuItem::Separator => "—".to_owned(),
+                    gpui::OwnedMenuItem::Submenu(menu) => menu.name.to_string(),
+                    gpui::OwnedMenuItem::SystemMenu(menu) => menu.name.to_string(),
+                })
+                .collect()
+        });
+        assert_eq!(
+            items,
+            [
+                "Impostazioni…",
+                "Scorciatoie da tastiera",
+                "Tema colori…",
+                "Lingua…",
+                "—",
+                "Servizi",
+                "—",
+                "Nascondi Keel",
+                "Nascondi altre",
+                "Mostra tutte",
+                "—",
+                "Esci da Keel"
+            ]
+        );
+        let keys = |action: &dyn gpui::Action, cx: &mut TestAppContext| -> Vec<String> {
+            cx.update(|cx| {
+                cx.key_bindings()
+                    .borrow()
+                    .bindings_for_action(action)
+                    .map(|binding| {
+                        binding
+                            .keystrokes()
+                            .iter()
+                            .map(|keystroke| keystroke.inner().unparse(gpui::OperatingSystem::Mac))
+                            .collect::<Vec<_>>()
+                            .join(" ")
+                    })
+                    .collect()
+            })
+        };
+        assert_eq!(keys(&HideKeel, cx), ["cmd-h"]);
+        assert_eq!(keys(&HideOtherApps, cx), ["alt-cmd-h"]);
     }
 
     #[gpui::test]
