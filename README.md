@@ -28,4 +28,4 @@ cargo run -p keel
 
 ## Development plan
 
-The full plan, split into phases, is in [`docs/PIANO.md`](docs/PIANO.md) (in Italian).
+The full plan, split into phases, is in [`docs/PIANO.md`](docs/PIANO.md), and a handoff with the current state is in [`docs/HANDOFF.md`](docs/HANDOFF.md) (both in Italian).

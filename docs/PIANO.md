@@ -1918,6 +1918,7 @@ La prima volta che apri un file di un linguaggio, Keel scarica il suo server: ne
   - funziona in parte senza: pagine web interne, editor propri, e ora anche i suoi task e la sua formattazione, che Keel non usa ancora;
   - il controllo gira in sottofondo, perché il codice di un'estensione può pesare diversi megabyte;
   - VSAuto Ghost non ha etichette: tutto quello che usa c'è.
+- **I controlli della pagina Impostazioni cambiano davvero** (quarta prova): interruttori, menu, numeri e testi scrivevano l'impostazione mentre la finestra stava ancora gestendo il clic, e la scrittura si perdeva senza errori, sia nelle pagine di Keel sia in quelle delle estensioni. Ora la scrittura aspetta che la finestra abbia finito. Il test scrive come fa un controllo, e senza la correzione fallisce.
 - **Prove automatiche:** pagina delle impostazioni e cambi che arrivano all'estensione (dalla pagina, da `settings.json` salvato a mano, col ripristino), proposta dei temi dopo l'installazione, icone del tema nelle schede e nell'apertura rapida, etichette delle estensioni; le 20 impostazioni vere di VSAuto Ghost lette dal suo pacchetto.
 
 **Le tue prove a mano della fase 12**
