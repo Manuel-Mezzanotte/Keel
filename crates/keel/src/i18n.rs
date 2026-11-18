@@ -81,6 +81,7 @@ pub struct Strings {
     pub menu_command_palette: &'static str,
     pub choose_theme: &'static str,
     pub settings_tab_title: &'static str,
+    pub explorer_empty: &'static str,
     pub keybindings_tab_title: &'static str,
     pub open_settings_json: &'static str,
     pub open_keybindings_json: &'static str,
@@ -91,6 +92,7 @@ pub struct Strings {
     pub keybindings_change: &'static str,
     pub keybindings_reset: &'static str,
     pub command_open_settings: &'static str,
+    pub command_show_commands: &'static str,
     pub command_open_settings_json: &'static str,
     pub command_open_keybindings: &'static str,
     pub command_import_cursor_settings: &'static str,
@@ -649,6 +651,7 @@ impl Strings {
             "workbench.action.gotoLine" => self.command_go_to_line,
             "editor.action.commentLine" => self.command_comment_line,
             "workbench.action.openSettings" => self.command_open_settings,
+            "workbench.action.showCommands" => self.command_show_commands,
             "workbench.action.openSettingsJson" => self.command_open_settings_json,
             "workbench.action.openGlobalKeybindings" => self.command_open_keybindings,
             "keel.settings.importFromCursor" => self.command_import_cursor_settings,
@@ -1046,6 +1049,7 @@ pub const ITALIAN: Strings = Strings {
     menu_command_palette: "Palette dei comandi…",
     choose_theme: "Tema colori",
     settings_tab_title: "Impostazioni",
+    explorer_empty: "La cartella è vuota: crea un file con il tasto destro o con Cmd+N",
     keybindings_tab_title: "Scorciatoie da tastiera",
     open_settings_json: "Apri settings.json",
     open_keybindings_json: "Apri keybindings.json",
@@ -1056,6 +1060,7 @@ pub const ITALIAN: Strings = Strings {
     keybindings_change: "Cambia la scorciatoia",
     keybindings_reset: "Torna a quella predefinita",
     command_open_settings: "Preferenze: Apri le impostazioni",
+    command_show_commands: "Mostra tutti i comandi",
     command_open_settings_json: "Preferenze: Apri le impostazioni (JSON)",
     command_open_keybindings: "Preferenze: Apri le scorciatoie da tastiera",
     command_import_cursor_settings: "Preferenze: Importa impostazioni, scorciatoie e progetti recenti da Cursor",
@@ -1546,6 +1551,7 @@ pub const ENGLISH: Strings = Strings {
     menu_command_palette: "Command Palette…",
     choose_theme: "Color theme",
     settings_tab_title: "Settings",
+    explorer_empty: "The folder is empty: create a file with a right click or Cmd+N",
     keybindings_tab_title: "Keyboard Shortcuts",
     open_settings_json: "Open settings.json",
     open_keybindings_json: "Open keybindings.json",
@@ -1556,6 +1562,7 @@ pub const ENGLISH: Strings = Strings {
     keybindings_change: "Change Keybinding",
     keybindings_reset: "Reset to Default",
     command_open_settings: "Preferences: Open Settings",
+    command_show_commands: "Show All Commands",
     command_open_settings_json: "Preferences: Open Settings (JSON)",
     command_open_keybindings: "Preferences: Open Keyboard Shortcuts",
     command_import_cursor_settings: "Preferences: Import Settings, Shortcuts and Recent Projects from Cursor",
@@ -2015,6 +2022,70 @@ pub const ENGLISH: Strings = Strings {
 
 #[cfg(test)]
 mod tests {
+    /// The `name: "text"` lines of one language's table, from the source.
+    fn table(name: &str) -> std::collections::BTreeMap<String, String> {
+        let source = include_str!("i18n.rs");
+        let start = source
+            .find(&format!("pub const {name}: Strings = Strings {{"))
+            .unwrap();
+        let end = start + source[start..].find("\n};").unwrap();
+        source[start..end]
+            .lines()
+            .filter_map(|line| {
+                let (field, rest) = line.trim().split_once(": \"")?;
+                Some((
+                    field.to_owned(),
+                    rest.trim_end_matches(',').trim_end_matches('"').to_owned(),
+                ))
+            })
+            .collect()
+    }
+
+    fn placeholders(text: &str) -> Vec<String> {
+        let mut found: Vec<String> = text
+            .split('{')
+            .skip(1)
+            .filter_map(|part| part.split_once('}').map(|(name, _)| name.to_owned()))
+            .filter(|name| {
+                name.chars().all(|c| c.is_ascii_lowercase() || c == '_') && !name.is_empty()
+            })
+            .collect();
+        found.sort();
+        found
+    }
+
+    /// Both languages fill in the same `{name}` parts, so no text shows a
+    /// raw `{count}` or loses a number.
+    #[test]
+    fn both_languages_have_the_same_placeholders() {
+        let (italian, english) = (table("ITALIAN"), table("ENGLISH"));
+        assert!(italian.len() > 400, "{} texts", italian.len());
+        let mut different = Vec::new();
+        for (field, text) in &italian {
+            let Some(other) = english.get(field) else {
+                continue;
+            };
+            if placeholders(text) != placeholders(other) {
+                different.push(field.clone());
+            }
+            if text.trim().is_empty() || other.trim().is_empty() {
+                different.push(format!("{field} is empty"));
+            }
+        }
+        assert!(different.is_empty(), "{different:?}");
+    }
+
+    /// Every command of Keel has a name in the palette, in both languages.
+    #[test]
+    fn every_command_has_a_name() {
+        let missing: Vec<&str> = crate::keymap::COMMANDS
+            .iter()
+            .map(|command| command.id)
+            .filter(|id| ITALIAN.command_title(id).is_none() || ENGLISH.command_title(id).is_none())
+            .collect();
+        assert!(missing.is_empty(), "{missing:?}");
+    }
+
     use super::*;
 
     #[test]

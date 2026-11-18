@@ -124,7 +124,7 @@ pub(super) const CATALOG: &[Entry] = &[
         key: "workbench.preferredLightColorTheme",
         page: Page::Appearance,
         kind: Kind::Text,
-        default: "\"Alba\"",
+        default: "\"Chiaro\"",
         title: ("Tema chiaro preferito", "Preferred Light Theme"),
         description: (
             "Il tema quando macOS è chiaro.",

@@ -254,7 +254,7 @@
         "editor.foreground": "#1D1D1F",
         "editor.background": "#FFFFFF",
         "editor.active_line.background": "#0A84FF14",
-        "editor.line_number": "#A1A1A6",
+        "editor.line_number": "#86868B",
         "editor.active_line_number": "#1D1D1F",
         "editor.invisible": "#A1A1A666",
         "created": "#2DA44E",
@@ -316,11 +316,11 @@
             "color": "#4B21B0"
           },
           "comment": {
-            "color": "#707F8C",
+            "color": "#5E6B78",
             "font_style": "italic"
           },
           "comment.doc": {
-            "color": "#707F8C",
+            "color": "#5E6B78",
             "font_style": "italic"
           },
           "variable": {
@@ -358,10 +358,10 @@
             "font_weight": 700
           },
           "link_text": {
-            "color": "#0A84FF"
+            "color": "#0066D6"
           },
           "link_uri": {
-            "color": "#0A84FF"
+            "color": "#0066D6"
           },
           "text.literal": {
             "color": "#D12F1B"
@@ -438,7 +438,7 @@
         "editor.foreground": "#F5F5F7",
         "editor.background": "#0A0A0A",
         "editor.active_line.background": "#0A84FF14",
-        "editor.line_number": "#5A5A5E",
+        "editor.line_number": "#6E6E73",
         "editor.active_line_number": "#F5F5F7",
         "editor.invisible": "#5A5A5E66",
         "created": "#30D158",
@@ -499,11 +499,11 @@
             "color": "#9CCBFF"
           },
           "comment": {
-            "color": "#6C7986",
+            "color": "#76838F",
             "font_style": "italic"
           },
           "comment.doc": {
-            "color": "#6C7986",
+            "color": "#76838F",
             "font_style": "italic"
           },
           "variable": {

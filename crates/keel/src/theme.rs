@@ -153,6 +153,61 @@ mod tests {
         });
     }
 
+    /// WCAG's contrast between two `#RRGGBB` colors, 1 to 21.
+    fn contrast(a: &str, b: &str) -> f64 {
+        fn luminance(color: &str) -> f64 {
+            let hex = color.trim_start_matches('#');
+            let channel = |at: usize| {
+                let value = u8::from_str_radix(&hex[at..at + 2], 16).unwrap() as f64 / 255.;
+                if value <= 0.03928 {
+                    value / 12.92
+                } else {
+                    ((value + 0.055) / 1.055).powf(2.4)
+                }
+            };
+            0.2126 * channel(0) + 0.7152 * channel(2) + 0.0722 * channel(4)
+        }
+        let (a, b) = (luminance(a), luminance(b));
+        (a.max(b) + 0.05) / (a.min(b) + 0.05)
+    }
+
+    /// Text reads well in every theme: 4.5 for text (WCAG AA), 3 for the
+    /// line numbers, which WCAG counts as large or incidental.
+    #[test]
+    fn every_theme_has_enough_contrast() {
+        let themes: serde_json::Value = serde_json::from_str(THEMES).unwrap();
+        let mut weak = Vec::new();
+        for theme in themes["themes"].as_array().unwrap() {
+            let name = theme["name"].as_str().unwrap();
+            let colors = &theme["colors"];
+            let highlight = &theme["highlight"];
+            let background = colors["background"].as_str().unwrap();
+            let editor = highlight["editor.background"]
+                .as_str()
+                .unwrap_or(background);
+            let mut check = |what: &str, color: &serde_json::Value, against: &str, least: f64| {
+                if let Some(color) = color.as_str().filter(|color| color.starts_with('#')) {
+                    let ratio = contrast(color, against);
+                    if ratio < least {
+                        weak.push(format!("{name} {what} {color}: {ratio:.2}"));
+                    }
+                }
+            };
+            check("foreground", &colors["foreground"], background, 4.5);
+            check(
+                "muted.foreground",
+                &colors["muted.foreground"],
+                background,
+                4.5,
+            );
+            check("line numbers", &highlight["editor.line_number"], editor, 3.);
+            for (capture, style) in highlight["syntax"].as_object().unwrap() {
+                check(capture, &style["color"], editor, 4.5);
+            }
+        }
+        assert!(weak.is_empty(), "{weak:#?}");
+    }
+
     #[test]
     fn the_choice_comes_from_the_settings() {
         let settings = Settings::load("/nonexistent/keel/settings.json", None);

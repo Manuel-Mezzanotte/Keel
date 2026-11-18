@@ -11,6 +11,7 @@ mod instance;
 mod keymap;
 mod layout;
 mod menus;
+mod motion;
 mod paths;
 mod project;
 mod quick_pick;

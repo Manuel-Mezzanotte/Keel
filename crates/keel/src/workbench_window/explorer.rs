@@ -783,7 +783,11 @@ impl Workbench {
                                 }),
                             )
                     })
-                    .child(list),
+                    .child(list)
+                    // An empty folder says so, with where to start.
+                    .when(count == 0, |tree| {
+                        tree.child(note(strings.explorer_empty.to_owned(), colors))
+                    }),
             )
             .children(self.render_npm_scripts(colors, cx))
             .into_any_element()

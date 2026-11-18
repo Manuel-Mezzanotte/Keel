@@ -3,7 +3,7 @@
 //! of all of them, and `$1` in replacements with a regular expression. The
 //! editor highlights the matches; this bar sits on top of it.
 
-use gpui::{AnyElement, Subscription, prelude::FluentBuilder as _};
+use gpui::{AnimationExt as _, AnyElement, Subscription, prelude::FluentBuilder as _};
 use gpui_base::input::SearchOptions;
 use gpui_component::button::{Button, ButtonVariants as _};
 use gpui_component::input::{Input, InputEvent, InputState, Replace, Search};
@@ -341,129 +341,128 @@ impl Workbench {
                 .icon(Icon::new(icon))
                 .tooltip(tooltip)
         };
-        Some(
-            div()
-                .absolute()
-                .top_1()
-                .right_4()
-                .w(px(420.))
-                .p_1()
-                .flex()
-                .gap_0p5()
-                .items_start()
-                .rounded_md()
-                .border_1()
-                .border_color(colors.border)
-                .bg(cx.theme().popover)
-                .shadow_md()
-                .key_context(FIND_CONTEXT)
-                .child(
-                    button(
-                        "find-toggle-replace",
-                        if self.find.show_replace {
-                            IconName::ChevronDown
-                        } else {
-                            IconName::ChevronRight
-                        },
-                        strings.toggle_replace,
-                    )
-                    .on_click(cx.listener(|this, _, _, cx| {
-                        this.find.show_replace = !this.find.show_replace;
-                        cx.notify();
-                    })),
+        let bar = div()
+            .absolute()
+            .top_1()
+            .right_4()
+            .w(px(420.))
+            .p_1()
+            .flex()
+            .gap_0p5()
+            .items_start()
+            .rounded_md()
+            .border_1()
+            .border_color(colors.border)
+            .bg(cx.theme().popover)
+            .shadow_md()
+            .key_context(FIND_CONTEXT)
+            .child(
+                button(
+                    "find-toggle-replace",
+                    if self.find.show_replace {
+                        IconName::ChevronDown
+                    } else {
+                        IconName::ChevronRight
+                    },
+                    strings.toggle_replace,
                 )
-                .child(
-                    div()
-                        .flex_1()
-                        .min_w_0()
-                        .flex()
-                        .flex_col()
-                        .gap_1()
-                        .child(
+                .on_click(cx.listener(|this, _, _, cx| {
+                    this.find.show_replace = !this.find.show_replace;
+                    cx.notify();
+                })),
+            )
+            .child(
+                div()
+                    .flex_1()
+                    .min_w_0()
+                    .flex()
+                    .flex_col()
+                    .gap_1()
+                    .child(
+                        div()
+                            .flex()
+                            .items_center()
+                            .gap_1()
+                            .child(
+                                div()
+                                    .flex_1()
+                                    .min_w_0()
+                                    .child(Input::new(&self.find.query).small().suffix(switches)),
+                            )
+                            .child(
+                                div()
+                                    .min_w(px(64.))
+                                    .text_xs()
+                                    .text_color(if warning {
+                                        cx.theme().danger
+                                    } else {
+                                        colors.muted
+                                    })
+                                    .truncate()
+                                    .child(summary),
+                            )
+                            .child(
+                                button("find-previous", IconName::ArrowUp, strings.find_previous)
+                                    .on_click(cx.listener(|this, _, window, cx| {
+                                        this.find_step(false, window, cx)
+                                    })),
+                            )
+                            .child(
+                                button("find-next", IconName::ArrowDown, strings.find_next)
+                                    .on_click(cx.listener(|this, _, window, cx| {
+                                        this.find_step(true, window, cx)
+                                    })),
+                            )
+                            .child(
+                                button("find-close", IconName::Close, strings.close_find).on_click(
+                                    cx.listener(|this, _, window, cx| this.close_find(window, cx)),
+                                ),
+                            ),
+                    )
+                    .when(self.find.show_replace, |fields| {
+                        fields.child(
                             div()
                                 .flex()
                                 .items_center()
                                 .gap_1()
                                 .child(
-                                    div().flex_1().min_w_0().child(
-                                        Input::new(&self.find.query).small().suffix(switches),
-                                    ),
+                                    div()
+                                        .flex_1()
+                                        .min_w_0()
+                                        .child(Input::new(&self.find.replace).small()),
                                 )
                                 .child(
-                                    div()
-                                        .min_w(px(64.))
-                                        .text_xs()
-                                        .text_color(if warning {
-                                            cx.theme().danger
-                                        } else {
-                                            colors.muted
-                                        })
-                                        .truncate()
-                                        .child(summary),
+                                    button("find-replace", IconName::Replace, strings.replace_one)
+                                        .on_click(cx.listener(|this, _, window, cx| {
+                                            this.replace_current(window, cx)
+                                        })),
                                 )
                                 .child(
                                     button(
-                                        "find-previous",
-                                        IconName::ArrowUp,
-                                        strings.find_previous,
+                                        "find-replace-all",
+                                        IconName::ReplaceAll,
+                                        strings.replace_all,
                                     )
                                     .on_click(cx.listener(
-                                        |this, _, window, cx| this.find_step(false, window, cx),
+                                        |this, _, window, cx| this.replace_all(window, cx),
                                     )),
-                                )
-                                .child(
-                                    button("find-next", IconName::ArrowDown, strings.find_next)
-                                        .on_click(cx.listener(|this, _, window, cx| {
-                                            this.find_step(true, window, cx)
-                                        })),
-                                )
-                                .child(
-                                    button("find-close", IconName::Close, strings.close_find)
-                                        .on_click(cx.listener(|this, _, window, cx| {
-                                            this.close_find(window, cx)
-                                        })),
                                 ),
                         )
-                        .when(self.find.show_replace, |fields| {
-                            fields.child(
-                                div()
-                                    .flex()
-                                    .items_center()
-                                    .gap_1()
-                                    .child(
-                                        div()
-                                            .flex_1()
-                                            .min_w_0()
-                                            .child(Input::new(&self.find.replace).small()),
-                                    )
-                                    .child(
-                                        button(
-                                            "find-replace",
-                                            IconName::Replace,
-                                            strings.replace_one,
-                                        )
-                                        .on_click(
-                                            cx.listener(|this, _, window, cx| {
-                                                this.replace_current(window, cx)
-                                            }),
-                                        ),
-                                    )
-                                    .child(
-                                        button(
-                                            "find-replace-all",
-                                            IconName::ReplaceAll,
-                                            strings.replace_all,
-                                        )
-                                        .on_click(
-                                            cx.listener(|this, _, window, cx| {
-                                                this.replace_all(window, cx)
-                                            }),
-                                        ),
-                                    ),
-                            )
-                        }),
-                )
-                .into_any_element(),
+                    }),
+            );
+        // It slides in like gpui-component's menus, unless macOS asks for
+        // less motion.
+        if crate::motion::reduced() {
+            return Some(bar.into_any_element());
+        }
+        Some(
+            bar.with_animation(
+                "find-bar",
+                gpui::Animation::new(std::time::Duration::from_millis(150))
+                    .with_easing(gpui::ease_out_quint()),
+                |bar, delta| bar.opacity(delta).mt(px(-6. * (1. - delta))),
+            )
+            .into_any_element(),
         )
     }
 }

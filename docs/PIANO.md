@@ -1819,10 +1819,31 @@ La prima volta che apri un file di un linguaggio, Keel scarica il suo server: ne
 | 12.3 | Sticky scroll e minimappa, disegnati da Keel | fatta |
 | 12.4 | Impostazioni con interfaccia grafica ed editor delle scorciatoie | fatta |
 | 12.5 | Importa da Cursor impostazioni, scorciatoie e progetti recenti | fatta |
-| 12.6 | Rifinitura: animazioni, schermate vuote, coerenza di temi e icone, accessibilità di base, revisione dei testi in italiano e in inglese | da fare |
+| 12.6 | Rifinitura: animazioni, schermate vuote, coerenza di temi e icone, accessibilità di base, revisione dei testi in italiano e in inglese | fatta |
 | 12.7 | Prestazioni: file e progetti enormi, sessione lunga senza perdite di memoria, misure finali contro Cursor; resoconto | da fare |
 
 **Già fatto nelle fasi precedenti:** i salvataggi sicuri (file temporaneo, poi rinomina) e le copie delle modifiche non salvate, che tornano dopo un crash o Cmd+Q (fase 2.6).
+
+**Note sulla 12.6**
+- **Contrasto dei temi, misurato.** Un test calcola il contrasto WCAG di ogni tema: testo e testo attenuato almeno 4,5 (livello AA), ogni colore della sintassi almeno 4,5 sullo sfondo dell'editor, numeri di riga almeno 3. Sono state corrette otto tinte:
+  - **Chiaro:** commenti da 4,1 a 5,5, link da 3,7 a 5,4, numeri di riga da 2,6 a 3,6;
+  - **Nero:** commenti da 4,45 a 5,1, numeri di riga da 2,9 a 3,9;
+  - **Mezzanotte** passava già.
+
+  I tre temi hanno le stesse 60 voci di colore e la stessa sintassi.
+- **Testi italiani e inglesi controllati da test:**
+  - le parti da riempire (`{count}`, `{name}`…) sono le stesse nelle due lingue in tutti i 491 testi;
+  - nessun testo è vuoto;
+  - ogni comando di Keel ha il suo nome nella tavolozza («Mostra tutti i comandi» non l'aveva).
+- **Schermate vuote:** le viste avevano già il loro messaggio (Problemi, Output, Porte, Controllo del codice, agente, ricerca). Ora ce l'hanno anche l'Esplora risorse su una cartella vuota («La cartella è vuota: crea un file con il tasto destro o con Cmd+N») e le scorciatoie quando la ricerca non trova niente.
+- **Animazioni:** menu e popover di gpui-component entrano già con una dissolvenza. La barra di ricerca di Keel ora fa lo stesso (150 ms). Con «Riduci movimento» di macOS (Accessibilità → Schermo) Keel non anima niente.
+- **Accessibilità, fin dove GPUI arriva:**
+  - si usa tutto da tastiera;
+  - Cmd+= ingrandisce il testo;
+  - i temi rispettano il contrasto AA;
+  - «Riduci movimento» viene rispettato.
+- **Non ancora:** VoiceOver non vede l'interfaccia di Keel. GPUI prepara l'albero di accessibilità (AccessKit), ma la sua parte per macOS non lo passa al sistema: le funzioni ci sono e non fanno niente. Collegarlo vuol dire scrivere l'adattatore per macOS dentro GPUI, un lavoro a sé.
+- La rifinitura visiva fine (spazi, allineamenti, icone una per una) si giudica guardando: resta alle tue prove a mano.
 
 **Note sulla 12.5**
 - **Nuovo comando** nella tavolozza: «Preferenze: Importa impostazioni, scorciatoie e progetti recenti da Cursor». Le estensioni si importavano già dalla fase 9.

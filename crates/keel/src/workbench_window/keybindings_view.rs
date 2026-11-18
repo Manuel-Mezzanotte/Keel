@@ -465,6 +465,15 @@ impl Workbench {
                     ),
             )
             .child(div().flex_1().min_h_0().child(list))
+            .when(count == 0, |page| {
+                page.child(
+                    div()
+                        .px_3()
+                        .text_sm()
+                        .text_color(colors.muted)
+                        .child(strings.no_results),
+                )
+            })
             .into_any_element()
     }
 }
