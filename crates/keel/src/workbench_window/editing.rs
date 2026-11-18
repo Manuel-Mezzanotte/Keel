@@ -26,7 +26,11 @@ actions!(
         ToggleWordWrap,
         ZoomIn,
         ZoomOut,
-        ZoomReset
+        ZoomReset,
+        Fold,
+        Unfold,
+        FoldAll,
+        UnfoldAll
     ]
 );
 
@@ -38,10 +42,12 @@ pub(super) fn font_size_setting(settings: &Settings) -> f32 {
 }
 
 impl Workbench {
-    /// Runs a line command on the active editor as one undoable edit.
+    /// Runs a line command on the active editor as one undoable edit, at
+    /// every cursor: cursors on the same or neighboring lines act as one, as
+    /// in VS Code.
     fn edit_lines(
         &mut self,
-        command: impl FnOnce(&str, Range<usize>, &str) -> Option<LineEdit>,
+        command: impl Fn(&str, Range<usize>, &str) -> Option<LineEdit>,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
@@ -54,18 +60,102 @@ impl Workbench {
             .get(&pane.uri)
             .map(|document| document.language_id.clone())
             .unwrap_or_default();
-        let (text, selection) = editor.read_with(cx, |editor, _| {
-            (editor.value().to_string(), editor.selected_range())
+        let (text, selection, all) = editor.read_with(cx, |editor, _| {
+            (
+                editor.value().to_string(),
+                editor.selected_range(),
+                editor.selected_ranges(),
+            )
         });
-        let Some(edit) = command(&text, selection, &language) else {
+        if all.len() <= 1 {
+            let Some(edit) = command(&text, selection, &language) else {
+                return;
+            };
+            editor.update(cx, |editor, cx| {
+                editor.set_selected_range(edit.range.clone(), cx);
+                editor.replace(edit.text.clone(), window, cx);
+                editor.set_selected_range(edit.selection.clone(), cx);
+            });
+        } else {
+            let ranges: Vec<Range<usize>> = all.into_iter().map(|(range, _)| range).collect();
+            let Some((span, replacement, selections)) =
+                line_edits::at_every_cursor(&text, &ranges, |text, selection| {
+                    command(text, selection, &language)
+                })
+            else {
+                return;
+            };
+            editor.update(cx, |editor, cx| {
+                editor.set_selected_range(span, cx);
+                editor.replace(replacement, window, cx);
+                editor.set_selected_ranges(selections, cx);
+            });
+        }
+        self.publish_selection_if_changed(self.active, cx);
+    }
+
+    /// Folds or unfolds at the cursor, or everywhere, as VS Code's
+    /// Cmd+Alt+[ and ], Cmd+K Cmd+0 and Cmd+K Cmd+J.
+    fn fold(&mut self, fold: Option<bool>, all: bool, window: &mut Window, cx: &mut Context<Self>) {
+        let Some(editor) = self.active_editor() else {
             return;
         };
         editor.update(cx, |editor, cx| {
-            editor.set_selected_range(edit.range.clone(), cx);
-            editor.replace(edit.text.clone(), window, cx);
-            editor.set_selected_range(edit.selection.clone(), cx);
+            let line = editor.cursor_position().line as usize;
+            let candidates = editor.display_map().fold_candidates().to_vec();
+            let folded: Vec<usize> = editor
+                .display_map()
+                .folded_ranges()
+                .iter()
+                .map(|range| range.start_line)
+                .collect();
+            let mut moved_to = None;
+            match (fold, all) {
+                (Some(true), true) => {
+                    for candidate in &candidates {
+                        editor.set_folded_at_line(candidate.start_line, true, cx);
+                    }
+                    // The cursor goes to the outermost fold hiding it.
+                    moved_to = candidates
+                        .iter()
+                        .filter(|range| range.start_line < line && line <= range.end_line)
+                        .map(|range| range.start_line)
+                        .min();
+                }
+                (_, true) => editor.unfold_all(cx),
+                (Some(true), false) => {
+                    // The innermost block around the cursor that is open.
+                    if let Some(range) = candidates
+                        .iter()
+                        .filter(|range| {
+                            range.start_line <= line
+                                && line <= range.end_line
+                                && !folded.contains(&range.start_line)
+                        })
+                        .min_by_key(|range| range.end_line - range.start_line)
+                    {
+                        editor.set_folded_at_line(range.start_line, true, cx);
+                        moved_to = (range.start_line != line).then_some(range.start_line);
+                    }
+                }
+                _ => {
+                    if let Some(range) = editor
+                        .display_map()
+                        .folded_ranges()
+                        .iter()
+                        .filter(|range| range.start_line <= line && line <= range.end_line)
+                        .min_by_key(|range| range.end_line - range.start_line)
+                        .cloned()
+                    {
+                        editor.set_folded_at_line(range.start_line, false, cx);
+                    }
+                }
+            }
+            if let Some(start) = moved_to {
+                let position = gpui_component::input::Position::new(start as u32, 0);
+                editor.set_cursor_position(position, window, cx);
+            }
         });
-        self.publish_selection_if_changed(self.active, cx);
     }
 
     /// After typing `>` in JSX or HTML, adds the closing tag after the
@@ -220,6 +310,16 @@ impl Workbench {
             let wrap = !this.word_wrap;
             this.set_word_wrap(wrap, window, cx)
         }))
+        .on_action(
+            cx.listener(|this, _: &Fold, window, cx| this.fold(Some(true), false, window, cx)),
+        )
+        .on_action(
+            cx.listener(|this, _: &Unfold, window, cx| this.fold(Some(false), false, window, cx)),
+        )
+        .on_action(
+            cx.listener(|this, _: &FoldAll, window, cx| this.fold(Some(true), true, window, cx)),
+        )
+        .on_action(cx.listener(|this, _: &UnfoldAll, window, cx| this.fold(None, true, window, cx)))
         .on_action(cx.listener(|this, _: &ZoomIn, _, cx| this.zoom(1., cx)))
         .on_action(cx.listener(|this, _: &ZoomOut, _, cx| this.zoom(-1., cx)))
         .on_action(cx.listener(|this, _: &ZoomReset, _, cx| this.zoom(0., cx)))
@@ -293,6 +393,46 @@ mod tests {
             "{:?}",
             text(&view, cx)
         );
+    }
+
+    #[gpui::test]
+    fn line_commands_work_at_every_cursor(cx: &mut TestAppContext) {
+        let (_folder, _path, view, cx) = window_on(cx, "app.ts", "one();\ntwo();\nthree();\n");
+        // A second cursor on the line below, then comment both.
+        cx.simulate_keystrokes("cmd-alt-down cmd-/");
+        assert_eq!(text(&view, cx), "// one();\n// two();\nthree();\n");
+        cx.simulate_keystrokes("cmd-z");
+        assert_eq!(text(&view, cx), "one();\ntwo();\nthree();\n");
+        cx.simulate_keystrokes("cmd-up cmd-alt-down cmd-shift-k");
+        assert_eq!(text(&view, cx), "three();\n");
+    }
+
+    #[gpui::test]
+    fn blocks_fold_and_unfold_from_the_keyboard(cx: &mut TestAppContext) {
+        let code = "function a() {\n  one();\n  two();\n}\n\nfunction b() {\n  three();\n}\n";
+        let (_folder, _path, view, cx) = window_on(cx, "app.ts", code);
+        let folded = |view: &Entity<Workbench>, cx: &mut VisualTestContext| {
+            view.read_with(cx, |view, cx| {
+                view.panes[view.active]
+                    .editor
+                    .read(cx)
+                    .display_map()
+                    .folded_ranges()
+                    .iter()
+                    .map(|range| range.start_line)
+                    .collect::<Vec<_>>()
+            })
+        };
+        cx.run_until_parked();
+        // From inside the first function.
+        cx.simulate_keystrokes("down cmd-alt-[");
+        assert_eq!(folded(&view, cx), [0]);
+        cx.simulate_keystrokes("cmd-alt-]");
+        assert_eq!(folded(&view, cx), Vec::<usize>::new());
+        cx.simulate_keystrokes("cmd-k cmd-0");
+        assert_eq!(folded(&view, cx), [0, 5]);
+        cx.simulate_keystrokes("cmd-k cmd-j");
+        assert_eq!(folded(&view, cx), Vec::<usize>::new());
     }
 
     #[gpui::test]

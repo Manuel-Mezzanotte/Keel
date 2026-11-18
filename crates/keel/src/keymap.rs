@@ -36,6 +36,7 @@ use crate::workbench_window::{
     OpenClaudeCodeInPanel, RenameTerminal, RunNpmScript, SplitTerminal, TERMINAL_CONTEXT,
     ToggleMaximizedPanel,
 };
+use crate::workbench_window::{Fold, FoldAll, Unfold, UnfoldAll};
 use crate::workbench_window::{FormatDocument, OrganizeImports, ShowGitGraph};
 use crate::workbench_window::{
     GoToImplementation, GoToReferences, GoToSymbolInFile, GoToSymbolInWorkspace,
@@ -631,6 +632,30 @@ pub const COMMANDS: &[KeelCommand] = &[
         context: Some(EDITOR_CONTEXT),
     },
     KeelCommand {
+        id: "editor.fold",
+        action: || Box::new(Fold),
+        default_key: Some("cmd+alt+["),
+        context: Some(EDITOR_CONTEXT),
+    },
+    KeelCommand {
+        id: "editor.unfold",
+        action: || Box::new(Unfold),
+        default_key: Some("cmd+alt+]"),
+        context: Some(EDITOR_CONTEXT),
+    },
+    KeelCommand {
+        id: "editor.foldAll",
+        action: || Box::new(FoldAll),
+        default_key: Some("cmd+k cmd+0"),
+        context: Some(EDITOR_CONTEXT),
+    },
+    KeelCommand {
+        id: "editor.unfoldAll",
+        action: || Box::new(UnfoldAll),
+        default_key: Some("cmd+k cmd+j"),
+        context: Some(EDITOR_CONTEXT),
+    },
+    KeelCommand {
         id: "editor.action.blockComment",
         action: || Box::new(ToggleBlockComment),
         default_key: Some("shift+alt+a"),
@@ -972,7 +997,7 @@ mod tests {
         let (bindings, warnings) =
             read_user_bindings(Path::new("/nonexistent/keel/keybindings.json"));
         assert!(bindings.is_empty() && warnings.is_empty());
-        assert_eq!(keel_bindings(&[]).len(), 69);
+        assert_eq!(keel_bindings(&[]).len(), 73);
     }
 
     #[test]

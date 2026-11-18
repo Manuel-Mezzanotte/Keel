@@ -40,9 +40,9 @@ mod terminal_view;
 mod terminals;
 
 pub(crate) use editing::{
-    CopyLinesDown, CopyLinesUp, DeleteLines, EDITOR_CONTEXT, InsertLineAfter, InsertLineBefore,
-    MoveLinesDown, MoveLinesUp, ToggleBlockComment, ToggleLineComment, ToggleWordWrap, ZoomIn,
-    ZoomOut, ZoomReset,
+    CopyLinesDown, CopyLinesUp, DeleteLines, EDITOR_CONTEXT, Fold, FoldAll, InsertLineAfter,
+    InsertLineBefore, MoveLinesDown, MoveLinesUp, ToggleBlockComment, ToggleLineComment,
+    ToggleWordWrap, Unfold, UnfoldAll, ZoomIn, ZoomOut, ZoomReset,
 };
 pub(crate) use navigation::{GoToLine, QuickOpen};
 

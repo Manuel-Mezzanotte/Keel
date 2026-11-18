@@ -118,3 +118,10 @@ opt-level = 2
 
 [profile.release]
 lto = "thin"
+
+# A copy of gpui-base 0.9.1 with a few functions made public that Keel
+# needs and the published crate keeps private (keyboard folds, all the
+# selections, regex search). Each change is marked `KEEL:` and listed in
+# vendor/gpui-base/KEEL.md; on a new version, copy it again and redo them.
+[patch.crates-io]
+gpui-base = { path = "vendor/gpui-base" }

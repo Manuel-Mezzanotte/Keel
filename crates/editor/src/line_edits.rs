@@ -98,6 +98,68 @@ fn shift(offset: usize, range: &Range<usize>, inserted: usize) -> usize {
     }
 }
 
+/// Runs a line command at every cursor of `selections` (in text order):
+/// cursors whose lines touch or neighbor act as one, as VS Code's line
+/// commands do. Returns the span of `text` to replace, its new text and the
+/// new selections, or `None` when nothing changes.
+pub fn at_every_cursor(
+    text: &str,
+    selections: &[Range<usize>],
+    command: impl Fn(&str, Range<usize>) -> Option<LineEdit>,
+) -> Option<(Range<usize>, String, Vec<Range<usize>>)> {
+    // Blocks of selections over the same or neighboring lines.
+    let line_of = |offset: usize| text[..offset.min(text.len())].matches('\n').count();
+    let mut blocks: Vec<(Range<usize>, usize, usize)> = Vec::new();
+    for selection in selections {
+        let lines = covered_lines(text, selection);
+        let (first, last) = (line_of(lines.start), line_of(lines.end));
+        match blocks.last_mut() {
+            Some((range, _, block_last)) if first <= *block_last + 1 => {
+                // To the end of this cursor's line, so the block covers it.
+                let end = if selection.is_empty() {
+                    text[selection.end..]
+                        .find('\n')
+                        .map_or(text.len(), |at| selection.end + at)
+                } else {
+                    selection.end
+                };
+                range.end = range.end.max(end);
+                *block_last = (*block_last).max(last);
+            }
+            _ => blocks.push((selection.clone(), first, last)),
+        }
+    }
+    // Bottom up, so each edit leaves the offsets above it alone.
+    let mut result = text.to_owned();
+    let mut edits: Vec<LineEdit> = Vec::new();
+    for (range, _, _) in blocks.iter().rev() {
+        if let Some(edit) = command(&result, range.clone()) {
+            result.replace_range(edit.range.clone(), &edit.text);
+            edits.push(edit);
+        }
+    }
+    if edits.is_empty() {
+        return None;
+    }
+    edits.reverse();
+    let start = edits.iter().map(|edit| edit.range.start).min()?;
+    let end = edits.iter().map(|edit| edit.range.end).max()?;
+    let grown: isize = edits
+        .iter()
+        .map(|edit| edit.text.len() as isize - (edit.range.end - edit.range.start) as isize)
+        .sum();
+    // An edit's selection moves with what the edits above it changed.
+    let mut shift: isize = 0;
+    let mut cursors = Vec::new();
+    for edit in &edits {
+        let moved = |offset: usize| (offset as isize + shift) as usize;
+        cursors.push(moved(edit.selection.start)..moved(edit.selection.end));
+        shift += edit.text.len() as isize - (edit.range.end - edit.range.start) as isize;
+    }
+    let new_end = (end as isize + grown) as usize;
+    Some((start..end, result[start..new_end].to_owned(), cursors))
+}
+
 /// Comments or uncomments the selected lines with the language's line
 /// comment, or wraps each line in a block comment when it has none.
 pub fn toggle_line_comment(
@@ -433,6 +495,47 @@ mod tests {
 
     fn ts() -> CommentSyntax<'static> {
         comment_syntax("typescript")
+    }
+
+    #[test]
+    fn line_commands_run_at_every_cursor() {
+        let text = "uno\ndue\ntre\nquattro\n";
+        let at = |needle: &str| {
+            let start = text.find(needle).unwrap();
+            start..start
+        };
+        // Two cursors far apart: both lines are commented.
+        let (span, new, cursors) =
+            at_every_cursor(text, &[at("uno"), at("tre")], |text, selection| {
+                toggle_line_comment(text, selection, comment_syntax("python"))
+            })
+            .unwrap();
+        let mut result = text.to_owned();
+        result.replace_range(span, &new);
+        assert_eq!(result, "# uno\ndue\n# tre\nquattro\n");
+        assert_eq!(cursors.len(), 2);
+        assert_eq!(&result[cursors[1].start..cursors[1].start + 3], "tre");
+
+        // Deleting lines at two cursors.
+        let (span, new, _) =
+            at_every_cursor(text, &[at("due"), at("quattro")], |text, selection| {
+                Some(delete_lines(text, selection))
+            })
+            .unwrap();
+        let mut result = text.to_owned();
+        result.replace_range(span, &new);
+        assert_eq!(result, "uno\ntre\n");
+
+        // Neighboring lines move together, as one block.
+        let (span, new, cursors) =
+            at_every_cursor(text, &[at("uno"), at("due")], |text, selection| {
+                move_lines(text, selection, false)
+            })
+            .unwrap();
+        let mut result = text.to_owned();
+        result.replace_range(span, &new);
+        assert_eq!(result, "tre\nuno\ndue\nquattro\n");
+        assert_eq!(cursors.len(), 1);
     }
 
     #[test]
