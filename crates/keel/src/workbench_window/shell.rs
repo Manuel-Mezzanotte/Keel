@@ -1775,87 +1775,139 @@ impl Workbench {
             })
     }
 
-    fn render_agent(&self, colors: Colors, open: f32, cx: &mut Context<Self>) -> Div {
+    fn render_agent(
+        &self,
+        colors: Colors,
+        open: f32,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> Div {
+        use super::agent_panel::AgentView;
         let strings = self.strings();
         let look = self.look;
         let terminal = self.render_agent_terminal();
         let running = terminal.is_some();
-        let showing_agent = self.agent_panel.view == super::agent_panel::AgentView::Agent;
-        let switch =
-            |id: &'static str, label: &'static str, view: super::agent_panel::AgentView| {
-                Button::new(id)
+        let showing_agent = self.agent_panel.view == AgentView::Agent;
+        // Chat or terminal, as two symbols side by side.
+        let switch = |id: &'static str, icon: IconName, tooltip: &'static str, view: AgentView| {
+            Button::new(id)
+                .ghost()
+                .small()
+                .icon(Icon::new(icon))
+                .tooltip(tooltip)
+                .selected(self.agent_panel.view == view)
+                .on_click(cx.listener(move |this, _, window, cx| {
+                    this.agent_panel.view = view;
+                    if view == AgentView::Agent {
+                        this.agent_panel
+                            .input
+                            .update(cx, |input, cx| input.focus(window, cx));
+                    }
+                    cx.notify();
+                }))
+        };
+        let chat_switch = switch(
+            "agent-view-agent",
+            IconName::MessageSquare,
+            strings.agent_view_agent,
+            AgentView::Agent,
+        );
+        let terminal_switch = switch(
+            "agent-view-terminal",
+            IconName::SquareTerminal,
+            strings.agent_view_terminal,
+            AgentView::Terminal,
+        );
+        // The chat's own buttons, or the one that closes the terminal.
+        let actions: Option<AnyElement> = if showing_agent {
+            Some(self.render_agent_header_buttons(cx))
+        } else if running {
+            Some(
+                Button::new("close-claude-code")
                     .ghost()
                     .small()
-                    .label(label)
-                    .selected(self.agent_panel.view == view)
-                    .on_click(cx.listener(move |this, _, window, cx| {
-                        this.agent_panel.view = view;
-                        if view == super::agent_panel::AgentView::Agent {
-                            this.ensure_agent(window, cx);
-                        }
-                        cx.notify();
-                    }))
-            };
+                    .icon(Icon::new(IconName::X))
+                    .tooltip(strings.close_claude_code)
+                    .on_click(
+                        cx.listener(|this, _, window, cx| this.close_agent_terminal(window, cx)),
+                    )
+                    .into_any_element(),
+            )
+        } else {
+            None
+        };
+        let connected = running || self.agent_panel.agent.is_some();
+        let title = if showing_agent {
+            if self.agent_panel.show_chats {
+                strings.agent_chats.to_owned()
+            } else {
+                self.agent_title()
+            }
+        } else {
+            "Claude Code".to_owned()
+        };
         let header = div()
             .h(px(look.bar_height()))
             .flex_none()
-            .pl_3()
+            .pl_2p5()
             .pr_1p5()
             .flex()
             .items_center()
             .gap_1()
             .border_b_1()
             .border_color(colors.border)
-            .child(div().size(px(7.)).rounded_full().bg(
-                if running || self.agent_panel.agent.is_some() {
-                    cx.theme().success
-                } else {
-                    colors.faint
-                },
-            ))
+            // Claude's mark, with a dot while it is connected.
             .child(
                 div()
+                    .relative()
+                    .size(px(22.))
+                    .flex_none()
+                    .rounded_full()
+                    .flex()
+                    .items_center()
+                    .justify_center()
+                    .bg(colors.accent.opacity(0.16))
+                    .child(
+                        Icon::new(IconName::Sparkles)
+                            .xsmall()
+                            .text_color(colors.accent),
+                    )
+                    .when(connected, |mark| {
+                        mark.child(
+                            div()
+                                .absolute()
+                                .bottom(px(-1.))
+                                .right(px(-1.))
+                                .size(px(8.))
+                                .rounded_full()
+                                .border_2()
+                                .border_color(colors.panel)
+                                .bg(cx.theme().success),
+                        )
+                    }),
+            )
+            .child(
+                div()
+                    .flex_1()
+                    .min_w_0()
+                    .ml_1()
+                    .truncate()
                     .text_sm()
                     .font_weight(FontWeight::SEMIBOLD)
                     .text_color(colors.text)
-                    .mr_1()
-                    .child("Claude Code"),
+                    .child(title),
             )
-            .child(switch(
-                "agent-view-terminal",
-                strings.agent_view_terminal,
-                super::agent_panel::AgentView::Terminal,
-            ))
-            .child(switch(
-                "agent-view-agent",
-                strings.agent_view_agent,
-                super::agent_panel::AgentView::Agent,
-            ))
-            .child(div().ml_auto().map(|right| {
-                if showing_agent {
-                    right.child(self.render_agent_header_buttons(cx))
-                } else if running {
-                    right.child(
-                        Button::new("close-claude-code")
-                            .ghost()
-                            .small()
-                            .icon(Icon::new(IconName::X))
-                            .tooltip(strings.close_claude_code)
-                            .on_click(cx.listener(|this, _, window, cx| {
-                                this.close_agent_terminal(window, cx)
-                            })),
-                    )
-                } else {
-                    right
-                }
-            }));
+            .children(actions)
+            .child(div().w(px(1.)).h(px(16.)).mx_0p5().bg(colors.border))
+            .child(chat_switch)
+            .child(terminal_switch);
         let body = match (showing_agent, terminal) {
             (true, _) => div()
                 .flex_1()
                 .min_h_0()
                 .flex()
                 .flex_col()
-                .child(self.render_agent_conversation(colors, cx)),
+                .child(self.render_agent_conversation(colors, window, cx)),
             (false, Some(terminal)) => div().flex_1().min_h_0().child(terminal),
             (false, None) => div()
                 .flex_1()
@@ -1867,7 +1919,7 @@ impl Workbench {
                 .gap_1()
                 .px_4()
                 .child(empty_state(
-                    IconName::Sparkles,
+                    IconName::SquareTerminal,
                     strings.claude_code_title,
                     strings.claude_code_hint,
                     colors,
@@ -2125,7 +2177,7 @@ impl Render for Workbench {
             })
             .child(self.render_editors(colors, panel_open, window, cx))
             .when(agent_open > 0., |body| {
-                body.child(self.render_agent(colors, agent_open, cx))
+                body.child(self.render_agent(colors, agent_open, window, cx))
                     .child(div().flex_none().w(px(gap)))
             })
             .on_drag_move::<super::claude_code::AgentResize>(

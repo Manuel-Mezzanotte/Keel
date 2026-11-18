@@ -52,7 +52,11 @@ gpui_kit_assets::icon_assets!(
         LayoutPanelLeft,
         Palette,
         Gauge,
-        Command
+        Command,
+        MessageSquare,
+        CircleDot,
+        Circle,
+        ShieldCheck
     ]
 );
 

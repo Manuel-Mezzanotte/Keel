@@ -591,7 +591,7 @@ impl Workbench {
         subscriptions.push(store_events);
         let (agent_panel, agent_events) =
             agent_panel::AgentPanel::new(language.strings(), window, cx);
-        subscriptions.push(agent_events);
+        subscriptions.extend(agent_events);
         // Quitting may not drop the windows: Claude's announcement and the
         // adapter go away here.
         subscriptions.push(cx.on_app_quit(|this, _| {
@@ -704,6 +704,8 @@ impl Workbench {
         if let Some(root) = workbench.project.root.as_deref() {
             workbench.store.recommended = extensions_view::recommendations(root);
         }
+        // Claude Code's chats in the project, for the Claude panel.
+        workbench.read_claude_chats(cx);
         workbench.diff_split = workbench
             .settings
             .get("diffEditor.renderSideBySide")

@@ -1,24 +1,30 @@
-//! The agent panel: Claude Code as a conversation on the right, through
-//! the Agent Client Protocol, next to Claude Code in a terminal. Keel
-//! installs the `claude-agent-acp` adapter once, starts it in the project,
-//! and shows the conversation: messages, reasoning, tools with their file
-//! differences, the plan, permission requests, the mode and past
-//! conversations. Files and selections go along with a message.
+//! The Claude panel: Claude Code as a chat on the right, through the Agent
+//! Client Protocol, next to Claude Code in a terminal. It is the user's own
+//! Claude Code, with its login and its chats: Keel installs the
+//! `claude-agent-acp` adapter once and starts it in the project only when
+//! the chat is used, and shows Claude Code's past chats at once, read from
+//! where Claude Code keeps them. A chat shows its messages, reasoning,
+//! tools with their file differences, the plan, permission requests and
+//! the mode; files and selections go along with a message.
 
 use std::collections::HashSet;
 
 use ai::acp::{self, Agent, AgentCommand, AgentEvent};
+use ai::history::Chat;
 use ai::thread::{Entry, Thread, ToolCall, ToolContent, ToolStatus};
 use futures::StreamExt as _;
-use gpui::{AnyElement, ScrollHandle, StatefulInteractiveElement as _, Subscription};
+use gpui::{
+    Animation, AnimationExt as _, AnyElement, ScrollHandle, StatefulInteractiveElement as _,
+    Subscription,
+};
 use gpui_component::button::{Button, ButtonVariants as _};
-use gpui_component::input::{InputEvent, Textarea, TextareaState};
+use gpui_component::input::{Input, InputEvent, InputState, Textarea, TextareaState};
 use gpui_component::menu::DropdownMenu as _;
 use gpui_component::text::{TextView, TextViewState};
-use gpui_component::{ActiveTheme as _, Disableable as _, Icon, Sizable as _};
+use gpui_component::{ActiveTheme as _, Disableable as _, Icon, Selectable as _, Sizable as _};
 use gpui_kit_assets::IconName;
 
-use super::shell::Colors;
+use super::shell::{Colors, chevron_turn, empty_state, heading};
 use super::*;
 
 actions!(keel, [OpenAgent, NewAgentConversation, AddToAgent]);
@@ -28,13 +34,19 @@ const INPUT_ROWS: usize = 8;
 /// How many lines of a file difference a tool shows before "…".
 const DIFF_LINES: usize = 14;
 
-/// What the panel on the right shows.
+/// What the panel on the right shows: the chat at first, Claude Code in
+/// a terminal on Cmd+Esc.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub(super) enum AgentView {
-    #[default]
     Terminal,
+    #[default]
     Agent,
 }
+
+/// How many chats the list keeps.
+const MOST_CHATS: usize = 60;
+/// How many chats the panel shows before the first message.
+const RECENT_CHATS: usize = 5;
 
 #[derive(Clone, Debug, PartialEq)]
 pub(super) enum AgentStatus {
@@ -78,9 +90,18 @@ pub(super) struct AgentPanel {
     /// Modes the agent offers (value, name), and the current one.
     pub(super) modes: Vec<(String, String)>,
     pub(super) mode: Option<String>,
-    /// Past conversations in the project: id and title.
-    pub(super) history: Vec<(String, String)>,
+    /// The project's chats in Claude Code, the latest first: read from its
+    /// files at first, then from the agent.
+    pub(super) chats: Vec<Chat>,
+    /// The list of chats is shown in place of the chat.
+    pub(super) show_chats: bool,
+    /// What the list of chats is filtered by.
+    pub(super) chat_filter: Entity<InputState>,
+    /// A chat to open as soon as the agent is ready.
+    pending_load: Option<String>,
     open_thoughts: HashSet<usize>,
+    /// Tools opened to show what they did.
+    open_tools: HashSet<usize>,
     scroll: ScrollHandle,
     /// A message written before the session was ready.
     waiting: Option<Vec<Value>>,
@@ -100,7 +121,7 @@ impl AgentPanel {
         strings: &'static Strings,
         window: &mut Window,
         cx: &mut Context<Workbench>,
-    ) -> (Self, Subscription) {
+    ) -> (Self, Vec<Subscription>) {
         let input = cx.new(|cx| {
             TextareaState::new(window, cx)
                 .placeholder(strings.agent_placeholder)
@@ -124,6 +145,13 @@ impl AgentPanel {
                 _ => {}
             },
         );
+        let chat_filter =
+            cx.new(|cx| InputState::new(window, cx).placeholder(strings.agent_search_chats));
+        let filtered = cx.subscribe(&chat_filter, |_, _, event: &InputEvent, cx| {
+            if matches!(event, InputEvent::Change) {
+                cx.notify();
+            }
+        });
         let panel = Self {
             view: AgentView::default(),
             status: AgentStatus::Off,
@@ -137,8 +165,12 @@ impl AgentPanel {
             markdown: HashMap::new(),
             modes: Vec::new(),
             mode: None,
-            history: Vec::new(),
+            chats: Vec::new(),
+            show_chats: false,
+            chat_filter,
+            pending_load: None,
             open_thoughts: HashSet::new(),
+            open_tools: HashSet::new(),
             scroll: ScrollHandle::new(),
             waiting: None,
             notice: None,
@@ -146,7 +178,7 @@ impl AgentPanel {
             snapshots: Vec::new(),
             changes: Vec::new(),
         };
-        (panel, events)
+        (panel, vec![events, filtered])
     }
 
     /// Brings the rendered messages up to date with the thread.
@@ -172,6 +204,7 @@ impl AgentPanel {
         self.thread = Thread::default();
         self.markdown.clear();
         self.open_thoughts.clear();
+        self.open_tools.clear();
         self.permissions.clear();
         self.notice = None;
     }
@@ -337,11 +370,21 @@ impl Workbench {
         })
         .detach();
         let initialize = agent.initialize();
+        // A chat chosen before the agent ran: its updates are this
+        // session's from the first one.
+        let resume = self.agent_panel.pending_load.take();
+        if let Some(id) = &resume {
+            self.agent_panel.session = Some(id.clone());
+        }
         cx.spawn_in(window, async move |this, cx| {
             let ready = initialize.await;
-            let session = match ready {
-                Ok(_) => agent.new_session(&cwd).await,
-                Err(error) => Err(error),
+            let session = match (ready, resume) {
+                (Ok(_), Some(id)) => agent.load_session(&id, &cwd).await.map(|mut loaded| {
+                    loaded["sessionId"] = json!(id);
+                    loaded
+                }),
+                (Ok(_), None) => agent.new_session(&cwd).await,
+                (Err(error), _) => Err(error),
             };
             this.update_in(cx, |this, window, cx| {
                 match session {
@@ -685,6 +728,7 @@ impl Workbench {
             self.cancel_agent(cx);
         }
         self.agent_panel.reset_thread();
+        self.agent_panel.show_chats = false;
         self.agent_panel.session = None;
         let opened = agent.new_session(&self.agent_folder());
         cx.spawn_in(window, async move |this, cx| {
@@ -707,15 +751,43 @@ impl Workbench {
         cx.notify();
     }
 
-    /// Reads the list of past conversations in the project.
+    /// Reads the project's chats from Claude Code's files, away from the
+    /// interface: they show before the agent starts.
+    pub(super) fn read_claude_chats(&mut self, cx: &mut Context<Self>) {
+        if self.agent_panel.fake || self.agent_panel.agent.is_some() {
+            return;
+        }
+        let Some(claude) = ai::history::claude_dir() else {
+            return;
+        };
+        let cwd = self.agent_folder();
+        let read =
+            cx.background_spawn(async move { ai::history::chats(&claude, &cwd, MOST_CHATS) });
+        cx.spawn(async move |this, cx| {
+            let chats = read.await;
+            this.update(cx, |this, cx| {
+                // The agent's list wins once it runs.
+                if this.agent_panel.agent.is_none() {
+                    this.agent_panel.chats = chats;
+                    cx.notify();
+                }
+            })
+            .ok();
+        })
+        .detach();
+    }
+
+    /// Reads the project's chats from the agent, which knows them best;
+    /// without it, from Claude Code's files.
     fn refresh_agent_history(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let Some(agent) = self.agent_panel.agent.clone() else {
+            self.read_claude_chats(cx);
             return;
         };
         let listed = agent.list_sessions(&self.agent_folder());
         cx.spawn_in(window, async move |this, cx| {
             let Ok(listed) = listed.await else { return };
-            let history: Vec<(String, String)> = listed["sessions"]
+            let chats: Vec<Chat> = listed["sessions"]
                 .as_array()
                 .into_iter()
                 .flatten()
@@ -723,15 +795,22 @@ impl Workbench {
                     let id = session["sessionId"].as_str()?.to_owned();
                     let title = session["title"]
                         .as_str()
+                        .map(str::trim)
                         .filter(|title| !title.is_empty())
                         .unwrap_or(&id)
                         .to_owned();
-                    Some((id, title))
+                    let updated = session["updatedAt"]
+                        .as_str()
+                        .and_then(ai::history::iso_seconds)
+                        .unwrap_or(0);
+                    Some(Chat { id, title, updated })
                 })
-                .take(30)
+                .take(MOST_CHATS)
                 .collect();
             this.update(cx, |this, cx| {
-                this.agent_panel.history = history;
+                if !chats.is_empty() || this.agent_panel.chats.is_empty() {
+                    this.agent_panel.chats = chats;
+                }
                 cx.notify();
             })
             .ok();
@@ -746,7 +825,15 @@ impl Workbench {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
+        self.agent_panel.show_chats = false;
+        self.agent_panel.view = AgentView::Agent;
         let Some(agent) = self.agent_panel.agent.clone() else {
+            // The agent starts, then opens the chat instead of a new one.
+            self.agent_panel.reset_thread();
+            self.agent_panel.pending_load = Some(id.clone());
+            self.agent_panel.session = Some(id);
+            self.ensure_agent(window, cx);
+            cx.notify();
             return;
         };
         if self.agent_panel.running {
@@ -850,10 +937,40 @@ impl Workbench {
     // -----------------------------------------------------------------
     // Drawing
 
-    /// The buttons of the panel's header while the agent is shown.
+    /// What the chat is called: Claude Code's title, the one in the list of
+    /// chats, or its first message; "Claude Code" before there is one.
+    pub(super) fn agent_title(&self) -> String {
+        let panel = &self.agent_panel;
+        if let Some(title) = panel
+            .thread
+            .title
+            .as_ref()
+            .filter(|title| !title.is_empty())
+        {
+            return title.clone();
+        }
+        if let Some(chat) = panel
+            .session
+            .as_ref()
+            .and_then(|id| panel.chats.iter().find(|chat| &chat.id == id))
+        {
+            return chat.title.clone();
+        }
+        panel
+            .thread
+            .entries
+            .iter()
+            .find_map(|entry| match entry {
+                Entry::User(text) => text.lines().next().map(str::to_owned),
+                _ => None,
+            })
+            .unwrap_or_else(|| "Claude Code".to_owned())
+    }
+
+    /// The buttons of the panel's header while the chat is shown: the
+    /// list of chats and a new one.
     pub(super) fn render_agent_header_buttons(&self, cx: &mut Context<Self>) -> AnyElement {
         let strings = self.strings();
-        let history = self.agent_panel.history.clone();
         div()
             .flex()
             .items_center()
@@ -863,32 +980,25 @@ impl Workbench {
                     .ghost()
                     .small()
                     .icon(Icon::new(IconName::Clock))
-                    .tooltip(strings.agent_history)
-                    .disabled(history.is_empty())
-                    .dropdown_menu(move |mut menu, _, _| {
-                        for (id, title) in &history {
-                            let id = id.clone();
-                            menu = menu.item(
-                                gpui_component::menu::PopupMenuItem::new(title.clone()).on_click(
-                                    move |_, window, cx| {
-                                        let id = id.clone();
-                                        window.dispatch_action(
-                                            Box::new(LoadAgentConversation { id }),
-                                            cx,
-                                        );
-                                    },
-                                ),
-                            );
+                    .selected(self.agent_panel.show_chats)
+                    .tooltip(strings.agent_all_chats)
+                    .on_click(cx.listener(|this, _, window, cx| {
+                        this.agent_panel.show_chats = !this.agent_panel.show_chats;
+                        if this.agent_panel.show_chats {
+                            this.refresh_agent_history(window, cx);
+                            this.agent_panel
+                                .chat_filter
+                                .update(cx, |input, cx| input.focus(window, cx));
                         }
-                        menu
-                    }),
+                        cx.notify();
+                    })),
             )
             .child(
                 Button::new("agent-new")
                     .ghost()
                     .small()
                     .icon(Icon::new(IconName::Plus))
-                    .tooltip(strings.agent_new)
+                    .tooltip(strings.agent_new_chat)
                     .on_click(
                         cx.listener(|this, _, window, cx| this.new_agent_conversation(window, cx)),
                     ),
@@ -899,81 +1009,62 @@ impl Workbench {
     pub(super) fn render_agent_conversation(
         &self,
         colors: Colors,
+        window: &mut Window,
         cx: &mut Context<Self>,
     ) -> AnyElement {
         let strings = self.strings();
         let panel = &self.agent_panel;
-        let mut body = div()
-            .id("agent-conversation")
-            .flex_1()
-            .min_h_0()
-            .overflow_y_scroll()
-            .track_scroll(&panel.scroll)
-            .px_3()
-            .py_2()
-            .flex()
-            .flex_col()
-            .gap_2();
-        if panel.thread.entries.is_empty() {
-            let message = match &panel.status {
-                AgentStatus::Installing => strings.agent_installing.to_owned(),
-                AgentStatus::Starting => strings.agent_starting.to_owned(),
-                AgentStatus::Failed(error) => error.clone(),
-                AgentStatus::Off | AgentStatus::Ready => strings.agent_empty.to_owned(),
-            };
-            body = body.child(
-                div()
-                    .flex_1()
-                    .flex()
-                    .flex_col()
-                    .items_center()
-                    .justify_center()
-                    .gap_3()
-                    .py_8()
-                    .text_color(colors.faint)
-                    .child(Icon::new(IconName::Sparkles).large())
-                    .child(
-                        div()
-                            .text_xs()
-                            .text_center()
-                            .text_color(colors.muted)
-                            .child(message),
-                    )
-                    .when(
-                        matches!(panel.status, AgentStatus::Failed(_) | AgentStatus::Off),
-                        |empty| {
-                            empty.child(
-                                Button::new("agent-start")
-                                    .primary()
-                                    .small()
-                                    .label(strings.agent_start)
-                                    .on_click(cx.listener(|this, _, window, cx| {
-                                        this.open_agent(window, cx)
-                                    })),
-                            )
-                        },
-                    ),
-            );
+        if panel.show_chats {
+            return div()
+                .flex_1()
+                .min_h_0()
+                .flex()
+                .flex_col()
+                .child(self.render_agent_chats(colors, cx))
+                .child(self.render_agent_input(colors, window, cx))
+                .into_any_element();
         }
-        for (index, entry) in panel.thread.entries.iter().enumerate() {
-            body = body.child(self.render_agent_entry(index, entry, colors, cx));
-        }
-        if panel.running && panel.permissions.is_empty() {
-            body = body.child(
-                div()
-                    .text_xs()
-                    .text_color(colors.faint)
-                    .child(strings.agent_working),
-            );
-        }
-        if let Some(notice) = &panel.notice {
-            body = body.child(
-                div()
-                    .text_xs()
-                    .text_color(cx.theme().warning)
-                    .child(notice.clone()),
-            );
-        }
+        let body: AnyElement = if panel.thread.entries.is_empty() {
+            self.render_agent_home(colors, window, cx)
+        } else {
+            let mut body = div()
+                .id("agent-conversation")
+                .flex_1()
+                .min_h_0()
+                .overflow_y_scroll()
+                .track_scroll(&panel.scroll)
+                .px_3()
+                .py_3()
+                .flex()
+                .flex_col()
+                .gap_3();
+            let mut after_user = true;
+            for (index, entry) in panel.thread.entries.iter().enumerate() {
+                // Claude's name over the first block of each answer.
+                let starts_answer = after_user && !matches!(entry, Entry::User(_));
+                after_user = matches!(entry, Entry::User(_));
+                if starts_answer {
+                    body = body.child(claude_label(strings.agent_claude, colors));
+                }
+                body = body.child(self.render_agent_entry(index, entry, colors, window, cx));
+            }
+            if panel.running && panel.permissions.is_empty() {
+                body = body.child(working(strings.agent_working, colors, self.look.motion));
+            }
+            if let Some(notice) = &panel.notice {
+                body = body.child(
+                    div()
+                        .px_2()
+                        .py_1p5()
+                        .rounded(px(8.))
+                        .bg(cx.theme().warning.opacity(0.1))
+                        .text_xs()
+                        .text_color(cx.theme().warning)
+                        .child(notice.clone()),
+                );
+            }
+            body.into_any_element()
+        };
         div()
             .flex_1()
             .min_h_0()
@@ -991,7 +1082,255 @@ impl Workbench {
                         self.render_permission(index, permission, colors, cx)
                     }),
             )
-            .child(self.render_agent_input(colors, cx))
+            .child(self.render_agent_input(colors, window, cx))
+            .into_any_element()
+    }
+
+    /// Before the first message: who Claude is here, how it is doing, and
+    /// the latest chats to pick up.
+    fn render_agent_home(
+        &self,
+        colors: Colors,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
+        let strings = self.strings();
+        let panel = &self.agent_panel;
+        let status: Option<(String, bool)> = match &panel.status {
+            AgentStatus::Installing => Some((strings.agent_installing.to_owned(), true)),
+            AgentStatus::Starting if panel.session.is_some() => {
+                Some((strings.agent_opening_chat.to_owned(), true))
+            }
+            AgentStatus::Starting => Some((strings.agent_starting.to_owned(), true)),
+            AgentStatus::Failed(error) => Some((error.clone(), false)),
+            AgentStatus::Off | AgentStatus::Ready => None,
+        };
+        let failed = matches!(panel.status, AgentStatus::Failed(_));
+        let recent: Vec<AnyElement> = panel
+            .chats
+            .iter()
+            .take(RECENT_CHATS)
+            .enumerate()
+            .map(|(index, chat)| self.render_chat_row(("agent-recent", index), chat, colors, cx))
+            .collect();
+        let _ = window;
+        div()
+            .id("agent-home")
+            .flex_1()
+            .min_h_0()
+            .overflow_y_scroll()
+            .px_2()
+            .py_4()
+            .flex()
+            .flex_col()
+            .gap_3()
+            .child(empty_state(
+                IconName::Sparkles,
+                "Claude Code",
+                strings.agent_home_hint,
+                colors,
+            ))
+            .when_some(status, |home, (text, busy)| {
+                home.child(
+                    div()
+                        .mx_2()
+                        .px_2p5()
+                        .py_2()
+                        .flex()
+                        .items_center()
+                        .gap_2()
+                        .rounded(px(9.))
+                        .bg(if busy {
+                            colors.hover
+                        } else {
+                            cx.theme().warning.opacity(0.1)
+                        })
+                        .text_xs()
+                        .text_color(if busy {
+                            colors.muted
+                        } else {
+                            cx.theme().warning
+                        })
+                        .when(busy, |row| {
+                            row.child(spinner(colors.accent, self.look.motion))
+                        })
+                        .child(div().flex_1().min_w_0().child(text))
+                        .when(failed, |row| {
+                            row.child(
+                                Button::new("agent-start")
+                                    .primary()
+                                    .small()
+                                    .label(strings.agent_start)
+                                    .on_click(cx.listener(|this, _, window, cx| {
+                                        this.open_agent(window, cx)
+                                    })),
+                            )
+                        }),
+                )
+            })
+            .when(!recent.is_empty(), |home| {
+                home.child(
+                    div()
+                        .flex()
+                        .flex_col()
+                        .child(
+                            div()
+                                .flex()
+                                .items_center()
+                                .child(
+                                    div()
+                                        .flex_1()
+                                        .child(heading(strings.agent_recent_chats, colors)),
+                                )
+                                .child(
+                                    Button::new("agent-all-chats")
+                                        .ghost()
+                                        .small()
+                                        .label(strings.agent_all_chats)
+                                        .on_click(cx.listener(|this, _, window, cx| {
+                                            this.agent_panel.show_chats = true;
+                                            this.refresh_agent_history(window, cx);
+                                            cx.notify();
+                                        })),
+                                ),
+                        )
+                        .children(recent),
+                )
+            })
+            .into_any_element()
+    }
+
+    /// A chat in a list: its symbol, its title and how long ago it changed.
+    fn render_chat_row(
+        &self,
+        id: impl Into<gpui::ElementId>,
+        chat: &Chat,
+        colors: Colors,
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
+        let italian = self.language == UiLanguage::Italian;
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map_or(0, |elapsed| elapsed.as_secs() as i64);
+        let current = self.agent_panel.session.as_deref() == Some(chat.id.as_str());
+        let chat_id = chat.id.clone();
+        let when =
+            (chat.updated > 0).then(|| super::scm_graph::relative_time(chat.updated, now, italian));
+        div()
+            .id(id)
+            .h(px(32.))
+            .px_2()
+            .flex()
+            .items_center()
+            .gap_2()
+            .rounded(px(7.))
+            .text_sm()
+            .cursor_pointer()
+            .when(current, |row| row.bg(colors.selected))
+            .when(!current, |row| row.hover(|row| row.bg(colors.hover)))
+            .active(|row| row.bg(colors.selected))
+            .on_click(cx.listener(move |this, _, window, cx| {
+                this.load_agent_conversation(chat_id.clone(), window, cx)
+            }))
+            .child(
+                Icon::new(IconName::MessageSquare)
+                    .small()
+                    .text_color(colors.faint),
+            )
+            .child(
+                div()
+                    .flex_1()
+                    .min_w_0()
+                    .truncate()
+                    .text_color(colors.text)
+                    .child(chat.title.clone()),
+            )
+            .children(when.map(|when| {
+                div()
+                    .flex_none()
+                    .text_xs()
+                    .text_color(colors.faint)
+                    .child(when)
+            }))
+            .into_any_element()
+    }
+
+    /// Every chat of the project, by day, with a field to find one.
+    fn render_agent_chats(&self, colors: Colors, cx: &mut Context<Self>) -> AnyElement {
+        let strings = self.strings();
+        let panel = &self.agent_panel;
+        let filter = panel.chat_filter.read(cx).value().to_lowercase();
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map_or(0, |elapsed| elapsed.as_secs() as i64);
+        let midnight = local_midnight(now);
+        let groups = [
+            (strings.agent_today, midnight),
+            (strings.agent_yesterday, midnight - 86_400),
+            (strings.agent_this_week, midnight - 6 * 86_400),
+            (strings.agent_older, i64::MIN),
+        ];
+        let shown: Vec<&Chat> = panel
+            .chats
+            .iter()
+            .filter(|chat| filter.is_empty() || chat.title.to_lowercase().contains(&filter))
+            .collect();
+        let mut list = div()
+            .id("agent-chats")
+            .flex_1()
+            .min_h_0()
+            .overflow_y_scroll()
+            .px_2()
+            .pb_2()
+            .flex()
+            .flex_col();
+        if shown.is_empty() {
+            list = list.child(
+                div()
+                    .px_2()
+                    .py_6()
+                    .text_sm()
+                    .text_center()
+                    .text_color(colors.muted)
+                    .child(if panel.chats.is_empty() {
+                        strings.agent_no_chats
+                    } else {
+                        strings.agent_no_match
+                    }),
+            );
+        }
+        let mut row = 0usize;
+        let mut newer = i64::MAX;
+        for (label, since) in groups {
+            let chats: Vec<&Chat> = shown
+                .iter()
+                .copied()
+                .filter(|chat| chat.updated >= since && chat.updated < newer)
+                .collect();
+            newer = since;
+            if chats.is_empty() {
+                continue;
+            }
+            list = list.child(div().pt_2().child(heading(label, colors)));
+            for chat in chats {
+                list = list.child(self.render_chat_row(("agent-chat", row), chat, colors, cx));
+                row += 1;
+            }
+        }
+        div()
+            .flex_1()
+            .min_h_0()
+            .flex()
+            .flex_col()
+            .child(
+                div().px_3().pt_2p5().pb_1().child(
+                    Input::new(&panel.chat_filter)
+                        .small()
+                        .prefix(Icon::new(IconName::Search).small().text_color(colors.faint))
+                        .cleanable(true),
+                ),
+            )
+            .child(list)
             .into_any_element()
     }
 
@@ -1000,19 +1339,22 @@ impl Workbench {
         index: usize,
         entry: &Entry,
         colors: Colors,
+        window: &mut Window,
         cx: &mut Context<Self>,
     ) -> AnyElement {
         match entry {
+            // Your messages on the right, in a bubble of the accent's tint.
             Entry::User(text) => div()
                 .flex()
                 .justify_end()
                 .child(
                     div()
-                        .max_w(px(self.agent_width * 0.85))
+                        .max_w(px(self.agent_width * 0.86))
                         .px_3()
-                        .py_1p5()
-                        .rounded(px(10.))
-                        .bg(colors.hover)
+                        .py_2()
+                        .rounded(px(14.))
+                        .rounded_br(px(5.))
+                        .bg(colors.accent.opacity(0.16))
                         .text_sm()
                         .text_color(colors.text)
                         .child(text.clone()),
@@ -1027,12 +1369,13 @@ impl Workbench {
             },
             Entry::Thought(text) => {
                 let open = self.agent_panel.open_thoughts.contains(&index);
+                let turn = chevron_turn(("agent-thought-turn", index), open, self.look, window, cx);
                 let first = text.lines().next().unwrap_or_default().to_owned();
                 div()
                     .id(("agent-thought", index))
                     .flex()
                     .flex_col()
-                    .gap_0p5()
+                    .gap_1()
                     .text_xs()
                     .text_color(colors.faint)
                     .cursor_pointer()
@@ -1046,35 +1389,51 @@ impl Workbench {
                         div()
                             .flex()
                             .items_center()
-                            .gap_1()
+                            .gap_1p5()
                             .child(
-                                Icon::new(if open {
-                                    IconName::ChevronDown
-                                } else {
-                                    IconName::ChevronRight
-                                })
-                                .xsmall(),
+                                Icon::new(IconName::ChevronRight)
+                                    .xsmall()
+                                    .rotate(gpui::radians(turn * std::f32::consts::FRAC_PI_2)),
                             )
-                            .child(self.strings().agent_thinking)
-                            .when(!open, |line| line.child(div().truncate().child(first))),
+                            .child(
+                                div()
+                                    .flex_none()
+                                    .font_weight(FontWeight::MEDIUM)
+                                    .child(self.strings().agent_thinking),
+                            )
+                            .when(!open, |line| {
+                                line.child(div().min_w_0().truncate().child(first))
+                            }),
                     )
                     .when(open, |thought| {
-                        thought.child(div().pl_4().italic().child(text.clone()))
+                        thought.child(
+                            div()
+                                .ml(px(5.))
+                                .pl_3()
+                                .border_l_2()
+                                .border_color(colors.border)
+                                .italic()
+                                .child(text.clone()),
+                        )
                     })
                     .into_any_element()
             }
-            Entry::Tool(tool) => self.render_tool(index, tool, colors, cx),
+            Entry::Tool(tool) => self.render_tool(index, tool, colors, window, cx),
         }
     }
 
+    /// A tool Claude used: a row with its symbol, its title and its state,
+    /// that opens on what it did. A file's edit is open at first.
     fn render_tool(
         &self,
         index: usize,
         tool: &ToolCall,
         colors: Colors,
+        window: &mut Window,
         cx: &mut Context<Self>,
     ) -> AnyElement {
         let theme = cx.theme();
+        let (success, danger) = (theme.success, theme.danger);
         let icon = match tool.kind.as_str() {
             "edit" | "delete" | "move" => IconName::Pencil,
             "read" => IconName::FileText,
@@ -1084,43 +1443,37 @@ impl Workbench {
             "think" => IconName::Sparkles,
             _ => IconName::Blocks,
         };
-        let (status, status_color) = match tool.status {
-            ToolStatus::Pending | ToolStatus::InProgress => ("…", colors.faint),
-            ToolStatus::Completed => ("✓", theme.success),
-            ToolStatus::Failed => ("✗", theme.danger),
+        let has_diff = tool
+            .content
+            .iter()
+            .any(|content| matches!(content, ToolContent::Diff { .. }));
+        let toggled = self.agent_panel.open_tools.contains(&index);
+        // An edit shows its difference until it is closed; the others
+        // open on a click.
+        let open = !tool.content.is_empty() && (has_diff != toggled);
+        let turn = chevron_turn(("agent-tool-turn", index), open, self.look, window, cx);
+        let state: AnyElement = match tool.status {
+            ToolStatus::Pending | ToolStatus::InProgress => {
+                spinner(colors.accent, self.look.motion).into_any_element()
+            }
+            ToolStatus::Completed => Icon::new(IconName::Check)
+                .xsmall()
+                .text_color(success)
+                .into_any_element(),
+            ToolStatus::Failed => Icon::new(IconName::X)
+                .xsmall()
+                .text_color(danger)
+                .into_any_element(),
         };
         let location = tool.locations.first().cloned();
-        let mut card = div()
-            .id(("agent-tool", index))
-            .flex()
-            .flex_col()
-            .gap_1()
-            .px_2()
-            .py_1p5()
-            .rounded(px(8.))
-            .border_1()
-            .border_color(colors.border)
-            .child(
-                div()
-                    .flex()
-                    .items_center()
-                    .gap_1p5()
-                    .text_xs()
-                    .child(Icon::new(icon).xsmall().text_color(colors.muted))
-                    .child(
-                        div()
-                            .flex_1()
-                            .min_w_0()
-                            .truncate()
-                            .text_color(colors.text)
-                            .child(tool.title.clone()),
-                    )
-                    .child(div().flex_none().text_color(status_color).child(status)),
-            );
-        if let Some((path, line)) = location {
-            card = card
-                .cursor_pointer()
+        let open_file = location.map(|(path, line)| {
+            Button::new(("agent-tool-open", index))
+                .ghost()
+                .xsmall()
+                .icon(Icon::new(IconName::ExternalLink))
+                .tooltip(self.strings().agent_open_file)
                 .on_click(cx.listener(move |this, _, window, cx| {
+                    cx.stop_propagation();
                     if path.is_file() {
                         this.open_file(&path, window, cx);
                         if let Some(line) = line
@@ -1135,15 +1488,89 @@ impl Workbench {
                             });
                         }
                     }
-                }));
-        }
-        for content in &tool.content {
-            card = card.child(render_tool_content(
-                content,
-                colors,
-                theme.success,
-                theme.danger,
-            ));
+                }))
+        });
+        let expandable = !tool.content.is_empty();
+        let mut card = div()
+            .flex()
+            .flex_col()
+            .rounded(px(10.))
+            .border_1()
+            .border_color(colors.border)
+            .bg(colors.editor.opacity(0.6))
+            .overflow_hidden()
+            .child(
+                div()
+                    .id(("agent-tool", index))
+                    .h(px(30.))
+                    .pl_1p5()
+                    .pr_1()
+                    .flex()
+                    .items_center()
+                    .gap_1p5()
+                    .text_xs()
+                    .when(expandable, |row| {
+                        row.cursor_pointer()
+                            .hover(|row| row.bg(colors.hover.opacity(0.5)))
+                            .on_click(cx.listener(move |this, _, _, cx| {
+                                if !this.agent_panel.open_tools.remove(&index) {
+                                    this.agent_panel.open_tools.insert(index);
+                                }
+                                cx.notify();
+                            }))
+                    })
+                    .child(
+                        div()
+                            .size(px(20.))
+                            .flex_none()
+                            .flex()
+                            .items_center()
+                            .justify_center()
+                            .rounded(px(5.))
+                            .bg(colors.hover)
+                            .child(Icon::new(icon).xsmall().text_color(colors.muted)),
+                    )
+                    .child(
+                        div()
+                            .flex_1()
+                            .min_w_0()
+                            .truncate()
+                            .text_color(colors.text)
+                            .child(tool.title.clone()),
+                    )
+                    .children(open_file)
+                    .child(
+                        div()
+                            .flex_none()
+                            .w(px(16.))
+                            .flex()
+                            .justify_center()
+                            .child(state),
+                    )
+                    .when(expandable, |row| {
+                        row.child(
+                            Icon::new(IconName::ChevronRight)
+                                .xsmall()
+                                .rotate(gpui::radians(turn * std::f32::consts::FRAC_PI_2))
+                                .text_color(colors.faint),
+                        )
+                    }),
+            );
+        if open {
+            card = card.child(
+                div()
+                    .px_2()
+                    .pb_2()
+                    .pt_0p5()
+                    .flex()
+                    .flex_col()
+                    .gap_1()
+                    .children(
+                        tool.content
+                            .iter()
+                            .map(|content| render_tool_content(content, colors, success, danger)),
+                    ),
+            );
         }
         card.into_any_element()
     }
@@ -1157,39 +1584,70 @@ impl Workbench {
             .iter()
             .filter(|item| item.status == "completed")
             .count();
+        let progress = done as f32 / plan.len() as f32;
         Some(
             div()
                 .flex_none()
-                .mx_3()
-                .mb_1()
-                .px_2()
-                .py_1p5()
-                .rounded(px(8.))
-                .bg(colors.hover)
+                .mx_2()
+                .mb_1p5()
+                .px_2p5()
+                .py_2()
+                .rounded(px(10.))
+                .border_1()
+                .border_color(colors.border)
+                .bg(colors.editor.opacity(0.6))
                 .flex()
                 .flex_col()
-                .gap_0p5()
+                .gap_1()
                 .text_xs()
                 .child(
                     div()
-                        .text_color(colors.muted)
-                        .child(self.strings().agent_plan(done, plan.len())),
+                        .flex()
+                        .items_center()
+                        .gap_2()
+                        .child(
+                            div()
+                                .flex_none()
+                                .font_weight(FontWeight::SEMIBOLD)
+                                .text_color(colors.muted)
+                                .child(self.strings().agent_plan(done, plan.len())),
+                        )
+                        // How far along, as a thin bar.
+                        .child(
+                            div()
+                                .flex_1()
+                                .h(px(4.))
+                                .rounded_full()
+                                .bg(colors.hover)
+                                .child(
+                                    div()
+                                        .h_full()
+                                        .w(gpui::relative(progress))
+                                        .rounded_full()
+                                        .bg(colors.accent),
+                                ),
+                        ),
                 )
                 .children(plan.iter().map(|item| {
-                    let mark = match item.status.as_str() {
-                        "completed" => "✓",
-                        "in_progress" => "›",
-                        _ => "·",
+                    let (mark, color) = match item.status.as_str() {
+                        "completed" => (IconName::CircleCheck, colors.accent),
+                        "in_progress" => (IconName::CircleDot, colors.text),
+                        _ => (IconName::Circle, colors.faint),
                     };
                     div()
                         .flex()
+                        .items_start()
                         .gap_1p5()
                         .text_color(if item.status == "completed" {
                             colors.faint
                         } else {
                             colors.text
                         })
-                        .child(div().flex_none().w(px(10.)).child(mark))
+                        .child(
+                            div()
+                                .pt(px(1.))
+                                .child(Icon::new(mark).xsmall().text_color(color)),
+                        )
                         .child(div().flex_1().min_w_0().child(item.content.clone()))
                 }))
                 .into_any_element(),
@@ -1206,21 +1664,35 @@ impl Workbench {
         let theme = cx.theme();
         let mut card = div()
             .flex_none()
-            .mx_3()
-            .mb_1()
-            .px_2()
-            .py_2()
-            .rounded(px(8.))
+            .mx_2()
+            .mb_1p5()
+            .p_2p5()
+            .rounded(px(12.))
             .border_1()
-            .border_color(colors.accent)
+            .border_color(colors.accent.opacity(0.6))
+            .bg(colors.accent.opacity(0.07))
             .flex()
             .flex_col()
-            .gap_1p5()
+            .gap_2()
             .child(
                 div()
+                    .flex()
+                    .items_center()
+                    .gap_1p5()
                     .text_xs()
+                    .font_weight(FontWeight::MEDIUM)
                     .text_color(colors.text)
-                    .child(self.strings().agent_permission(&permission.title)),
+                    .child(
+                        Icon::new(IconName::ShieldCheck)
+                            .small()
+                            .text_color(colors.accent),
+                    )
+                    .child(
+                        div()
+                            .flex_1()
+                            .min_w_0()
+                            .child(self.strings().agent_permission(&permission.title)),
+                    ),
             );
         for content in &permission.content {
             card = card.child(render_tool_content(
@@ -1230,7 +1702,7 @@ impl Workbench {
                 theme.danger,
             ));
         }
-        let mut buttons = div().flex().flex_wrap().gap_1();
+        let mut buttons = div().flex().flex_wrap().gap_1p5();
         for (number, (id, name, kind)) in permission.options.iter().enumerate() {
             let option = id.clone();
             let button = Button::new(("agent-permission", index * 16 + number))
@@ -1239,7 +1711,7 @@ impl Workbench {
             let button = if kind.starts_with("allow") && number == 0 {
                 button.primary()
             } else {
-                button.ghost()
+                button.outline()
             };
             buttons = buttons.child(button.on_click(
                 cx.listener(move |this, _, _, cx| this.answer_permission(index, &option, cx)),
@@ -1248,7 +1720,14 @@ impl Workbench {
         card.child(buttons).into_any_element()
     }
 
-    fn render_agent_input(&self, colors: Colors, cx: &mut Context<Self>) -> AnyElement {
+    /// The message box, as a composer: what is attached, the text, and
+    /// under it @, the mode and the button that sends or stops.
+    fn render_agent_input(
+        &self,
+        colors: Colors,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
         let strings = self.strings();
         let panel = &self.agent_panel;
         let chips = panel
@@ -1266,20 +1745,28 @@ impl Workbench {
                     None => name,
                 };
                 div()
+                    .h(px(24.))
+                    .pl_2()
                     .flex()
                     .items_center()
                     .gap_1()
-                    .px_1p5()
-                    .rounded(px(6.))
-                    .bg(colors.hover)
+                    .rounded(px(7.))
+                    .border_1()
+                    .border_color(colors.border)
+                    .bg(colors.hover.opacity(0.6))
                     .text_xs()
                     .text_color(colors.text)
+                    .child(
+                        Icon::new(IconName::FileText)
+                            .xsmall()
+                            .text_color(colors.muted),
+                    )
                     .child(label)
                     .child(
                         Button::new(("agent-attachment", index))
                             .ghost()
-                            .small()
-                            .icon(Icon::new(IconName::X).xsmall())
+                            .xsmall()
+                            .icon(Icon::new(IconName::X))
                             .on_click(cx.listener(move |this, _, _, cx| {
                                 if index < this.agent_panel.attachments.len() {
                                     this.agent_panel.attachments.remove(index);
@@ -1302,35 +1789,57 @@ impl Workbench {
         let send: AnyElement = if panel.running {
             Button::new("agent-stop")
                 .ghost()
-                .small()
                 .icon(Icon::new(IconName::Square))
                 .tooltip(strings.agent_stop)
+                .rounded(px(16.))
                 .on_click(cx.listener(|this, _, _, cx| this.cancel_agent(cx)))
                 .into_any_element()
         } else {
+            let empty =
+                panel.input.read(cx).value().trim().is_empty() && panel.attachments.is_empty();
             Button::new("agent-send")
                 .primary()
-                .small()
                 .icon(Icon::new(IconName::ArrowUp))
                 .tooltip(strings.agent_send)
+                .rounded(px(16.))
+                .disabled(empty)
                 .on_click(cx.listener(|this, _, window, cx| this.send_to_agent(window, cx)))
                 .into_any_element()
         };
+        let typing = panel.input.read(cx).focus_handle(cx).is_focused(window);
         div()
             .flex_none()
             .m_2()
-            .p_1p5()
-            .rounded(px(10.))
+            .pt_1()
+            .pb_1p5()
+            .px_1p5()
+            .rounded(px(14.))
             .border_1()
-            .border_color(colors.border)
+            .border_color(if typing {
+                colors.accent.opacity(0.7)
+            } else {
+                colors.border
+            })
             .bg(colors.editor)
             .flex()
             .flex_col()
             .gap_1()
             .when(!panel.attachments.is_empty(), |input| {
-                input.child(div().flex().flex_wrap().gap_1().children(chips))
+                input.child(
+                    div()
+                        .px_1()
+                        .pt_1()
+                        .flex()
+                        .flex_wrap()
+                        .gap_1()
+                        .children(chips),
+                )
             })
-            .child(Textarea::new(&panel.input).appearance(false))
+            .child(
+                div()
+                    .text_sm()
+                    .child(Textarea::new(&panel.input).appearance(false)),
+            )
             .child(
                 div()
                     .flex()
@@ -1340,7 +1849,7 @@ impl Workbench {
                         Button::new("agent-add-file")
                             .ghost()
                             .small()
-                            .label("@")
+                            .icon(Icon::new(IconName::AtSign))
                             .tooltip(strings.agent_add_file)
                             .on_click(
                                 cx.listener(|this, _, window, cx| this.add_to_agent(window, cx)),
@@ -1351,6 +1860,7 @@ impl Workbench {
                             Button::new("agent-mode")
                                 .ghost()
                                 .small()
+                                .icon(Icon::new(IconName::ShieldCheck))
                                 .label(mode_name)
                                 .dropdown_menu(move |mut menu, _, _| {
                                     for (value, name) in &modes {
@@ -1376,6 +1886,87 @@ impl Workbench {
             )
             .into_any_element()
     }
+}
+
+/// Claude's name and mark over its answer.
+fn claude_label(name: &'static str, colors: Colors) -> gpui::Div {
+    div()
+        .flex()
+        .items_center()
+        .gap_1p5()
+        .mb(px(-6.))
+        .text_xs()
+        .font_weight(FontWeight::SEMIBOLD)
+        .text_color(colors.muted)
+        .child(
+            div()
+                .size(px(18.))
+                .rounded_full()
+                .flex()
+                .items_center()
+                .justify_center()
+                .bg(colors.accent.opacity(0.16))
+                .child(
+                    Icon::new(IconName::Sparkles)
+                        .xsmall()
+                        .text_color(colors.accent),
+                ),
+        )
+        .child(name)
+}
+
+/// A small circle turning while something runs; still without movements.
+fn spinner(color: Hsla, motion: bool) -> AnyElement {
+    let icon = Icon::new(IconName::LoaderCircle).xsmall().text_color(color);
+    if !motion {
+        return icon.into_any_element();
+    }
+    icon.with_animation(
+        "spinner",
+        Animation::new(std::time::Duration::from_millis(900)).repeat(),
+        |icon, delta| icon.rotate(gpui::radians(delta * std::f32::consts::TAU)),
+    )
+    .into_any_element()
+}
+
+/// "Claude is working…" with three dots that breathe in turn.
+fn working(text: &'static str, colors: Colors, motion: bool) -> gpui::Div {
+    let dot = |index: usize| {
+        let dot = div().size(px(5.)).rounded_full().bg(colors.accent);
+        if !motion {
+            return dot.into_any_element();
+        }
+        dot.with_animation(
+            ("working-dot", index),
+            Animation::new(std::time::Duration::from_millis(1100)).repeat(),
+            move |dot, delta| {
+                let phase = (delta - index as f32 * 0.18).rem_euclid(1.);
+                let lift = (phase * std::f32::consts::TAU).sin().max(0.);
+                dot.opacity(0.3 + 0.7 * lift)
+            },
+        )
+        .into_any_element()
+    };
+    div()
+        .flex()
+        .items_center()
+        .gap_2()
+        .text_xs()
+        .text_color(colors.faint)
+        .child(div().flex().gap_1().children((0..3).map(dot)))
+        .child(text)
+}
+
+/// Seconds since 1970 of the last local midnight before `now`.
+fn local_midnight(now: i64) -> i64 {
+    let time = now as libc::time_t;
+    // SAFETY: localtime_r writes only into the tm it is given.
+    let mut tm: libc::tm = unsafe { std::mem::zeroed() };
+    let found = unsafe { !libc::localtime_r(&time, &mut tm).is_null() };
+    if !found {
+        return now - now.rem_euclid(86_400);
+    }
+    now - (tm.tm_hour as i64 * 3600 + tm.tm_min as i64 * 60 + tm.tm_sec as i64)
 }
 
 /// Opens a past conversation, from the history menu.
@@ -1569,7 +2160,7 @@ mod tests {
         // The mode changes; past conversations are listed and come back.
         view.update(cx, |view, cx| view.set_agent_mode("plan".to_owned(), cx));
         wait_until(cx, "the history", |cx| {
-            view.read_with(cx, |view, _| !view.agent_panel.history.is_empty())
+            view.read_with(cx, |view, _| !view.agent_panel.chats.is_empty())
         });
         view.update_in(cx, |view, window, cx| {
             view.new_agent_conversation(window, cx)

@@ -42,6 +42,7 @@ impl Workbench {
     /// the keyboard when it is open.
     pub(super) fn open_claude_code(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         self.layout.agent = true;
+        self.agent_panel.view = super::agent_panel::AgentView::Terminal;
         if self.agent_terminal.is_none() {
             let spawn = terminal_view::shell_spawn(self.terminal_folder(), cx);
             if !self.start_agent_terminal(spawn, window, cx) {
