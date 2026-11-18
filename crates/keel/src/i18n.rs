@@ -517,6 +517,11 @@ pub struct Strings {
     pub cursor_blocker_views: &'static str,
     pub cursor_blocker_webviews: &'static str,
     pub cursor_blocker_language_server: &'static str,
+    pub cursor_blocker_tasks: &'static str,
+    pub cursor_blocker_formatting: &'static str,
+    pub extension_not_working: &'static str,
+    pub extension_partly_working: &'static str,
+    extension_not_working_detail_text: &'static str,
     pub command_insert_at_mention: &'static str,
     pub claude_not_connected: &'static str,
     pub command_accept_proposed: &'static str,
@@ -844,6 +849,11 @@ impl Strings {
     pub fn cursor_install_all(&self, count: usize) -> String {
         self.cursor_install_all_text
             .replace("{count}", &count.to_string())
+    }
+
+    pub fn extension_not_working_detail(&self, reasons: &str) -> String {
+        self.extension_not_working_detail_text
+            .replace("{reasons}", reasons)
     }
 
     pub fn cursor_partial(&self, reasons: &str) -> String {
@@ -1502,6 +1512,11 @@ pub const ITALIAN: Strings = Strings {
     cursor_blocker_views: "pannelli propri",
     cursor_blocker_webviews: "pagine web interne",
     cursor_blocker_language_server: "avvia un language server",
+    cursor_blocker_tasks: "i suoi task",
+    cursor_blocker_formatting: "la sua formattazione",
+    extension_not_working: "Non funziona in Keel",
+    extension_partly_working: "Funziona in parte",
+    extension_not_working_detail_text: "Non funziona in Keel: {reasons}.",
     command_insert_at_mention: "Claude Code: Inserisci il riferimento al file",
     claude_not_connected: "Claude Code non è collegato a questa finestra: avvialo in un terminale di Keel.",
     command_accept_proposed: "Claude Code: Accetta la modifica proposta",
@@ -2014,6 +2029,11 @@ pub const ENGLISH: Strings = Strings {
     cursor_blocker_views: "its own panels",
     cursor_blocker_webviews: "web pages inside the window",
     cursor_blocker_language_server: "starts a language server",
+    cursor_blocker_tasks: "its tasks",
+    cursor_blocker_formatting: "its formatting",
+    extension_not_working: "Does not work in Keel",
+    extension_partly_working: "Works in part",
+    extension_not_working_detail_text: "Does not work in Keel: {reasons}.",
     command_insert_at_mention: "Claude Code: Insert At-Mention",
     claude_not_connected: "Claude Code is not connected to this window: start it in a Keel terminal.",
     command_accept_proposed: "Claude Code: Accept Proposed Changes",

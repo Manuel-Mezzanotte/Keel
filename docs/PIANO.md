@@ -1911,6 +1911,14 @@ La prima volta che apri un file di un linguaggio, Keel scarica il suo server: ne
   - il tema di icone scelto (o le icone di Keel) ora vale anche nelle schede, in Controllo versione, nei risultati di Cerca, in Problemi e nell'apertura rapida (Cmd+P), non solo nell'Esplora risorse;
   - le schede delle pagine di Keel hanno un simbolo: ingranaggio per le Impostazioni, tastiera per le Scorciatoie, blocchi per le estensioni, il grafico per Git Graph;
   - nell'apertura rapida l'icona si calcola solo per le righe sullo schermo, così la lista si apre subito anche con molti file.
+- **Quanto funziona un'estensione in Keel:**
+  - nella vista Estensioni, accanto all'editore, un'estensione può avere «Funziona in parte» (grigio) o «Non funziona in Keel» (giallo); passandoci sopra si legge il motivo, e la scheda dell'estensione lo scrive per intero;
+  - è lo stesso controllo di «Importa da Cursor»: guarda il `package.json` e cerca nel codice principale;
+  - non funziona con: debugger, notebook, pannelli propri, language server avviati dall'estensione, estensioni solo per Cursor;
+  - funziona in parte senza: pagine web interne, editor propri, e ora anche i suoi task e la sua formattazione, che Keel non usa ancora;
+  - il controllo gira in sottofondo, perché il codice di un'estensione può pesare diversi megabyte;
+  - VSAuto Ghost non ha etichette: tutto quello che usa c'è.
+- **Prove automatiche:** pagina delle impostazioni e cambi che arrivano all'estensione (dalla pagina, da `settings.json` salvato a mano, col ripristino), proposta dei temi dopo l'installazione, icone del tema nelle schede e nell'apertura rapida, etichette delle estensioni; le 20 impostazioni vere di VSAuto Ghost lette dal suo pacchetto.
 
 **Le tue prove a mano della fase 12**
 1. **Crash:** in un terminale lancia `kill -9` sul processo di Keel (`pgrep -x keel`), poi riapri Keel. Nella barra di stato compare «Keel non si è chiuso normalmente l'ultima volta», e le modifiche non salvate sono tornate.

@@ -31,6 +31,8 @@ fn blocker_text(blocker: Blocker, strings: &Strings) -> &'static str {
         Blocker::Views => strings.cursor_blocker_views,
         Blocker::Webviews => strings.cursor_blocker_webviews,
         Blocker::LanguageServer => strings.cursor_blocker_language_server,
+        Blocker::Tasks => strings.cursor_blocker_tasks,
+        Blocker::Formatting => strings.cursor_blocker_formatting,
     }
 }
 
@@ -46,7 +48,7 @@ fn built_in_text(feature: BuiltIn, strings: &Strings) -> &'static str {
     }
 }
 
-fn reasons(blockers: &[Blocker], strings: &Strings) -> String {
+pub(super) fn reasons(blockers: &[Blocker], strings: &Strings) -> String {
     blockers
         .iter()
         .map(|blocker| blocker_text(*blocker, strings))

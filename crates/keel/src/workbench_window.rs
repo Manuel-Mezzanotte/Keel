@@ -1540,6 +1540,7 @@ impl Workbench {
         }
         self.extension_state = crate::extension_state::ExtensionState::load(&data_dir);
         self.installed = installed.clone();
+        self.check_extension_limits(cx);
         let installed: Vec<InstalledExtension> = installed
             .into_iter()
             .filter(|extension| self.extension_enabled(&extension.id()))

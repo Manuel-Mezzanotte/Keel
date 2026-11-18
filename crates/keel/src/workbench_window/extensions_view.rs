@@ -7,7 +7,7 @@
 use std::collections::HashSet;
 
 use extensions::marketplace::{self, Listing};
-use extensions::{color_theme, icon_theme};
+use extensions::{color_theme, cursor, icon_theme};
 use gpui::{AnyElement, Entity, PathPromptOptions, StatefulInteractiveElement as _, img};
 use gpui_component::button::{Button, ButtonVariants as _};
 use gpui_component::input::{Input, InputEvent, InputState};
@@ -59,6 +59,10 @@ pub(super) struct ExtensionStore {
     pub(super) cursor: Option<super::cursor_import::CursorImport>,
     /// Cursor's extensions folder; none means `~/.cursor/extensions`.
     pub(super) cursor_dir: Option<PathBuf>,
+    /// What keeps each installed extension from working fully in Keel,
+    /// by lower-case id; worked out in the background.
+    pub(super) limits: HashMap<String, Vec<cursor::Blocker>>,
+    limits_task: Task<()>,
 }
 
 impl ExtensionStore {
@@ -88,6 +92,8 @@ impl ExtensionStore {
             icons: HashMap::new(),
             cursor: None,
             cursor_dir: None,
+            limits: HashMap::new(),
+            limits_task: Task::ready(()),
         };
         (store, events)
     }
@@ -223,6 +229,58 @@ fn contributions(extension: &InstalledExtension, strings: &Strings) -> String {
 }
 
 impl Workbench {
+    /// Works out, in the background, what each installed extension needs
+    /// that Keel lacks: their main scripts can be several megabytes.
+    pub(super) fn check_extension_limits(&mut self, cx: &mut Context<Self>) {
+        let extensions = self.installed.clone();
+        let found = cx.background_spawn(async move {
+            extensions
+                .iter()
+                .map(|extension| (extension.id().to_lowercase(), cursor::blockers(extension)))
+                .collect::<HashMap<_, _>>()
+        });
+        self.store.limits_task = cx.spawn(async move |this, cx| {
+            let limits = found.await;
+            this.update(cx, |this, cx| {
+                this.store.limits = limits;
+                cx.notify();
+            })
+            .ok();
+        });
+    }
+
+    /// How well an extension works in Keel: `None` when fully, otherwise
+    /// whether it works at all and why not.
+    fn extension_limits(&self, id: &str) -> Option<(bool, String)> {
+        let blockers = self.store.limits.get(&id.to_lowercase())?;
+        if blockers.is_empty() {
+            return None;
+        }
+        let strings = self.strings();
+        let blocking: Vec<cursor::Blocker> = blockers
+            .iter()
+            .copied()
+            .filter(|blocker| blocker.blocks())
+            .collect();
+        Some(if blocking.is_empty() {
+            (
+                true,
+                format!(
+                    "{}. {}.",
+                    strings.extension_partly_working,
+                    strings.cursor_partial(&super::cursor_import::reasons(blockers, strings))
+                ),
+            )
+        } else {
+            (
+                false,
+                strings.extension_not_working_detail(&super::cursor_import::reasons(
+                    &blocking, strings,
+                )),
+            )
+        })
+    }
+
     /// Whether `id` runs in this window.
     pub(super) fn extension_enabled(&self, id: &str) -> bool {
         self.extension_state
@@ -248,6 +306,7 @@ impl Workbench {
             Some(setup) => self.start_extensions(setup, window, cx),
             None => {
                 self.installed = crate::paths::installed_extensions(&data);
+                self.check_extension_limits(cx);
                 self.report(self.strings().extensions_failed.to_owned());
             }
         }
@@ -1101,6 +1160,28 @@ impl Workbench {
                             .child(extension.manifest.publisher.clone())
                             .when(!enabled, |line| {
                                 line.child(strings.extension_disabled_badge)
+                            })
+                            .when_some(self.extension_limits(&id), |line, (works, why)| {
+                                line.child(
+                                    div()
+                                        .id(("extension-limits", index))
+                                        .min_w_0()
+                                        .truncate()
+                                        .text_color(if works {
+                                            colors.faint
+                                        } else {
+                                            cx.theme().warning
+                                        })
+                                        .child(if works {
+                                            strings.extension_partly_working
+                                        } else {
+                                            strings.extension_not_working
+                                        })
+                                        .tooltip(move |window, cx| {
+                                            gpui_component::tooltip::Tooltip::new(why.clone())
+                                                .build(window, cx)
+                                        }),
+                                )
                             }),
                     ),
             )
@@ -1255,6 +1336,18 @@ impl Workbench {
                                         .child(strings.extension_disabled_badge),
                                 )
                             })
+                            .when_some(self.extension_limits(&tab.id), |info, (works, why)| {
+                                info.child(
+                                    div()
+                                        .text_xs()
+                                        .text_color(if works {
+                                            colors.muted
+                                        } else {
+                                            theme.warning
+                                        })
+                                        .child(why),
+                                )
+                            })
                             .child(div().pt_2().flex().gap_2().children(buttons)),
                     ),
             )
@@ -1299,6 +1392,81 @@ mod tests {
             assert!(Instant::now() < deadline, "timed out waiting for {what}");
             std::thread::sleep(Duration::from_millis(20));
         }
+    }
+
+    /// The Extensions view says which extensions work only in part in
+    /// Keel, or not at all, and why; the same check as "Import from Cursor".
+    #[gpui::test]
+    fn extensions_that_work_in_part_are_labelled(cx: &mut TestAppContext) {
+        cx.executor().allow_parking();
+        cx.update(|cx| {
+            gpui_component::init(cx);
+            language::register_grammars();
+            init(cx);
+        });
+        let data = tempfile::tempdir().unwrap();
+        for (name, contributes, main) in [
+            ("fine", r#"{ "themes": [] }"#, ""),
+            (
+                "lint",
+                r#"{ "taskDefinitions": [{ "type": "lint" }] }"#,
+                "vscode.window.createWebviewPanel('lint');",
+            ),
+            ("debug", r#"{ "debuggers": [{ "type": "node" }] }"#, ""),
+        ] {
+            let root =
+                crate::paths::extensions_dir(data.path()).join(format!("tests.{name}-1.0.0"));
+            std::fs::create_dir_all(&root).unwrap();
+            std::fs::write(
+                root.join("package.json"),
+                format!(
+                    r#"{{ "name": "{name}", "publisher": "tests", "version": "1.0.0",
+                         "main": "./extension.js", "contributes": {contributes} }}"#
+                ),
+            )
+            .unwrap();
+            std::fs::write(root.join("extension.js"), main).unwrap();
+        }
+        let folder = tempfile::tempdir().unwrap();
+        let settings_file = folder.path().join("settings.json");
+        std::fs::write(&settings_file, r#"{ "keel.language": "en" }"#).unwrap();
+        let path = folder.path().join("notes.md");
+        std::fs::write(&path, "# Notes\n").unwrap();
+        let mut setup = crate::windows::extension_setup(data.path()).unwrap();
+        setup.marketplace = None;
+        let document = Document::open(&path).unwrap();
+        let (view, cx) = cx.add_window_view(|window, cx| {
+            let settings = Settings::load(&settings_file, None);
+            Workbench::new(Some(document), settings, Some(setup), window, cx)
+        });
+        wait_until(cx, "the check of the extensions", |cx| {
+            view.read_with(cx, |view, _| view.store.limits.len() == 3)
+        });
+        view.read_with(cx, |view, _| {
+            assert_eq!(view.extension_limits("tests.fine"), None);
+            assert_eq!(
+                view.extension_limits("tests.lint"),
+                Some((
+                    true,
+                    "Works in part. Without: web pages inside the window, its tasks.".to_owned()
+                ))
+            );
+            assert_eq!(
+                view.extension_limits("tests.debug"),
+                Some((
+                    false,
+                    "Does not work in Keel: needs the debugger.".to_owned()
+                ))
+            );
+        });
+        // Drawn in the view and in the details tab.
+        view.update_in(cx, |view, window, cx| {
+            view.layout
+                .select_side_view(crate::layout::SideView::Extensions);
+            view.open_extension_details("tests.debug", window, cx);
+        });
+        cx.update(|window, _| window.refresh());
+        cx.run_until_parked();
     }
 
     /// A package with a color theme and a file icon theme.

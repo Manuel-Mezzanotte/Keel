@@ -99,13 +99,20 @@ pub enum Blocker {
     Webviews,
     /// Starts a language server program.
     LanguageServer,
+    /// Tasks of its own, such as "Lint workspace".
+    Tasks,
+    /// Formats documents itself.
+    Formatting,
 }
 
 impl Blocker {
     /// Whether the extension is useless without it; otherwise only a part
     /// of it is missing.
     pub fn blocks(self) -> bool {
-        !matches!(self, Blocker::Webviews | Blocker::CustomEditors)
+        !matches!(
+            self,
+            Blocker::Webviews | Blocker::CustomEditors | Blocker::Tasks | Blocker::Formatting
+        )
     }
 }
 
@@ -338,6 +345,14 @@ pub fn blockers(extension: &InstalledExtension) -> Vec<Blocker> {
     if contains(b"vscode-languageclient") || contains(b"LanguageClient(") {
         found.push(Blocker::LanguageServer);
     }
+    if has("taskDefinitions") || contains(b"registerTaskProvider") {
+        found.push(Blocker::Tasks);
+    }
+    if contains(b"registerDocumentFormattingEditProvider")
+        || contains(b"registerDocumentRangeFormattingEditProvider")
+    {
+        found.push(Blocker::Formatting);
+    }
     found.sort();
     found.dedup();
     found
@@ -464,6 +479,17 @@ mod tests {
         );
         assert_eq!(blockers_of(&ssh), [Blocker::CursorOnly]);
         assert_eq!(blockers_of(&ghost), [Blocker::Webviews]);
+        // Tasks and formatting of its own: it works, without them.
+        let lint = write_extension(
+            folder.path(),
+            "davidanson.vscode-markdownlint",
+            "0.60.0",
+            r#"{ "taskDefinitions": [{ "type": "markdownlint" }] }"#,
+            "vscode.languages.registerDocumentFormattingEditProvider(selector, provider);",
+        );
+        let lint_blockers = blockers_of(&lint);
+        assert_eq!(lint_blockers, [Blocker::Tasks, Blocker::Formatting]);
+        assert!(lint_blockers.iter().all(|blocker| !blocker.blocks()));
         assert_eq!(built_in("esbenp.prettier-vscode"), Some(BuiltIn::Prettier));
         assert_eq!(built_in("dracula-theme.theme-dracula"), None);
 
