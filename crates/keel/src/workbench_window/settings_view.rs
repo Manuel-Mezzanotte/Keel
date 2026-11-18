@@ -4,11 +4,12 @@
 //! keeping its comments, and takes effect in the window.
 //! "Open Settings (JSON)" opens the file itself.
 
+use extensions::configuration::{self, SettingKind};
 use gpui::{AnyElement, AnyWindowHandle, SharedString, WeakEntity};
 use gpui_component::Sizable as _;
 use gpui_component::button::{Button, ButtonVariants as _};
 use gpui_component::setting::{
-    NumberFieldOptions, SettingField, SettingGroup, SettingItem, SettingPage,
+    NumberFieldOptions, SelectIndex, SettingField, SettingGroup, SettingItem, SettingPage,
     Settings as SettingsPage,
 };
 
@@ -484,8 +485,68 @@ impl Workbench {
             cx.notify();
             return;
         }
-        self.apply_setting(key, window, cx);
+        self.settings_changed(&[key.to_owned()], window, cx);
+    }
+
+    /// Tells everything that reads settings about the keys that changed:
+    /// the window, the language servers and the extensions.
+    pub(super) fn settings_changed(
+        &mut self,
+        keys: &[String],
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        if keys.is_empty() {
+            return;
+        }
+        for key in keys {
+            self.apply_setting(key, window, cx);
+        }
         self.language_settings_changed();
+        if let Some(extensions) = &self.extensions {
+            let merged = self.settings.merged();
+            // A key gone is `null`: the extension falls back to its default.
+            let values: serde_json::Map<String, Value> = keys
+                .iter()
+                .map(|key| (key.clone(), merged.get(key).cloned().unwrap_or(Value::Null)))
+                .collect();
+            let mut workspace = self.settings.layer(settings::Source::VsCodeProject);
+            workspace.extend(self.settings.layer(settings::Source::Project));
+            let _ = extensions.host.notify(
+                "configuration/changed",
+                json!({
+                    "values": values,
+                    "user": self.settings.layer(settings::Source::User),
+                    "workspace": workspace,
+                }),
+            );
+        }
+        cx.notify();
+    }
+
+    /// Reads the settings files again after one was saved in an editor.
+    /// A file with a mistake changes nothing and says where it is.
+    pub(super) fn reload_settings(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        match self.settings.reload() {
+            Ok(keys) => self.settings_changed(&keys, window, cx),
+            Err(problems) => {
+                for problem in problems {
+                    self.report(problem);
+                }
+                cx.notify();
+            }
+        }
+    }
+
+    /// Opens the Settings tab on the page of an extension's settings.
+    pub(super) fn open_extension_settings(
+        &mut self,
+        id: &str,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.settings_jump = (self.settings_jump.0 + 1, Some(id.to_owned()));
+        self.open_page(PageKind::Settings, window, cx);
         cx.notify();
     }
 
@@ -512,6 +573,7 @@ impl Workbench {
                 crate::theme::apply(&choice, Some(window), cx);
             }
             "editor.tabSize" | "editor.insertSpaces" => self.apply_tab_size(cx),
+            "workbench.iconTheme" => self.reload_icon_theme(),
             _ => {}
         }
     }
@@ -550,9 +612,11 @@ impl Workbench {
         cx: &mut Context<Self>,
     ) -> AnyElement {
         let italian = self.language == UiLanguage::Italian;
+        let strings = self.strings();
         let pick = |pair: (&'static str, &'static str)| if italian { pair.0 } else { pair.1 };
         let workbench = cx.entity().downgrade();
         let handle = window.window_handle();
+        let item = |field: Field| self.setting_item(field, italian, &workbench, handle);
         let pages = [
             (Page::Appearance, ("Aspetto", "Appearance")),
             (Page::Editor, ("Editor", "Editor")),
@@ -561,35 +625,57 @@ impl Workbench {
             (Page::Languages, ("Linguaggi", "Languages")),
             (Page::Extensions, ("Estensioni", "Extensions")),
         ];
-        let mut settings = SettingsPage::new("keel-settings").sidebar_width(px(200.));
-        for (page, title) in pages {
-            let items: Vec<SettingItem> = CATALOG
-                .iter()
-                .filter(|entry| entry.page == page)
-                .map(|entry| {
-                    let mut description = pick(entry.description).to_owned();
-                    if self.settings.source_of(entry.key) == Some(settings::Source::Project)
-                        || self.settings.source_of(entry.key)
-                            == Some(settings::Source::VsCodeProject)
-                    {
-                        description.push_str(if italian {
-                            " Il progetto la cambia nelle sue impostazioni."
-                        } else {
-                            " The project changes it in its settings."
-                        });
-                    }
-                    item(entry, italian, &workbench, handle)
-                        .keywords([entry.key])
-                        .description(description)
-                })
-                .collect();
-            settings = settings.page(
+        let mut all: Vec<SettingPage> = pages
+            .into_iter()
+            .map(|(page, title)| {
+                let items: Vec<SettingItem> = CATALOG
+                    .iter()
+                    .filter(|entry| entry.page == page)
+                    .map(|entry| item(Field::from_entry(entry, italian)))
+                    .collect();
                 SettingPage::new(pick(title))
                     .resettable(true)
-                    .group(SettingGroup::new().items(items)),
+                    .group(SettingGroup::new().items(items))
+            })
+            .collect();
+        // Then a page for each running extension with settings of its own,
+        // as VS Code lists them under Extensions.
+        for (id, name, sections) in self.extension_setting_pages() {
+            let groups: Vec<SettingGroup> = sections
+                .into_iter()
+                .map(|section| {
+                    let items: Vec<SettingItem> = section
+                        .settings
+                        .iter()
+                        .map(|setting| {
+                            item(Field::from_extension(
+                                setting,
+                                self.settings.get(&setting.key),
+                            ))
+                        })
+                        .collect();
+                    let group = SettingGroup::new().items(items);
+                    match section.title {
+                        Some(title) => group.title(title),
+                        None => group,
+                    }
+                })
+                .collect();
+            all.push(
+                SettingPage::new(name)
+                    .description(strings.extension_settings_from(&id))
+                    .resettable(true)
+                    .groups(groups),
             );
         }
-        let strings = self.strings();
+        // A jump to an extension's page starts the tab afresh on it.
+        let settings = SettingsPage::new(("keel-settings", self.settings_jump.0))
+            .sidebar_width(px(200.))
+            .default_selected_index(SelectIndex {
+                page_ix: self.settings_jump_page().unwrap_or(0),
+                group_ix: None,
+            })
+            .pages(all);
         div()
             .size_full()
             .flex()
@@ -608,52 +694,252 @@ impl Workbench {
             .child(div().flex_1().min_h_0().child(settings))
             .into_any_element()
     }
+
+    /// The running extensions that declare settings, by name: their id,
+    /// their name and their settings.
+    pub(super) fn extension_setting_pages(
+        &self,
+    ) -> Vec<(String, String, Vec<configuration::SettingSection>)> {
+        let mut pages: Vec<(String, String, Vec<configuration::SettingSection>)> = self
+            .installed
+            .iter()
+            .filter(|extension| self.extension_enabled(&extension.id()))
+            .filter_map(|extension| {
+                let sections = configuration::settings(extension);
+                (!sections.is_empty()).then(|| {
+                    (
+                        extension.id(),
+                        super::extensions_view::display_name(extension),
+                        sections,
+                    )
+                })
+            })
+            .collect();
+        pages.sort_by_key(|(_, name, _)| name.to_lowercase());
+        pages
+    }
+
+    /// The page of the extension the Settings tab was last opened for:
+    /// after Keel's own pages, in the order of [`Self::extension_setting_pages`].
+    pub(super) fn settings_jump_page(&self) -> Option<usize> {
+        let id = self.settings_jump.1.as_deref()?;
+        let own = [
+            Page::Appearance,
+            Page::Editor,
+            Page::Files,
+            Page::Terminal,
+            Page::Languages,
+            Page::Extensions,
+        ]
+        .len();
+        self.extension_setting_pages()
+            .iter()
+            .position(|(page, _, _)| page.eq_ignore_ascii_case(id))
+            .map(|index| own + index)
+    }
+
+    /// Whether `id` is running and declares settings.
+    pub(super) fn extension_has_settings(&self, id: &str) -> bool {
+        self.extension_enabled(id)
+            && self
+                .installed
+                .iter()
+                .find(|extension| extension.id().eq_ignore_ascii_case(id))
+                .is_some_and(|extension| !configuration::settings(extension).is_empty())
+    }
+
+    /// The item of one setting, reading and writing it through the window.
+    fn setting_item(
+        &self,
+        field: Field,
+        italian: bool,
+        workbench: &WeakEntity<Workbench>,
+        handle: AnyWindowHandle,
+    ) -> SettingItem {
+        let mut description = field.description.clone();
+        let source = self.settings.source_of(&field.key);
+        if source == Some(settings::Source::Project)
+            || source == Some(settings::Source::VsCodeProject)
+        {
+            description.push_str(if italian {
+                " Il progetto la cambia nelle sue impostazioni."
+            } else {
+                " The project changes it in its settings."
+            });
+        }
+        let key = field.key.clone();
+        item(field, italian, workbench, handle)
+            .keywords([SharedString::from(key)])
+            .description(description)
+    }
 }
 
-/// The item of one setting, reading and writing it through the window.
+/// One setting as the page draws it: Keel's own, or one an extension
+/// declares in its `package.json`.
+pub(super) struct Field {
+    key: String,
+    title: String,
+    description: String,
+    kind: FieldKind,
+    default: Value,
+}
+
+enum FieldKind {
+    Switch,
+    Number {
+        min: f64,
+        max: f64,
+        step: f64,
+    },
+    /// The values and what the menu calls them.
+    Choice(Vec<(SharedString, SharedString)>),
+    Text,
+    Json,
+}
+
+impl Field {
+    fn from_entry(entry: &Entry, italian: bool) -> Self {
+        let pick = |pair: (&'static str, &'static str)| if italian { pair.0 } else { pair.1 };
+        Field {
+            key: entry.key.to_owned(),
+            title: pick(entry.title).to_owned(),
+            description: pick(entry.description).to_owned(),
+            kind: match entry.kind {
+                Kind::Switch => FieldKind::Switch,
+                Kind::Number { min, max } => FieldKind::Number { min, max, step: 1. },
+                Kind::Choice(options) => FieldKind::Choice(
+                    options
+                        .iter()
+                        .map(|(value, it, en)| {
+                            ((*value).into(), (if italian { *it } else { *en }).into())
+                        })
+                        .collect(),
+                ),
+                Kind::Text => FieldKind::Text,
+                Kind::Json => FieldKind::Json,
+            },
+            default: serde_json::from_str(entry.default).unwrap_or(Value::Null),
+        }
+    }
+
+    /// A setting an extension declares. With a list of choices, the
+    /// description of the one chosen now follows the setting's own.
+    fn from_extension(setting: &configuration::Setting, current: Option<&Value>) -> Self {
+        let mut description = setting.description.clone();
+        let kind = match &setting.kind {
+            SettingKind::Boolean => FieldKind::Switch,
+            SettingKind::Number {
+                integer,
+                minimum,
+                maximum,
+            } => {
+                let whole = *integer
+                    || setting
+                        .default
+                        .as_f64()
+                        .is_none_or(|value| value.fract() == 0.);
+                FieldKind::Number {
+                    min: minimum.unwrap_or(-1e9),
+                    max: maximum.unwrap_or(1e9),
+                    step: if whole { 1. } else { 0.1 },
+                }
+            }
+            SettingKind::Choice(choices) => {
+                let chosen = current.unwrap_or(&setting.default).as_str();
+                if let Some(choice) = choices
+                    .iter()
+                    .find(|choice| Some(choice.value.as_str()) == chosen)
+                    .filter(|choice| !choice.description.is_empty())
+                {
+                    if !description.is_empty() {
+                        description.push('\n');
+                    }
+                    description.push_str(&format!("{}: {}", choice.label, choice.description));
+                }
+                FieldKind::Choice(
+                    choices
+                        .iter()
+                        .map(|choice| (choice.value.clone().into(), choice.label.clone().into()))
+                        .collect(),
+                )
+            }
+            SettingKind::Text => FieldKind::Text,
+            SettingKind::Other => FieldKind::Json,
+        };
+        Field {
+            key: setting.key.clone(),
+            title: setting.title.clone(),
+            description,
+            kind,
+            default: setting.default.clone(),
+        }
+    }
+}
+
+/// The item of one setting. Resetting it takes it out of the user's file,
+/// so the default counts again, as VS Code's "Reset Setting".
 fn item(
-    entry: &'static Entry,
+    field: Field,
     italian: bool,
     workbench: &WeakEntity<Workbench>,
     handle: AnyWindowHandle,
 ) -> SettingItem {
-    let title = if italian {
-        entry.title.0
-    } else {
-        entry.title.1
-    };
-    let default: Value = serde_json::from_str(entry.default).unwrap_or(Value::Null);
-    let key = entry.key;
+    let Field {
+        key,
+        title,
+        kind,
+        default,
+        ..
+    } = field;
+    let key: SharedString = key.into();
     let read = {
         let workbench = workbench.clone();
         let default = default.clone();
+        let key = key.clone();
         std::rc::Rc::new(move |cx: &App| -> Value {
             workbench
                 .upgrade()
-                .and_then(|workbench| workbench.read(cx).settings.get(key).cloned())
+                .and_then(|workbench| workbench.read(cx).settings.get(&key).cloned())
                 .unwrap_or_else(|| default.clone())
         })
     };
-    let write = {
+    let change = {
         let workbench = workbench.clone();
-        std::rc::Rc::new(move |value: Value, cx: &mut App| {
-            let workbench = workbench.clone();
-            let _ = handle.update(cx, |_, window, cx| {
+        let key = key.clone();
+        std::rc::Rc::new(
+            move |value: Option<Value>, window: &mut Window, cx: &mut App| {
                 workbench
                     .update(cx, |workbench, cx| {
-                        workbench.change_setting(key, Some(value), window, cx)
+                        workbench.change_setting(&key, value, window, cx)
                     })
                     .ok();
-            });
+            },
+        )
+    };
+    let write = {
+        let change = change.clone();
+        std::rc::Rc::new(move |value: Value, cx: &mut App| {
+            let change = change.clone();
+            let _ = handle.update(cx, |_, window, cx| change(Some(value), window, cx));
         })
     };
+    let is_set = {
+        let workbench = workbench.clone();
+        let key = key.clone();
+        move |cx: &App| {
+            workbench.upgrade().is_some_and(|workbench| {
+                workbench.read(cx).settings.source_of(&key) == Some(settings::Source::User)
+            })
+        }
+    };
+    let reset = move |window: &mut Window, cx: &mut App| change(None, window, cx);
     let as_text = |value: &Value| match value {
         Value::String(text) => text.clone(),
         Value::Null => String::new(),
         other => other.to_string(),
     };
-    match entry.kind {
-        Kind::Switch => SettingItem::new(
+    match kind {
+        FieldKind::Switch => SettingItem::new(
             title,
             SettingField::switch(
                 {
@@ -662,12 +948,12 @@ fn item(
                 },
                 move |on, cx| write(Value::Bool(on), cx),
             )
-            .default_value(default.as_bool().unwrap_or(false)),
+            .on_reset(is_set, reset),
         ),
-        Kind::Number { min, max } => SettingItem::new(
+        FieldKind::Number { min, max, step } => SettingItem::new(
             title,
             SettingField::number_input(
-                NumberFieldOptions { min, max, step: 1. },
+                NumberFieldOptions { min, max, step },
                 {
                     let read = read.clone();
                     move |cx| read(cx).as_f64().unwrap_or(0.)
@@ -682,27 +968,21 @@ fn item(
                     write(value, cx)
                 },
             )
-            .default_value(default.as_f64().unwrap_or(0.)),
+            .on_reset(is_set, reset),
         ),
-        Kind::Choice(options) => {
-            let options: Vec<(SharedString, SharedString)> = options
-                .iter()
-                .map(|(value, it, en)| ((*value).into(), (if italian { *it } else { *en }).into()))
-                .collect();
-            SettingItem::new(
-                title,
-                SettingField::dropdown(
-                    options,
-                    {
-                        let read = read.clone();
-                        move |cx| as_text(&read(cx)).into()
-                    },
-                    move |value: SharedString, cx| write(Value::String(value.to_string()), cx),
-                )
-                .default_value(SharedString::from(as_text(&default))),
+        FieldKind::Choice(options) => SettingItem::new(
+            title,
+            SettingField::dropdown(
+                options,
+                {
+                    let read = read.clone();
+                    move |cx| as_text(&read(cx)).into()
+                },
+                move |value: SharedString, cx| write(Value::String(value.to_string()), cx),
             )
-        }
-        Kind::Text => SettingItem::new(
+            .on_reset(is_set, reset),
+        ),
+        FieldKind::Text => SettingItem::new(
             title,
             SettingField::input(
                 {
@@ -711,9 +991,9 @@ fn item(
                 },
                 move |value: SharedString, cx| write(Value::String(value.to_string()), cx),
             )
-            .default_value(SharedString::from(as_text(&default))),
+            .on_reset(is_set, reset),
         ),
-        Kind::Json => {
+        FieldKind::Json => {
             let workbench = workbench.clone();
             SettingItem::new(
                 title,
@@ -837,5 +1117,150 @@ mod tests {
         });
         cx.simulate_keystrokes("cmd-/");
         assert_eq!(text(&view, cx), "uno();\n");
+    }
+
+    /// An extension's settings: on a page of their own, opened from the
+    /// extension's menu, and every change reaches the extension, from the
+    /// page or from `settings.json` saved by hand.
+    #[gpui::test]
+    fn extension_settings_are_shown_and_reach_the_extension(cx: &mut TestAppContext) {
+        cx.executor().allow_parking();
+        cx.update(|cx| {
+            gpui_component::init(cx);
+            language::register_grammars();
+            crate::workbench_window::init(cx);
+        });
+        let folder = tempfile::tempdir().unwrap();
+        let data = std::fs::canonicalize(folder.path()).unwrap();
+        let root = crate::paths::extensions_dir(&data).join("keel-tests.ghost-1.0.0");
+        std::fs::create_dir_all(&root).unwrap();
+        std::fs::write(
+            root.join("package.json"),
+            r#"{ "name": "ghost", "displayName": "Ghost", "publisher": "keel-tests",
+                 "version": "1.0.0", "main": "./extension.js", "activationEvents": ["*"],
+                 "contributes": { "configuration": { "title": "Ghost", "properties": {
+                    "ghost.speed": { "type": "string", "default": "human",
+                        "enum": ["human", "fast", "turbo"],
+                        "enumDescriptions": ["Like a person", "Quick", "Very quick"],
+                        "description": "How fast it types." },
+                    "ghost.seen": { "type": "string", "default": "" },
+                    "ghost.askOnStart": { "type": "boolean", "default": false }
+                 } } } }"#,
+        )
+        .unwrap();
+        // It writes down every speed it is told about.
+        std::fs::write(
+            root.join("extension.js"),
+            r#"const vscode = require("vscode");
+               const ghost = () => vscode.workspace.getConfiguration("ghost");
+               exports.activate = async (context) => {
+                 context.subscriptions.push(vscode.workspace.onDidChangeConfiguration((event) => {
+                   if (event.affectsConfiguration("ghost.speed")) {
+                     ghost().update("seen", ghost().get("speed"), true);
+                   }
+                 }));
+                 await ghost().update("seen", "ready", true);
+               };"#,
+        )
+        .unwrap();
+        let project = data.join("progetto");
+        std::fs::create_dir_all(&project).unwrap();
+        let settings_file = crate::paths::user_settings_file(&data);
+        std::fs::write(&settings_file, "{\n    \"keel.language\": \"en\"\n}\n").unwrap();
+        let settings = Settings::load(&settings_file, None);
+        let mut setup = crate::windows::extension_setup(&data).unwrap();
+        setup.marketplace = None;
+        let opening = Opening::new(Some(project), None).with_data_dir(data.clone());
+        let (view, cx) = cx.add_window_view(|window, cx| {
+            Workbench::new(opening, settings, Some(setup), window, cx)
+        });
+        let seen = |speed: &str| {
+            let wanted = format!("\"ghost.seen\": \"{speed}\"");
+            let file = settings_file.clone();
+            move || std::fs::read_to_string(&file).unwrap().contains(&wanted)
+        };
+        let wait = |cx: &mut VisualTestContext, done: &dyn Fn() -> bool, what: &str| {
+            let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
+            while !done() {
+                assert!(std::time::Instant::now() < deadline, "timed out: {what}");
+                cx.run_until_parked();
+                std::thread::sleep(std::time::Duration::from_millis(20));
+            }
+        };
+        wait(cx, &seen("ready"), "the extension starts");
+
+        // Its page, and the way there from its menu.
+        view.read_with(cx, |view, _| {
+            let pages = view.extension_setting_pages();
+            assert_eq!(pages.len(), 1);
+            let (id, name, sections) = &pages[0];
+            assert_eq!((id.as_str(), name.as_str()), ("keel-tests.ghost", "Ghost"));
+            let titles: Vec<&str> = sections[0]
+                .settings
+                .iter()
+                .map(|setting| setting.title.as_str())
+                .collect();
+            assert_eq!(titles, ["Ask On Start", "Seen", "Speed"]);
+            let speed = Field::from_extension(&sections[0].settings[2], Some(&json!("fast")));
+            assert_eq!(speed.description, "How fast it types.\nfast: Quick");
+            let menu: Vec<&str> = view
+                .extension_menu_items(id)
+                .iter()
+                .map(|(label, _)| *label)
+                .collect();
+            assert_eq!(
+                menu,
+                ["Disable", "Disable (Workspace)", "Settings", "Uninstall"]
+            );
+        });
+        view.update_in(cx, |view, window, cx| {
+            view.run_extension_menu(
+                &super::super::extensions_view::ExtensionMenu {
+                    id: "keel-tests.ghost".to_owned(),
+                    command: super::super::extensions_view::ExtensionCommand::Settings,
+                },
+                window,
+                cx,
+            )
+        });
+        cx.update(|window, _| window.refresh());
+        cx.run_until_parked();
+        view.read_with(cx, |view, _| {
+            assert!(view.documents.contains_key(PageKind::Settings.uri()));
+            assert_eq!(view.settings_jump_page(), Some(6), "after Keel's six pages");
+        });
+
+        // From the page.
+        view.update_in(cx, |view, window, cx| {
+            view.change_setting("ghost.speed", Some(json!("fast")), window, cx)
+        });
+        wait(cx, &seen("fast"), "the change from the page");
+
+        // From settings.json, edited and saved by hand.
+        view.update_in(cx, |view, window, cx| view.open_settings_json(window, cx));
+        let text = std::fs::read_to_string(&settings_file)
+            .unwrap()
+            .replace("\"ghost.speed\": \"fast\"", "\"ghost.speed\": \"turbo\"");
+        view.update_in(cx, |view, window, cx| {
+            let editor = view.active_editor().unwrap();
+            editor.update(cx, |editor, cx| editor.set_value(text, window, cx));
+            let uri = view.panes[view.active].uri.clone();
+            view.sync_document_from(&uri, None, window, cx);
+            view.save_file(&uri, None, window, cx);
+        });
+        wait(cx, &seen("turbo"), "the change saved by hand");
+        assert_eq!(
+            view.read_with(cx, |view, _| view
+                .settings
+                .string("ghost.speed")
+                .map(str::to_owned)),
+            Some("turbo".to_owned())
+        );
+
+        // Reset: out of the file, so the extension's default counts again.
+        view.update_in(cx, |view, window, cx| {
+            view.change_setting("ghost.speed", None, window, cx)
+        });
+        wait(cx, &seen("human"), "the default after a reset");
     }
 }

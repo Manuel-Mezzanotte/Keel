@@ -2,6 +2,7 @@
 //! `vscode` bridge that extensions talk to.
 
 pub mod color_theme;
+pub mod configuration;
 pub mod cursor;
 mod host;
 pub mod icon_theme;

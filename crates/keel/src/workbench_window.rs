@@ -464,6 +464,9 @@ pub struct Workbench {
     agent_width: f32,
     /// The sidebar's width, dragged from its edge.
     sidebar_width: f32,
+    /// The page the Settings tab opens on: a counter that changes at each
+    /// jump, and the extension whose settings to show, if any.
+    settings_jump: (usize, Option<String>),
     agent_terminal: Option<claude_code::AgentTerminal>,
     /// The staged text of files, for the margin, by path in the repository.
     git_baselines: HashMap<String, Option<String>>,
@@ -660,6 +663,7 @@ impl Workbench {
             panel_maximized: false,
             agent_width: claude_code::AGENT_WIDTH,
             sidebar_width: shell::SIDEBAR_WIDTH,
+            settings_jump: (0, None),
             agent_terminal: None,
             npm_scripts: None,
             npm_collapsed: false,

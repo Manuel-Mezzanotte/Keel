@@ -113,6 +113,8 @@ pub enum ExtensionCommand {
     Enable,
     Disable,
     DisableInProject,
+    /// The extension's page in the Settings tab.
+    Settings,
     Uninstall,
 }
 
@@ -304,12 +306,16 @@ impl Workbench {
         cx.notify();
     }
 
-    fn run_extension_menu(
+    pub(super) fn run_extension_menu(
         &mut self,
         action: &ExtensionMenu,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
+        if action.command == ExtensionCommand::Settings {
+            self.open_extension_settings(&action.id, window, cx);
+            return;
+        }
         let Some(data) = self.extension_data.clone() else {
             return;
         };
@@ -323,6 +329,7 @@ impl Workbench {
         };
         let project = self.project.root.clone();
         match action.command {
+            ExtensionCommand::Settings => {}
             ExtensionCommand::Enable
             | ExtensionCommand::Disable
             | ExtensionCommand::DisableInProject => {
@@ -771,7 +778,7 @@ impl Workbench {
     // -----------------------------------------------------------------
     // Drawing
 
-    fn extension_menu_items(&self, id: &str) -> Vec<(&'static str, ExtensionMenu)> {
+    pub(super) fn extension_menu_items(&self, id: &str) -> Vec<(&'static str, ExtensionMenu)> {
         let strings = self.strings();
         let item = |command: ExtensionCommand| ExtensionMenu {
             id: id.to_owned(),
@@ -788,6 +795,9 @@ impl Workbench {
             }
         } else {
             items.push((strings.extension_enable, item(ExtensionCommand::Enable)));
+        }
+        if self.extension_has_settings(id) {
+            items.push((strings.extension_settings, item(ExtensionCommand::Settings)));
         }
         items.push((
             strings.extension_uninstall,

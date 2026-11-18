@@ -1890,6 +1890,19 @@ La prima volta che apri un file di un linguaggio, Keel scarica il suo server: ne
   - Un test misura la finestra vera: a 240 e a 420 punti le etichette di un nome corto e di uno lungo stanno nello stesso punto, vicino al bordo. Senza la correzione cadevano a 135 e a 601 punti.
 - **App e DMG:** ricostruendo l'app mentre la usi, il Keel aperto non si chiude più. Prima lo script copiava sopra l'eseguibile in uso; ora ne scrive uno nuovo e lo sostituisce in un colpo solo.
 
+**Estensioni: impostazioni, temi e icone** (dopo la prova del 18 novembre)
+- **Impostazioni delle estensioni:**
+  - nella pagina Impostazioni, dopo le sei pagine di Keel, c'è una pagina per ogni estensione accesa che dichiara impostazioni (per VSAuto Ghost sono 20);
+  - ogni impostazione ha il controllo adatto: interruttore per sì e no, menu per le scelte, numero, testo; liste e oggetti con «Modifica in settings.json»;
+  - i titoli si fanno dalla chiave come in VS Code (`vsauto.multiSelectionRewrite.enabled` → «Multi Selection Rewrite › Enabled»), in ordine di chiave, prima quelle con un `order`; quelle deprecate non compaiono;
+  - nei menu a scelta, sotto la descrizione compare quella della scelta attuale;
+  - «Ripristina» toglie l'impostazione dal tuo `settings.json`, così vale di nuovo il valore predefinito;
+  - l'ingranaggio dell'estensione e la sua scheda hanno «Impostazioni», che apre la scheda Impostazioni sulla sua pagina.
+- **I cambi arrivano subito alle estensioni.** Prima un'estensione leggeva le impostazioni solo all'avvio: cambiarle dalla pagina o da `settings.json` contava solo riaprendo la finestra.
+  - Ora ogni cambio dalla pagina arriva all'estensione, che riceve l'evento `onDidChangeConfiguration` come in VS Code.
+  - Salvando a mano `settings.json` (tuo o del progetto) Keel lo rilegge e applica le chiavi cambiate: tema, carattere, tema di icone, server dei linguaggi ed estensioni.
+  - Un file salvato a metà, con un errore, non cambia niente: l'errore compare nell'Output e restano i valori di prima.
+
 **Le tue prove a mano della fase 12**
 1. **Crash:** in un terminale lancia `kill -9` sul processo di Keel (`pgrep -x keel`), poi riapri Keel. Nella barra di stato compare «Keel non si è chiuso normalmente l'ultima volta», e le modifiche non salvate sono tornate.
 2. **Pieghe:** in un file con funzioni, Cmd+Alt+[ e Cmd+Alt+], poi Cmd+K Cmd+0 e Cmd+K Cmd+J.

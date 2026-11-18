@@ -202,6 +202,21 @@ impl Workbench {
         });
     }
 
+    /// Loads the icon theme the settings name now.
+    pub(super) fn reload_icon_theme(&mut self) {
+        let running: Vec<InstalledExtension> = self
+            .installed
+            .iter()
+            .filter(|extension| self.extension_enabled(&extension.id()))
+            .cloned()
+            .collect();
+        let wanted = self
+            .settings
+            .string("workbench.iconTheme")
+            .map(str::to_owned);
+        self.load_icon_theme(&running, wanted);
+    }
+
     /// The picture the icon theme has for a row of the Explorer.
     pub(super) fn themed_icon(
         &self,

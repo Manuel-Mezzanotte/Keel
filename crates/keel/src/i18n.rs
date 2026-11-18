@@ -458,6 +458,8 @@ pub struct Strings {
     pub extension_disable: &'static str,
     pub extension_disable_project: &'static str,
     pub extension_uninstall: &'static str,
+    pub extension_settings: &'static str,
+    extension_settings_from_text: &'static str,
     pub extension_disabled_badge: &'static str,
     pub extension_missing: &'static str,
     pub extension_commands: &'static str,
@@ -885,6 +887,10 @@ impl Strings {
     pub fn extension_uninstall_question(&self, name: &str) -> String {
         self.extension_uninstall_question_text
             .replace("{name}", name)
+    }
+
+    pub fn extension_settings_from(&self, id: &str) -> String {
+        self.extension_settings_from_text.replace("{id}", id)
     }
 
     pub fn extension_tab_title(&self, name: &str) -> String {
@@ -1434,6 +1440,8 @@ pub const ITALIAN: Strings = Strings {
     extension_disable: "Disattiva",
     extension_disable_project: "Disattiva per questo progetto",
     extension_uninstall: "Disinstalla",
+    extension_settings: "Impostazioni",
+    extension_settings_from_text: "Dall'estensione {id}.",
     extension_disabled_badge: "Disattivata",
     extension_missing: "Questa estensione non è più installata.",
     extension_commands: "comandi",
@@ -1941,6 +1949,8 @@ pub const ENGLISH: Strings = Strings {
     extension_disable: "Disable",
     extension_disable_project: "Disable (Workspace)",
     extension_uninstall: "Uninstall",
+    extension_settings: "Settings",
+    extension_settings_from_text: "From the extension {id}.",
     extension_disabled_badge: "Disabled",
     extension_missing: "This extension is no longer installed.",
     extension_commands: "commands",

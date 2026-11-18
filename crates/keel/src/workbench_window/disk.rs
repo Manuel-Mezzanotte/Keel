@@ -201,9 +201,19 @@ impl Workbench {
         let Backing::File(file) = &mut document.backing else {
             return;
         };
+        let saved = file.path().to_path_buf();
         match file.save(&text) {
             Ok(()) => {
                 document.modified = false;
+                // A settings file saved by hand counts at once.
+                if self
+                    .settings
+                    .files()
+                    .iter()
+                    .any(|settings| same_file(settings, &saved) || same_file(&saved, settings))
+                {
+                    self.reload_settings(window, cx);
+                }
                 self.notify_host("documents/saved", json!({ "uri": uri }));
                 self.forget_backup(uri);
                 self.refresh_title(window);

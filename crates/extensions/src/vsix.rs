@@ -148,6 +148,22 @@ mod tests {
         );
         assert_eq!(manifest.keybindings.len(), 24);
         assert_eq!(manifest.configuration_defaults().len(), 20);
+        // Its settings, as the Settings tab shows them.
+        let sections = crate::configuration::sections(manifest.raw());
+        assert_eq!(sections.len(), 1);
+        let settings = &sections[0].settings;
+        assert_eq!(settings.len(), 20);
+        let typing = settings
+            .iter()
+            .find(|setting| setting.key == "vsauto.defaultTypingMode")
+            .unwrap();
+        assert_eq!(typing.title, "Default Typing Mode");
+        let crate::configuration::SettingKind::Choice(choices) = &typing.kind else {
+            panic!("a choice: {:?}", typing.kind);
+        };
+        let values: Vec<&str> = choices.iter().map(|choice| choice.value.as_str()).collect();
+        assert_eq!(values, ["human", "normal", "fast", "turbo"]);
+        assert!(settings.iter().all(|setting| !setting.description.is_empty()));
     }
 
     #[test]

@@ -177,13 +177,15 @@ impl Workbench {
         cx: &mut Context<Self>,
     ) {
         let mut problems = Vec::new();
+        let mut imported = Vec::new();
         for (key, value) in &plan.settings {
             if let Err(error) = self.settings.update_user(key, Some(value.clone())) {
                 problems.push(format!("{key}: {error:#}"));
             } else {
-                self.apply_setting(key, window, cx);
+                imported.push(key.clone());
             }
         }
+        self.settings_changed(&imported, window, cx);
         if !plan.keybindings.is_empty()
             && let Some(file) = self
                 .data_dir
@@ -219,7 +221,6 @@ impl Workbench {
         } else {
             format!("{done} {}", strings.cursor_import_problems)
         });
-        self.language_settings_changed();
         cx.notify();
     }
 }

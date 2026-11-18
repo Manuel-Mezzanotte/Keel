@@ -126,6 +126,39 @@ impl Settings {
         )
     }
 
+    /// The files the settings are read from: the user's, then the project's.
+    pub fn files(&self) -> Vec<PathBuf> {
+        let mut files = vec![self.user_file.clone()];
+        if let Some(root) = &self.project_root {
+            files.push(root.join(".vscode/settings.json"));
+            files.push(root.join(".keel/settings.json"));
+        }
+        files
+    }
+
+    /// Reads the files again, as after one is saved by hand, and returns
+    /// the keys whose winning value changed, added or removed. A file that
+    /// cannot be read, such as one saved half-written, changes nothing: its
+    /// problems come back instead, and the values stay as they were.
+    pub fn reload(&mut self) -> Result<Vec<String>, Vec<String>> {
+        let fresh = Self::load(self.user_file.clone(), self.project_root.as_deref());
+        if !fresh.warnings.is_empty() {
+            return Err(fresh.warnings);
+        }
+        let before = self.merged();
+        *self = fresh;
+        let after = self.merged();
+        let mut changed: Vec<String> = before
+            .keys()
+            .chain(after.keys())
+            .filter(|key| before.get(*key) != after.get(*key))
+            .cloned()
+            .collect();
+        changed.sort();
+        changed.dedup();
+        Ok(changed)
+    }
+
     /// Whether a project is open, with settings of its own.
     pub fn has_project(&self) -> bool {
         self.project_root.is_some()
@@ -264,6 +297,40 @@ mod tests {
         );
         assert!(settings.warnings.is_empty());
         assert_eq!(settings.merged()["editor.fontSize"], 16);
+    }
+
+    #[test]
+    fn a_file_saved_by_hand_is_read_again() {
+        let folder = tempfile::tempdir().unwrap();
+        let user = folder.path().join("settings.json");
+        let project = folder.path().join("project");
+        write(
+            &user,
+            r#"{ "editor.fontSize": 15, "ghost.speed": "human" }"#,
+        );
+        let mut settings = Settings::load(&user, Some(&project));
+        assert_eq!(settings.files().len(), 3);
+        assert_eq!(settings.files()[0], user);
+        write(
+            &user,
+            r#"{ "editor.fontSize": 15, "ghost.speed": "fast", "ghost.new": 1 }"#,
+        );
+        write(
+            &project.join(".keel/settings.json"),
+            r#"{ "editor.fontSize": 18 }"#,
+        );
+        assert_eq!(
+            settings.reload().unwrap(),
+            ["editor.fontSize", "ghost.new", "ghost.speed"]
+        );
+        assert_eq!(settings.string("ghost.speed"), Some("fast"));
+        // Half-written: nothing changes, and the problem is told.
+        write(&user, r#"{ "ghost.speed": "#);
+        assert_eq!(settings.reload().unwrap_err().len(), 1);
+        assert_eq!(settings.string("ghost.speed"), Some("fast"));
+        write(&user, "{}");
+        assert_eq!(settings.reload().unwrap(), ["ghost.new", "ghost.speed"]);
+        assert_eq!(settings.reload().unwrap(), Vec::<String>::new());
     }
 
     #[test]
