@@ -7,6 +7,7 @@
 use std::collections::HashSet;
 
 use extensions::marketplace::{self, Listing};
+use extensions::{color_theme, icon_theme};
 use gpui::{AnyElement, Entity, PathPromptOptions, StatefulInteractiveElement as _, img};
 use gpui_component::button::{Button, ButtonVariants as _};
 use gpui_component::input::{Input, InputEvent, InputState};
@@ -115,6 +116,9 @@ pub enum ExtensionCommand {
     DisableInProject,
     /// The extension's page in the Settings tab.
     Settings,
+    /// Choose one of its color themes, or of its file icon themes.
+    ColorTheme,
+    IconTheme,
     Uninstall,
 }
 
@@ -123,6 +127,13 @@ pub enum ExtensionCommand {
 pub struct ExtensionMenu {
     pub id: String,
     pub command: ExtensionCommand,
+}
+
+/// Which themes of an extension to offer.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(super) enum ThemeKind {
+    Color,
+    Icon,
 }
 
 /// The tab with an extension's details.
@@ -279,9 +290,17 @@ impl Workbench {
         let Some(data) = self.extension_data.clone() else {
             return;
         };
+        let known: Vec<String> = self
+            .installed
+            .iter()
+            .map(|extension| extension.id().to_lowercase())
+            .collect();
         match crate::paths::install_extension(&data, path) {
             Ok(installed) => {
                 let id = installed.id();
+                // New, rather than a new version, and not one of many
+                // coming from Cursor: its themes are offered at once.
+                let offer = !known.contains(&id.to_lowercase()) && self.store.cursor.is_none();
                 for old in std::fs::read_dir(crate::paths::extensions_dir(&data))
                     .into_iter()
                     .flatten()
@@ -300,6 +319,9 @@ impl Workbench {
                         .extension_installed(&display_name(&installed)),
                 );
                 self.restart_extensions(window, cx);
+                if offer {
+                    self.offer_new_themes(&id, window, cx);
+                }
             }
             Err(error) => self.report(format!("{error:#}")),
         }
@@ -312,9 +334,20 @@ impl Workbench {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        if action.command == ExtensionCommand::Settings {
-            self.open_extension_settings(&action.id, window, cx);
-            return;
+        match action.command {
+            ExtensionCommand::Settings => {
+                self.open_extension_settings(&action.id, window, cx);
+                return;
+            }
+            ExtensionCommand::ColorTheme => {
+                self.offer_extension_themes(&action.id, ThemeKind::Color, false, window, cx);
+                return;
+            }
+            ExtensionCommand::IconTheme => {
+                self.offer_extension_themes(&action.id, ThemeKind::Icon, false, window, cx);
+                return;
+            }
+            _ => {}
         }
         let Some(data) = self.extension_data.clone() else {
             return;
@@ -329,7 +362,9 @@ impl Workbench {
         };
         let project = self.project.root.clone();
         match action.command {
-            ExtensionCommand::Settings => {}
+            ExtensionCommand::Settings
+            | ExtensionCommand::ColorTheme
+            | ExtensionCommand::IconTheme => {}
             ExtensionCommand::Enable
             | ExtensionCommand::Disable
             | ExtensionCommand::DisableInProject => {
@@ -379,6 +414,89 @@ impl Workbench {
                 .detach();
             }
         }
+    }
+
+    /// Offers the themes of an extension just installed, as VS Code does:
+    /// its color themes, then its file icon themes.
+    fn offer_new_themes(&mut self, id: &str, window: &mut Window, cx: &mut Context<Self>) {
+        let Some(extension) = self
+            .installed
+            .iter()
+            .find(|extension| extension.id().eq_ignore_ascii_case(id))
+        else {
+            return;
+        };
+        let colors = !color_theme::color_themes(extension).is_empty();
+        let icons = !icon_theme::icon_themes(extension).is_empty();
+        if colors {
+            self.offer_extension_themes(id, ThemeKind::Color, icons, window, cx);
+        } else if icons {
+            self.offer_extension_themes(id, ThemeKind::Icon, false, window, cx);
+        }
+    }
+
+    /// A list of an extension's color or icon themes: the one chosen is
+    /// used at once; "Keep as Is", or Escape, changes nothing. With
+    /// `then_icons`, its icon themes are offered next.
+    pub(super) fn offer_extension_themes(
+        &mut self,
+        id: &str,
+        kind: ThemeKind,
+        then_icons: bool,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let Some(extension) = self
+            .installed
+            .iter()
+            .find(|extension| extension.id().eq_ignore_ascii_case(id))
+        else {
+            return;
+        };
+        let strings = self.strings();
+        // What is saved, and what the list shows.
+        let (title, themes): (&str, Vec<(String, String)>) = match kind {
+            ThemeKind::Color => (
+                strings.choose_theme,
+                color_theme::color_themes(extension)
+                    .into_iter()
+                    .map(|theme| (theme.label.clone(), theme.label))
+                    .collect(),
+            ),
+            ThemeKind::Icon => (
+                strings.choose_icon_theme,
+                icon_theme::icon_themes(extension)
+                    .into_iter()
+                    .map(|theme| (theme.id, theme.label))
+                    .collect(),
+            ),
+        };
+        if themes.is_empty() {
+            return;
+        }
+        let mut items: Vec<PickItem> = themes
+            .iter()
+            .map(|(_, label)| PickItem::new(label.clone()))
+            .collect();
+        items.push(PickItem::new(strings.keep_as_is));
+        let chosen = quick_pick::show(Some(title.to_owned()), None, items, window, cx);
+        let id = id.to_owned();
+        cx.spawn_in(window, async move |this, cx| {
+            let index = chosen.await.ok().flatten();
+            this.update_in(cx, |this, window, cx| {
+                if let Some((value, _)) = index.and_then(|index| themes.get(index)) {
+                    match kind {
+                        ThemeKind::Color => this.set_theme(value, window, cx),
+                        ThemeKind::Icon => this.set_icon_theme(Some(value.clone()), cx),
+                    }
+                }
+                if then_icons {
+                    this.offer_extension_themes(&id, ThemeKind::Icon, false, window, cx);
+                }
+            })
+            .ok();
+        })
+        .detach();
     }
 
     /// Opens the tab with an extension's details and README.
@@ -785,6 +903,29 @@ impl Workbench {
             command,
         };
         let mut items = Vec::new();
+        // A theme extension is there for its themes: they come first.
+        if let Some(extension) = self
+            .extension_enabled(id)
+            .then(|| {
+                self.installed
+                    .iter()
+                    .find(|extension| extension.id().eq_ignore_ascii_case(id))
+            })
+            .flatten()
+        {
+            if !color_theme::color_themes(extension).is_empty() {
+                items.push((
+                    strings.extension_set_color_theme,
+                    item(ExtensionCommand::ColorTheme),
+                ));
+            }
+            if !icon_theme::icon_themes(extension).is_empty() {
+                items.push((
+                    strings.extension_set_icon_theme,
+                    item(ExtensionCommand::IconTheme),
+                ));
+            }
+        }
         if self.extension_enabled(id) {
             items.push((strings.extension_disable, item(ExtensionCommand::Disable)));
             if self.project.root.is_some() {
@@ -1158,6 +1299,134 @@ mod tests {
             assert!(Instant::now() < deadline, "timed out waiting for {what}");
             std::thread::sleep(Duration::from_millis(20));
         }
+    }
+
+    /// A package with a color theme and a file icon theme.
+    fn theme_vsix(folder: &Path) -> PathBuf {
+        use std::io::Write as _;
+        let path = folder.join("looks.vsix");
+        let mut zip = zip::ZipWriter::new(std::fs::File::create(&path).unwrap());
+        for (name, text) in [
+            (
+                "extension/package.json",
+                r#"{ "name": "looks", "displayName": "Looks", "publisher": "someone",
+                     "version": "1.0.0", "contributes": {
+                       "themes": [{ "label": "Ghost Night", "uiTheme": "vs-dark", "path": "./night.json" }],
+                       "iconThemes": [{ "id": "ghost-icons", "label": "Ghost Icons", "path": "./icons.json" }]
+                     } }"#,
+            ),
+            (
+                "extension/night.json",
+                r##"{ "colors": { "editor.background": "#101820", "editor.foreground": "#E0E0E0" } }"##,
+            ),
+            (
+                "extension/icons.json",
+                r#"{ "iconDefinitions": { "file": { "iconPath": "./file.svg" } }, "file": "file" }"#,
+            ),
+            (
+                "extension/file.svg",
+                r#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16"/>"#,
+            ),
+        ] {
+            zip.start_file(name, zip::write::SimpleFileOptions::default())
+                .unwrap();
+            zip.write_all(text.as_bytes()).unwrap();
+        }
+        zip.finish().unwrap();
+        path
+    }
+
+    /// As in VS Code: once installed, a theme extension offers its color
+    /// themes and then its icon themes; its menu offers them again.
+    #[gpui::test]
+    fn a_theme_extension_offers_its_themes_once_installed(cx: &mut TestAppContext) {
+        cx.executor().allow_parking();
+        cx.update(|cx| {
+            gpui_component::init(cx);
+            language::register_grammars();
+            crate::theme::init(cx);
+            init(cx);
+        });
+        let data = tempfile::tempdir().unwrap();
+        let folder = tempfile::tempdir().unwrap();
+        let package = theme_vsix(folder.path());
+        let settings_file = folder.path().join("settings.json");
+        std::fs::write(&settings_file, r#"{ "keel.language": "en" }"#).unwrap();
+        let path = folder.path().join("notes.md");
+        std::fs::write(&path, "# Notes\n").unwrap();
+        let mut setup = crate::windows::extension_setup(data.path()).unwrap();
+        setup.marketplace = None;
+        let document = Document::open(&path).unwrap();
+        let mut workbench = None;
+        let (_root, cx) = cx.add_window_view(|window, cx| {
+            let settings = Settings::load(&settings_file, None);
+            let view =
+                cx.new(|cx| Workbench::new(Some(document), settings, Some(setup), window, cx));
+            workbench = Some(view.clone());
+            gpui_component::Root::new(view, window, cx)
+        });
+        let view = workbench.unwrap();
+        let open =
+            |cx: &mut VisualTestContext| cx.update(|window, cx| window.has_active_dialog(cx));
+        let setting = |view: &Entity<Workbench>, cx: &mut VisualTestContext, key: &str| {
+            view.read_with(cx, |view, _| view.settings.string(key).map(str::to_owned))
+        };
+
+        view.update_in(cx, |view, window, cx| {
+            view.install_vsix(&package, window, cx)
+        });
+        cx.run_until_parked();
+        assert!(open(cx), "its color themes are offered");
+        cx.simulate_input("Ghost Night");
+        cx.simulate_keystrokes("enter");
+        cx.run_until_parked();
+        assert_eq!(
+            setting(&view, cx, "workbench.colorTheme").as_deref(),
+            Some("Ghost Night")
+        );
+        assert!(open(cx), "then its icon themes");
+        cx.simulate_input("Keep");
+        cx.simulate_keystrokes("enter");
+        cx.run_until_parked();
+        assert!(!open(cx));
+        assert_eq!(setting(&view, cx, "workbench.iconTheme"), None);
+
+        // Its menu has them first, and sets them.
+        let menu: Vec<&str> = view.read_with(cx, |view, _| {
+            view.extension_menu_items("someone.looks")
+                .into_iter()
+                .map(|(label, _)| label)
+                .collect()
+        });
+        assert_eq!(
+            menu,
+            [
+                "Set Color Theme",
+                "Set File Icon Theme",
+                "Disable",
+                "Disable (Workspace)",
+                "Uninstall"
+            ]
+        );
+        view.update_in(cx, |view, window, cx| {
+            view.run_extension_menu(
+                &ExtensionMenu {
+                    id: "someone.looks".to_owned(),
+                    command: ExtensionCommand::IconTheme,
+                },
+                window,
+                cx,
+            )
+        });
+        cx.run_until_parked();
+        cx.simulate_input("Ghost Icons");
+        cx.simulate_keystrokes("enter");
+        cx.run_until_parked();
+        assert_eq!(
+            setting(&view, cx, "workbench.iconTheme").as_deref(),
+            Some("ghost-icons")
+        );
+        assert!(view.read_with(cx, |view, _| view.icon_theme.is_some()));
     }
 
     fn running_commands(view: &Entity<Workbench>, cx: &mut VisualTestContext) -> usize {

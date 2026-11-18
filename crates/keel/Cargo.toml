@@ -43,6 +43,7 @@ workbench.workspace = true
 gpui = { workspace = true, features = ["test-support"] }
 tempfile.workspace = true
 tungstenite = "0.30.0"
+zip.workspace = true
 
 [lints]
 workspace = true

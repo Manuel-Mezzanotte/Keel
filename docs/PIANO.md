@@ -1902,6 +1902,11 @@ La prima volta che apri un file di un linguaggio, Keel scarica il suo server: ne
   - Ora ogni cambio dalla pagina arriva all'estensione, che riceve l'evento `onDidChangeConfiguration` come in VS Code.
   - Salvando a mano `settings.json` (tuo o del progetto) Keel lo rilegge e applica le chiavi cambiate: tema, carattere, tema di icone, server dei linguaggi ed estensioni.
   - Un file salvato a metà, con un errore, non cambia niente: l'errore compare nell'Output e restano i valori di prima.
+- **Temi subito dopo l'installazione**, come in VS Code:
+  - installando un'estensione nuova con temi colori, si apre la lista dei suoi temi: scegliendone uno si vede subito; «Lascia com'è» o Esc non cambiano niente;
+  - se porta anche temi di icone (o solo quelli, come Material Icon Theme), subito dopo si apre la lista delle icone;
+  - non succede per gli aggiornamenti né per le estensioni che arrivano insieme da «Importa da Cursor»;
+  - l'ingranaggio e la scheda dell'estensione hanno in cima «Imposta tema colori» e «Imposta tema icona file», che riaprono le stesse liste.
 
 **Le tue prove a mano della fase 12**
 1. **Crash:** in un terminale lancia `kill -9` sul processo di Keel (`pgrep -x keel`), poi riapri Keel. Nella barra di stato compare «Keel non si è chiuso normalmente l'ultima volta», e le modifiche non salvate sono tornate.

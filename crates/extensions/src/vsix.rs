@@ -163,7 +163,11 @@ mod tests {
         };
         let values: Vec<&str> = choices.iter().map(|choice| choice.value.as_str()).collect();
         assert_eq!(values, ["human", "normal", "fast", "turbo"]);
-        assert!(settings.iter().all(|setting| !setting.description.is_empty()));
+        assert!(
+            settings
+                .iter()
+                .all(|setting| !setting.description.is_empty())
+        );
     }
 
     #[test]
