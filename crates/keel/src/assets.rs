@@ -34,7 +34,24 @@ gpui_kit_assets::icon_assets!(
         Info,
         Pencil,
         Clock,
-        Square
+        Square,
+        GitGraph,
+        Keyboard,
+        Tag,
+        TextSearch,
+        Hash,
+        AtSign,
+        CornerDownRight,
+        Eraser,
+        Funnel,
+        Download,
+        PackagePlus,
+        Import,
+        RotateCcw,
+        Layers,
+        LayoutPanelLeft,
+        Palette,
+        Gauge
     ]
 );
 
@@ -72,6 +89,47 @@ mod tests {
     use gpui_kit_assets::IconName;
 
     use super::*;
+
+    /// Every `IconName::…` in Keel's code draws: an icon left out of the
+    /// bundle shows as an empty square, and nothing else would notice.
+    #[test]
+    fn every_icon_keel_uses_is_bundled() {
+        fn files(folder: &std::path::Path, found: &mut Vec<std::path::PathBuf>) {
+            for entry in std::fs::read_dir(folder).unwrap().flatten() {
+                let path = entry.path();
+                if path.is_dir() {
+                    files(&path, found);
+                } else if path.extension().is_some_and(|ext| ext == "rs") {
+                    found.push(path);
+                }
+            }
+        }
+        let mut sources = Vec::new();
+        files(
+            &std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src"),
+            &mut sources,
+        );
+        let mut missing = Vec::new();
+        for source in sources {
+            let text = std::fs::read_to_string(&source).unwrap();
+            for (at, _) in text.match_indices("IconName::") {
+                let name: String = text[at + "IconName::".len()..]
+                    .chars()
+                    .take_while(|c| c.is_ascii_alphanumeric())
+                    .collect();
+                let Some(icon) = IconName::ALL
+                    .iter()
+                    .find(|icon| format!("{icon:?}") == name)
+                else {
+                    continue;
+                };
+                if KeelAssets.load(&icon.path()).unwrap().is_none() && !missing.contains(&name) {
+                    missing.push(name);
+                }
+            }
+        }
+        assert!(missing.is_empty(), "not bundled: {missing:?}");
+    }
 
     #[test]
     fn the_layout_icons_and_the_logo_load() {
