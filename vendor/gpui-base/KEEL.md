@@ -9,7 +9,7 @@ additions Keel needs. Each change is marked `KEEL:` in the code:
   functions use it.
 - `editor/display_map/display_map.rs`: `DisplayMap::fold_candidates`.
 - `base/state.rs`: `set_folded_at_line`, `unfold_all`, `selected_ranges`,
-  `set_selected_ranges`.
+  `set_selected_ranges`, `visible_buffer_lines`, `gutter_width`.
 
 To move to a new version: copy the new crate here again, redo the changes
 above (search the old copy for `KEEL:`), and run Keel's tests.

@@ -186,6 +186,22 @@ impl Workbench {
             this.sync_preview_from_editor(&editor, cx);
         });
         self.underline_editor(uri, &editor, cx);
+        // VS Code has both on unless the settings say otherwise.
+        let on = |key: &str| {
+            self.settings
+                .get(key)
+                .and_then(Value::as_bool)
+                .unwrap_or(true)
+        };
+        let font_size = self.font_size;
+        let sticky = on("editor.stickyScroll.enabled").then(|| {
+            let editor = editor.clone();
+            cx.new(|cx| editor_overlays::StickyScroll::new(editor, font_size, cx))
+        });
+        let minimap = on("editor.minimap.enabled").then(|| {
+            let editor = editor.clone();
+            cx.new(|cx| editor_overlays::Minimap::new(editor, cx))
+        });
         Some(Pane {
             editor_id,
             uri: uri.to_owned(),
@@ -194,6 +210,8 @@ impl Workbench {
             gutter: None,
             hunks: Vec::new(),
             completions: Default::default(),
+            sticky,
+            minimap,
             _subscriptions: vec![subscription, cursor],
         })
     }

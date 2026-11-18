@@ -986,15 +986,25 @@ impl Workbench {
                             .key_context(super::EDITOR_CONTEXT)
                             .children(self.render_blame_column(index, cx))
                             .child(
-                                Editor::new(&pane.editor)
-                                    // A library's class is there to read.
-                                    .readonly(matches!(backing, Some(Backing::Library)))
+                                div()
+                                    .relative()
                                     .flex_1()
                                     .min_w_0()
                                     .h_full()
-                                    .bordered(false)
-                                    .text_size(px(self.font_size)),
+                                    .flex()
+                                    .child(
+                                        Editor::new(&pane.editor)
+                                            // A library's class is there to read.
+                                            .readonly(matches!(backing, Some(Backing::Library)))
+                                            .flex_1()
+                                            .min_w_0()
+                                            .h_full()
+                                            .bordered(false)
+                                            .text_size(px(self.font_size)),
+                                    )
+                                    .children(pane.sticky.clone()),
                             )
+                            .children(pane.minimap.clone())
                             .children(self.render_hunk_bar(index, colors, cx))
                             .children(self.render_find_bar(index, colors, cx))
                             .children(self.render_signature_help(index, colors, cx)),

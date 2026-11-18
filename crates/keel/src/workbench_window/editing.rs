@@ -230,6 +230,22 @@ impl Workbench {
         } else {
             (self.font_size + step).clamp(6., 72.)
         };
+        // Sticky lines follow the editor's size.
+        let font_size = self.font_size;
+        let sticky: Vec<_> = self
+            .panes
+            .iter()
+            .filter_map(|pane| pane.sticky.clone())
+            .chain(
+                self.groups
+                    .iter()
+                    .flat_map(|group| &group.tabs)
+                    .filter_map(|tab| tab.parked.as_ref().and_then(|pane| pane.sticky.clone())),
+            )
+            .collect();
+        for sticky in sticky {
+            sticky.update(cx, |sticky, cx| sticky.set_font_size(font_size, cx));
+        }
         cx.notify();
     }
 
@@ -433,6 +449,48 @@ mod tests {
         assert_eq!(folded(&view, cx), [0, 5]);
         cx.simulate_keystrokes("cmd-k cmd-j");
         assert_eq!(folded(&view, cx), Vec::<usize>::new());
+    }
+
+    #[gpui::test]
+    fn sticky_lines_and_the_minimap_follow_the_scroll(cx: &mut TestAppContext) {
+        let mut code = String::from("function lunga() {\n  if (vero) {\n");
+        for line in 0..150 {
+            code.push_str(&format!("    riga({line});\n"));
+        }
+        code.push_str("  }\n}\n");
+        let (_folder, _path, view, cx) = window_on(cx, "app.ts", &code);
+        let (editor, sticky, minimap) = view.read_with(cx, |view, _| {
+            let pane = &view.panes[view.active];
+            (
+                pane.editor.clone(),
+                pane.sticky.clone().unwrap(),
+                pane.minimap.clone().unwrap(),
+            )
+        });
+        let draw = |cx: &mut VisualTestContext| {
+            cx.update(|window, _| window.refresh());
+            cx.run_until_parked();
+        };
+        draw(cx);
+        assert_eq!(
+            sticky.read_with(cx, |sticky, cx| sticky.lines(cx)),
+            Vec::<usize>::new()
+        );
+        // Down in the middle of the `if`: the function and the `if` stay.
+        editor.update(cx, |editor, cx| {
+            let line_height = editor.line_height().unwrap();
+            editor.set_scroll_offset(gpui::point(px(0.), -line_height * 60.), cx);
+        });
+        draw(cx);
+        let top = editor.read_with(cx, |editor, _| editor.visible_buffer_lines().unwrap().start);
+        assert!(top >= 50, "scrolled to {top}");
+        assert_eq!(sticky.read_with(cx, |sticky, cx| sticky.lines(cx)), [0, 1]);
+        // A click near the top of the minimap goes back up.
+        cx.update(|_, cx| super::editor_overlays::Minimap::scroll_to(&editor, 0., 400., 154, cx));
+        draw(cx);
+        let top = editor.read_with(cx, |editor, _| editor.visible_buffer_lines().unwrap().start);
+        assert_eq!(top, 0);
+        let _ = minimap;
     }
 
     #[gpui::test]

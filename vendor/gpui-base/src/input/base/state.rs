@@ -3554,6 +3554,21 @@ impl<M: InputModeKind> InputBaseState<M> {
         self.last_layout.as_ref().map(|l| l.line_height)
     }
 
+    // KEEL: sticky scroll and the minimap follow the lines in view.
+    /// The lines of the text in view in the last layout, first to last.
+    pub fn visible_buffer_lines(&self) -> Option<std::ops::Range<usize>> {
+        let layout = self.last_layout.as_ref()?;
+        let first = *layout.visible_buffer_lines.first()?;
+        let last = *layout.visible_buffer_lines.last()?;
+        Some(first..last + 1)
+    }
+
+    // KEEL: sticky lines start where the code does.
+    /// The width of the line numbers in the last layout.
+    pub fn gutter_width(&self) -> Option<gpui::Pixels> {
+        self.last_layout.as_ref().map(|layout| layout.line_number_width)
+    }
+
     /// Returns the active selection as a byte range into the text.
     ///
     /// With multiple cursors, this reads only the active selection.

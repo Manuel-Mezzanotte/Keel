@@ -15,6 +15,7 @@ mod cursor_import;
 mod diff_view;
 mod disk;
 mod editing;
+mod editor_overlays;
 pub(crate) mod explorer;
 mod extension_features;
 mod extensions_view;
@@ -310,6 +311,9 @@ struct Pane {
     hunks: Vec<git::Hunk>,
     /// The completions offered last, to finish the one picked.
     completions: Rc<RefCell<language_features::CompletionSession>>,
+    /// Drawn over and beside the editor, when the settings want them.
+    sticky: Option<Entity<editor_overlays::StickyScroll>>,
+    minimap: Option<Entity<editor_overlays::Minimap>>,
     _subscriptions: Vec<Subscription>,
 }
 
