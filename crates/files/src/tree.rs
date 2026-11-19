@@ -38,12 +38,94 @@ pub struct Row {
     pub expanded: bool,
     /// Ignored by git, so shown dimmed.
     pub ignored: bool,
+    /// A file with others nested under it, such as `package.json` with
+    /// its lock file: whether they are shown.
+    pub nested: Option<bool>,
+}
+
+/// How files nest under others, as VS Code's `explorer.fileNesting`: a
+/// parent name, exact or `*.ext`, and the names nested under it, where
+/// `${capture}` is what the parent's `*` matched.
+pub type NestingPatterns = Vec<(String, Vec<String>)>;
+
+/// VS Code's usual nests for web and Rust projects.
+pub fn default_nesting() -> NestingPatterns {
+    let list = |items: &[&str]| items.iter().map(|item| (*item).to_owned()).collect();
+    vec![
+        (
+            "package.json".to_owned(),
+            list(&[
+                "package-lock.json",
+                "yarn.lock",
+                "pnpm-lock.yaml",
+                "pnpm-workspace.yaml",
+                "bun.lockb",
+                "bun.lock",
+                ".npmrc",
+                ".nvmrc",
+                ".yarnrc*",
+            ]),
+        ),
+        ("Cargo.toml".to_owned(), list(&["Cargo.lock"])),
+        (
+            "*.ts".to_owned(),
+            list(&[
+                "${capture}.js",
+                "${capture}.d.ts",
+                "${capture}.js.map",
+                "${capture}.test.ts",
+                "${capture}.spec.ts",
+            ]),
+        ),
+        (
+            "*.tsx".to_owned(),
+            list(&[
+                "${capture}.test.tsx",
+                "${capture}.spec.tsx",
+                "${capture}.module.css",
+                "${capture}.module.scss",
+                "${capture}.stories.tsx",
+            ]),
+        ),
+        (
+            "*.js".to_owned(),
+            list(&[
+                "${capture}.js.map",
+                "${capture}.min.js",
+                "${capture}.test.js",
+            ]),
+        ),
+        (".env".to_owned(), list(&[".env.*", "*.env"])),
+        ("tsconfig.json".to_owned(), list(&["tsconfig.*.json"])),
+    ]
+}
+
+/// What `*` of `pattern` matched in `name`, or `""` for an exact match.
+fn capture<'a>(pattern: &str, name: &'a str) -> Option<&'a str> {
+    match pattern.split_once('*') {
+        None => (pattern == name).then_some(""),
+        Some((start, end)) => name
+            .strip_prefix(start)?
+            .strip_suffix(end)
+            .filter(|middle| !middle.is_empty()),
+    }
+}
+
+/// Whether `name` matches a nested pattern, with `${capture}` filled.
+fn matches_nested(pattern: &str, captured: &str, name: &str) -> bool {
+    let pattern = pattern.replace("${capture}", captured);
+    capture(&pattern, name).is_some()
 }
 
 pub struct FileTree {
     root: PathBuf,
     excluded: GlobSet,
     expanded: HashSet<PathBuf>,
+    /// Folders holding only one folder show as one row, `src/main/java`.
+    compact: bool,
+    /// How files nest, when they do, and the parents shown open.
+    nesting: Option<NestingPatterns>,
+    nests_open: HashSet<PathBuf>,
     /// The contents of the folders read so far.
     listings: HashMap<PathBuf, Vec<Entry>>,
 }
@@ -56,6 +138,9 @@ impl FileTree {
         let mut tree = Self {
             excluded: glob_set(excludes),
             expanded: HashSet::from([root.clone()]),
+            compact: false,
+            nesting: None,
+            nests_open: HashSet::new(),
             listings: HashMap::new(),
             root,
         };
@@ -67,6 +152,46 @@ impl FileTree {
         &self.root
     }
 
+    /// Folders holding only one folder become one row, as VS Code's
+    /// `explorer.compactFolders`.
+    pub fn set_compact(&mut self, compact: bool) {
+        self.compact = compact;
+    }
+
+    /// Files nest under others, or not.
+    pub fn set_nesting(&mut self, nesting: Option<NestingPatterns>) {
+        self.nesting = nesting;
+    }
+
+    /// Shows or hides the files nested under `file`.
+    pub fn toggle_nest(&mut self, file: &Path) {
+        if !self.nests_open.remove(file) {
+            self.nests_open.insert(file.to_path_buf());
+        }
+    }
+
+    /// The file `name` nests under, among `names` of its folder.
+    fn nest_parent<'a>(&self, name: &str, names: &[&'a str]) -> Option<&'a str> {
+        let nesting = self.nesting.as_ref()?;
+        for (parent, children) in nesting {
+            for candidate in names {
+                if *candidate == name {
+                    continue;
+                }
+                let Some(captured) = capture(parent, candidate) else {
+                    continue;
+                };
+                if children
+                    .iter()
+                    .any(|child| matches_nested(child, captured, name))
+                {
+                    return Some(candidate);
+                }
+            }
+        }
+        None
+    }
+
     /// The rows shown, top to bottom.
     pub fn rows(&self) -> Vec<Row> {
         let mut rows = Vec::new();
@@ -75,18 +200,65 @@ impl FileTree {
     }
 
     fn collect(&self, folder: &Path, depth: usize, rows: &mut Vec<Row>) {
-        for entry in self.listings.get(folder).into_iter().flatten() {
-            let expanded = entry.is_dir && self.expanded.contains(&entry.path);
+        let entries: &[Entry] = self.listings.get(folder).map_or(&[], Vec::as_slice);
+        // Files nested under another one of the folder.
+        let files: Vec<&str> = entries
+            .iter()
+            .filter(|entry| !entry.is_dir)
+            .map(|entry| entry.name.as_str())
+            .collect();
+        let parents: HashMap<&str, &str> = if self.nesting.is_some() {
+            files
+                .iter()
+                .filter_map(|name| Some((*name, self.nest_parent(name, &files)?)))
+                .collect()
+        } else {
+            HashMap::new()
+        };
+        for entry in entries {
+            if parents.contains_key(entry.name.as_str()) {
+                continue;
+            }
+            // One folder in a folder: shown as one row, down to where it
+            // branches.
+            let (mut shown, mut name) = (entry, entry.name.clone());
+            if self.compact && entry.is_dir {
+                while let Some([only]) = self.listings.get(&shown.path).map(Vec::as_slice) {
+                    if !only.is_dir {
+                        break;
+                    }
+                    shown = only;
+                    name = format!("{name}/{}", only.name);
+                }
+            }
+            let expanded = shown.is_dir && self.expanded.contains(&shown.path);
+            let nested: Vec<&Entry> = entries
+                .iter()
+                .filter(|other| parents.get(other.name.as_str()) == Some(&entry.name.as_str()))
+                .collect();
+            let nest_open = self.nests_open.contains(&entry.path);
             rows.push(Row {
-                path: entry.path.clone(),
-                name: entry.name.clone(),
+                path: shown.path.clone(),
+                name,
                 depth,
-                is_dir: entry.is_dir,
+                is_dir: shown.is_dir,
                 expanded,
-                ignored: entry.ignored,
+                ignored: shown.ignored,
+                nested: (!nested.is_empty()).then_some(nest_open),
             });
             if expanded {
-                self.collect(&entry.path, depth + 1, rows);
+                self.collect(&shown.path, depth + 1, rows);
+            }
+            if nest_open {
+                rows.extend(nested.into_iter().map(|child| Row {
+                    path: child.path.clone(),
+                    name: child.name.clone(),
+                    depth: depth + 1,
+                    is_dir: false,
+                    expanded: false,
+                    ignored: child.ignored,
+                    nested: None,
+                }));
             }
         }
     }
@@ -120,6 +292,17 @@ impl FileTree {
         if !self.listings.contains_key(folder) {
             self.load(folder);
         }
+        // A folder holding only one folder opens it too, so the compact
+        // row shows where the files are.
+        if self.compact
+            && let Some([only]) = self.listings.get(folder).map(Vec::as_slice)
+            && only.is_dir
+        {
+            let only = only.path.clone();
+            if !self.expanded.contains(&only) {
+                self.expand(&only);
+            }
+        }
     }
 
     pub fn collapse(&mut self, folder: &Path) {
@@ -147,6 +330,23 @@ impl FileTree {
         folders.reverse();
         for folder in folders {
             self.expand(&folder);
+        }
+        // A nested file shows its nest.
+        if let Some(parent) = file.parent()
+            && let Some(entries) = self.listings.get(parent)
+        {
+            let names: Vec<&str> = entries
+                .iter()
+                .filter(|entry| !entry.is_dir)
+                .map(|entry| entry.name.as_str())
+                .collect();
+            let name = file
+                .file_name()
+                .and_then(|name| name.to_str())
+                .unwrap_or_default();
+            if let Some(nest) = self.nest_parent(name, &names) {
+                self.nests_open.insert(parent.join(nest));
+            }
         }
     }
 
@@ -378,5 +578,55 @@ mod tests {
         patterns.push("**/node_modules".to_owned());
         let tree = FileTree::new(&root, &patterns);
         assert!(!names(&tree).contains(&"node_modules".to_owned()));
+    }
+
+    #[test]
+    fn single_folders_compact_and_files_nest() {
+        let folder = tempfile::tempdir().unwrap();
+        let root = folder.path().to_path_buf();
+        fs::create_dir_all(root.join("src/main/java/app")).unwrap();
+        fs::write(root.join("src/main/java/app/Main.java"), "").unwrap();
+        fs::write(root.join("src/main/java/app/Other.java"), "").unwrap();
+        fs::create_dir_all(root.join("web")).unwrap();
+        for name in [
+            "package.json",
+            "package-lock.json",
+            "card.tsx",
+            "card.test.tsx",
+            "util.ts",
+            "util.js",
+        ] {
+            fs::write(root.join("web").join(name), "").unwrap();
+        }
+        let mut tree = FileTree::new(&root, &[]);
+        tree.set_compact(true);
+        tree.set_nesting(Some(default_nesting()));
+        tree.expand(&root.join("src"));
+        tree.expand(&root.join("web"));
+        assert_eq!(
+            names(&tree),
+            [
+                "src/main/java/app",
+                "  Main.java",
+                "  Other.java",
+                "web",
+                "  card.tsx",
+                "  package.json",
+                "  util.ts",
+            ]
+        );
+        let package = tree
+            .rows()
+            .into_iter()
+            .find(|row| row.name == "package.json")
+            .unwrap();
+        assert_eq!(package.nested, Some(false));
+        tree.toggle_nest(&root.join("web/package.json"));
+        assert!(names(&tree).contains(&"    package-lock.json".to_owned()));
+        // Revealing a nested file opens its nest.
+        let mut fresh = FileTree::new(&root, &[]);
+        fresh.set_nesting(Some(default_nesting()));
+        fresh.reveal(&root.join("web/card.test.tsx"));
+        assert!(names(&fresh).contains(&"    card.test.tsx".to_owned()));
     }
 }

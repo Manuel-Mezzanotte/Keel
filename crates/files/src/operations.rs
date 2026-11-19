@@ -108,9 +108,108 @@ pub fn trash(path: &Path) -> io::Result<()> {
     trash::delete(path).map_err(io::Error::other)
 }
 
+/// A name free in `folder` for a copy of `name`, as Finder makes it:
+/// `card.tsx`, then `card copy.tsx`, `card copy 2.tsx`. `word` is
+/// «copy» in the interface's language.
+pub fn free_name(folder: &Path, name: &str, word: &str) -> PathBuf {
+    let first = folder.join(name);
+    if !first.exists() {
+        return first;
+    }
+    // A dotfile, such as `.env`, has no extension to keep apart.
+    let (stem, extension) = match name.rfind('.') {
+        Some(dot) if dot > 0 => (&name[..dot], &name[dot..]),
+        _ => (name, ""),
+    };
+    (1..)
+        .map(|count| {
+            let suffix = if count == 1 {
+                format!(" {word}")
+            } else {
+                format!(" {word} {count}")
+            };
+            folder.join(format!("{stem}{suffix}{extension}"))
+        })
+        .find(|candidate| !candidate.exists())
+        .unwrap_or(first)
+}
+
+/// Copies a file or a whole folder into `folder`, under a free name.
+pub fn copy_into(path: &Path, folder: &Path, word: &str) -> io::Result<PathBuf> {
+    let name = path
+        .file_name()
+        .ok_or_else(|| io::Error::new(ErrorKind::InvalidInput, "no name"))?
+        .to_string_lossy()
+        .into_owned();
+    if folder.starts_with(path) {
+        return Err(io::Error::new(
+            ErrorKind::InvalidInput,
+            "a folder cannot be copied into itself",
+        ));
+    }
+    let target = free_name(folder, &name, word);
+    copy_all(path, &target)?;
+    Ok(target)
+}
+
+fn copy_all(from: &Path, to: &Path) -> io::Result<()> {
+    if from.is_dir() {
+        std::fs::create_dir_all(to)?;
+        for entry in std::fs::read_dir(from)? {
+            let entry = entry?;
+            copy_all(&entry.path(), &to.join(entry.file_name()))?;
+        }
+        Ok(())
+    } else {
+        std::fs::copy(from, to).map(drop)
+    }
+}
+
+/// Where a file just moved to the Trash went, to bring it back: the
+/// newest item of the Trash with its name, or with Finder's « 2» after it.
+pub fn trashed_location(original: &Path) -> Option<PathBuf> {
+    let trash = PathBuf::from(std::env::var_os("HOME")?).join(".Trash");
+    let name = original.file_name()?.to_string_lossy().into_owned();
+    let (stem, extension) = match name.rfind('.') {
+        Some(dot) if dot > 0 => (name[..dot].to_owned(), name[dot..].to_owned()),
+        _ => (name.clone(), String::new()),
+    };
+    std::fs::read_dir(&trash)
+        .ok()?
+        .flatten()
+        .filter(|entry| {
+            let found = entry.file_name().to_string_lossy().into_owned();
+            found == name || (found.starts_with(&format!("{stem} ")) && found.ends_with(&extension))
+        })
+        .filter_map(|entry| {
+            let changed = entry.metadata().ok()?.modified().ok()?;
+            Some((changed, entry.path()))
+        })
+        .max_by_key(|(changed, _)| *changed)
+        .map(|(_, path)| path)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn copies_take_a_free_name() {
+        let folder = tempfile::tempdir().unwrap();
+        let root = folder.path();
+        std::fs::create_dir_all(root.join("src/lib")).unwrap();
+        std::fs::write(root.join("src/card.tsx"), "card").unwrap();
+        std::fs::write(root.join("src/lib/a.ts"), "a").unwrap();
+        let copy = copy_into(&root.join("src/card.tsx"), &root.join("src"), "copia").unwrap();
+        assert_eq!(copy, root.join("src/card copia.tsx"));
+        let again = copy_into(&root.join("src/card.tsx"), &root.join("src"), "copia").unwrap();
+        assert_eq!(again, root.join("src/card copia 2.tsx"));
+        // A folder comes with what it holds.
+        let lib = copy_into(&root.join("src/lib"), root, "copia").unwrap();
+        assert_eq!(std::fs::read_to_string(lib.join("a.ts")).unwrap(), "a");
+        assert!(copy_into(&root.join("src"), &root.join("src/lib"), "copia").is_err());
+        assert_eq!(free_name(root, ".env", "copy"), root.join(".env"));
+    }
 
     #[test]
     fn files_and_folders_are_created_with_valid_names() {

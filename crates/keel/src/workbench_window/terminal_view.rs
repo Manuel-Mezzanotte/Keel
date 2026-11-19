@@ -843,6 +843,32 @@ impl Render for TerminalView {
             .relative()
             .key_context(TERMINAL_CONTEXT)
             .track_focus(&self.focus_handle)
+            // A file dragged from the Explorer types its path, quoted when
+            // it needs it, as Terminal does with Finder's files.
+            .on_drop(
+                cx.listener(|this, dragged: &super::explorer::DraggedPath, window, cx| {
+                    let text = dragged
+                        .all()
+                        .iter()
+                        .map(|path| shell_quote(&path.to_string_lossy()))
+                        .collect::<Vec<_>>()
+                        .join(" ");
+                    this.terminal.paste(&format!("{text} "));
+                    this.focus_handle.focus(window, cx);
+                }),
+            )
+            .on_drop(
+                cx.listener(|this, paths: &gpui::ExternalPaths, window, cx| {
+                    let text = paths
+                        .paths()
+                        .iter()
+                        .map(|path| shell_quote(&path.to_string_lossy()))
+                        .collect::<Vec<_>>()
+                        .join(" ");
+                    this.terminal.paste(&format!("{text} "));
+                    this.focus_handle.focus(window, cx);
+                }),
+            )
             .size_full()
             .pl_3()
             .pr_1()
@@ -1228,5 +1254,34 @@ mod tests {
         });
         assert!(!open && focused);
         assert_eq!(current_match_line(&view, cx), None);
+    }
+}
+
+/// A path as a shell reads it: as it is when it holds only safe
+/// characters, else in single quotes.
+fn shell_quote(path: &str) -> String {
+    let safe = path
+        .chars()
+        .all(|c| c.is_alphanumeric() || "/._-+@%:,=".contains(c));
+    if safe && !path.is_empty() {
+        path.to_owned()
+    } else {
+        format!("'{}'", path.replace('\'', "'\\''"))
+    }
+}
+
+#[cfg(test)]
+mod quote_tests {
+    #[test]
+    fn paths_are_quoted_when_needed() {
+        assert_eq!(
+            super::shell_quote("/Users/me/app/a.ts"),
+            "/Users/me/app/a.ts"
+        );
+        assert_eq!(
+            super::shell_quote("/Users/me/My App/a.ts"),
+            "'/Users/me/My App/a.ts'"
+        );
+        assert_eq!(super::shell_quote("/tmp/it's"), "'/tmp/it'\\''s'");
     }
 }

@@ -10,6 +10,8 @@ mod tree;
 mod watch;
 
 pub use list::list_files;
-pub use operations::{create_file, create_folder, move_into, rename, trash};
-pub use tree::{DEFAULT_EXCLUDES, FileTree, Row, compare_names};
+pub use operations::{
+    copy_into, create_file, create_folder, free_name, move_into, rename, trash, trashed_location,
+};
+pub use tree::{DEFAULT_EXCLUDES, FileTree, NestingPatterns, Row, compare_names, default_nesting};
 pub use watch::{ProjectWatcher, watch};

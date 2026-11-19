@@ -35,6 +35,9 @@ pub(super) enum DiffSource {
     LocalHistory(String),
     /// The clipboard against the file in view.
     Clipboard,
+    /// Two files of the project, from the Explorer: the tab's path is the
+    /// first, this the second.
+    Files(String),
     /// A change the agent made to a file, by its path: what Keel kept
     /// before against the file now.
     Agent(String),
@@ -63,6 +66,7 @@ pub(super) fn diff_uri(path: &str, source: &DiffSource) -> String {
         DiffSource::AllChanges => return "keel-diff:all-changes".to_owned(),
         DiffSource::LocalHistory(version) => return format!("keel-history:{version}"),
         DiffSource::Clipboard => return format!("keel-clipboard:{path}"),
+        DiffSource::Files(other) => return format!("keel-compare:{path}|{other}"),
         DiffSource::Agent(path) => return format!("keel-agent-diff:{path}"),
     };
     format!("keel-diff:{kind}/{path}")
@@ -93,7 +97,8 @@ impl Workbench {
             | DiffSource::Agent(_)
             | DiffSource::AllChanges
             | DiffSource::LocalHistory(_)
-            | DiffSource::Clipboard => {
+            | DiffSource::Clipboard
+            | DiffSource::Files(_) => {
                 return Err("not a git difference".to_owned());
             }
             DiffSource::Changes | DiffSource::Staged => {
@@ -146,6 +151,9 @@ impl Workbench {
                 DiffSource::AllChanges => strings.diff_all_changes.to_owned(),
                 DiffSource::LocalHistory(_) => format!("{name} ({})", strings.history_version),
                 DiffSource::Clipboard => format!("{name} ↔ {}", strings.diff_clipboard),
+                DiffSource::Files(other) => {
+                    format!("{name} ↔ {}", other.rsplit('/').next().unwrap_or(other))
+                }
                 _ => name.to_owned(),
             };
             let state = cx.new(|cx| DiffState::new(Vec::new(), cx));
@@ -193,9 +201,10 @@ impl Workbench {
                 DiffSource::Commit(hash, _) => format!("{name} ({})", &hash[..hash.len().min(8)]),
                 DiffSource::Proposed(tab_name) => tab_name.clone(),
                 DiffSource::Agent(_) => format!("{name} (Claude)"),
-                DiffSource::AllChanges | DiffSource::LocalHistory(_) | DiffSource::Clipboard => {
-                    strings.diff_all_changes.to_owned()
-                }
+                DiffSource::AllChanges
+                | DiffSource::LocalHistory(_)
+                | DiffSource::Clipboard
+                | DiffSource::Files(_) => strings.diff_all_changes.to_owned(),
             };
             self.documents.insert(
                 uri.clone(),
@@ -268,6 +277,14 @@ impl Workbench {
                     shown(path),
                     &self.clipboard_text,
                     &now(path),
+                    ignore,
+                )]);
+            }
+            DiffSource::Files(other) => {
+                return Ok(vec![super::diff_model::FileDiff::new(
+                    format!("{} ↔ {}", shown(path), shown(other)),
+                    &now(path),
+                    &now(other),
                     ignore,
                 )]);
             }

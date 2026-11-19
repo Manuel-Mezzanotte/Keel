@@ -213,6 +213,21 @@ impl Workbench {
             .collect()
     }
 
+    /// Find in Folder: the search with «files to include» set to a folder.
+    pub(super) fn search_only_in(
+        &mut self,
+        folder: &str,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.search.show_folders = true;
+        let include = self.search.include.clone();
+        include.update(cx, |input, cx| {
+            input.set_value(folder.to_owned(), window, cx)
+        });
+        self.focus_search(window, cx);
+    }
+
     /// Runs the search after a short pause in typing.
     fn search_soon(&mut self, cx: &mut Context<Self>) {
         self.search.task = cx.spawn(async move |this, cx| {

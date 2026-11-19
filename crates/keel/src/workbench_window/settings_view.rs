@@ -451,6 +451,28 @@ pub(super) const CATALOG: &[Entry] = &[
         ),
     },
     Entry {
+        key: "explorer.compactFolders",
+        page: Page::Files,
+        kind: Kind::Switch,
+        default: "true",
+        title: ("Cartelle compatte", "Compact Folders"),
+        description: (
+            "Una cartella che contiene solo un'altra cartella si mostra su una riga, come src/main/java.",
+            "A folder holding only one folder shows on one row, as src/main/java.",
+        ),
+    },
+    Entry {
+        key: "explorer.fileNesting.enabled",
+        page: Page::Files,
+        kind: Kind::Switch,
+        default: "true",
+        title: ("File annidati", "File Nesting"),
+        description: (
+            "I file legati si raccolgono sotto un altro: il lock sotto package.json, i test sotto il loro file.",
+            "Related files gather under another: the lock under package.json, tests under their file.",
+        ),
+    },
+    Entry {
         key: "git.autofetch",
         page: Page::Git,
         kind: Kind::Switch,
@@ -684,6 +706,25 @@ impl Workbench {
                 cx.notify();
             }
             "workbench.iconTheme" => self.reload_icon_theme(),
+            // The tree is made again with its new look, open folders kept.
+            "explorer.compactFolders"
+            | "explorer.fileNesting.enabled"
+            | "explorer.fileNesting.patterns"
+            | "files.exclude" => {
+                let open = self
+                    .tree
+                    .as_ref()
+                    .map(files::FileTree::expanded_folders)
+                    .unwrap_or_default();
+                self.build_tree();
+                if let Some(tree) = &mut self.tree {
+                    for folder in open {
+                        tree.expand(&folder);
+                    }
+                }
+                self.tree_changed();
+                cx.notify();
+            }
             _ => {}
         }
     }

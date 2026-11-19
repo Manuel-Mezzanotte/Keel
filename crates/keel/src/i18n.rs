@@ -884,6 +884,22 @@ pub struct Strings {
     pub command_tab_7: &'static str,
     pub command_tab_8: &'static str,
     pub command_tab_9: &'static str,
+    /// The word Finder adds to a copy's name: «card copia.tsx».
+    pub explorer_copy_word: &'static str,
+    /// After Cmd+Z in the Explorer.
+    pub explorer_undone: &'static str,
+    pub explorer_undo_failed: &'static str,
+    pub explorer_filter: &'static str,
+    pub explorer_open_to_side: &'static str,
+    pub explorer_select_compare: &'static str,
+    pub explorer_compare_with_name: &'static str,
+    pub explorer_cut: &'static str,
+    pub explorer_copy: &'static str,
+    pub explorer_paste: &'static str,
+    pub explorer_duplicate: &'static str,
+    pub explorer_find_in_folder: &'static str,
+    pub explorer_open_terminal: &'static str,
+    pub explorer_items_count: &'static str,
 }
 
 impl Strings {
@@ -1387,6 +1403,17 @@ impl Strings {
     }
 
     /// The cursor position in the status bar, counted from 1.
+    /// «3 elementi» / «3 items».
+    pub fn explorer_items(&self, count: usize) -> String {
+        self.explorer_items_count
+            .replace("{count}", &count.to_string())
+    }
+
+    /// The Explorer's menu, once a file was chosen to compare.
+    pub fn explorer_compare_with(&self, name: &str) -> String {
+        self.explorer_compare_with_name.replace("{name}", name)
+    }
+
     /// The title of the list of a function's callers.
     pub fn lsp_incoming_calls(&self, name: &str) -> String {
         self.lsp_incoming_calls_title.replace("{name}", name)
@@ -2178,6 +2205,20 @@ pub const ITALIAN: Strings = Strings {
     command_tab_7: "Vista: vai alla scheda 7",
     command_tab_8: "Vista: vai alla scheda 8",
     command_tab_9: "Vista: vai all'ultima scheda",
+    explorer_copy_word: "copia",
+    explorer_undone: "Annullato",
+    explorer_undo_failed: "Non si può annullare",
+    explorer_filter: "Filtra i file del progetto",
+    explorer_open_to_side: "Apri di lato",
+    explorer_select_compare: "Seleziona per il confronto",
+    explorer_compare_with_name: "Confronta con «{name}»",
+    explorer_cut: "Taglia",
+    explorer_copy: "Copia",
+    explorer_paste: "Incolla",
+    explorer_duplicate: "Duplica",
+    explorer_find_in_folder: "Cerca nella cartella…",
+    explorer_open_terminal: "Apri nel terminale",
+    explorer_items_count: "{count} elementi",
 };
 
 pub const ENGLISH: Strings = Strings {
@@ -2944,6 +2985,20 @@ pub const ENGLISH: Strings = Strings {
     command_tab_7: "View: Open Editor at Index 7",
     command_tab_8: "View: Open Editor at Index 8",
     command_tab_9: "View: Open Last Editor",
+    explorer_copy_word: "copy",
+    explorer_undone: "Undone",
+    explorer_undo_failed: "Can't undo",
+    explorer_filter: "Filter the project's files",
+    explorer_open_to_side: "Open to the Side",
+    explorer_select_compare: "Select for Compare",
+    explorer_compare_with_name: "Compare with \"{name}\"",
+    explorer_cut: "Cut",
+    explorer_copy: "Copy",
+    explorer_paste: "Paste",
+    explorer_duplicate: "Duplicate",
+    explorer_find_in_folder: "Find in Folder…",
+    explorer_open_terminal: "Open in Integrated Terminal",
+    explorer_items_count: "{count} items",
 };
 
 #[cfg(test)]

@@ -241,7 +241,11 @@ impl Workbench {
                 notice_buttons(&actions, workbench.clone(), true, cx).into_any_element()
             });
         }
-        window.push_notification(note, cx);
+        // A window without Keel's root, as in some tests, keeps the
+        // notice for the bell only.
+        if matches!(window.root::<gpui_component::Root>(), Some(Some(_))) {
+            window.push_notification(note, cx);
+        }
     }
 
     /// An error that needs a decision, in a window of its own: what went
@@ -309,7 +313,9 @@ impl Workbench {
         self.notices.open = !self.notices.open;
         if self.notices.open {
             self.notices.unread = 0;
-            window.clear_notifications(cx);
+            if matches!(window.root::<gpui_component::Root>(), Some(Some(_))) {
+                window.clear_notifications(cx);
+            }
         }
         cx.notify();
     }

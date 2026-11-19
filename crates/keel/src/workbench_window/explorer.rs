@@ -18,8 +18,8 @@ use gpui_kit_assets::IconName;
 use super::shell::{Colors, note, view_header};
 use super::*;
 
-const ROW_HEIGHT: f32 = 24.;
-const INDENT: f32 = 14.;
+pub(super) const ROW_HEIGHT: f32 = 24.;
+pub(super) const INDENT: f32 = 14.;
 
 actions!(
     explorer,
@@ -91,6 +91,11 @@ pub fn tree_bindings() -> Vec<gpui::KeyBinding> {
         KeyBinding::new("cmd-down", OpenSelected, context),
         KeyBinding::new("space", OpenSelected, context),
         KeyBinding::new("cmd-backspace", TrashSelected, context),
+        KeyBinding::new("cmd-c", super::explorer_more::CopyFiles, context),
+        KeyBinding::new("cmd-x", super::explorer_more::CutFiles, context),
+        KeyBinding::new("cmd-v", super::explorer_more::PasteFiles, context),
+        KeyBinding::new("cmd-z", super::explorer_more::UndoFileChange, context),
+        KeyBinding::new("cmd-alt-f", super::explorer_more::FilterTree, context),
     ]
 }
 
@@ -108,11 +113,21 @@ pub(super) struct TreeEdit {
     _subscription: Subscription,
 }
 
-/// A file or folder being dragged in the tree.
+/// A file or folder being dragged in the tree, with the others selected
+/// along with it.
 #[derive(Clone)]
 pub(super) struct DraggedPath {
-    path: PathBuf,
-    name: String,
+    pub(super) path: PathBuf,
+    pub(super) name: String,
+    pub(super) others: Vec<PathBuf>,
+}
+
+impl DraggedPath {
+    pub(super) fn all(&self) -> Vec<PathBuf> {
+        std::iter::once(self.path.clone())
+            .chain(self.others.iter().cloned())
+            .collect()
+    }
 }
 
 impl Render for DraggedPath {
@@ -184,11 +199,42 @@ impl Workbench {
 
     /// Builds the tree of the window's project.
     pub(super) fn build_tree(&mut self) {
-        self.tree = self
-            .project
-            .root
-            .as_ref()
-            .map(|root| FileTree::new(root.clone(), &excludes(&self.settings)));
+        let on = |key: &str, default: bool| {
+            self.settings
+                .get(key)
+                .and_then(Value::as_bool)
+                .unwrap_or(default)
+        };
+        let compact = on("explorer.compactFolders", true);
+        let nesting = on("explorer.fileNesting.enabled", true).then(|| {
+            // `explorer.fileNesting.patterns`, as VS Code writes it: parent
+            // names to comma-separated nested names.
+            match self
+                .settings
+                .get("explorer.fileNesting.patterns")
+                .and_then(Value::as_object)
+            {
+                Some(patterns) => patterns
+                    .iter()
+                    .filter_map(|(parent, children)| {
+                        let children = children
+                            .as_str()?
+                            .split(',')
+                            .map(|child| child.trim().to_owned())
+                            .filter(|child| !child.is_empty())
+                            .collect();
+                        Some((parent.clone(), children))
+                    })
+                    .collect(),
+                None => files::default_nesting(),
+            }
+        });
+        self.tree = self.project.root.as_ref().map(|root| {
+            let mut tree = FileTree::new(root.clone(), &excludes(&self.settings));
+            tree.set_compact(compact);
+            tree.set_nesting(nesting);
+            tree
+        });
         self.tree_changed();
     }
 
@@ -392,7 +438,20 @@ impl Workbench {
         let Some(row) = self.tree_rows.get(index).cloned() else {
             return;
         };
+        let modifiers = event.modifiers();
+        // Cmd and Shift choose rows; Alt opens to the side.
+        if modifiers.platform || modifiers.shift {
+            self.choose_row(index, modifiers.shift);
+            self.tree_focus.focus(window, cx);
+            cx.notify();
+            return;
+        }
+        self.tree_extras.selected.clear();
         self.tree_selection = Some(row.path.clone());
+        if modifiers.alt && !row.is_dir {
+            self.open_to_side(&row.path, window, cx);
+            return;
+        }
         if row.is_dir {
             if let Some(tree) = &mut self.tree {
                 tree.toggle(&row.path);
@@ -562,17 +621,42 @@ impl Workbench {
         if !commit || name.is_empty() {
             return;
         }
+        if let TreeEditKind::Rename { path } = &edit.kind {
+            // The imports follow the renamed file, where a server knows how.
+            let (path, target) = (path.clone(), path.with_file_name(&name));
+            self.move_with_imports(
+                vec![(path.clone(), target)],
+                move |this, window, cx| match files::rename(&path, &name) {
+                    Ok(target) => {
+                        this.path_moved(&path, &target, window, cx);
+                        this.tree_extras
+                            .changes
+                            .push(super::explorer_more::FileChange::Moved {
+                                from: path.clone(),
+                                to: target.clone(),
+                            });
+                        this.after_file_change(Some(target), cx);
+                    }
+                    Err(error) => {
+                        let message = this.strings().could_not_change(&name, &error.to_string());
+                        this.report(message);
+                    }
+                },
+                window,
+                cx,
+            );
+            return;
+        }
         let result = match &edit.kind {
             TreeEditKind::NewFile { folder } => files::create_file(folder, &name),
             TreeEditKind::NewFolder { folder } => files::create_folder(folder, &name),
-            TreeEditKind::Rename { path } => {
-                let renamed = files::rename(path, &name);
-                if let Ok(target) = &renamed {
-                    self.path_moved(path, target, window, cx);
-                }
-                renamed
-            }
+            TreeEditKind::Rename { .. } => return,
         };
+        if let Ok(made) = &result {
+            self.tree_extras
+                .changes
+                .push(super::explorer_more::FileChange::Made(made.clone()));
+        }
         match result {
             Ok(path) => {
                 self.refresh_tree(cx);
@@ -596,18 +680,28 @@ impl Workbench {
     // Moving and trashing
 
     /// Moves a file or folder into another folder, after asking.
-    fn move_path(
+    /// Moves files and folders into another folder, after asking once;
+    /// the imports that point at them follow, where a server knows how.
+    pub(super) fn move_paths(
         &mut self,
-        path: PathBuf,
+        paths: Vec<PathBuf>,
         folder: PathBuf,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        if path.parent() == Some(folder.as_path()) || folder.starts_with(&path) {
+        let paths: Vec<PathBuf> = paths
+            .into_iter()
+            .filter(|path| path.parent() != Some(folder.as_path()) && !folder.starts_with(path))
+            .collect();
+        let Some(path) = paths.first().cloned() else {
             return;
-        }
+        };
         let strings = self.strings();
-        let name = display_file_name(&path);
+        let name = if paths.len() == 1 {
+            display_file_name(&path)
+        } else {
+            strings.explorer_items(paths.len())
+        };
         let message = strings.move_question(&name, &display_file_name(&folder));
         let answer = window.prompt(
             PromptLevel::Info,
@@ -621,18 +715,40 @@ impl Workbench {
                 return;
             }
             this.update_in(cx, |this, window, cx| {
-                match files::move_into(&path, &folder) {
-                    Ok(target) => {
-                        this.path_moved(&path, &target, window, cx);
-                        this.refresh_tree(cx);
-                        this.tree_selection = Some(target);
-                    }
-                    Err(error) => {
-                        let message = this.strings().could_not_change(&name, &error.to_string());
-                        this.report(message);
-                    }
-                }
-                cx.notify();
+                let moves: Vec<(PathBuf, PathBuf)> = paths
+                    .iter()
+                    .filter_map(|path| Some((path.clone(), folder.join(path.file_name()?))))
+                    .collect();
+                this.move_with_imports(
+                    moves,
+                    move |this, window, cx| {
+                        let mut last = None;
+                        for path in &paths {
+                            match files::move_into(path, &folder) {
+                                Ok(target) => {
+                                    this.path_moved(path, &target, window, cx);
+                                    this.tree_extras.changes.push(
+                                        super::explorer_more::FileChange::Moved {
+                                            from: path.clone(),
+                                            to: target.clone(),
+                                        },
+                                    );
+                                    last = Some(target);
+                                }
+                                Err(error) => {
+                                    let message = this.strings().could_not_change(
+                                        &display_file_name(path),
+                                        &error.to_string(),
+                                    );
+                                    this.report(message);
+                                }
+                            }
+                        }
+                        this.after_file_change(last, cx);
+                    },
+                    window,
+                    cx,
+                );
             })
             .ok();
         })
@@ -658,9 +774,12 @@ impl Workbench {
                 return;
             }
             this.update_in(cx, |this, _, cx| {
-                if let Err(error) = files::trash(&path) {
-                    let message = this.strings().could_not_change(&name, &error.to_string());
-                    this.report(message);
+                match files::trash(&path) {
+                    Ok(()) => this.remember_trashed(&path),
+                    Err(error) => {
+                        let message = this.strings().could_not_change(&name, &error.to_string());
+                        this.report(message);
+                    }
                 }
                 if this.tree_selection.as_ref() == Some(&path) {
                     this.tree_selection = path.parent().map(Path::to_path_buf);
@@ -823,82 +942,101 @@ impl Workbench {
             .flex()
             .flex_col()
             .child(header)
-            .child(
-                div()
-                    .id("file-tree-area")
-                    .flex_1()
-                    .min_h_0()
-                    .key_context(TREE_CONTEXT)
-                    .track_focus(&self.tree_focus)
-                    .on_action(cx.listener(|this, _: &SelectPrevious, _, cx| {
-                        if !this.typing_a_name(cx) {
-                            this.move_selection(-1, cx)
-                        }
-                    }))
-                    .on_action(cx.listener(|this, _: &SelectNext, _, cx| {
-                        if !this.typing_a_name(cx) {
-                            this.move_selection(1, cx)
-                        }
-                    }))
-                    .on_action(cx.listener(|this, _: &CollapseSelected, _, cx| {
-                        if !this.typing_a_name(cx) {
-                            this.collapse_selected(cx)
-                        }
-                    }))
-                    .on_action(cx.listener(|this, _: &ExpandSelected, _, cx| {
-                        if !this.typing_a_name(cx) {
-                            this.expand_selected(cx)
-                        }
-                    }))
-                    .on_action(cx.listener(|this, _: &OpenSelected, window, cx| {
-                        if !this.typing_a_name(cx) {
-                            this.open_selected(window, cx)
-                        }
-                    }))
-                    .on_action(cx.listener(|this, _: &RenameSelected, window, cx| {
-                        if this.typing_a_name(cx) {
-                            return;
-                        }
-                        if let Some(path) = this.tree_selection.clone() {
-                            this.start_tree_edit(TreeEditKind::Rename { path }, window, cx);
-                        }
-                    }))
-                    .on_action(cx.listener(|this, _: &TrashSelected, window, cx| {
-                        if this.typing_a_name(cx) {
-                            return;
-                        }
-                        if let Some(path) = this.tree_selection.clone() {
-                            this.trash_path(path, window, cx);
-                        }
-                    }))
-                    .drag_over::<DraggedPath>(move |style, _, _, _| style.bg(colors.hover))
-                    .on_drop(cx.listener({
-                        let root = root.clone();
-                        move |this, dragged: &DraggedPath, window, cx| {
-                            this.move_path(dragged.path.clone(), root.clone(), window, cx)
-                        }
-                    }))
-                    .context_menu(move |menu, _, _| {
-                        menu.action_context(focus.clone())
-                            .menu(
-                                strings.explorer_new_file,
-                                Box::new(NewFileIn {
-                                    folder: root_for_menu.clone(),
-                                }),
-                            )
-                            .menu(
-                                strings.explorer_new_folder,
-                                Box::new(NewFolderIn {
-                                    folder: root_for_menu.clone(),
-                                }),
-                            )
-                    })
-                    .child(list)
-                    // An empty folder says so, with where to start.
-                    .when(count == 0, |tree| {
-                        tree.child(note(strings.explorer_empty.to_owned(), colors))
-                    }),
-            )
+            .children(self.render_tree_filter(colors, cx))
+            .when(self.tree_extras.filter.is_none(), |explorer| {
+                explorer.child(
+                    div()
+                        .id("file-tree-area")
+                        .flex_1()
+                        .min_h_0()
+                        .key_context(TREE_CONTEXT)
+                        .track_focus(&self.tree_focus)
+                        .on_action(cx.listener(|this, _: &SelectPrevious, _, cx| {
+                            if !this.typing_a_name(cx) {
+                                this.move_selection(-1, cx)
+                            }
+                        }))
+                        .on_action(cx.listener(|this, _: &SelectNext, _, cx| {
+                            if !this.typing_a_name(cx) {
+                                this.move_selection(1, cx)
+                            }
+                        }))
+                        .on_action(cx.listener(|this, _: &CollapseSelected, _, cx| {
+                            if !this.typing_a_name(cx) {
+                                this.collapse_selected(cx)
+                            }
+                        }))
+                        .on_action(cx.listener(|this, _: &ExpandSelected, _, cx| {
+                            if !this.typing_a_name(cx) {
+                                this.expand_selected(cx)
+                            }
+                        }))
+                        .on_action(cx.listener(|this, _: &OpenSelected, window, cx| {
+                            if !this.typing_a_name(cx) {
+                                this.open_selected(window, cx)
+                            }
+                        }))
+                        .on_action(cx.listener(|this, _: &RenameSelected, window, cx| {
+                            if this.typing_a_name(cx) {
+                                return;
+                            }
+                            if let Some(path) = this.tree_selection.clone() {
+                                this.start_tree_edit(TreeEditKind::Rename { path }, window, cx);
+                            }
+                        }))
+                        .on_action(cx.listener(|this, _: &TrashSelected, window, cx| {
+                            if this.typing_a_name(cx) {
+                                return;
+                            }
+                            let chosen = this.chosen_paths();
+                            if chosen.len() > 1 {
+                                this.trash_paths(chosen, window, cx);
+                            } else if let Some(path) = this.tree_selection.clone() {
+                                this.trash_path(path, window, cx);
+                            }
+                        }))
+                        .group("file-tree-area")
+                        .relative()
+                        .on_scroll(cx.listener(|this, _, _, cx| this.tree_scrolled(cx)))
+                        .drag_over::<gpui::ExternalPaths>(move |style, _, _, _| {
+                            style.bg(colors.hover)
+                        })
+                        .on_drop(cx.listener({
+                            let root = root.clone();
+                            move |this, paths: &gpui::ExternalPaths, window, cx| {
+                                this.drop_external(paths, root.clone(), window, cx)
+                            }
+                        }))
+                        .drag_over::<DraggedPath>(move |style, _, _, _| style.bg(colors.hover))
+                        .on_drop(cx.listener({
+                            let root = root.clone();
+                            move |this, dragged: &DraggedPath, window, cx| {
+                                this.move_paths(dragged.all(), root.clone(), window, cx)
+                            }
+                        }))
+                        .context_menu(move |menu, _, _| {
+                            menu.action_context(focus.clone())
+                                .menu(
+                                    strings.explorer_new_file,
+                                    Box::new(NewFileIn {
+                                        folder: root_for_menu.clone(),
+                                    }),
+                                )
+                                .menu(
+                                    strings.explorer_new_folder,
+                                    Box::new(NewFolderIn {
+                                        folder: root_for_menu.clone(),
+                                    }),
+                                )
+                        })
+                        .child(list)
+                        .children(self.render_sticky_folders(colors, cx))
+                        // An empty folder says so, with where to start.
+                        .when(count == 0, |tree| {
+                            tree.child(note(strings.explorer_empty.to_owned(), colors))
+                        }),
+                )
+            })
             .children(self.render_outline(colors, window, cx))
             .children(self.render_npm_scripts(colors, window, cx))
             .into_any_element()
@@ -977,13 +1115,41 @@ impl Workbench {
             is_dir,
             expanded,
             ignored,
+            nested,
         } = row;
-        let selected = self.tree_selection.as_ref() == Some(&path);
+        let selected = self.tree_selection.as_ref() == Some(&path) || self.is_chosen(&path);
         let renaming = matches!(
             &self.tree_edit,
             Some(TreeEdit { kind: TreeEditKind::Rename { path: renamed }, .. }) if *renamed == path
         );
-        let chevron = if is_dir {
+        let chevron = if let Some(open) = nested {
+            // A file with others nested under it opens like a folder.
+            let nest = path.clone();
+            div()
+                .id(("tree-nest", index))
+                .size(px(12.))
+                .flex()
+                .items_center()
+                .justify_center()
+                .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| {
+                    cx.stop_propagation();
+                    if let Some(tree) = &mut this.tree {
+                        tree.toggle_nest(&nest);
+                    }
+                    this.tree_changed();
+                    cx.notify();
+                }))
+                .child(
+                    Icon::new(if open {
+                        IconName::ChevronDown
+                    } else {
+                        IconName::ChevronRight
+                    })
+                    .xsmall()
+                    .text_color(colors.faint),
+                )
+                .into_any_element()
+        } else if is_dir {
             Icon::new(if expanded {
                 IconName::ChevronDown
             } else {
@@ -1065,8 +1231,25 @@ impl Workbench {
         let focus = self.tree_focus.clone();
         let menu_path = path.clone();
         let menu_folder = drop_folder.clone();
+        let external_folder = drop_folder.clone();
+        let hover_folder = (is_dir && !expanded).then(|| path.clone());
+        let others: Vec<PathBuf> = if selected {
+            self.chosen_paths()
+                .into_iter()
+                .filter(|other| *other != path)
+                .collect()
+        } else {
+            Vec::new()
+        };
+        let compare_with = self
+            .tree_extras
+            .compare_with
+            .clone()
+            .filter(|other| *other != path);
         div()
             .id(("tree-row", index))
+            .relative()
+            .children(super::explorer_more::indent_guides(depth, colors))
             .h(px(ROW_HEIGHT))
             .w_full()
             .pl(px(8. + depth as f32 * INDENT))
@@ -1091,13 +1274,27 @@ impl Workbench {
                 DraggedPath {
                     path: path.clone(),
                     name: name.clone(),
+                    others,
                 },
                 |dragged, _, _, cx| cx.new(|_| dragged.clone()),
             )
             .drag_over::<DraggedPath>(move |style, _, _, _| style.bg(colors.selected))
+            .drag_over::<gpui::ExternalPaths>(move |style, _, _, _| style.bg(colors.selected))
+            .on_drag_move::<DraggedPath>(cx.listener(
+                move |this, event: &gpui::DragMoveEvent<DraggedPath>, _, cx| {
+                    if event.bounds.contains(&event.event.position) {
+                        this.drag_over_folder(hover_folder.clone(), cx);
+                    }
+                },
+            ))
             .on_drop(cx.listener(move |this, dragged: &DraggedPath, window, cx| {
-                this.move_path(dragged.path.clone(), drop_folder.clone(), window, cx)
+                this.move_paths(dragged.all(), drop_folder.clone(), window, cx)
             }))
+            .on_drop(
+                cx.listener(move |this, paths: &gpui::ExternalPaths, window, cx| {
+                    this.drop_external(paths, external_folder.clone(), window, cx)
+                }),
+            )
             .context_menu(move |menu, _, _| {
                 let menu = menu.action_context(focus.clone());
                 let menu = if is_dir {
@@ -1121,6 +1318,13 @@ impl Workbench {
                     menu
                 } else {
                     menu.menu(
+                        strings.explorer_open_to_side,
+                        Box::new(super::explorer_more::OpenToSide {
+                            path: menu_path.clone(),
+                        }),
+                    )
+                    .separator()
+                    .menu(
                         strings.command_file_history,
                         Box::new(super::blame::ShowFileHistoryOf {
                             path: menu_path.clone(),
@@ -1133,40 +1337,85 @@ impl Workbench {
                         }),
                     )
                 };
-                menu.menu(
-                    strings.explorer_reveal,
-                    Box::new(RevealInFinder {
-                        path: menu_path.clone(),
-                    }),
-                )
-                .separator()
-                .menu(
-                    strings.explorer_copy_path,
-                    Box::new(CopyPath {
-                        path: menu_path.clone(),
-                        relative: false,
-                    }),
-                )
-                .menu(
-                    strings.explorer_copy_relative,
-                    Box::new(CopyPath {
-                        path: menu_path.clone(),
-                        relative: true,
-                    }),
-                )
-                .separator()
-                .menu(
-                    strings.explorer_rename,
-                    Box::new(RenamePath {
-                        path: menu_path.clone(),
-                    }),
-                )
-                .menu(
-                    strings.explorer_trash,
-                    Box::new(TrashPath {
-                        path: menu_path.clone(),
-                    }),
-                )
+                let menu = match &compare_with {
+                    Some(other) if !is_dir => menu.separator().menu(
+                        strings.explorer_compare_with(&display_file_name(other)),
+                        Box::new(super::explorer_more::CompareWithSelected {
+                            path: menu_path.clone(),
+                        }),
+                    ),
+                    _ if !is_dir => menu.separator().menu(
+                        strings.explorer_select_compare,
+                        Box::new(super::explorer_more::SelectForCompare {
+                            path: menu_path.clone(),
+                        }),
+                    ),
+                    _ => menu,
+                };
+                menu.separator()
+                    .menu(
+                        strings.explorer_cut,
+                        Box::new(super::explorer_more::CutFiles),
+                    )
+                    .menu(
+                        strings.explorer_copy,
+                        Box::new(super::explorer_more::CopyFiles),
+                    )
+                    .menu(
+                        strings.explorer_paste,
+                        Box::new(super::explorer_more::PasteFiles),
+                    )
+                    .menu(
+                        strings.explorer_duplicate,
+                        Box::new(super::explorer_more::DuplicateFiles),
+                    )
+                    .separator()
+                    .menu(
+                        strings.explorer_find_in_folder,
+                        Box::new(super::explorer_more::SearchInFolder {
+                            path: menu_path.clone(),
+                        }),
+                    )
+                    .menu(
+                        strings.explorer_open_terminal,
+                        Box::new(super::explorer_more::OpenInTerminal {
+                            path: menu_path.clone(),
+                        }),
+                    )
+                    .menu(
+                        strings.explorer_reveal,
+                        Box::new(RevealInFinder {
+                            path: menu_path.clone(),
+                        }),
+                    )
+                    .separator()
+                    .menu(
+                        strings.explorer_copy_path,
+                        Box::new(CopyPath {
+                            path: menu_path.clone(),
+                            relative: false,
+                        }),
+                    )
+                    .menu(
+                        strings.explorer_copy_relative,
+                        Box::new(CopyPath {
+                            path: menu_path.clone(),
+                            relative: true,
+                        }),
+                    )
+                    .separator()
+                    .menu(
+                        strings.explorer_rename,
+                        Box::new(RenamePath {
+                            path: menu_path.clone(),
+                        }),
+                    )
+                    .menu(
+                        strings.explorer_trash,
+                        Box::new(TrashPath {
+                            path: menu_path.clone(),
+                        }),
+                    )
             })
             .child(chevron)
             .child(icon)
@@ -1388,12 +1637,17 @@ mod tests {
 
         // Moving the folder asks first, then keeps the file open.
         view.update_in(cx, |view, window, cx| {
-            view.move_path(root.join("src"), root.join("src/components"), window, cx)
+            view.move_paths(
+                vec![root.join("src")],
+                root.join("src/components"),
+                window,
+                cx,
+            )
         });
         assert!(!cx.has_pending_prompt(), "a folder cannot go inside itself");
         fs::create_dir_all(root.join("lib")).unwrap();
         view.update_in(cx, |view, window, cx| {
-            view.move_path(root.join("src"), root.join("lib"), window, cx)
+            view.move_paths(vec![root.join("src")], root.join("lib"), window, cx)
         });
         assert!(cx.has_pending_prompt());
         cx.simulate_prompt_answer("Move");

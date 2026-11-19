@@ -20,6 +20,7 @@ mod disk;
 mod editing;
 mod editor_overlays;
 pub(crate) mod explorer;
+mod explorer_more;
 mod extension_features;
 mod extensions_view;
 mod file_commands;
@@ -495,6 +496,9 @@ pub struct Workbench {
     git_daily: git_daily::GitDaily,
     /// Where you have been, for Back, Forward and Ctrl+Tab.
     nav: nav_history::NavHistory,
+    /// The Explorer's selection of several rows, its clipboard, Undo and
+    /// filter.
+    tree_extras: explorer_more::TreeExtras,
     /// The symbols of the file in front, for the Outline section.
     outline: outline::Outline,
     /// A definition or the references, looked at in a frame.
@@ -722,6 +726,7 @@ impl Workbench {
             git_daily: Default::default(),
             nav: Default::default(),
             outline: Default::default(),
+            tree_extras: Default::default(),
             peek: None,
             watcher: None,
             watching: Task::ready(()),
@@ -1858,8 +1863,19 @@ impl Workbench {
         if !keystroke.modifiers.modified() && self.commit_message_key(&keystroke.key, window, cx) {
             return true;
         }
-        // Esc closes a peek first.
-        if keystroke.key == "escape" && !keystroke.modifiers.modified() && self.close_peek(cx) {
+        // Esc closes a peek first, then the Explorer's filter.
+        if keystroke.key == "escape"
+            && !keystroke.modifiers.modified()
+            && (self.close_peek(cx) || self.close_tree_filter(window, cx))
+        {
+            return true;
+        }
+        // Letters typed in the Explorer jump to a name, as in Finder.
+        if self.tree_focus.is_focused(window)
+            && self.tree_edit.is_none()
+            && !keystroke.modifiers.modified()
+            && self.tree_type_ahead(&keystroke.key, cx)
+        {
             return true;
         }
         if self.active_editor_focused(window, cx) {

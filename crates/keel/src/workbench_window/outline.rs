@@ -119,7 +119,12 @@ impl Workbench {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> Option<AnyElement> {
-        self.panes.get(self.active)?;
+        // Only a file in front has symbols: not Settings, a diff or an image.
+        let pane = self.panes.get(self.active)?;
+        let document = self.documents.get(&pane.uri)?;
+        if !matches!(document.backing, Backing::File(_) | Backing::Untitled) {
+            return None;
+        }
         let strings = self.strings();
         let open = !self.outline.collapsed;
         let turn = chevron_turn("outline-turn", open, self.look, window, cx);
