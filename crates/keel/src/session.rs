@@ -41,6 +41,9 @@ pub struct WindowState {
     /// The folders open in the Explorer.
     #[serde(default)]
     pub expanded: Vec<PathBuf>,
+    /// How far down the Explorer was scrolled, in points.
+    #[serde(default)]
+    pub tree_scroll: Option<f32>,
     /// The bottom panel's height and Claude Code's width, in points.
     #[serde(default)]
     pub panel_height: Option<f32>,

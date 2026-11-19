@@ -50,6 +50,7 @@ impl ThemeChoice {
 /// Shows the chosen theme, or the one matching macOS when following it.
 /// Unknown names fall back to Mezzanotte and Chiaro.
 pub fn apply(choice: &ThemeChoice, window: Option<&mut Window>, cx: &mut App) {
+    place_notifications(cx);
     let registry = ThemeRegistry::global(cx);
     let find = |name: &str| {
         registry
@@ -84,6 +85,17 @@ pub fn apply(choice: &ThemeChoice, window: Option<&mut Window>, cx: &mut App) {
         theme.light_theme = chosen;
         Theme::change(ThemeMode::Light, window, cx);
     }
+}
+
+/// Notices come in at the bottom right, just above the status bar, as in
+/// VS Code, out of the way of the toolbar and of Claude's header.
+fn place_notifications(cx: &mut App) {
+    let notification = &mut Theme::global_mut(cx).notification;
+    notification.placement = gpui::Anchor::BottomRight;
+    notification.margins.bottom = gpui::px(36.);
+    notification.margins.right = gpui::px(14.);
+    notification.width = gpui::px(360.);
+    notification.max_items = 4;
 }
 
 /// Whether a theme is dark, for picking which preferred-theme setting to

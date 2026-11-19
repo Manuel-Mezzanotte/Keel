@@ -119,8 +119,16 @@ impl Workbench {
             "isDirty": false,
         });
         self.notify_host("documents/changed", params);
-        let editors: Vec<Entity<EditorState>> = self
-            .panes
+        for editor in self.editors_showing(uri) {
+            tabs::replace_text(&editor, &text, window, cx);
+        }
+        self.schedule_gutter_refresh(window, cx);
+        cx.notify();
+    }
+
+    /// Every editor showing `uri`, in view or in a hidden tab.
+    pub(super) fn editors_showing(&self, uri: &str) -> Vec<Entity<EditorState>> {
+        self.panes
             .iter()
             .filter(|pane| pane.uri == uri)
             .map(|pane| pane.editor.clone())
@@ -131,11 +139,47 @@ impl Workbench {
                     .filter(|tab| tab.uri == uri)
                     .filter_map(|tab| tab.parked.as_ref().map(|pane| pane.editor.clone())),
             )
-            .collect();
-        for editor in editors {
+            .collect()
+    }
+
+    /// Drops a file's unsaved changes and shows its saved text again.
+    pub(super) fn revert_document(
+        &mut self,
+        uri: &str,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let Some(document) = self.documents.get_mut(uri) else {
+            return;
+        };
+        let Backing::File(file) = &mut document.backing else {
+            return;
+        };
+        // What is on disk now, or what Keel saved last if the file is gone.
+        let text = file
+            .changed_on_disk()
+            .unwrap_or_else(|| file.saved_text().to_owned());
+        file.accept_disk_text(text.clone());
+        document.synced_text = text.clone();
+        document.modified = false;
+        document.version += 1;
+        let params = json!({
+            "uri": uri,
+            "version": document.version,
+            "text": text,
+            "isDirty": false,
+        });
+        self.notify_host("documents/changed", params);
+        self.forget_backup(uri);
+        for editor in self.editors_showing(uri) {
             tabs::replace_text(&editor, &text, window, cx);
         }
+        // The editors' change events marked it modified again.
+        if let Some(document) = self.documents.get_mut(uri) {
+            document.modified = false;
+        }
         self.schedule_gutter_refresh(window, cx);
+        self.refresh_title(window);
         cx.notify();
     }
 

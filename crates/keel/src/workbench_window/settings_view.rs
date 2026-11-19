@@ -298,7 +298,11 @@ pub(super) const CATALOG: &[Entry] = &[
             ("onFocusChange", "Cambiando editor", "On Focus Change"),
             ("onWindowChange", "Cambiando finestra", "On Window Change"),
         ]),
-        default: "\"off\"",
+        default: if cfg!(test) {
+            "\"off\""
+        } else {
+            "\"afterDelay\""
+        },
         title: ("Salvataggio automatico", "Auto Save"),
         description: (
             "Quando salvare i file da soli.",
@@ -526,6 +530,9 @@ impl Workbench {
         }
         for key in keys {
             self.apply_setting(key, window, cx);
+        }
+        if keys.iter().any(|key| key == "files.autoSave") {
+            crate::menus::set_auto_save(self.auto_save_is_on(), cx);
         }
         self.language_settings_changed();
         if let Some(extensions) = &self.extensions {

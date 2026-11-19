@@ -528,6 +528,7 @@ impl Workbench {
             view.rows.len(),
             cx.processor(|this, range: Range<usize>, _, cx| this.render_result_rows(range, cx)),
         )
+        .track_scroll(&self.search_scroll)
         .size_full();
 
         let header = view_header(strings.view_search, colors)

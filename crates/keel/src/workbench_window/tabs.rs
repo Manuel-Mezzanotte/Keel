@@ -185,6 +185,12 @@ impl Workbench {
             this.signature_after_cursor_move(window, cx);
             this.sync_preview_from_editor(&editor, cx);
         });
+        // «On focus change» saves as soon as the editor loses the keyboard,
+        // to the terminal, the sidebar or Claude as much as to another tab.
+        let focus = editor.read(cx).focus_handle(cx);
+        let left = cx.on_focus_out(&focus, window, |this, _, window, cx| {
+            this.auto_save_on(false, window, cx)
+        });
         self.underline_editor(uri, &editor, cx);
         // VS Code has both on unless the settings say otherwise.
         let on = |key: &str| {
@@ -212,7 +218,7 @@ impl Workbench {
             completions: Default::default(),
             sticky,
             minimap,
-            _subscriptions: vec![subscription, cursor],
+            _subscriptions: vec![subscription, cursor, left],
         })
     }
 

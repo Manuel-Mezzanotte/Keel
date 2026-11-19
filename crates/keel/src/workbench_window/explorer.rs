@@ -6,8 +6,8 @@ use std::path::{Path, PathBuf};
 
 use files::{FileTree, Row};
 use gpui::{
-    AnyElement, ClickEvent, ClipboardItem, Div, Render, StatefulInteractiveElement as _, img,
-    uniform_list,
+    AnyElement, ClickEvent, ClipboardItem, Div, Render, ScrollStrategy,
+    StatefulInteractiveElement as _, img, uniform_list,
 };
 use gpui_component::button::{Button, ButtonVariants as _};
 use gpui_component::input::{Input, InputState};
@@ -207,7 +207,8 @@ impl Workbench {
     }
 
     /// Opens the folders down to the active file and selects it, as VS
-    /// Code's `explorer.autoReveal` does.
+    /// Code's `explorer.autoReveal` does, and scrolls the tree to it when it
+    /// is out of sight. A differences tab counts as its file.
     pub(super) fn reveal_active_in_tree(&mut self) {
         let auto_reveal = self
             .settings
@@ -220,10 +221,34 @@ impl Workbench {
         if !auto_reveal {
             return;
         }
+        let changed = self.tree_selection.as_ref() != Some(&path);
         if let Some(tree) = &mut self.tree {
             tree.reveal(&path);
             self.tree_selection = Some(path);
             self.tree_changed();
+            // Coming back to the same file leaves the tree where you put it.
+            if changed && !self.restoring {
+                self.scroll_tree_to_selection();
+            }
+        }
+    }
+
+    /// Scrolls the tree so the selected row shows, in the middle, unless
+    /// it shows already.
+    pub(super) fn scroll_tree_to_selection(&self) {
+        let Some(index) = self.selected_index() else {
+            return;
+        };
+        let (top, height) = {
+            let state = self.tree_scroll.0.borrow();
+            let handle = &state.base_handle;
+            (-handle.offset().y, handle.bounds().size.height)
+        };
+        let row_top = px(ROW_HEIGHT) * index as f32;
+        let visible = height > px(0.) && row_top >= top && row_top + px(ROW_HEIGHT) <= top + height;
+        if !visible {
+            self.tree_scroll
+                .scroll_to_item(index, ScrollStrategy::Center);
         }
     }
 
@@ -241,12 +266,39 @@ impl Workbench {
         cx.notify();
     }
 
+    /// The file the active tab shows: its own, or the one whose
+    /// differences it shows.
     fn active_file_path(&self) -> Option<PathBuf> {
         let pane = self.panes.get(self.active)?;
-        self.documents
-            .get(&pane.uri)?
-            .disk_path()
-            .map(Path::to_path_buf)
+        let document = self.documents.get(&pane.uri)?;
+        if let Some(path) = document.disk_path() {
+            return Some(path.to_path_buf());
+        }
+        match &document.backing {
+            Backing::Diff(tab) => {
+                let path = Path::new(&tab.path);
+                if path.is_absolute() {
+                    return Some(path.to_path_buf());
+                }
+                let real = self.scm.repo.as_ref()?.absolute(&tab.path);
+                Some(self.project_spelling(&real))
+            }
+            Backing::Preview(tab) => Uri::parse(&tab.source)?.file_path(),
+            _ => None,
+        }
+    }
+
+    /// A path as git gives it, with links resolved, spelled from the
+    /// project's folder as Keel opened it.
+    pub(super) fn project_spelling(&self, real: &Path) -> PathBuf {
+        let Some(root) = &self.project.root else {
+            return real.to_path_buf();
+        };
+        let real_root = root.canonicalize().unwrap_or_else(|_| root.clone());
+        match real.strip_prefix(&real_root) {
+            Ok(inside) => root.join(inside),
+            Err(_) => real.to_path_buf(),
+        }
     }
 
     fn selected_index(&self) -> Option<usize> {
@@ -701,6 +753,7 @@ impl Workbench {
                 this.render_tree_rows(range, window, cx)
             }),
         )
+        .track_scroll(&self.tree_scroll)
         .size_full();
         let root_for_menu = root.clone();
         div()
@@ -902,15 +955,31 @@ impl Workbench {
                 None => div().into_any_element(),
             }
         } else {
-            // Errors in red and warnings in yellow, as in VS Code.
+            // Errors in red and warnings in yellow, as in VS Code; then
+            // git's colours, with the letter at the right, or a dot on a
+            // folder holding changes.
             let mark = self.problems.marks.get(&path).copied();
+            let git = self.git_marks.of(&path, is_dir);
             let theme = cx.theme();
-            let color = match mark {
-                Some((true, _)) => theme.danger,
-                Some((false, _)) => theme.warning,
-                None if ignored => colors.faint,
-                None => colors.text,
+            let color = match (mark, git) {
+                (Some((true, _)), _) => theme.danger,
+                (Some((false, _)), _) => theme.warning,
+                (None, Some(git)) => git.color(cx),
+                (None, None) if ignored => colors.faint,
+                (None, None) => colors.text,
             };
+            let git_badge = git.map(|git| {
+                let text = if is_dir { "•" } else { git.letter() };
+                div()
+                    .flex_none()
+                    .w(px(12.))
+                    .flex()
+                    .justify_center()
+                    .text_xs()
+                    .font_weight(FontWeight::MEDIUM)
+                    .text_color(git.color(cx))
+                    .child(text)
+            });
             div()
                 .flex_1()
                 .min_w_0()
@@ -922,6 +991,7 @@ impl Workbench {
                 .when_some(mark.filter(|(_, count)| *count > 0), |label, (_, count)| {
                     label.child(div().flex_none().text_xs().child(count.to_string()))
                 })
+                .children(git_badge)
                 .into_any_element()
         };
         let drop_folder = if is_dir {
@@ -1264,5 +1334,60 @@ mod tests {
         view.read_with(cx, |view, _| {
             assert!(view.documents.contains_key(&Uri::file(&moved).to_string()));
         });
+    }
+
+    /// The tree stays where you scrolled it while another view is in
+    /// front, and goes to a file opened elsewhere only when it is out of
+    /// sight.
+    #[gpui::test]
+    fn the_tree_keeps_its_place_and_finds_the_open_file(cx: &mut TestAppContext) {
+        let (_folder, root, view, cx) = project_window(cx);
+        for index in 0..200 {
+            fs::write(root.join(format!("note-{index:03}.md")), "").unwrap();
+        }
+        view.update(cx, |view, cx| view.refresh_tree(cx));
+        let draw = |cx: &mut VisualTestContext| {
+            cx.update(|window, _| window.refresh());
+            cx.run_until_parked();
+        };
+        let top = |view: &Entity<Workbench>, cx: &mut VisualTestContext| {
+            view.read_with(cx, |view, _| {
+                -view.tree_scroll.0.borrow().base_handle.offset().y.as_f32()
+            })
+        };
+        draw(cx);
+        view.read_with(cx, |view, _| {
+            view.tree_scroll
+                .0
+                .borrow()
+                .base_handle
+                .set_offset(gpui::point(px(0.), px(-2400.)));
+        });
+        draw(cx);
+        assert_eq!(top(&view, cx), 2400.);
+
+        for side in [
+            SideView::Search,
+            SideView::SourceControl,
+            SideView::Explorer,
+        ] {
+            view.update(cx, |view, cx| view.show_side_view(side, cx));
+            draw(cx);
+        }
+        assert_eq!(top(&view, cx), 2400., "back where it was");
+
+        // A file far above: the tree goes to it.
+        view.update_in(cx, |view, window, cx| {
+            view.open_file(&root.join("note-005.md"), window, cx)
+        });
+        draw(cx);
+        let found = top(&view, cx);
+        assert!(found < 400., "scrolled up to the file, at {found}");
+        // Another file already in sight: the tree does not move.
+        view.update_in(cx, |view, window, cx| {
+            view.open_file(&root.join("note-006.md"), window, cx)
+        });
+        draw(cx);
+        assert_eq!(top(&view, cx), found);
     }
 }

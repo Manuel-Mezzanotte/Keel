@@ -17,6 +17,10 @@ use crate::workbench_window::{
     GitRefresh, GitStash, GitStashPop, GitSync, StageAll, UnstageAll,
 };
 use crate::workbench_window::{
+    ClearNotifications, CloseFolder, RevertFile, SaveAll, SaveAs, ToggleAutoSave,
+    ToggleDoNotDisturb, ToggleNotifications, UndoLastCommit,
+};
+use crate::workbench_window::{
     CloseAllEditors, CloseEditor, CloseEditorsInGroup, CloseOtherEditors, FocusGroup1, FocusGroup2,
     FocusGroup3, KeepEditor, NextEditor, PreviousEditor, ReopenClosedEditor, SplitEditor,
     TogglePinEditor,
@@ -778,6 +782,60 @@ pub const COMMANDS: &[KeelCommand] = &[
         default_key: None,
         context: None,
     },
+    KeelCommand {
+        id: "workbench.action.files.saveAs",
+        action: || Box::new(SaveAs),
+        default_key: Some("cmd+shift+s"),
+        context: None,
+    },
+    KeelCommand {
+        id: "workbench.action.files.saveAll",
+        action: || Box::new(SaveAll),
+        default_key: Some("cmd+alt+s"),
+        context: None,
+    },
+    KeelCommand {
+        id: "workbench.action.files.revert",
+        action: || Box::new(RevertFile),
+        default_key: None,
+        context: None,
+    },
+    KeelCommand {
+        id: "workbench.action.toggleAutoSave",
+        action: || Box::new(ToggleAutoSave),
+        default_key: None,
+        context: None,
+    },
+    KeelCommand {
+        id: "workbench.action.closeFolder",
+        action: || Box::new(CloseFolder),
+        default_key: Some("cmd+k f"),
+        context: None,
+    },
+    KeelCommand {
+        id: "git.undoCommit",
+        action: || Box::new(UndoLastCommit),
+        default_key: None,
+        context: None,
+    },
+    KeelCommand {
+        id: "notifications.toggleList",
+        action: || Box::new(ToggleNotifications),
+        default_key: None,
+        context: None,
+    },
+    KeelCommand {
+        id: "notifications.clearAll",
+        action: || Box::new(ClearNotifications),
+        default_key: None,
+        context: None,
+    },
+    KeelCommand {
+        id: "workbench.action.toggleDoNotDisturbMode",
+        action: || Box::new(ToggleDoNotDisturb),
+        default_key: None,
+        context: None,
+    },
 ];
 
 /// The editor's own key that VS Code uses for something else: gpui-component
@@ -1025,7 +1083,7 @@ mod tests {
         let (bindings, warnings) =
             read_user_bindings(Path::new("/nonexistent/keel/keybindings.json"));
         assert!(bindings.is_empty() && warnings.is_empty());
-        assert_eq!(keel_bindings(&[]).len(), 75);
+        assert_eq!(keel_bindings(&[]).len(), 78);
     }
 
     #[test]

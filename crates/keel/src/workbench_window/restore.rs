@@ -72,6 +72,7 @@ impl Workbench {
                 .as_ref()
                 .map(files::FileTree::expanded_folders)
                 .unwrap_or_default(),
+            tree_scroll: Some(-self.tree_scroll.0.borrow().base_handle.offset().y.as_f32()),
             panel_height: Some(self.panel_height),
             agent_width: Some(self.agent_width),
             sidebar_width: Some(self.sidebar_width),
@@ -234,6 +235,14 @@ impl Workbench {
             }
         }
         self.tree_changed();
+        // The tree comes back where it was, not on the file in view.
+        if let Some(top) = state.tree_scroll.filter(|top| top.is_finite() && *top > 0.) {
+            self.tree_scroll
+                .0
+                .borrow()
+                .base_handle
+                .set_offset(gpui::point(px(0.), px(-top)));
+        }
         for group in &state.groups {
             let column = self.groups.len();
             for tab in group.tabs.iter().filter(|tab| tab.path.is_file()) {
@@ -355,7 +364,9 @@ impl Workbench {
     // Saving by itself
 
     fn auto_save_mode(&self) -> &str {
-        self.settings.string("files.autoSave").unwrap_or("off")
+        self.settings
+            .string("files.autoSave")
+            .unwrap_or(super::file_commands::AUTO_SAVE_DEFAULT)
     }
 
     /// After a change: with `files.autoSave` set to `afterDelay`, saves a
@@ -394,7 +405,7 @@ impl Workbench {
 
     /// Saves every file with changes, except those that also changed on
     /// disk, which wait for a save that asks.
-    fn save_all_quietly(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+    pub(super) fn save_all_quietly(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let uris: Vec<String> = self
             .documents
             .values()
@@ -563,5 +574,75 @@ mod tests {
             "x// c\n"
         );
         assert!(!view.read_with(window, |view, _| view.has_unsaved_changes()));
+    }
+
+    #[gpui::test]
+    fn leaving_the_editor_saves_with_on_focus_change(cx: &mut TestAppContext) {
+        set_up(cx);
+        let project = project(r#"{ "keel.language": "en", "files.autoSave": "onFocusChange" }"#);
+        let (view, window) = open_window(cx, &project);
+        // Focus is told only to the window in front.
+        window.update(|window, _| window.activate_window());
+        open(&view, window, &project.root.join("src/a.rs"));
+        window.update(|window, _| window.refresh());
+        window.run_until_parked();
+        window.simulate_input("x");
+        window.run_until_parked();
+        assert_eq!(
+            fs::read_to_string(project.root.join("src/a.rs")).unwrap(),
+            "// a\n"
+        );
+        // To the Explorer: not another editor, and still a change of focus.
+        view.update_in(window, |view, window, cx| view.tree_focus.focus(window, cx));
+        // Focus changes are told at the next frame.
+        window.update(|window, _| window.refresh());
+        window.run_until_parked();
+        assert_eq!(
+            fs::read_to_string(project.root.join("src/a.rs")).unwrap(),
+            "x// a\n"
+        );
+    }
+
+    #[gpui::test]
+    fn the_file_menu_saves_all_reverts_and_turns_auto_save_on(cx: &mut TestAppContext) {
+        set_up(cx);
+        let project = project(r#"{ "keel.language": "en" }"#);
+        let (view, window) = open_window(cx, &project);
+        open(&view, window, &project.root.join("src/a.rs"));
+        window.simulate_input("a");
+        open(&view, window, &project.root.join("src/b.rs"));
+        window.simulate_input("b");
+        window.dispatch_action(file_commands::SaveAll);
+        window.run_until_parked();
+        assert_eq!(
+            fs::read_to_string(project.root.join("src/a.rs")).unwrap(),
+            "a// a\n"
+        );
+        assert_eq!(
+            fs::read_to_string(project.root.join("src/b.rs")).unwrap(),
+            "b// b\n"
+        );
+
+        // Revert drops what was typed since.
+        window.simulate_input("z");
+        assert!(view.read_with(window, |view, _| view.has_unsaved_changes()));
+        window.dispatch_action(file_commands::RevertFile);
+        window.run_until_parked();
+        view.read_with(window, |view, cx| {
+            assert!(!view.has_unsaved_changes());
+            let editor = view.active_editor().unwrap();
+            assert_eq!(editor.read(cx).value().to_string(), "b// b\n");
+        });
+
+        // Auto Save, from the menu, writes the setting and turns on.
+        assert!(!view.read_with(window, |view, _| view.auto_save_is_on()));
+        window.dispatch_action(file_commands::ToggleAutoSave);
+        window.run_until_parked();
+        assert!(view.read_with(window, |view, _| view.auto_save_is_on()));
+        let written = fs::read_to_string(&project.settings).unwrap();
+        assert!(
+            written.contains("\"files.autoSave\": \"afterDelay\""),
+            "{written}"
+        );
     }
 }

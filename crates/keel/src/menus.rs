@@ -5,6 +5,7 @@ use gpui_component::input::{Copy, Cut, Paste, Redo, Replace, Search, SelectAll, 
 
 use crate::i18n::UiLanguage;
 use crate::workbench_window::{CloseEditor, GoToLine, QuickOpen, ReopenClosedEditor, SplitEditor};
+use crate::workbench_window::{CloseFolder, RevertFile, SaveAll, SaveAs, ToggleAutoSave};
 use crate::workbench_window::{
     CloseWindow, NewFile, NewWindow, Open, OpenKeybindings, OpenProject, OpenSettings, Quit, Save,
     SelectLanguage, SelectTheme, ShowCommands, ShowExplorer, ShowExtensions, ShowSearch,
@@ -34,6 +35,20 @@ pub fn init(cx: &mut App) {
     ]);
 }
 
+/// Whether File → Auto Save has its check mark.
+struct MenuAutoSave(bool);
+
+impl Global for MenuAutoSave {}
+
+/// Puts the check mark of File → Auto Save on or off.
+pub fn set_auto_save(on: bool, cx: &mut App) {
+    if cx.try_global::<MenuAutoSave>().map(|auto_save| auto_save.0) == Some(on) {
+        return;
+    }
+    cx.set_global(MenuAutoSave(on));
+    refresh(cx);
+}
+
 /// The language the menu bar was last built in.
 struct MenuLanguage(UiLanguage);
 
@@ -57,6 +72,9 @@ pub fn refresh(cx: &mut App) {
 pub fn set(language: UiLanguage, cx: &mut App) {
     cx.set_global(MenuLanguage(language));
     let strings = language.strings();
+    let auto_save = cx
+        .try_global::<MenuAutoSave>()
+        .is_none_or(|auto_save| auto_save.0);
     let recent: Vec<MenuItem> = crate::recent::projects(cx)
         .into_iter()
         .take(10)
@@ -105,9 +123,16 @@ pub fn set(language: UiLanguage, cx: &mut App) {
                 }),
                 MenuItem::separator(),
                 MenuItem::action(strings.save, Save),
+                MenuItem::action(strings.menu_save_as, SaveAs),
+                MenuItem::action(strings.menu_save_all, SaveAll),
+                MenuItem::separator(),
+                MenuItem::action(strings.menu_auto_save, ToggleAutoSave).checked(auto_save),
+                MenuItem::separator(),
+                MenuItem::action(strings.menu_revert, RevertFile),
                 MenuItem::separator(),
                 MenuItem::action(strings.menu_reopen_editor, ReopenClosedEditor),
                 MenuItem::action(strings.menu_close_editor, CloseEditor),
+                MenuItem::action(strings.menu_close_folder, CloseFolder),
                 MenuItem::action(strings.menu_close_window, CloseWindow),
             ],
         ),

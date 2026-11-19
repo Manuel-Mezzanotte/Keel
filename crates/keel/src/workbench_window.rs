@@ -20,9 +20,12 @@ mod editor_overlays;
 pub(crate) mod explorer;
 mod extension_features;
 mod extensions_view;
+mod file_commands;
 mod find_bar;
+mod git_feedback;
 mod git_graph;
 mod git_gutter;
+mod git_marks;
 mod host_watchdog;
 mod interface_page;
 mod keybindings_view;
@@ -31,6 +34,7 @@ mod language_servers;
 pub(crate) mod look;
 mod markdown_preview;
 mod navigation;
+mod notices;
 mod npm_scripts;
 mod other_files;
 mod panel_views;
@@ -78,11 +82,15 @@ pub(crate) use cursor_import::ImportFromCursor;
 pub(crate) use extensions_view::{
     CheckExtensionUpdates, InstallFromVsix, RestartExtensions, UpdateAllExtensions,
 };
+pub(crate) use file_commands::{
+    CloseFolder, RevertFile, SaveAll, SaveAs, ToggleAutoSave, UndoLastCommit,
+};
 pub(crate) use find_bar::bindings as find_bindings;
 pub(crate) use git_graph::ShowGitGraph;
 pub(crate) use git_gutter::{NextChange, PreviousChange, RevertChange, StageChange};
 pub(crate) use language_servers::RestartLanguageServers;
 pub(crate) use markdown_preview::{ShowMarkdownPreview, ShowMarkdownPreviewToSide};
+pub(crate) use notices::{ClearNotifications, ToggleDoNotDisturb, ToggleNotifications};
 pub(crate) use npm_scripts::RunNpmScript;
 pub(crate) use pdf_view::bindings as pdf_bindings;
 pub(crate) use problems::{NextProblem, PreviousProblem};
@@ -368,6 +376,8 @@ struct Extensions {
 #[derive(Clone, Copy)]
 enum AfterConfirm {
     CloseWindow,
+    /// Close Folder: the window closes and an empty one takes its place.
+    CloseFolder,
     QuitApp,
 }
 
@@ -453,6 +463,17 @@ pub struct Workbench {
     tree_selection: Option<PathBuf>,
     tree_edit: Option<explorer::TreeEdit>,
     tree_focus: gpui::FocusHandle,
+    /// Where each list of the sidebar is scrolled to, kept while another
+    /// view is in front: the Explorer, Search, Source Control, and the
+    /// views that scroll as a whole, such as Extensions.
+    tree_scroll: gpui::UniformListScrollHandle,
+    search_scroll: gpui::UniformListScrollHandle,
+    scm_scroll: gpui::UniformListScrollHandle,
+    side_scroll: gpui::ScrollHandle,
+    /// What git says of each file and folder, for their colours.
+    git_marks: git_marks::GitMarks,
+    /// The notices shown lately, for the bell in the status bar.
+    notices: notices::Notices,
     /// Watches the project for changes made outside Keel.
     watcher: Option<files::ProjectWatcher>,
     watching: Task<()>,
@@ -545,6 +566,7 @@ impl Workbench {
             }
             // Files may have changed in another app, such as Claude Code.
             if window.is_window_active() {
+                crate::menus::set_auto_save(this.auto_save_is_on(), cx);
                 this.project.refresh_branch();
                 this.refresh_git(cx);
                 this.refresh_tree(cx);
@@ -662,6 +684,12 @@ impl Workbench {
             tree_selection: None,
             tree_edit: None,
             tree_focus: cx.focus_handle(),
+            tree_scroll: Default::default(),
+            search_scroll: Default::default(),
+            scm_scroll: Default::default(),
+            side_scroll: Default::default(),
+            git_marks: Default::default(),
+            notices: Default::default(),
             watcher: None,
             watching: Task::ready(()),
             file_index: None,
@@ -1253,13 +1281,24 @@ impl Workbench {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let folder = self
-            .project
-            .root
-            .clone()
+        // A saved file suggests its own folder and name.
+        let current = self
+            .documents
+            .get(&uri)
+            .and_then(|document| document.disk_path())
+            .map(Path::to_path_buf);
+        let folder = current
+            .as_ref()
+            .and_then(|path| path.parent().map(Path::to_path_buf))
+            .or_else(|| self.project.root.clone())
             .or_else(|| std::env::current_dir().ok())
             .unwrap_or_else(|| PathBuf::from("/"));
-        let chosen = cx.prompt_for_new_path(&folder, Some(self.strings().untitled_file_name));
+        let name = current
+            .as_ref()
+            .and_then(|path| path.file_name())
+            .map(|name| name.to_string_lossy().into_owned())
+            .unwrap_or_else(|| self.strings().untitled_file_name.to_owned());
+        let chosen = cx.prompt_for_new_path(&folder, Some(&name));
         cx.spawn_in(window, async move |this, cx| {
             let Ok(Ok(Some(path))) = chosen.await else {
                 return;
@@ -1389,6 +1428,11 @@ impl Workbench {
         match after {
             AfterConfirm::CloseWindow => {
                 self.before_close(cx);
+                window.remove_window();
+            }
+            AfterConfirm::CloseFolder => {
+                self.before_close(cx);
+                cx.dispatch_action(&NewWindow);
                 window.remove_window();
             }
             AfterConfirm::QuitApp => cx.quit(),
@@ -2250,10 +2294,32 @@ impl Workbench {
             .filter_map(|item| item.as_str().map(str::to_owned))
             .collect();
         let modal = params["modal"].as_bool().unwrap_or(false);
-        if items.is_empty() && !modal {
-            self.status_message = Some(message);
-            cx.notify();
-            self.reply(id, Ok(Value::Null));
+        // As in VS Code, a message that is not modal is a notice in the
+        // corner, with the extension's buttons; closing it answers nothing.
+        if !modal {
+            let mut notice = match params["severity"].as_str() {
+                Some("error") => notices::Notice::error(message),
+                Some("warning") => notices::Notice::warning(message),
+                _ => notices::Notice::info(message),
+            };
+            let answered = Rc::new(std::cell::Cell::new(items.is_empty()));
+            if items.is_empty() {
+                self.reply(id, Ok(Value::Null));
+            }
+            for (index, item) in items.iter().enumerate() {
+                let answered = answered.clone();
+                notice = notice.action(item.clone(), move |this, _, _| {
+                    if !answered.replace(true) {
+                        this.reply(id, Ok(json!(index)));
+                    }
+                });
+            }
+            notice = notice.on_close(move |this, _, _| {
+                if !answered.replace(true) {
+                    this.reply(id, Ok(Value::Null));
+                }
+            });
+            self.notify_user(notice, window, cx);
             return;
         }
         let level = match params["severity"].as_str() {

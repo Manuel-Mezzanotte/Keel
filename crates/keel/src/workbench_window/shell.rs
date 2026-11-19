@@ -755,7 +755,7 @@ impl Workbench {
                     self.layout.side_view,
                     SideView::Explorer | SideView::Search | SideView::SourceControl
                 ) || self.project.root.is_none(),
-                |content| content.overflow_y_scroll(),
+                |content| content.overflow_y_scroll().track_scroll(&self.side_scroll),
             )
             .child(content);
         let content: AnyElement = if duration.is_zero() {
@@ -1161,6 +1161,7 @@ impl Workbench {
         index: usize,
         tab: &super::tabs::Tab,
         colors: Colors,
+        window: &mut Window,
         cx: &mut Context<Self>,
     ) -> AnyElement {
         use super::tabs::{TabAction, TabCommand};
@@ -1170,6 +1171,25 @@ impl Workbench {
             .get(&tab.uri)
             .map(|document| (self.display_name(document), document.modified))
             .unwrap_or_default();
+        // Errors, warnings and git's colour on the name, as in the Explorer.
+        let tinted = self
+            .documents
+            .get(&tab.uri)
+            .and_then(|document| document.disk_path())
+            .and_then(|path| match self.problems.marks.get(path) {
+                Some((true, _)) => Some(cx.theme().danger),
+                Some((false, count)) if *count > 0 => Some(cx.theme().warning),
+                _ => self.git_marks.file(path).map(|mark| mark.color(cx)),
+            });
+        // The dot of unsaved changes fades away when the file is saved,
+        // instead of blinking out at each automatic save.
+        let dot = look::glide(
+            gpui::ElementId::Name(format!("tab-dot-{}", tab.uri).into()),
+            if modified { 1. } else { 0. },
+            self.look.duration(220),
+            window,
+            cx,
+        );
         let icon = self
             .documents
             .get(&tab.uri)
@@ -1207,14 +1227,20 @@ impl Workbench {
                     cx,
                 )
             }));
-        let marker = if modified && !tab.pinned {
+        let marker = if dot > 0. && !tab.pinned {
             div()
                 .size(px(16.))
                 .flex()
                 .items_center()
                 .justify_center()
+                .opacity(dot)
                 .group_hover(hover_group.clone(), |marker| marker.invisible())
-                .child(div().size(px(7.)).rounded_full().bg(colors.muted))
+                .child(
+                    div()
+                        .size(px(7. * (0.6 + 0.4 * dot)))
+                        .rounded_full()
+                        .bg(colors.muted),
+                )
                 .into_any_element()
         } else {
             div().into_any_element()
@@ -1341,6 +1367,9 @@ impl Workbench {
                 div()
                     .whitespace_nowrap()
                     .when(tab.preview, |name| name.italic())
+                    .when_some(tinted, |name, color| {
+                        name.text_color(if in_view { color } else { color.opacity(0.8) })
+                    })
                     .child(name),
             )
             .child(
@@ -1448,7 +1477,7 @@ impl Workbench {
                 .tabs
                 .iter()
                 .enumerate()
-                .map(|(position, tab)| self.render_tab(index, position, tab, colors, cx))
+                .map(|(position, tab)| self.render_tab(index, position, tab, colors, window, cx))
                 .collect();
             div()
                 .flex_1()
@@ -2128,7 +2157,9 @@ impl Workbench {
                             .flex()
                             .items_center()
                             .child(text)
-                    })),
+                            .into_any_element()
+                    }))
+                    .child(self.render_bell(colors, cx)),
             )
     }
 }
@@ -2213,7 +2244,11 @@ impl Render for Workbench {
         let root = self.agent_panel_actions(root, cx);
         let root = self.editing_actions(root, cx);
         let root = self.find_actions(root, cx);
+        let root = self.notice_actions(root, cx);
+        let root = self.file_command_actions(root, cx);
+        let notice_center = self.render_notice_center(colors, window, cx);
         self.explorer_actions(root, cx)
+            .relative()
             .size_full()
             .flex()
             .flex_col()
@@ -2279,6 +2314,7 @@ impl Render for Workbench {
             .child(toolbar)
             .child(body)
             .child(status)
+            .children(notice_center)
     }
 }
 

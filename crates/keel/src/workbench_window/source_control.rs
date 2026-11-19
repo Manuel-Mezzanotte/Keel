@@ -22,6 +22,9 @@ use super::*;
 /// The key context around the commit message, for Cmd+Enter.
 const MESSAGE_CONTEXT: &str = "CommitMessage";
 
+/// How long the Commit button says «Done» after a commit.
+const COMMITTED_FOR: Duration = Duration::from_millis(1600);
+
 /// How long the status waits after a change before git is asked again.
 const REFRESH_PAUSE: Duration = Duration::from_millis(250);
 
@@ -68,9 +71,12 @@ enum Row {
 pub(super) struct SourceControl {
     pub(super) repo: Option<Arc<git::Repo>>,
     pub(super) status: git::Status,
-    message: Entity<TextareaState>,
+    pub(super) message: Entity<TextareaState>,
     /// What git is doing now, such as "Push", shown while it runs.
     pub(super) busy: Option<&'static str>,
+    /// When the last commit was made, for the check on the button.
+    pub(super) committed_at: Option<std::time::Instant>,
+    committed_task: Task<()>,
     /// Sections closed to their header.
     pub(super) collapsed: std::collections::HashSet<Section>,
     refresh_task: Task<()>,
@@ -115,6 +121,8 @@ impl SourceControl {
             status: git::Status::default(),
             message,
             busy: None,
+            committed_at: None,
+            committed_task: Task::ready(()),
             collapsed: Default::default(),
             refresh_task: Task::ready(()),
             operation: Task::ready(()),
@@ -188,6 +196,13 @@ impl Workbench {
                     self.project.branch = status.branch.clone().or_else(|| status.head.clone());
                 }
                 self.scm.status = status;
+                self.git_marks = match (&self.project.root, &self.scm.repo) {
+                    (Some(root), Some(repo)) => {
+                        let real = root.canonicalize().unwrap_or_else(|_| root.clone());
+                        git_marks::GitMarks::new(root, &real, repo.root(), &self.scm.status)
+                    }
+                    _ => Default::default(),
+                };
                 self.git_status_changed(cx);
             }
             Err(error) => self.log(format!("git: {error}")),
@@ -202,6 +217,27 @@ impl Workbench {
         label: &'static str,
         operation: impl FnOnce(&git::Repo) -> git::Result<()> + Send + 'static,
         then: impl FnOnce(&mut Self, &mut Window, &mut Context<Self>) + 'static,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.run_git_with(
+            label,
+            None,
+            operation,
+            move |this, (), window, cx| then(this, window, cx),
+            window,
+            cx,
+        );
+    }
+
+    /// Like `run_git`, with what the operation found for `then`; when it
+    /// fails, the error window offers `retry` again.
+    pub(super) fn run_git_with<T: Send + 'static>(
+        &mut self,
+        label: &'static str,
+        retry: Option<RemoteAction>,
+        operation: impl FnOnce(&git::Repo) -> git::Result<T> + Send + 'static,
+        then: impl FnOnce(&mut Self, T, &mut Window, &mut Context<Self>) + 'static,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
@@ -223,11 +259,8 @@ impl Workbench {
                 let (result, status) = result;
                 this.git_status_arrived(status, cx);
                 match result {
-                    Ok(()) => then(this, window, cx),
-                    Err(error) => {
-                        let message = format!("{label}: {error}");
-                        this.report(message);
-                    }
+                    Ok(value) => then(this, value, window, cx),
+                    Err(error) => this.git_failed(label, error.to_string(), retry, window, cx),
                 }
                 cx.notify();
             })
@@ -406,6 +439,7 @@ impl Workbench {
         cx: &mut Context<Self>,
     ) {
         let label = self.strings().scm_commit;
+        let written = message.clone();
         self.run_git(
             label,
             move |repo| {
@@ -414,10 +448,20 @@ impl Workbench {
                 }
                 repo.commit(&message, amend)
             },
-            |this, window, cx| {
+            move |this, window, cx| {
                 this.scm
                     .message
                     .update(cx, |input, cx| input.set_value("", window, cx));
+                this.scm.committed_at = Some(std::time::Instant::now());
+                this.scm.committed_task = cx.spawn(async move |this, cx| {
+                    cx.background_executor().timer(COMMITTED_FOR).await;
+                    this.update(cx, |this, cx| {
+                        this.scm.committed_at = None;
+                        cx.notify();
+                    })
+                    .ok();
+                });
+                this.notify_committed(&written, amend, window, cx);
             },
             window,
             cx,
@@ -438,35 +482,129 @@ impl Workbench {
         self.commit(true, window, cx);
     }
 
-    fn remote_command(
+    pub(super) fn remote_command(
         &mut self,
         action: RemoteAction,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
         let strings = self.strings();
-        let label = match action {
-            RemoteAction::Push => strings.scm_push,
-            RemoteAction::Pull => strings.scm_pull,
-            RemoteAction::Fetch => strings.scm_fetch,
-            RemoteAction::Sync => strings.scm_sync,
-            RemoteAction::Stash => strings.scm_stash,
-            RemoteAction::StashPop => strings.scm_stash_pop,
-        };
-        self.run_git(
-            label,
-            move |repo| match action {
-                RemoteAction::Push => repo.push(),
-                RemoteAction::Pull => repo.pull(),
-                RemoteAction::Fetch => repo.fetch(),
-                RemoteAction::Sync => repo.sync(),
-                RemoteAction::Stash => repo.stash(),
-                RemoteAction::StashPop => repo.stash_pop(),
-            },
-            |_, _, _| {},
-            window,
-            cx,
-        );
+        match action {
+            RemoteAction::Push => self.run_git_with(
+                strings.scm_push,
+                Some(action),
+                |repo| {
+                    let before = repo.status()?;
+                    repo.push()?;
+                    let after = repo.status().ok();
+                    Ok(git_feedback::Pushed {
+                        commits: before.ahead,
+                        published: before.upstream.is_none(),
+                        branch: before.branch,
+                        upstream: after.and_then(|status| status.upstream),
+                    })
+                },
+                |this, pushed, window, cx| this.notify_pushed(pushed, window, cx),
+                window,
+                cx,
+            ),
+            RemoteAction::Pull => self.run_git_with(
+                strings.scm_pull,
+                Some(action),
+                |repo| {
+                    let before = repo.head_hash();
+                    repo.pull()?;
+                    Ok(match (before, repo.head_hash()) {
+                        (Some(before), Some(after)) if before != after => {
+                            repo.changes_between(&before, &after)
+                        }
+                        _ => (0, 0),
+                    })
+                },
+                |this, pulled, window, cx| this.notify_pulled(pulled, window, cx),
+                window,
+                cx,
+            ),
+            RemoteAction::Fetch => self.run_git_with(
+                strings.scm_fetch,
+                Some(action),
+                |repo| {
+                    repo.fetch()?;
+                    Ok(repo.status()?.behind)
+                },
+                |this, behind, window, cx| this.notify_fetched(behind, window, cx),
+                window,
+                cx,
+            ),
+            RemoteAction::Sync => self.run_git_with(
+                strings.scm_sync,
+                Some(action),
+                |repo| {
+                    let before = repo.status()?;
+                    let head = repo.head_hash();
+                    repo.sync()?;
+                    let pulled = match (head, repo.head_hash()) {
+                        (Some(before), Some(after)) if before != after => {
+                            repo.changes_between(&before, &after).0
+                        }
+                        _ => 0,
+                    };
+                    let after = repo.status()?;
+                    Ok((pulled, before.ahead, after.upstream))
+                },
+                |this, (pulled, pushed, upstream), window, cx| {
+                    let strings = this.strings();
+                    let upstream = upstream.unwrap_or_default();
+                    this.notify_user(
+                        notices::Notice::success(notices::fill(
+                            strings.git_synced,
+                            &[("upstream", &upstream)],
+                        ))
+                        .message(notices::fill(
+                            strings.git_synced_why,
+                            &[
+                                ("pulled", &pulled.to_string()),
+                                ("pushed", &pushed.to_string()),
+                            ],
+                        )),
+                        window,
+                        cx,
+                    );
+                },
+                window,
+                cx,
+            ),
+            RemoteAction::Stash => self.run_git_with(
+                strings.scm_stash,
+                Some(action),
+                |repo| repo.stash(),
+                |this, (), window, cx| {
+                    let strings = this.strings();
+                    this.notify_user(
+                        notices::Notice::success(strings.git_stashed)
+                            .message(strings.git_stashed_why)
+                            .action(strings.git_stash_bring_back, |this, window, cx| {
+                                this.remote_command(RemoteAction::StashPop, window, cx)
+                            }),
+                        window,
+                        cx,
+                    );
+                },
+                window,
+                cx,
+            ),
+            RemoteAction::StashPop => self.run_git_with(
+                strings.scm_stash_pop,
+                Some(action),
+                |repo| repo.stash_pop(),
+                |this, (), window, cx| {
+                    let strings = this.strings();
+                    this.notify_user(notices::Notice::success(strings.git_unstashed), window, cx);
+                },
+                window,
+                cx,
+            ),
+        }
     }
 
     /// The branch in the status bar: switch to another, or create one.
@@ -516,7 +654,18 @@ impl Workbench {
                 this.run_git(
                     label,
                     move |repo| repo.switch(&branch),
-                    |_, _, _| {},
+                    |this, window, cx| {
+                        let strings = this.strings();
+                        let name = this.scm.status.branch.clone().unwrap_or_default();
+                        this.notify_user(
+                            notices::Notice::info(notices::fill(
+                                strings.git_switched,
+                                &[("branch", &name)],
+                            )),
+                            window,
+                            cx,
+                        );
+                    },
                     window,
                     cx,
                 );
@@ -542,10 +691,21 @@ impl Workbench {
                     if !name.is_empty() {
                         this.update(cx, |this, cx| {
                             let label = this.strings().scm_create_branch;
+                            let created = name.clone();
                             this.run_git(
                                 label,
                                 move |repo| repo.create_branch(&name),
-                                |_, _, _| {},
+                                move |this, window, cx| {
+                                    let strings = this.strings();
+                                    this.notify_user(
+                                        notices::Notice::success(notices::fill(
+                                            strings.git_branch_created,
+                                            &[("branch", &created)],
+                                        )),
+                                        window,
+                                        cx,
+                                    );
+                                },
                                 window,
                                 cx,
                             );
@@ -784,14 +944,23 @@ impl Workbench {
                     .children(sync)
                     .child(div().pr_1().child(key_hint("⌘↩", colors))),
             );
+        let just_committed = self.scm.committed_at.is_some();
         let commit = DropdownButton::new("scm-commit-split")
             .primary()
             .mx_1()
             .button(
                 Button::new("scm-commit")
                     .flex_1()
-                    .icon(Icon::new(IconName::Check))
-                    .label(strings.scm_commit)
+                    .icon(Icon::new(if just_committed {
+                        IconName::CircleCheck
+                    } else {
+                        IconName::Check
+                    }))
+                    .label(if just_committed {
+                        strings.git_committed
+                    } else {
+                        strings.scm_commit
+                    })
                     .tooltip(strings.scm_commit_on(&branch))
                     .loading(committing)
                     .disabled(busy || nothing)
@@ -838,6 +1007,7 @@ impl Workbench {
                                 .collect::<Vec<_>>()
                         }),
                     )
+                    .track_scroll(&self.scm_scroll)
                     .px_1()
                     .size_full(),
                 )
@@ -1173,7 +1343,7 @@ impl Workbench {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-enum RemoteAction {
+pub(super) enum RemoteAction {
     Push,
     Pull,
     Fetch,
@@ -1385,5 +1555,177 @@ mod tests {
         cx.simulate_prompt_answer("Stage All and Commit");
         settle(cx);
         assert_eq!(view.read_with(cx, |view, _| view.git_change_count()), 0);
+    }
+
+    /// Git and the Explorer speak to each other, and every git command
+    /// says what it did: colours in the tree, the tree on the file whose
+    /// differences are open, a notice after a commit with Undo, after a
+    /// push, and a window with the fix when the remote is ahead.
+    #[gpui::test]
+    fn git_colours_the_tree_and_says_what_it_did(cx: &mut TestAppContext) {
+        cx.executor().allow_parking();
+        cx.update(|cx| {
+            gpui_component::init(cx);
+            crate::workbench_window::init(cx);
+        });
+        let folder = tempfile::tempdir().unwrap();
+        let base = fs::canonicalize(folder.path()).unwrap();
+        let remote = base.join("remote.git");
+        let root = base.join("app");
+        let other = base.join("other");
+        fs::create_dir_all(&root).unwrap();
+        git(&base, &["init", "-q", "--bare", "-b", "main", "remote.git"]);
+        git(&root, &["init", "-q", "-b", "main"]);
+        git(&root, &["config", "user.name", "Test"]);
+        git(&root, &["config", "user.email", "test@example.com"]);
+        git(&root, &["config", "commit.gpgsign", "false"]);
+        fs::create_dir_all(root.join("src")).unwrap();
+        fs::write(root.join("a.txt"), "uno\n").unwrap();
+        git(&root, &["add", "."]);
+        git(&root, &["commit", "-q", "-m", "first"]);
+        git(
+            &root,
+            &["remote", "add", "origin", remote.to_str().unwrap()],
+        );
+        fs::write(root.join("a.txt"), "uno\ndue\n").unwrap();
+        fs::write(root.join("src/b.txt"), "nuovo\n").unwrap();
+
+        let config = tempfile::tempdir().unwrap();
+        let settings_file = config.path().join("settings.json");
+        fs::write(&settings_file, r#"{ "keel.language": "en" }"#).unwrap();
+        let settings = Settings::load(&settings_file, None);
+        let opening = Opening::new(Some(root.clone()), None);
+        let (view, cx) = cx.add_window_view(|window, cx| {
+            gpui_component::Root::new(
+                cx.new(|cx| Workbench::new(opening, settings, None, window, cx)),
+                window,
+                cx,
+            )
+        });
+        let view = view.read_with(cx, |root, _| {
+            root.view().clone().downcast::<Workbench>().unwrap()
+        });
+        let settle = |cx: &mut gpui::VisualTestContext| {
+            for _ in 0..80 {
+                cx.executor().advance_clock(REFRESH_PAUSE * 2);
+                cx.run_until_parked();
+                if view.read_with(cx, |view, _| view.scm.busy.is_none()) {
+                    break;
+                }
+                std::thread::sleep(Duration::from_millis(20));
+            }
+        };
+        let last = |cx: &mut gpui::VisualTestContext| {
+            view.read_with(cx, |view, _| {
+                let notice = view.notices.list.front().expect("a notice");
+                (notice.title.clone(), notice.message.clone())
+            })
+        };
+        settle(cx);
+
+        // M on the changed file, U on the new one, the folder's dot.
+        view.read_with(cx, |view, _| {
+            use super::git_marks::Mark;
+            assert_eq!(
+                view.git_marks.file(&root.join("a.txt")),
+                Some(Mark::Modified)
+            );
+            assert_eq!(
+                view.git_marks.file(&root.join("src/b.txt")),
+                Some(Mark::Untracked)
+            );
+            assert_eq!(
+                view.git_marks.folder(&root.join("src")),
+                Some(Mark::Untracked)
+            );
+            assert_eq!(view.git_marks.folder(&root), Some(Mark::Modified));
+        });
+
+        // A file's differences take the tree to the file.
+        view.update_in(cx, |view, window, cx| {
+            view.open_change("src/b.txt", Section::Changes, window, cx);
+        });
+        view.read_with(cx, |view, _| {
+            assert_eq!(
+                view.tree_selection.as_deref(),
+                Some(root.join("src/b.txt").as_path())
+            );
+        });
+
+        // A commit says so, and Undo takes it back with its message.
+        view.update_in(cx, |view, window, cx| {
+            view.stage_paths(vec!["a.txt".into()], window, cx)
+        });
+        settle(cx);
+        view.update_in(cx, |view, window, cx| {
+            view.scm
+                .message
+                .update(cx, |input, cx| input.set_value("add due", window, cx));
+            view.commit(false, window, cx);
+        });
+        settle(cx);
+        assert_eq!(
+            last(cx),
+            ("Committed".to_owned(), Some("add due".to_owned()))
+        );
+        view.read_with(cx, |view, _| assert!(view.scm.committed_at.is_some()));
+        view.update_in(cx, |view, window, cx| {
+            let (label, undo) = view.notices.list[0].actions[0].clone();
+            assert_eq!(label, "Undo");
+            undo(view, window, cx);
+        });
+        settle(cx);
+        assert_eq!(last(cx).0, "Commit undone");
+        view.read_with(cx, |view, cx| {
+            assert_eq!(view.scm.message.read(cx).value().to_string(), "add due");
+            assert_eq!(view.file_paths(Section::Staged), ["a.txt"]);
+        });
+
+        // The first push publishes the branch, the next one counts.
+        view.update_in(cx, |view, window, cx| view.commit(false, window, cx));
+        settle(cx);
+        view.update_in(cx, |view, window, cx| {
+            view.remote_command(RemoteAction::Push, window, cx)
+        });
+        settle(cx);
+        assert_eq!(last(cx).0, "Branch main published to origin");
+        fs::write(root.join("a.txt"), "uno\ndue\ntre\n").unwrap();
+        git(&root, &["commit", "-q", "-am", "tre"]);
+        view.update_in(cx, |view, window, cx| {
+            view.remote_command(RemoteAction::Push, window, cx)
+        });
+        settle(cx);
+        assert_eq!(last(cx).0, "Pushed 1 commit to origin/main");
+
+        // Someone else pushes: ours is rejected, and the window offers
+        // the pull that fixes it.
+        git(&base, &["clone", "-q", remote.to_str().unwrap(), "other"]);
+        git(&other, &["config", "user.name", "Other"]);
+        git(&other, &["config", "user.email", "other@example.com"]);
+        git(&other, &["config", "commit.gpgsign", "false"]);
+        fs::write(other.join("c.txt"), "altro\n").unwrap();
+        git(&other, &["add", "."]);
+        git(&other, &["commit", "-q", "-m", "theirs"]);
+        git(&other, &["push", "-q"]);
+        fs::write(root.join("d.txt"), "mio\n").unwrap();
+        git(&root, &["add", "d.txt"]);
+        git(&root, &["commit", "-q", "-m", "mine"]);
+        git(&root, &["config", "pull.rebase", "false"]);
+        view.update_in(cx, |view, window, cx| {
+            view.remote_command(RemoteAction::Push, window, cx)
+        });
+        settle(cx);
+        assert!(cx.has_pending_prompt());
+        cx.simulate_prompt_answer("Pull and Push");
+        settle(cx);
+        assert_eq!(last(cx).0, "Synced with origin/main");
+        let log = Command::new("git")
+            .arg("-C")
+            .arg(&remote)
+            .args(["log", "--format=%s", "main"])
+            .output()
+            .unwrap();
+        let log = String::from_utf8_lossy(&log.stdout);
+        assert!(log.contains("mine") && log.contains("theirs"), "{log}");
     }
 }

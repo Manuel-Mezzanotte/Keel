@@ -173,6 +173,27 @@ fn shots() -> Vec<Shot> {
                 workbench.open_change(&path, source_control::Section::Changes, window, cx);
             }
         }));
+        shots.push(shot(name("notices"), |workbench, window, cx| {
+            workbench.notify_pulled((2, 5), window, cx);
+            workbench.notify_pushed(
+                super::git_feedback::Pushed {
+                    commits: 3,
+                    published: false,
+                    branch: Some("develop".to_owned()),
+                    upstream: Some("origin/develop".to_owned()),
+                },
+                window,
+                cx,
+            );
+        }));
+        shots.push(shot(name("notice-center"), |workbench, window, cx| {
+            workbench.toggle_notice_center(window, cx);
+        }));
+        shots.push(shot(name("after-notices"), |workbench, window, cx| {
+            workbench.notices.open = false;
+            window.clear_notifications(cx);
+            cx.notify();
+        }));
     }
     // The Claude panel: its start with the project's real chats, read
     // from disk, then a chat with the tests' fake agent, so nothing is

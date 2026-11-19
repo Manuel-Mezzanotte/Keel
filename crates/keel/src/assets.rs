@@ -56,7 +56,14 @@ gpui_kit_assets::icon_assets!(
         MessageSquare,
         CircleDot,
         Circle,
-        ShieldCheck
+        ShieldCheck,
+        Bell,
+        BellDot,
+        BellOff,
+        CloudUpload,
+        CloudDownload,
+        ExternalLink,
+        Undo2
     ]
 );
 
