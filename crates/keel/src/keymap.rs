@@ -25,6 +25,7 @@ use crate::workbench_window::{
     FocusGroup3, KeepEditor, NextEditor, PreviousEditor, ReopenClosedEditor, SplitEditor,
     TogglePinEditor,
 };
+use crate::workbench_window::{CloseSavedEditors, OpenEditorAtIndex};
 use crate::workbench_window::{
     CloseWindow, NewFile, NewWindow, Open, OpenRecent, Quit, Save, SelectLanguage, SelectTheme,
     ShowCommands, ShowExplorer, ShowExtensions, ShowSearch, ShowSourceControl, ToggleAgent,
@@ -46,6 +47,7 @@ use crate::workbench_window::{
 };
 use crate::workbench_window::{Fold, FoldAll, Unfold, UnfoldAll};
 use crate::workbench_window::{FormatDocument, OrganizeImports, ShowGitGraph};
+use crate::workbench_window::{GoBack, GoForward, GoToLastEdit, RecentEditors, ShowRecentPlaces};
 use crate::workbench_window::{
     GoToImplementation, GoToReferences, GoToSymbolInFile, GoToSymbolInWorkspace,
     GoToTypeDefinition, RenameSymbol, RevealDefinition,
@@ -58,6 +60,9 @@ use crate::workbench_window::{NextChange, PreviousChange, RevertChange, StageCha
 use crate::workbench_window::{NextDiffChange, OpenAllChanges, PreviousDiffChange};
 use crate::workbench_window::{
     NextProblem, PreviousProblem, RestartLanguageServers, TriggerParameterHints,
+};
+use crate::workbench_window::{
+    PeekDefinition, PeekReferences, ShowIncomingCalls, ShowOutgoingCalls,
 };
 use crate::workbench_window::{ShowMarkdownPreview, ShowMarkdownPreviewToSide};
 
@@ -913,6 +918,120 @@ pub const COMMANDS: &[KeelCommand] = &[
         default_key: Some("cmd+k c"),
         context: None,
     },
+    KeelCommand {
+        id: "workbench.action.navigateBack",
+        action: || Box::new(GoBack),
+        default_key: Some("ctrl+-"),
+        context: None,
+    },
+    KeelCommand {
+        id: "workbench.action.navigateForward",
+        action: || Box::new(GoForward),
+        default_key: Some("ctrl+shift+-"),
+        context: None,
+    },
+    KeelCommand {
+        id: "workbench.action.navigateToLastEditLocation",
+        action: || Box::new(GoToLastEdit),
+        default_key: Some("cmd+k cmd+q"),
+        context: None,
+    },
+    KeelCommand {
+        id: "keel.recentPlaces",
+        action: || Box::new(ShowRecentPlaces),
+        default_key: None,
+        context: None,
+    },
+    KeelCommand {
+        id: "workbench.action.openNextRecentlyUsedEditor",
+        action: || Box::new(RecentEditors),
+        default_key: Some("ctrl+tab"),
+        context: None,
+    },
+    KeelCommand {
+        id: "workbench.action.closeUnmodifiedEditors",
+        action: || Box::new(CloseSavedEditors),
+        default_key: Some("cmd+k u"),
+        context: None,
+    },
+    KeelCommand {
+        id: "workbench.action.openEditorAtIndex1",
+        action: || Box::new(OpenEditorAtIndex { index: 0 }),
+        default_key: Some("ctrl+1"),
+        context: None,
+    },
+    KeelCommand {
+        id: "workbench.action.openEditorAtIndex2",
+        action: || Box::new(OpenEditorAtIndex { index: 1 }),
+        default_key: Some("ctrl+2"),
+        context: None,
+    },
+    KeelCommand {
+        id: "workbench.action.openEditorAtIndex3",
+        action: || Box::new(OpenEditorAtIndex { index: 2 }),
+        default_key: Some("ctrl+3"),
+        context: None,
+    },
+    KeelCommand {
+        id: "workbench.action.openEditorAtIndex4",
+        action: || Box::new(OpenEditorAtIndex { index: 3 }),
+        default_key: Some("ctrl+4"),
+        context: None,
+    },
+    KeelCommand {
+        id: "workbench.action.openEditorAtIndex5",
+        action: || Box::new(OpenEditorAtIndex { index: 4 }),
+        default_key: Some("ctrl+5"),
+        context: None,
+    },
+    KeelCommand {
+        id: "workbench.action.openEditorAtIndex6",
+        action: || Box::new(OpenEditorAtIndex { index: 5 }),
+        default_key: Some("ctrl+6"),
+        context: None,
+    },
+    KeelCommand {
+        id: "workbench.action.openEditorAtIndex7",
+        action: || Box::new(OpenEditorAtIndex { index: 6 }),
+        default_key: Some("ctrl+7"),
+        context: None,
+    },
+    KeelCommand {
+        id: "workbench.action.openEditorAtIndex8",
+        action: || Box::new(OpenEditorAtIndex { index: 7 }),
+        default_key: Some("ctrl+8"),
+        context: None,
+    },
+    KeelCommand {
+        id: "workbench.action.openEditorAtIndex9",
+        action: || Box::new(OpenEditorAtIndex { index: 8 }),
+        default_key: Some("ctrl+9"),
+        context: None,
+    },
+    KeelCommand {
+        id: "editor.action.peekDefinition",
+        action: || Box::new(PeekDefinition),
+        default_key: Some("alt+f12"),
+        context: Some(EDITOR_CONTEXT),
+    },
+    KeelCommand {
+        id: "editor.action.referenceSearch.trigger",
+        action: || Box::new(PeekReferences),
+        default_key: None,
+        context: Some(EDITOR_CONTEXT),
+    },
+    KeelCommand {
+        id: "editor.showIncomingCalls",
+        action: || Box::new(ShowIncomingCalls),
+        default_key: Some("shift+alt+h"),
+        context: Some(EDITOR_CONTEXT),
+    },
+    KeelCommand {
+        id: "editor.showOutgoingCalls",
+        action: || Box::new(ShowOutgoingCalls),
+        default_key: None,
+        context: Some(EDITOR_CONTEXT),
+    },
 ];
 
 /// The editor's own key that VS Code uses for something else: gpui-component
@@ -1058,6 +1177,7 @@ pub fn bind(user: &[UserBinding], cx: &mut App) -> Vec<String> {
     key_bindings.extend(crate::workbench_window::source_control_bindings());
     key_bindings.extend(crate::workbench_window::pdf_bindings());
     key_bindings.extend(crate::workbench_window::find_bindings());
+    key_bindings.extend(crate::workbench_window::nav_bindings());
     key_bindings.extend(crate::workbench_window::terminal_bindings(
         &window_keys_for_shell(user),
         cx,
@@ -1160,7 +1280,7 @@ mod tests {
         let (bindings, warnings) =
             read_user_bindings(Path::new("/nonexistent/keel/keybindings.json"));
         assert!(bindings.is_empty() && warnings.is_empty());
-        assert_eq!(keel_bindings(&[]).len(), 81);
+        assert_eq!(keel_bindings(&[]).len(), 97);
     }
 
     #[test]

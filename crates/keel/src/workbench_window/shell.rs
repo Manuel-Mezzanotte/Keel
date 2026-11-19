@@ -426,7 +426,7 @@ impl Workbench {
 
     /// Shows a document from the Open Editors list: in its pane if it has
     /// one, otherwise in the active pane.
-    fn show_document(&mut self, uri: &str, window: &mut Window, cx: &mut Context<Self>) {
+    pub(super) fn show_document(&mut self, uri: &str, window: &mut Window, cx: &mut Context<Self>) {
         if !self.documents.contains_key(uri) {
             return;
         }
@@ -1177,6 +1177,21 @@ impl Workbench {
             .get(&tab.uri)
             .map(|document| (self.display_name(document), document.modified))
             .unwrap_or_default();
+        // Two tabs with one name: the folder tells them apart.
+        let folder = self
+            .documents
+            .get(&tab.uri)
+            .and_then(|document| document.disk_path())
+            .filter(|_| {
+                self.groups
+                    .iter()
+                    .flat_map(|group| &group.tabs)
+                    .filter(|other| other.uri != tab.uri)
+                    .filter_map(|other| self.documents.get(&other.uri))
+                    .any(|other| self.display_name(other) == name)
+            })
+            .and_then(|path| path.parent()?.file_name())
+            .map(|folder| folder.to_string_lossy().into_owned());
         // Errors, warnings and git's colour on the name, as in the Explorer.
         let tinted = self
             .documents
@@ -1272,6 +1287,10 @@ impl Workbench {
             menu_entry(strings.tab_close_others, TabCommand::CloseOthers),
             menu_entry(strings.tab_close_right, TabCommand::CloseToTheRight),
             menu_entry(strings.tab_close_all, TabCommand::CloseAll),
+            (
+                strings.tab_close_saved,
+                Box::new(super::tabs::CloseSavedEditors) as Box<dyn gpui::Action>,
+            ),
             menu_entry(pin_label, TabCommand::TogglePin),
             menu_entry(strings.tab_split, TabCommand::Split),
             menu_entry(strings.explorer_copy_path, TabCommand::CopyPath),
@@ -1358,7 +1377,7 @@ impl Workbench {
             .context_menu(move |menu, _, _| {
                 let mut menu = menu.action_context(focus.clone());
                 for (position, (label, action)) in entries.iter().enumerate() {
-                    if position == 4 || position == 6 {
+                    if position == 5 || position == 7 {
                         menu = menu.separator();
                     }
                     menu = menu.menu(*label, action.boxed_clone());
@@ -1371,12 +1390,20 @@ impl Workbench {
             .children(icon)
             .child(
                 div()
+                    .flex()
+                    .items_baseline()
                     .whitespace_nowrap()
                     .when(tab.preview, |name| name.italic())
                     .when_some(tinted, |name, color| {
                         name.text_color(if in_view { color } else { color.opacity(0.8) })
                     })
-                    .child(name),
+                    .child(name)
+                    .children(folder.map(|folder| {
+                        div()
+                            .text_xs()
+                            .text_color(colors.faint)
+                            .child(format!(" · {folder}"))
+                    })),
             )
             .child(
                 div()
@@ -1446,9 +1473,9 @@ impl Workbench {
                     .id(("crumb", group * 1000 + position))
                     .cursor_pointer()
                     .hover(|crumb| crumb.text_color(colors.text))
-                    .on_click(
-                        cx.listener(move |this, _, _, cx| this.show_folder_in_tree(&target, cx)),
-                    )
+                    .on_click(cx.listener(move |this, _, window, cx| {
+                        this.browse_folder(target.clone(), window, cx)
+                    }))
                     .child(part)
                     .into_any_element(),
             );
@@ -1479,6 +1506,12 @@ impl Workbench {
         let look = self.look;
         let flat = look.flat();
         let panes = self.panes.iter().enumerate().map(|(index, pane)| {
+            // A tab come in front out of sight scrolls into view, once.
+            let group = &self.groups[index];
+            if group.shown.get() != Some(group.active) {
+                group.shown.set(Some(group.active));
+                group.scroll.scroll_to_item(group.active);
+            }
             let tabs: Vec<AnyElement> = self.groups[index]
                 .tabs
                 .iter()
@@ -1489,8 +1522,10 @@ impl Workbench {
                 .flex_1()
                 .min_w_0()
                 .h_full()
+                .relative()
                 .flex()
                 .flex_col()
+                .children(self.render_peek(index, colors, cx))
                 .when(index > 0, |pane| {
                     pane.border_l_1().border_color(colors.border)
                 })
@@ -1512,6 +1547,7 @@ impl Workbench {
                                 .items_center()
                                 .when(!flat, |strip| strip.px_2().gap_0p5())
                                 .overflow_x_scroll()
+                                .track_scroll(&self.groups[index].scroll)
                                 // Dropped after the last tab: at the end.
                                 .on_drop(cx.listener(
                                     move |this, dragged: &super::tabs::DraggedTab, window, cx| {
@@ -1530,17 +1566,25 @@ impl Workbench {
                                     },
                                 ))
                                 .children(tabs)
-                                // The strip's line goes on after the last tab.
-                                .when(flat, |strip| {
-                                    strip.child(
-                                        div()
-                                            .flex_1()
-                                            .min_w(px(8.))
-                                            .h_full()
-                                            .border_b_1()
-                                            .border_color(colors.border),
-                                    )
-                                }),
+                                // The strip's line goes on after the last tab;
+                                // a double click there makes a new file.
+                                .child(
+                                    div()
+                                        .id(("tab-strip-end", index))
+                                        .flex_1()
+                                        .min_w(px(8.))
+                                        .h_full()
+                                        .when(flat, |end| {
+                                            end.border_b_1().border_color(colors.border)
+                                        })
+                                        .on_click(cx.listener(
+                                            |this, event: &gpui::ClickEvent, window, cx| {
+                                                if event.click_count() >= 2 {
+                                                    this.new_file(window, cx);
+                                                }
+                                            },
+                                        )),
+                                ),
                         )
                         .children(self.render_preview_button(index, cx).map(|button| {
                             div()
@@ -2277,6 +2321,7 @@ impl Render for Workbench {
         let root = self.diff_actions(root, cx);
         let root = self.git_daily_actions(root, cx);
         let root = self.local_history_actions(root, cx);
+        let root = self.nav_actions(root, cx);
         let notice_center = self.render_notice_center(colors, window, cx);
         self.explorer_actions(root, cx)
             .relative()

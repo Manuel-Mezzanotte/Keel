@@ -9,6 +9,21 @@ pub(super) struct Group {
     pub(super) tabs: Vec<Tab>,
     /// The tab in view.
     pub(super) active: usize,
+    /// The strip's scroll, and the tab it was last brought to, so a tab
+    /// opened or chosen out of sight scrolls into view once.
+    pub(super) scroll: gpui::ScrollHandle,
+    pub(super) shown: std::cell::Cell<Option<usize>>,
+}
+
+impl Group {
+    pub(super) fn with(tabs: Vec<Tab>) -> Self {
+        Self {
+            tabs,
+            active: 0,
+            scroll: gpui::ScrollHandle::new(),
+            shown: std::cell::Cell::new(None),
+        }
+    }
 }
 
 pub(super) struct Tab {
@@ -56,9 +71,17 @@ pub(super) enum OpenAs {
 /// How many closed files Reopen Closed Editor remembers.
 const CLOSED_LIMIT: usize = 20;
 
+/// Ctrl+1…9: the tab at a position of the group in front.
+#[derive(Clone, Debug, PartialEq, gpui::Action)]
+#[action(namespace = keel, no_json)]
+pub struct OpenEditorAtIndex {
+    pub index: usize,
+}
+
 actions!(
     keel,
     [
+        CloseSavedEditors,
         CloseEditor,
         CloseOtherEditors,
         CloseEditorsInGroup,
@@ -173,14 +196,17 @@ impl Workbench {
         let subscription = cx.subscribe_in(
             &editor,
             window,
-            move |this, _, event: &InputEvent, window, cx| {
+            move |this, editor, event: &InputEvent, window, cx| {
                 if matches!(event, InputEvent::Change) {
+                    this.note_edit(&watched_uri, editor, cx);
                     this.sync_document_from(&watched_uri, Some(&watched_id), window, cx);
                 }
             },
         );
         // The block bar and the signature follow the cursor.
-        let cursor = cx.observe_in(&editor, window, |this, editor, window, cx| {
+        let cursor_uri = uri.to_owned();
+        let cursor = cx.observe_in(&editor, window, move |this, editor, window, cx| {
+            this.note_cursor(&cursor_uri, &editor, cx);
             this.update_hunk_bar(cx);
             this.signature_after_cursor_move(window, cx);
             this.sync_preview_from_editor(&editor, cx);
@@ -303,10 +329,7 @@ impl Workbench {
             column
         } else {
             self.panes.push(pane);
-            self.groups.push(Group {
-                tabs: vec![tab],
-                active: 0,
-            });
+            self.groups.push(Group::with(vec![tab]));
             self.panes.len() - 1
         };
         if let Some(uri) = replaced {
@@ -581,10 +604,7 @@ impl Workbench {
             group.active = group.tabs.len() - 1;
         } else {
             self.panes.push(pane);
-            self.groups.push(Group {
-                tabs: vec![tab],
-                active: 0,
-            });
+            self.groups.push(Group::with(vec![tab]));
         }
         let column = column.min(self.groups.len() - 1);
         self.install_completions(column, cx);
@@ -638,15 +658,12 @@ impl Workbench {
         self.panes.insert(at, pane);
         self.groups.insert(
             at,
-            Group {
-                tabs: vec![Tab {
-                    uri,
-                    preview: false,
-                    pinned: false,
-                    parked: None,
-                }],
-                active: 0,
-            },
+            Group::with(vec![Tab {
+                uri,
+                preview: false,
+                pinned: false,
+                parked: None,
+            }]),
         );
         self.install_completions(at, cx);
         self.focus_pane(at, window, cx);
@@ -861,8 +878,45 @@ impl Workbench {
     }
 
     /// The handlers of the tab commands, for the window's root.
+    /// Close Saved (Cmd+K U): every tab whose file has no unsaved change,
+    /// pinned ones aside.
+    fn close_saved(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        for group in (0..self.groups.len()).rev() {
+            for tab in (0..self.groups.get(group).map_or(0, |group| group.tabs.len())).rev() {
+                let Some(entry) = self.groups.get(group).and_then(|group| group.tabs.get(tab))
+                else {
+                    continue;
+                };
+                let modified = self
+                    .documents
+                    .get(&entry.uri)
+                    .is_some_and(|document| document.modified);
+                if !entry.pinned && !modified {
+                    self.close_tab_now(group, tab, window, cx);
+                }
+            }
+        }
+        cx.notify();
+    }
+
     pub(super) fn tab_actions(&self, root: gpui::Div, cx: &mut Context<Self>) -> gpui::Div {
-        root.on_action(cx.listener(|this, _: &CloseEditor, window, cx| {
+        root.on_action(
+            cx.listener(|this, _: &CloseSavedEditors, window, cx| this.close_saved(window, cx)),
+        )
+        .on_action(cx.listener(|this, action: &OpenEditorAtIndex, window, cx| {
+            let group = this.active.min(this.groups.len().saturating_sub(1));
+            let count = this.groups.get(group).map_or(0, |group| group.tabs.len());
+            // 9 is the last tab, as in VS Code and Safari.
+            let tab = if action.index >= 8 {
+                count.saturating_sub(1)
+            } else {
+                action.index
+            };
+            if tab < count {
+                this.activate_tab(group, tab, true, window, cx);
+            }
+        }))
+        .on_action(cx.listener(|this, _: &CloseEditor, window, cx| {
             if this.panes.is_empty() {
                 // With no editor left, Cmd+W closes the window, as in VS Code.
                 window.dispatch_action(Box::new(CloseWindow), cx);

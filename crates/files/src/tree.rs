@@ -226,7 +226,7 @@ fn glob_set(patterns: &[String]) -> GlobSet {
 
 /// Orders names as Finder and VS Code do: ignoring case, and numbers by
 /// value, so `file2` comes before `file10`.
-fn compare_names(a: &str, b: &str) -> Ordering {
+pub fn compare_names(a: &str, b: &str) -> Ordering {
     let key = |name: &str| {
         let mut parts: Vec<(String, u128)> = Vec::new();
         let mut text = String::new();

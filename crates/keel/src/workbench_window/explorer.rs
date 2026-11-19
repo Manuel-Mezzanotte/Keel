@@ -252,6 +252,68 @@ impl Workbench {
         }
     }
 
+    /// A breadcrumb's folder: what it holds, folders first, to open a file
+    /// next to the one in view or go further down; the first entry shows
+    /// the folder in the Explorer.
+    pub(super) fn browse_folder(
+        &mut self,
+        folder: PathBuf,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let strings = self.strings();
+        let excludes = excludes(&self.settings);
+        let mut entries: Vec<(bool, String, PathBuf)> = std::fs::read_dir(&folder)
+            .into_iter()
+            .flatten()
+            .flatten()
+            .filter_map(|entry| {
+                let path = entry.path();
+                let name = entry.file_name().to_string_lossy().into_owned();
+                let hidden = excludes
+                    .iter()
+                    .any(|pattern| pattern.trim_start_matches("**/") == name);
+                (!hidden).then(|| (path.is_dir(), name, path))
+            })
+            .collect();
+        entries.sort_by(|a, b| b.0.cmp(&a.0).then_with(|| files::compare_names(&a.1, &b.1)));
+        let mut items = vec![crate::quick_pick::PickItem::new(
+            strings.explorer_show_in_tree,
+        )];
+        items.extend(entries.iter().map(|(is_dir, name, _)| {
+            let mut item = crate::quick_pick::PickItem::new(if *is_dir {
+                format!("{name}/")
+            } else {
+                name.clone()
+            });
+            item.keywords.push(name.clone());
+            item
+        }));
+        let title = folder
+            .file_name()
+            .map(|name| name.to_string_lossy().into_owned());
+        let chosen = crate::quick_pick::show(title, None, items, window, cx);
+        cx.spawn_in(window, async move |this, cx| {
+            let Ok(Some(picked)) = chosen.await else {
+                return;
+            };
+            this.update_in(cx, |this, window, cx| {
+                if picked == 0 {
+                    this.show_folder_in_tree(&folder, cx);
+                    return;
+                }
+                let (is_dir, _, path) = entries[picked - 1].clone();
+                if is_dir {
+                    this.browse_folder(path, window, cx);
+                } else {
+                    this.open_file(&path, window, cx);
+                }
+            })
+            .ok();
+        })
+        .detach();
+    }
+
     /// Opens the Explorer on a folder and selects it.
     pub(super) fn show_folder_in_tree(&mut self, folder: &Path, cx: &mut Context<Self>) {
         let Some(tree) = &mut self.tree else {
@@ -837,6 +899,7 @@ impl Workbench {
                         tree.child(note(strings.explorer_empty.to_owned(), colors))
                     }),
             )
+            .children(self.render_outline(colors, window, cx))
             .children(self.render_npm_scripts(colors, window, cx))
             .into_any_element()
     }

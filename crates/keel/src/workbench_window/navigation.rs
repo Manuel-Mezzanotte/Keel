@@ -6,9 +6,23 @@ use gpui_component::input::{Input, InputState};
 use gpui_component::{Sizable as _, WindowExt as _};
 
 use super::*;
-use crate::quick_pick::{Matching, split_line};
+use crate::quick_pick::{Matching, PickOptions, split_line};
 
 actions!(keel, [QuickOpen, GoToLine]);
+
+/// Quick Open's prefixes, as VS Code's: the list a typed text goes to,
+/// with what follows the prefix.
+fn handed_over(typed: &str) -> Option<(Box<dyn gpui::Action>, &str)> {
+    let mut chars = typed.chars();
+    let action: Box<dyn gpui::Action> = match chars.next()? {
+        '>' => Box::new(ShowCommands),
+        '@' => Box::new(GoToSymbolInFile),
+        '#' => Box::new(GoToSymbolInWorkspace),
+        ':' => Box::new(GoToLine),
+        _ => return None,
+    };
+    Some((action, chars.as_str().trim_start()))
+}
 
 impl Workbench {
     /// Lists the project's files in the background, for Quick Open. Runs
@@ -94,17 +108,93 @@ impl Workbench {
             let workbench = workbench.upgrade()?;
             Some(workbench.read(cx).file_icon_element(Path::new(path), cx))
         });
-        let chosen = quick_pick::show_with(
+        // A prefix hands the typing to another list, as in VS Code:
+        // `>` the commands, `@` the file's symbols, `#` the project's,
+        // `:` a line.
+        let on_typed: quick_pick::OnTyped =
+            Rc::new(|typed: &str, window: &mut Window, cx: &mut App| {
+                let Some((action, rest)) = handed_over(typed) else {
+                    return false;
+                };
+                quick_pick::open_next_with(rest);
+                window.dispatch_action(action, cx);
+                true
+            });
+        // Going through the list shows each file in the preview tab, after
+        // a moment, as Sublime does; Esc puts back what was there.
+        let before = self.panes.get(self.active).map(|pane| pane.uri.clone());
+        let open_before: HashSet<String> = self.documents.keys().cloned().collect();
+        let previewed: Rc<RefCell<Option<String>>> = Rc::default();
+        let generation = Rc::new(std::cell::Cell::new(0u64));
+        let first = Rc::new(std::cell::Cell::new(true));
+        let on_highlight: quick_pick::OnHighlight = {
+            let workbench = cx.weak_entity();
+            let paths = paths.clone();
+            let root = root.clone();
+            let previewed = previewed.clone();
+            Rc::new(move |index: usize, window: &mut Window, cx: &mut App| {
+                // The highlight the list opens with is not a move.
+                if first.replace(false) {
+                    return;
+                }
+                let turn = generation.get() + 1;
+                generation.set(turn);
+                let generation = generation.clone();
+                let workbench = workbench.clone();
+                let Some(path) = paths.get(index).map(|path| root.join(path)) else {
+                    return;
+                };
+                let previewed = previewed.clone();
+                window
+                    .spawn(cx, async move |cx| {
+                        cx.background_executor()
+                            .timer(Duration::from_millis(140))
+                            .await;
+                        if generation.get() != turn {
+                            return;
+                        }
+                        workbench
+                            .update_in(cx, |this, window, cx| {
+                                if let Some(uri) = this.preview_file(&path, window, cx) {
+                                    *previewed.borrow_mut() = Some(uri);
+                                }
+                            })
+                            .ok();
+                    })
+                    .detach();
+            })
+        };
+        let options = PickOptions {
+            on_typed: Some(on_typed),
+            on_highlight: Some(on_highlight),
+            ..Default::default()
+        };
+        let chosen = quick_pick::show_with_options(
             None,
             placeholder,
             items,
             Matching::Path,
             Some(icon),
+            options,
             window,
             cx,
         );
         cx.spawn_in(window, async move |this, cx| {
             let Ok(Some(choice)) = chosen.await else {
+                // Closed: the file in view before comes back, and a file
+                // only looked at goes away.
+                let looked = previewed.borrow_mut().take();
+                this.update_in(cx, |this, window, cx| {
+                    if let Some(uri) = looked.filter(|uri| !open_before.contains(uri))
+                        && let Some((group, tab)) = this.find_tab(&uri, this.active)
+                    {
+                        this.close_tab_now(group, tab, window, cx);
+                    }
+                    if let Some(before) = before {
+                        this.show_document(&before, window, cx);
+                    }
+                })
+                .ok();
                 return;
             };
             let path = root.join(&paths[choice.index]);
@@ -118,6 +208,24 @@ impl Workbench {
             .ok();
         })
         .detach();
+    }
+
+    /// Shows a file in the preview tab without taking the keyboard, for
+    /// Quick Open's list; its uri, when it opened.
+    pub(super) fn preview_file(
+        &mut self,
+        path: &Path,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> Option<String> {
+        if !path.is_file() {
+            return None;
+        }
+        let uri = self.load_document(path, window, cx).ok()?;
+        let column = self.active.min(self.panes.len().saturating_sub(1));
+        self.show_tab(&uri, column, tabs::OpenAs::Preview, false, window, cx);
+        cx.notify();
+        Some(uri)
     }
 
     /// Puts the cursor on a line and column, counted from 1, in the
@@ -154,6 +262,10 @@ impl Workbench {
         });
         let placeholder = self.strings().go_to_line_placeholder(current, total);
         let input = cx.new(|cx| InputState::new(window, cx).placeholder(placeholder));
+        // `:42` typed in Quick Open arrives here.
+        if let Some(typed) = quick_pick::take_next_query().filter(|typed| !typed.is_empty()) {
+            input.update(cx, |input, cx| input.set_value(typed, window, cx));
+        }
         let this = cx.weak_entity();
         let field = input.clone();
         // The dialog takes Enter as its OK, which reads the field.
@@ -188,6 +300,30 @@ mod tests {
     use gpui::{TestAppContext, VisualTestContext};
 
     use super::*;
+
+    #[test]
+    fn prefixes_hand_the_typing_to_their_list() {
+        let name =
+            |typed: &str| handed_over(typed).map(|(action, rest)| (action.name(), rest.to_owned()));
+        assert_eq!(
+            name(">git push"),
+            Some(("keel::ShowCommands", "git push".to_owned()))
+        );
+        assert_eq!(
+            name("@save"),
+            Some(("keel::GoToSymbolInFile", "save".to_owned()))
+        );
+        assert_eq!(
+            name("#Strings"),
+            Some(("keel::GoToSymbolInWorkspace", "Strings".to_owned()))
+        );
+        assert_eq!(name(":42"), Some(("keel::GoToLine", "42".to_owned())));
+        assert_eq!(
+            name("app.ts:42"),
+            None,
+            "a line after a file name stays in Quick Open"
+        );
+    }
 
     /// A project in a window with gpui-component's Root, as dialogs need.
     fn project(

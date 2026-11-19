@@ -37,12 +37,15 @@ mod language_servers;
 mod local_history;
 pub(crate) mod look;
 mod markdown_preview;
+mod nav_history;
 mod navigation;
 mod notices;
 mod npm_scripts;
 mod other_files;
+mod outline;
 mod panel_views;
 mod pdf_view;
+mod peek;
 mod problems;
 mod restore;
 mod scm_graph;
@@ -65,9 +68,9 @@ pub(crate) use editing::{
 pub(crate) use navigation::{GoToLine, QuickOpen};
 
 pub(crate) use tabs::{
-    CloseAllEditors, CloseEditor, CloseEditorsInGroup, CloseOtherEditors, FocusGroup1, FocusGroup2,
-    FocusGroup3, KeepEditor, NextEditor, PreviousEditor, ReopenClosedEditor, SplitEditor,
-    TogglePinEditor,
+    CloseAllEditors, CloseEditor, CloseEditorsInGroup, CloseOtherEditors, CloseSavedEditors,
+    FocusGroup1, FocusGroup2, FocusGroup3, KeepEditor, NextEditor, OpenEditorAtIndex,
+    PreviousEditor, ReopenClosedEditor, SplitEditor, TogglePinEditor,
 };
 use tabs::{Group, OpenAs};
 
@@ -79,7 +82,8 @@ pub(crate) use claude_ide::InsertAtMention;
 pub(crate) use code_actions::{FormatDocument, OrganizeImports};
 pub(crate) use code_navigation::{
     GoToImplementation, GoToReferences, GoToSymbolInFile, GoToSymbolInWorkspace,
-    GoToTypeDefinition, RenameSymbol, RevealDefinition,
+    GoToTypeDefinition, PeekDefinition, PeekReferences, RenameSymbol, RevealDefinition,
+    ShowIncomingCalls, ShowOutgoingCalls,
 };
 pub(crate) use contributions::SelectIconTheme;
 pub(crate) use cursor_import::ImportFromCursor;
@@ -99,6 +103,9 @@ pub(crate) use git_gutter::{NextChange, PreviousChange, RevertChange, StageChang
 pub(crate) use language_servers::RestartLanguageServers;
 pub(crate) use local_history::{CompareWithClipboard, FindDeletedFile, ShowLocalHistory};
 pub(crate) use markdown_preview::{ShowMarkdownPreview, ShowMarkdownPreviewToSide};
+pub(crate) use nav_history::{
+    GoBack, GoForward, GoToLastEdit, RecentEditors, ShowRecentPlaces, bindings as nav_bindings,
+};
 pub(crate) use notices::{ClearNotifications, ToggleDoNotDisturb, ToggleNotifications};
 pub(crate) use npm_scripts::RunNpmScript;
 pub(crate) use pdf_view::bindings as pdf_bindings;
@@ -486,6 +493,12 @@ pub struct Workbench {
     /// Git day by day: fetching by itself, the commits to push and pull,
     /// the last messages.
     git_daily: git_daily::GitDaily,
+    /// Where you have been, for Back, Forward and Ctrl+Tab.
+    nav: nav_history::NavHistory,
+    /// The symbols of the file in front, for the Outline section.
+    outline: outline::Outline,
+    /// A definition or the references, looked at in a frame.
+    peek: Option<peek::Peek>,
     /// Watches the project for changes made outside Keel.
     watcher: Option<files::ProjectWatcher>,
     watching: Task<()>,
@@ -707,6 +720,9 @@ impl Workbench {
             git_marks: Default::default(),
             notices: Default::default(),
             git_daily: Default::default(),
+            nav: Default::default(),
+            outline: Default::default(),
+            peek: None,
             watcher: None,
             watching: Task::ready(()),
             file_index: None,
@@ -993,6 +1009,7 @@ impl Workbench {
         editor.update(cx, |editor, cx| editor.focus(window, cx));
         self.reveal_active_in_tree();
         self.ensure_line_blame(cx);
+        self.note_active_editor(cx);
     }
 
     /// Closes the tab in view in group `index`, without asking.
@@ -1024,6 +1041,7 @@ impl Workbench {
             self.active = index;
             self.reveal_active_in_tree();
             self.ensure_line_blame(cx);
+            self.note_active_editor(cx);
             self.publish_editors(window, cx);
             self.refresh_title(window);
         }
@@ -1838,6 +1856,10 @@ impl Workbench {
     ) -> bool {
         let keystroke = &event.keystroke;
         if !keystroke.modifiers.modified() && self.commit_message_key(&keystroke.key, window, cx) {
+            return true;
+        }
+        // Esc closes a peek first.
+        if keystroke.key == "escape" && !keystroke.modifiers.modified() && self.close_peek(cx) {
             return true;
         }
         if self.active_editor_focused(window, cx) {

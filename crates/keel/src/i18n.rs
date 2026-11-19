@@ -848,6 +848,42 @@ pub struct Strings {
     pub command_compare_clipboard: &'static str,
     /// Source Control's menu, with a check mark.
     pub scm_group_by_folder: &'static str,
+    /// The list of places visited.
+    pub nav_recent_places: &'static str,
+    pub command_go_back: &'static str,
+    pub command_go_forward: &'static str,
+    pub command_last_edit: &'static str,
+    pub command_recent_places: &'static str,
+    pub command_recent_editors: &'static str,
+    pub command_close_saved: &'static str,
+    /// In a tab's menu.
+    pub tab_close_saved: &'static str,
+    /// The Explorer's section with the file's symbols.
+    pub outline_title: &'static str,
+    pub outline_empty: &'static str,
+    /// First entry of a breadcrumb folder's list.
+    pub explorer_show_in_tree: &'static str,
+    /// The peek frame's button that goes to the place.
+    pub peek_open: &'static str,
+    pub peek_close: &'static str,
+    pub command_peek_definition: &'static str,
+    pub command_peek_references: &'static str,
+    pub lsp_no_calls: &'static str,
+    pub lsp_incoming_calls_title: &'static str,
+    pub lsp_outgoing_calls_title: &'static str,
+    pub command_incoming_calls: &'static str,
+    pub command_outgoing_calls: &'static str,
+    pub search_dismiss: &'static str,
+    pub search_open_only: &'static str,
+    pub command_tab_1: &'static str,
+    pub command_tab_2: &'static str,
+    pub command_tab_3: &'static str,
+    pub command_tab_4: &'static str,
+    pub command_tab_5: &'static str,
+    pub command_tab_6: &'static str,
+    pub command_tab_7: &'static str,
+    pub command_tab_8: &'static str,
+    pub command_tab_9: &'static str,
 }
 
 impl Strings {
@@ -901,6 +937,25 @@ impl Strings {
             "git.undoCommit" => self.command_undo_commit,
             "git.viewChanges" => self.command_view_changes,
             "git.viewStash" => self.command_show_stashes,
+            "editor.action.peekDefinition" => self.command_peek_definition,
+            "editor.showIncomingCalls" => self.command_incoming_calls,
+            "editor.showOutgoingCalls" => self.command_outgoing_calls,
+            "editor.action.referenceSearch.trigger" => self.command_peek_references,
+            "workbench.action.closeUnmodifiedEditors" => self.command_close_saved,
+            "workbench.action.openEditorAtIndex1" => self.command_tab_1,
+            "workbench.action.openEditorAtIndex2" => self.command_tab_2,
+            "workbench.action.openEditorAtIndex3" => self.command_tab_3,
+            "workbench.action.openEditorAtIndex4" => self.command_tab_4,
+            "workbench.action.openEditorAtIndex5" => self.command_tab_5,
+            "workbench.action.openEditorAtIndex6" => self.command_tab_6,
+            "workbench.action.openEditorAtIndex7" => self.command_tab_7,
+            "workbench.action.openEditorAtIndex8" => self.command_tab_8,
+            "workbench.action.openEditorAtIndex9" => self.command_tab_9,
+            "workbench.action.navigateBack" => self.command_go_back,
+            "workbench.action.navigateForward" => self.command_go_forward,
+            "workbench.action.navigateToLastEditLocation" => self.command_last_edit,
+            "keel.recentPlaces" => self.command_recent_places,
+            "workbench.action.openNextRecentlyUsedEditor" => self.command_recent_editors,
             "keel.localHistory.show" => self.command_local_history,
             "workbench.action.localHistory.restoreViaPicker" => self.command_find_deleted,
             "workbench.files.action.compareWithClipboard" => self.command_compare_clipboard,
@@ -1332,6 +1387,16 @@ impl Strings {
     }
 
     /// The cursor position in the status bar, counted from 1.
+    /// The title of the list of a function's callers.
+    pub fn lsp_incoming_calls(&self, name: &str) -> String {
+        self.lsp_incoming_calls_title.replace("{name}", name)
+    }
+
+    /// The title of the list of what a function calls.
+    pub fn lsp_outgoing_calls(&self, name: &str) -> String {
+        self.lsp_outgoing_calls_title.replace("{name}", name)
+    }
+
     pub fn line_column(&self, line: usize, column: usize) -> String {
         self.line_column
             .replace("{line}", &line.to_string())
@@ -2082,6 +2147,37 @@ pub const ITALIAN: Strings = Strings {
     command_find_deleted: "Cronologia locale: recupera un file cancellato",
     command_compare_clipboard: "File: Confronta con gli appunti",
     scm_group_by_folder: "Raggruppa per cartella",
+    nav_recent_places: "Luoghi recenti",
+    command_go_back: "Vai: indietro",
+    command_go_forward: "Vai: avanti",
+    command_last_edit: "Vai: all'ultima modifica",
+    command_recent_places: "Vai: luoghi recenti",
+    command_recent_editors: "Vai: file usati di recente",
+    command_close_saved: "Vista: chiudi i file salvati",
+    tab_close_saved: "Chiudi i salvati",
+    outline_title: "Struttura",
+    outline_empty: "Nessun simbolo: il linguaggio del file non ne dà.",
+    explorer_show_in_tree: "Mostra nell'Esplora risorse",
+    peek_open: "Apri",
+    peek_close: "Chiudi (Esc)",
+    command_peek_definition: "Vai: sbircia la definizione",
+    command_peek_references: "Vai: sbircia i riferimenti",
+    lsp_no_calls: "Nessuna chiamata trovata",
+    lsp_incoming_calls_title: "Chi chiama {name}",
+    lsp_outgoing_calls_title: "Cosa chiama {name}",
+    command_incoming_calls: "Vai: chi chiama questa funzione",
+    command_outgoing_calls: "Vai: cosa chiama questa funzione",
+    search_dismiss: "Togli dai risultati",
+    search_open_only: "Cerca solo nei file aperti",
+    command_tab_1: "Vista: vai alla scheda 1",
+    command_tab_2: "Vista: vai alla scheda 2",
+    command_tab_3: "Vista: vai alla scheda 3",
+    command_tab_4: "Vista: vai alla scheda 4",
+    command_tab_5: "Vista: vai alla scheda 5",
+    command_tab_6: "Vista: vai alla scheda 6",
+    command_tab_7: "Vista: vai alla scheda 7",
+    command_tab_8: "Vista: vai alla scheda 8",
+    command_tab_9: "Vista: vai all'ultima scheda",
 };
 
 pub const ENGLISH: Strings = Strings {
@@ -2817,6 +2913,37 @@ pub const ENGLISH: Strings = Strings {
     command_find_deleted: "Local History: Find Entry to Restore",
     command_compare_clipboard: "File: Compare Active File with Clipboard",
     scm_group_by_folder: "Group by Folder",
+    nav_recent_places: "Recent Places",
+    command_go_back: "Go Back",
+    command_go_forward: "Go Forward",
+    command_last_edit: "Go to Last Edit Location",
+    command_recent_places: "Go to Recent Places",
+    command_recent_editors: "Open Next Recently Used Editor",
+    command_close_saved: "View: Close Saved Editors",
+    tab_close_saved: "Close Saved",
+    outline_title: "Outline",
+    outline_empty: "No symbols: the file's language gives none.",
+    explorer_show_in_tree: "Show in Explorer",
+    peek_open: "Open",
+    peek_close: "Close (Esc)",
+    command_peek_definition: "Peek Definition",
+    command_peek_references: "Peek References",
+    lsp_no_calls: "No calls found",
+    lsp_incoming_calls_title: "Calls to {name}",
+    lsp_outgoing_calls_title: "Calls from {name}",
+    command_incoming_calls: "Show Incoming Calls",
+    command_outgoing_calls: "Show Outgoing Calls",
+    search_dismiss: "Dismiss",
+    search_open_only: "Search Only in Open Files",
+    command_tab_1: "View: Open Editor at Index 1",
+    command_tab_2: "View: Open Editor at Index 2",
+    command_tab_3: "View: Open Editor at Index 3",
+    command_tab_4: "View: Open Editor at Index 4",
+    command_tab_5: "View: Open Editor at Index 5",
+    command_tab_6: "View: Open Editor at Index 6",
+    command_tab_7: "View: Open Editor at Index 7",
+    command_tab_8: "View: Open Editor at Index 8",
+    command_tab_9: "View: Open Last Editor",
 };
 
 #[cfg(test)]

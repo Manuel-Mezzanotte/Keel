@@ -35,7 +35,11 @@ actions!(
         GoToReferences,
         RenameSymbol,
         GoToSymbolInFile,
-        GoToSymbolInWorkspace
+        GoToSymbolInWorkspace,
+        PeekDefinition,
+        PeekReferences,
+        ShowIncomingCalls,
+        ShowOutgoingCalls
     ]
 );
 
@@ -187,6 +191,18 @@ impl Workbench {
     }
 
     fn go_to_target(&mut self, target: Target, window: &mut Window, cx: &mut Context<Self>) {
+        self.find_target(target, false, window, cx)
+    }
+
+    /// F12 and its siblings; with `peek`, the places show in a frame in
+    /// the editor instead of opening.
+    fn find_target(
+        &mut self,
+        target: Target,
+        peek: bool,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
         let Some((servers, document, position)) = self.at_cursor(cx) else {
             return;
         };
@@ -252,7 +268,16 @@ impl Workbench {
                 (_, None) => Vec::new(),
             };
             this.update_in(cx, |this, window, cx| {
-                this.show_places(target, places, window, cx)
+                if peek && !places.is_empty() {
+                    let strings = this.strings();
+                    let title = match target {
+                        Target::References => strings.lsp_references_title(places.len()),
+                        _ => strings.lsp_definitions_title(places.len()),
+                    };
+                    this.open_peek(title, places, cx)
+                } else {
+                    this.show_places(target, places, window, cx)
+                }
             })
             .ok();
         })
@@ -338,7 +363,7 @@ impl Workbench {
     }
 
     /// The text of a file: from its editor when open, else from disk.
-    fn text_of(&self, uri: &str) -> Option<String> {
+    pub(super) fn text_of(&self, uri: &str) -> Option<String> {
         if let Some(document) = self.documents.get(uri) {
             return Some(document.synced_text.clone());
         }
@@ -347,7 +372,7 @@ impl Workbench {
     }
 
     /// A file's path from the project's folder, for lists.
-    fn shown_path(&self, uri: &str) -> String {
+    pub(super) fn shown_path(&self, uri: &str) -> String {
         let Some(path) = Uri::parse(uri).and_then(|parsed| parsed.file_path()) else {
             return uri.to_owned();
         };
@@ -359,6 +384,124 @@ impl Workbench {
                 .into_owned(),
             None => path.to_string_lossy().into_owned(),
         }
+    }
+
+    // -----------------------------------------------------------------
+    // Calls
+
+    /// Who calls the function under the cursor, or what it calls, as VS
+    /// Code's call hierarchy: one level, each to open or to go on from.
+    fn show_calls(&mut self, incoming: bool, window: &mut Window, cx: &mut Context<Self>) {
+        let Some((servers, document, position)) = self.at_cursor(cx) else {
+            return;
+        };
+        let Some(running) = servers
+            .iter()
+            .find(|running| {
+                running
+                    .server
+                    .capabilities()
+                    .is_some_and(|capabilities| capabilities.call_hierarchy_provider.is_some())
+            })
+            .cloned()
+        else {
+            self.status_message = Some(self.strings().lsp_not_supported.to_owned());
+            cx.notify();
+            return;
+        };
+        let at = TextDocumentPositionParams::new(document, position);
+        cx.spawn_in(window, async move |this, cx| {
+            let prepared = running
+                .server
+                .request_raw("textDocument/prepareCallHierarchy", json!(at))
+                .await
+                .ok()
+                .and_then(|value| {
+                    serde_json::from_value::<Option<Vec<Value>>>(value)
+                        .ok()
+                        .flatten()
+                })
+                .unwrap_or_default();
+            let Some(item) = prepared.into_iter().next() else {
+                this.update(cx, |this, cx| {
+                    this.status_message = Some(this.strings().lsp_no_calls.to_owned());
+                    cx.notify();
+                })
+                .ok();
+                return;
+            };
+            let name = item["name"].as_str().unwrap_or_default().to_owned();
+            let method = if incoming {
+                "callHierarchy/incomingCalls"
+            } else {
+                "callHierarchy/outgoingCalls"
+            };
+            let calls = running
+                .server
+                .request_raw(method, json!({ "item": item }))
+                .await
+                .ok()
+                .and_then(|value| {
+                    serde_json::from_value::<Option<Vec<Value>>>(value)
+                        .ok()
+                        .flatten()
+                })
+                .unwrap_or_default();
+            let key = if incoming { "from" } else { "to" };
+            let places: Vec<(String, Place)> = calls
+                .iter()
+                .filter_map(|call| {
+                    let target = &call[key];
+                    let range = serde_json::from_value(target["selectionRange"].clone()).ok()?;
+                    Some((
+                        target["name"].as_str()?.to_owned(),
+                        Place {
+                            uri: target["uri"].as_str()?.to_owned(),
+                            range,
+                        },
+                    ))
+                })
+                .collect();
+            this.update_in(cx, |this, window, cx| {
+                let strings = this.strings();
+                if places.is_empty() {
+                    this.status_message = Some(strings.lsp_no_calls.to_owned());
+                    cx.notify();
+                    return;
+                }
+                let items = places
+                    .iter()
+                    .map(|(name, place)| {
+                        let mut item = PickItem::new(name.clone());
+                        item.detail = Some(format!(
+                            "{}:{}",
+                            this.shown_path(&place.uri),
+                            place.range.start.line + 1
+                        ));
+                        item
+                    })
+                    .collect();
+                let title = if incoming {
+                    strings.lsp_incoming_calls(&name)
+                } else {
+                    strings.lsp_outgoing_calls(&name)
+                };
+                let chosen = quick_pick::show(Some(title), None, items, window, cx);
+                cx.spawn_in(window, async move |this, cx| {
+                    let Some(index) = chosen.await.ok().flatten() else {
+                        return;
+                    };
+                    let place = places[index].1.clone();
+                    this.update_in(cx, |this, window, cx| {
+                        this.open_lsp_range(&place.uri, place.range, OpenAs::Normal, window, cx)
+                    })
+                    .ok();
+                })
+                .detach();
+            })
+            .ok();
+        })
+        .detach();
     }
 
     // -----------------------------------------------------------------
@@ -746,8 +889,26 @@ impl Workbench {
         .on_action(cx.listener(|this, _: &GoToTypeDefinition, window, cx| {
             this.go_to_target(Target::TypeDefinition, window, cx)
         }))
+        // As VS Code's Shift+F12: the references in a frame, to look at
+        // without leaving.
         .on_action(cx.listener(|this, _: &GoToReferences, window, cx| {
-            this.go_to_target(Target::References, window, cx)
+            this.find_target(Target::References, true, window, cx)
+        }))
+        .on_action(cx.listener(|this, _: &PeekReferences, window, cx| {
+            this.find_target(Target::References, true, window, cx)
+        }))
+        .on_action(
+            cx.listener(|this, _: &ShowIncomingCalls, window, cx| {
+                this.show_calls(true, window, cx)
+            }),
+        )
+        .on_action(
+            cx.listener(|this, _: &ShowOutgoingCalls, window, cx| {
+                this.show_calls(false, window, cx)
+            }),
+        )
+        .on_action(cx.listener(|this, _: &PeekDefinition, window, cx| {
+            this.find_target(Target::Definition, true, window, cx)
         }))
         .on_action(cx.listener(|this, _: &RenameSymbol, window, cx| this.rename_symbol(window, cx)))
         .on_action(cx.listener(|this, _: &GoToSymbolInFile, window, cx| {
@@ -800,9 +961,9 @@ pub(super) fn apply_to_text(text: &str, edits: &[TextEdit]) -> String {
 
 /// A file's symbols in order, nested ones indented: depth, name, kind,
 /// detail and the range to select.
-type FlatSymbol = (usize, String, SymbolKind, Option<String>, lsp_types::Range);
+pub(super) type FlatSymbol = (usize, String, SymbolKind, Option<String>, lsp_types::Range);
 
-fn flatten_symbols(response: Option<DocumentSymbolResponse>) -> Vec<FlatSymbol> {
+pub(super) fn flatten_symbols(response: Option<DocumentSymbolResponse>) -> Vec<FlatSymbol> {
     fn walk(symbols: &[lsp_types::DocumentSymbol], depth: usize, out: &mut Vec<FlatSymbol>) {
         for symbol in symbols {
             out.push((
@@ -901,7 +1062,7 @@ fn workspace_symbol_items(response: WorkspaceSymbolResponse, root: Option<&Path>
 }
 
 /// VS Code's names for symbol kinds.
-fn kind_name(kind: SymbolKind) -> &'static str {
+pub(super) fn kind_name(kind: SymbolKind) -> &'static str {
     match kind {
         SymbolKind::FILE => "file",
         SymbolKind::MODULE => "module",

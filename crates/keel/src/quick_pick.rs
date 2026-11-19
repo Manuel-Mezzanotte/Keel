@@ -7,8 +7,10 @@ use std::rc::Rc;
 
 use files::fuzzy;
 use futures::channel::oneshot;
+use gpui::prelude::FluentBuilder as _;
 use gpui::{
-    AnyElement, App, AppContext as _, IntoElement, ParentElement as _, Styled as _, Window, div, px,
+    AnyElement, App, AppContext as _, InteractiveElement as _, IntoElement, ParentElement as _,
+    Styled as _, Window, div, px,
 };
 use gpui_component::command::{Command, CommandItem, CommandState};
 use gpui_component::dialog::{Dialog, DialogEntrance};
@@ -148,6 +150,45 @@ pub fn show(
     receiver
 }
 
+/// Called with the highlighted entry's index.
+pub type OnHighlight = Rc<dyn Fn(usize, &mut Window, &mut App)>;
+/// Called with what was typed; `true` closes the list.
+pub type OnTyped = Rc<dyn Fn(&str, &mut Window, &mut App) -> bool>;
+
+/// What a list can do beyond choosing: start with some text and an entry
+/// highlighted, follow the highlight, and hand the typing to another list.
+#[derive(Clone, Default)]
+pub struct PickOptions {
+    /// The text in the field when the list opens.
+    pub query: Option<String>,
+    /// The entry highlighted when the list opens, by its index.
+    pub selected: Option<usize>,
+    /// Called with the highlighted entry's index as it moves, as Sublime
+    /// shows the file while you go through the list.
+    pub on_highlight: Option<OnHighlight>,
+    /// Called with what was typed; `true` closes the list, as typing `>`
+    /// in Quick Open goes to the commands.
+    pub on_typed: Option<OnTyped>,
+    /// Letting Ctrl go chooses the highlighted entry, for Ctrl+Tab.
+    pub confirm_on_ctrl_release: bool,
+}
+
+thread_local! {
+    /// The text the next list opens with, for a list handing its typing to
+    /// another one.
+    static NEXT_QUERY: RefCell<Option<String>> = const { RefCell::new(None) };
+}
+
+/// The text a list handed to the next one, for a field that is not a list.
+pub fn take_next_query() -> Option<String> {
+    NEXT_QUERY.with(|next| next.borrow_mut().take())
+}
+
+/// Makes the next list open with `query` in its field.
+pub fn open_next_with(query: impl Into<String>) {
+    NEXT_QUERY.with(|next| *next.borrow_mut() = Some(query.into()));
+}
+
 /// Opens the list and also hands back the typed query, which Quick Open
 /// reads for a `:line` at its end.
 pub fn show_with(
@@ -159,6 +200,34 @@ pub fn show_with(
     window: &mut Window,
     cx: &mut App,
 ) -> oneshot::Receiver<Option<Choice>> {
+    show_with_options(
+        title,
+        placeholder,
+        items,
+        matching,
+        icon,
+        PickOptions::default(),
+        window,
+        cx,
+    )
+}
+
+/// Like [`show_with`], with the [`PickOptions`].
+#[allow(clippy::too_many_arguments)]
+pub fn show_with_options(
+    title: Option<String>,
+    placeholder: Option<String>,
+    items: Vec<PickItem>,
+    matching: Matching,
+    icon: Option<IconFor>,
+    options: PickOptions,
+    window: &mut Window,
+    cx: &mut App,
+) -> oneshot::Receiver<Option<Choice>> {
+    let mut options = options;
+    if let Some(next) = NEXT_QUERY.with(|next| next.borrow_mut().take()) {
+        options.query = Some(next);
+    }
     let (sender, receiver) = oneshot::channel();
     let sender = Rc::new(RefCell::new(Some(sender)));
     let finish = Rc::new(move |choice: Option<Choice>| {
@@ -169,13 +238,28 @@ pub fn show_with(
     let state = cx.new(|cx| CommandState::new(window, cx));
     let first_render = Cell::new(true);
     let items = Rc::new(items);
-    let shown = Rc::new(RefCell::new(rank(&items, "", matching)));
-    let query = Rc::new(RefCell::new(String::new()));
+    let start = options.query.clone().unwrap_or_default();
+    let shown = Rc::new(RefCell::new(rank(&items, &start, matching)));
+    let query = Rc::new(RefCell::new(start.clone()));
 
     window.open_dialog(cx, move |dialog, window, cx| {
         if first_render.replace(false) {
-            state.update(cx, |state, cx| state.focus(window, cx));
+            let selected = options.selected;
+            let start = start.clone();
+            state.update(cx, |state, cx| {
+                state.focus(window, cx);
+                if !start.is_empty() {
+                    state.set_query(start, window, cx);
+                }
+                if let Some(row) = selected {
+                    state.set_selected_index(Some(gpui_component::IndexPath::new(row)), window, cx);
+                }
+            });
         }
+        let highlight_shown = shown.clone();
+        let on_highlight = options.on_highlight.clone();
+        let on_typed = options.on_typed.clone();
+        let ctrl_release = options.confirm_on_ctrl_release;
         let confirm = finish.clone();
         let cancel = finish.clone();
         let close = finish.clone();
@@ -196,10 +280,22 @@ pub fn show_with(
             .filterable(false)
             .items(rows)
             .placeholder(placeholder.clone().unwrap_or_default())
-            .on_query(move |typed, window, _| {
+            .on_query(move |typed, window, cx| {
+                if let Some(on_typed) = &on_typed
+                    && on_typed(typed, window, cx)
+                {
+                    window.close_dialog(cx);
+                    return;
+                }
                 *query_shown.borrow_mut() = rank(&query_items, typed, matching);
                 *query_text.borrow_mut() = typed.to_owned();
                 window.refresh();
+            })
+            .on_select(move |index, window, cx| {
+                let chosen = highlight_shown.borrow().get(index.row).copied();
+                if let (Some(on_highlight), Some(chosen)) = (&on_highlight, chosen) {
+                    on_highlight(chosen, window, cx);
+                }
             })
             .on_confirm(move |index, window, cx| {
                 let chosen = confirm_shown.borrow().get(index.row).copied();
@@ -220,7 +316,20 @@ pub fn show_with(
         };
         frame(dialog, cx)
             .on_close(move |_, _, _| close(None))
-            .child(command)
+            .child(
+                div()
+                    .when(ctrl_release, |list| {
+                        list.on_modifiers_changed(|event, window, cx| {
+                            if !event.modifiers.control {
+                                window.dispatch_action(
+                                    Box::new(gpui_base::actions::Confirm { secondary: false }),
+                                    cx,
+                                );
+                            }
+                        })
+                    })
+                    .child(command),
+            )
     });
     receiver
 }
@@ -244,6 +353,9 @@ pub fn show_dynamic(
             let _ = sender.send(choice);
         }
     });
+    let start = NEXT_QUERY
+        .with(|next| next.borrow_mut().take())
+        .unwrap_or_default();
     let state = cx.new(|cx| CommandState::new(window, cx));
     let first_render = Cell::new(true);
     let items: Rc<RefCell<Vec<PickItem>>> = Rc::default();
@@ -264,11 +376,17 @@ pub fn show_dynamic(
             *pending.borrow_mut() = Some(task);
         })
     };
-    request(String::new(), cx);
+    request(start.clone(), cx);
 
     window.open_dialog(cx, move |dialog, window, cx| {
         if first_render.replace(false) {
-            state.update(cx, |state, cx| state.focus(window, cx));
+            let start = start.clone();
+            state.update(cx, |state, cx| {
+                state.focus(window, cx);
+                if !start.is_empty() {
+                    state.set_query(start, window, cx);
+                }
+            });
         }
         let confirm = finish.clone();
         let cancel = finish.clone();

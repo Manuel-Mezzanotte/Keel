@@ -11,5 +11,5 @@ mod watch;
 
 pub use list::list_files;
 pub use operations::{create_file, create_folder, move_into, rename, trash};
-pub use tree::{DEFAULT_EXCLUDES, FileTree, Row};
+pub use tree::{DEFAULT_EXCLUDES, FileTree, Row, compare_names};
 pub use watch::{ProjectWatcher, watch};

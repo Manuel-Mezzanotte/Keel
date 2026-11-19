@@ -43,6 +43,8 @@ pub(super) struct SearchView {
     whole_word: bool,
     regex: bool,
     show_folders: bool,
+    /// Only the files open in tabs, as VS Code's switch beside the fields.
+    pub(super) open_only: bool,
     results: Results,
     rows: Vec<ResultRow>,
     error: Option<String>,
@@ -163,6 +165,7 @@ impl Workbench {
             show_folders: false,
             results: Results::default(),
             rows: Vec::new(),
+            open_only: false,
             error: None,
             searching: false,
             collapsed: HashSet::new(),
@@ -193,6 +196,21 @@ impl Workbench {
         });
         self.run_search(cx);
         cx.notify();
+    }
+
+    /// The files open in tabs, from the project's folder, for «only open
+    /// files».
+    fn open_relative_paths(&self) -> HashSet<String> {
+        let Some(root) = &self.project.root else {
+            return HashSet::new();
+        };
+        self.groups
+            .iter()
+            .flat_map(|group| &group.tabs)
+            .filter_map(|tab| self.documents.get(&tab.uri)?.disk_path())
+            .filter_map(|path| path.strip_prefix(root).ok())
+            .map(|path| path.to_string_lossy().replace('\\', "/"))
+            .collect()
     }
 
     /// Runs the search after a short pause in typing.
@@ -233,6 +251,13 @@ impl Workbench {
                 match found {
                     Ok(results) => {
                         this.search.results = results;
+                        if this.search.open_only {
+                            let open = this.open_relative_paths();
+                            this.search
+                                .results
+                                .files
+                                .retain(|file| open.contains(&file.path));
+                        }
                         this.search.error = None;
                         let text = this.search.query.read(cx).value().to_string();
                         if remember_search(&mut this.search.recent, &text) {
@@ -566,6 +591,19 @@ impl Workbench {
                         this.search.show_folders = !this.search.show_folders;
                         cx.notify();
                     })),
+            )
+            .child(
+                Button::new("search-open-only")
+                    .ghost()
+                    .small()
+                    .icon(Icon::new(IconName::Layers))
+                    .selected(view.open_only)
+                    .tooltip(strings.search_open_only)
+                    .on_click(cx.listener(|this, _, _, cx| {
+                        this.search.open_only = !this.search.open_only;
+                        this.run_search(cx);
+                        cx.notify();
+                    })),
             );
 
         div()
@@ -862,7 +900,34 @@ impl Workbench {
                     .bg(colors.hover)
                     .text_xs()
                     .text_color(colors.muted)
+                    .group_hover("search-file-row", |count| count.invisible())
                     .child(count),
+            )
+            // On hover, × takes the file out of the results, before a
+            // replace for instance.
+            .group("search-file-row")
+            .relative()
+            .child(
+                div()
+                    .absolute()
+                    .right(px(2.))
+                    .invisible()
+                    .group_hover("search-file-row", |button| button.visible())
+                    .child(
+                        Button::new(("search-dismiss-file", index))
+                            .ghost()
+                            .xsmall()
+                            .icon(Icon::new(IconName::X))
+                            .tooltip(self.strings().search_dismiss)
+                            .on_click(cx.listener(move |this, _, _, cx| {
+                                cx.stop_propagation();
+                                if file < this.search.results.files.len() {
+                                    this.search.results.files.remove(file);
+                                }
+                                this.search.rebuild_rows();
+                                cx.notify();
+                            })),
+                    ),
             )
             .into_any_element()
     }
@@ -918,7 +983,36 @@ impl Workbench {
             .on_click(
                 cx.listener(move |this, _, window, cx| this.open_result(file, line, window, cx)),
             )
+            .group("search-line-row")
+            .relative()
             .child(div().min_w_0().truncate().whitespace_nowrap().child(text))
+            .child(
+                div()
+                    .absolute()
+                    .right(px(2.))
+                    .invisible()
+                    .group_hover("search-line-row", |button| button.visible())
+                    .child(
+                        Button::new(("search-dismiss-line", index))
+                            .ghost()
+                            .xsmall()
+                            .icon(Icon::new(IconName::X))
+                            .tooltip(self.strings().search_dismiss)
+                            .on_click(cx.listener(move |this, _, _, cx| {
+                                cx.stop_propagation();
+                                if let Some(found) = this.search.results.files.get_mut(file) {
+                                    if line < found.lines.len() {
+                                        found.lines.remove(line);
+                                    }
+                                    if found.lines.is_empty() {
+                                        this.search.results.files.remove(file);
+                                    }
+                                }
+                                this.search.rebuild_rows();
+                                cx.notify();
+                            })),
+                    ),
+            )
             .into_any_element()
     }
 }

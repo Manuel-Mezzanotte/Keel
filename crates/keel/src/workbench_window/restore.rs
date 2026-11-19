@@ -87,6 +87,7 @@ impl Workbench {
         [
             ("npm-scripts", self.npm_collapsed),
             ("git-graph", self.graph_collapsed),
+            ("outline", self.outline.collapsed),
         ]
         .into_iter()
         .filter(|(_, closed)| *closed)
@@ -229,6 +230,7 @@ impl Workbench {
             .any(|section| section == "npm-scripts");
         self.search.recent = state.recent_searches.clone();
         self.graph_collapsed = state.collapsed.iter().any(|section| section == "git-graph");
+        self.outline.collapsed = state.collapsed.iter().any(|section| section == "outline");
         if let Some(tree) = &mut self.tree {
             for folder in state.expanded.iter().filter(|folder| folder.is_dir()) {
                 tree.expand(folder);

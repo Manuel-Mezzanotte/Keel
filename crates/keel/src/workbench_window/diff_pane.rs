@@ -47,7 +47,7 @@ type LineStyles = Rc<Vec<(Range<usize>, HighlightStyle)>>;
 type Kept = (HashMap<usize, (usize, usize)>, bool);
 
 /// One version of a file with its syntax colours, worked out once.
-struct Side {
+pub(super) struct Side {
     text: String,
     /// Where each line starts in `text`.
     starts: Vec<usize>,
@@ -56,7 +56,7 @@ struct Side {
 }
 
 impl Side {
-    fn new(lines: &[String], language: &str) -> Self {
+    pub(super) fn new(lines: &[String], language: &str) -> Self {
         let mut text = String::new();
         let mut starts = Vec::with_capacity(lines.len());
         for line in lines {
@@ -78,7 +78,7 @@ impl Side {
     }
 
     /// A line's colours, from the start of the line.
-    fn styles(&self, line: usize, cx: &App) -> LineStyles {
+    pub(super) fn styles(&self, line: usize, cx: &App) -> LineStyles {
         if let Some(styles) = self.styles.borrow().get(&line) {
             return styles.clone();
         }
