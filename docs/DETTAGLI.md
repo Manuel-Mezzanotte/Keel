@@ -2,7 +2,7 @@
 
 I piccoli dettagli che rendono comodo un IDE: quelli a cui non pensi finché mancano. Raccoglie cosa fanno VS Code, Cursor, Zed, JetBrains, Xcode, Sublime Text, i programmi per git e il Mac stesso, confrontato con quello che Keel fa oggi. Alla fine c'è l'ordine in cui farli, deciso da me.
 
-*Scritto il 19 novembre 2026, sul commit `12db1b4` di `develop`. Stato: nessun giro ancora cominciato.*
+*Scritto il 19 novembre 2026, sul commit `12db1b4` di `develop`. Aggiornato il 20 novembre 2026: i nove giri sono fatti, dal commit `db6bbbe` al `66e6bfb`, su `develop` e non ancora su GitHub. La colonna «Keel oggi» dice ora com'è Keel dopo i giri.*
 
 ---
 
@@ -14,11 +14,50 @@ I piccoli dettagli che rendono comodo un IDE: quelli a cui non pensi finché man
   - **a metà** vuol dire che ne manca un pezzo;
   - **manca** vuol dire che non c'è.
 
-  Le cose che Keel fa già bene non sono elencate. In tutto sono 143 punti: 6 rotti, 13 a metà, 124 che mancano.
+  Le cose che Keel fa già bene non sono elencate. In tutto erano 143 punti: 6 rotti, 13 a metà, 124 che mancavano. Dopo i giri: 125 fatti, 9 a metà, 9 non ancora (vedi «Cosa non c'è ancora»).
 - **Giro.** Il numero dice in quale giro di lavoro lo farei. I giri sono descritti alla fine, in «L'ordine dei lavori».
 - **Fuori da qui.** Le funzioni grandi di cui abbiamo già parlato (commit scritto da Claude, chat in parallelo, pull request, Linear, cronologia locale, Docker) hanno il loro spazio. Qui ci sono solo quelle che servono a quelle grandi, come la cronologia locale per non perdere niente.
 
 ---
+
+## Come provarlo
+
+Keel nuovo è installato in /Applications: chiudi quello aperto e riaprilo. Ecco cosa guardare, giro per giro.
+
+- **Giri 1–3, Git e differenze.**
+  - Clicca un file nella vista Git, poi torna ai file: l'albero è su quel file. Scorri giù, cambia vista, torna: sei dov'eri.
+  - Fai un push: un avviso dice quanti commit sono partiti; se fallisce, una finestra dice perché e cosa fare.
+  - Apri una differenza: due colonne uguali, parole cambiate evidenziate, F7 per passare da un blocco all'altro, Stage e Annulla per blocco.
+- **Giri 4–6, navigare e scrivere.** Ctrl+- per tornare indietro, Ctrl+Tab fra i file recenti, Alt+F12 per sbirciare una definizione, Cmd+C senza selezione per copiare la riga, parentesi colorate.
+- **Giro 7, terminale.**
+  - Apri un terminale ed esegui qualche comando: accanto a ognuno c'è un pallino, blu o rosso. Un clic sul pallino apre il suo menu.
+  - Cmd+↑ e Cmd+↓ saltano fra i comandi; scorrendo dentro un output lungo, il comando resta in cima.
+  - Un comando che fallisce mostra una barra in basso a destra: «Libera la porta 3000» se la porta è occupata, e «Chiedi a Claude».
+  - Ctrl+Alt+R esegue un comando recente; Cmd+L passa a Claude la selezione o l'ultimo comando.
+  - Chiudi e riapri Keel: i terminali tornano con il loro testo.
+- **Giro 8, il Mac.**
+  - Menu Finestra (Cmd+M contrae) e Aiuto con la ricerca; tasto destro sull'icona nel Dock per i progetti recenti.
+  - Spazio su un'immagine nell'albero: Quick Look. Trascina un file dall'albero o una scheda fuori dalla finestra: va nel Finder.
+  - Nella barra di stato clicca riga e colonna, «Spazi: 2», «UTF-8», «LF» e il linguaggio. Premi Cmd+K: la barra dice che aspetta il secondo tasto.
+  - Con Keel in secondo piano, Claude che finisce o chiede un permesso mette un numero sull'icona nel Dock.
+- **Giro 9, il resto.**
+  - F3 mette un segnalibro, Cmd+F3 li elenca, Cmd+Alt+L e Cmd+Alt+J ci vanno.
+  - Cmd+Alt+V incolla dalla cronologia degli appunti. Un'immagine incollata in un file Markdown viene salvata accanto al file.
+  - Sposta una funzione in un file e guarda la differenza: è in blu, «spostato alla riga…». Cambia un'immagine del progetto e apri la sua differenza.
+  - I file cambiati da Claude hanno una scintilla nell'albero finché non li apri. Nei Problemi, «Correggi con Claude» compare passando sopra.
+  - Il cursore scivola mentre scrivi; in Impostazioni → Aspetto ci sono il raggio e lo spazio dei pannelli e le schede su più righe.
+
+## Cosa non c'è ancora, e perché
+
+- **Ancora da fare, più lavoro di un dettaglio:**
+  - la colonna di destra delle differenze modificabile;
+  - i risultati della ricerca in una scheda modificabile;
+  - i righelli, i suggerimenti in riga (inlay hints) e «N riferimenti» (CodeLens): l'editor di gpui-component non li disegna ancora;
+  - il commit in una scheda grande (Maiusc+Esc);
+  - il messaggio intero del commit passando sulla riga;
+  - Cmd+P con freccia a destra che apre il file in secondo piano;
+  - una scheda trascinata fuori che apre una finestra nuova: le finestre di Keel sono una per progetto, e due finestre sullo stesso progetto vorrebbero documenti in comune. Per ora la scheda trascinata fuori porta il suo file nel Finder.
+- **A metà:** lo scorrimento morbido resta quello di macOS (il cursore invece scivola); i simboli nel percorso sopra l'editor; il numero dei cursori nella barra di stato; «Non mostrare più» negli avvisi; i risultati della ricerca nella barra di scorrimento.
 
 ## Le sei cose che hai chiesto tu
 
@@ -109,219 +148,219 @@ Ho riguardato un'immagine della vista delle differenze, disegnata ieri da `scrip
 
 | Cosa | Da dove | Keel oggi | Giro |
 |---|---|---|---|
-| Lo scorrimento resta quando cambi vista e quando riapri il progetto | VS Code, Zed | rotto | 1 |
-| Il file rivelato si vede: l'albero scorre fino a lui, centrato, solo se è fuori vista | VS Code | a metà | 1 |
-| Segue le differenze, Git Graph, la ricerca, i Problemi e i link del terminale | VS Code | manca | 1 |
-| Colori e lettere di git, propagati alle cartelle con un pallino | VS Code, Zed, JetBrains | manca | 1 |
-| Errori e avvisi propagati alle cartelle | VS Code | a metà: solo i file | 1 |
-| Selezione di più file con Cmd e Maiusc, per spostarli, eliminarli o copiarli insieme | VS Code | manca | 5 |
-| Copia, taglia, incolla e duplica (Cmd+C, Cmd+X, Cmd+V); «nome copia.ts» se il nome c'è già | VS Code | manca | 5 |
-| Cmd+Z annulla l'ultima rinomina, spostamento o eliminazione | VS Code | manca | 5 |
-| Scrivi per cercare nell'albero (Cmd+Alt+F): evidenzia o filtra, e le cartelle dicono quanti ne contengono | VS Code | manca | 5 |
-| Le cartelle che contengono la riga in cima restano appiccicate in alto mentre scorri | VS Code, Zed | manca | 5 |
-| Guide di rientro, più chiare al passaggio del mouse | VS Code, Zed | manca | 5 |
-| Cartelle compatte: `src/main/java` su una riga sola, se ognuna contiene solo la successiva | VS Code, Zed | manca | 5 |
-| File annidati: `package-lock.json` sotto `package.json`, `x.test.ts` e `x.css` sotto `x.ts` | VS Code | manca | 5 |
-| Alt+clic apre di lato; Cmd+Invio apre a destra | VS Code | manca | 5 |
-| Tasto destro: «Cerca nella cartella…», «Apri nel terminale», «Confronta con il selezionato» | VS Code | manca | 5 |
-| Trascinare dal Finder copia i file nel progetto | VS Code | manca | 5 |
-| Trascinare un file nel terminale scrive il suo percorso; nella chat di Claude lo allega | VS Code, Cursor | manca | 5 |
-| Tenendo un file trascinato sopra una cartella chiusa, la cartella si apre | Finder, VS Code | manca | 5 |
-| Trascinare un file dall'albero al Finder, a Mail o a Slack | macOS | manca | 8 |
-| Spazio su un'immagine, un PDF o un video: anteprima Quick Look, come nel Finder | macOS | manca | 8 |
+| Lo scorrimento resta quando cambi vista e quando riapri il progetto | VS Code, Zed | fatto | 1 |
+| Il file rivelato si vede: l'albero scorre fino a lui, centrato, solo se è fuori vista | VS Code | fatto | 1 |
+| Segue le differenze, Git Graph, la ricerca, i Problemi e i link del terminale | VS Code | a metà: segue le differenze e le modifiche di Claude; Git Graph, ricerca, Problemi e link del terminale non ancora | 1 |
+| Colori e lettere di git, propagati alle cartelle con un pallino | VS Code, Zed, JetBrains | fatto | 1 |
+| Errori e avvisi propagati alle cartelle | VS Code | fatto | 1 |
+| Selezione di più file con Cmd e Maiusc, per spostarli, eliminarli o copiarli insieme | VS Code | fatto | 5 |
+| Copia, taglia, incolla e duplica (Cmd+C, Cmd+X, Cmd+V); «nome copia.ts» se il nome c'è già | VS Code | fatto | 5 |
+| Cmd+Z annulla l'ultima rinomina, spostamento o eliminazione | VS Code | fatto | 5 |
+| Scrivi per cercare nell'albero (Cmd+Alt+F): evidenzia o filtra, e le cartelle dicono quanti ne contengono | VS Code | fatto | 5 |
+| Le cartelle che contengono la riga in cima restano appiccicate in alto mentre scorri | VS Code, Zed | fatto | 5 |
+| Guide di rientro, più chiare al passaggio del mouse | VS Code, Zed | fatto | 5 |
+| Cartelle compatte: `src/main/java` su una riga sola, se ognuna contiene solo la successiva | VS Code, Zed | fatto | 5 |
+| File annidati: `package-lock.json` sotto `package.json`, `x.test.ts` e `x.css` sotto `x.ts` | VS Code | fatto | 5 |
+| Alt+clic apre di lato; Cmd+Invio apre a destra | VS Code | fatto | 5 |
+| Tasto destro: «Cerca nella cartella…», «Apri nel terminale», «Confronta con il selezionato» | VS Code | fatto | 5 |
+| Trascinare dal Finder copia i file nel progetto | VS Code | fatto | 5 |
+| Trascinare un file nel terminale scrive il suo percorso; nella chat di Claude lo allega | VS Code, Cursor | fatto | 5 |
+| Tenendo un file trascinato sopra una cartella chiusa, la cartella si apre | Finder, VS Code | fatto | 5 |
+| Trascinare un file dall'albero al Finder, a Mail o a Slack | macOS | fatto | 8 |
+| Spazio su un'immagine, un PDF o un video: anteprima Quick Look, come nel Finder | macOS | fatto | 8 |
 
 ### Schede e gruppi
 
 | Cosa | Da dove | Keel oggi | Giro |
 |---|---|---|---|
-| Colori di git e degli errori anche sul nome della scheda | VS Code | manca | 1 |
-| La scheda delle differenze con l'icona del suo linguaggio | — | rotto | 2 |
-| Due file con lo stesso nome: la scheda aggiunge la cartella, `index.ts · components` | VS Code | manca | 4 |
-| Aprendo un file la barra delle schede scorre fino a lui, se era nascosto | VS Code | manca | 4 |
-| Clic con il tasto centrale chiude; doppio clic sullo spazio vuoto crea un file | VS Code | manca | 4 |
-| «Chiudi i salvati» (Cmd+K U) | VS Code | manca | 4 |
-| Ctrl+1…9 va alla scheda numero 1…9 | VS Code, Safari | manca | 4 |
-| Schede su più righe quando non ci stanno, a scelta (`workbench.editor.wrapTabs`) | VS Code | manca | 9 |
-| Trascinare una scheda fuori dalla finestra apre una finestra nuova | VS Code | manca | 8 |
+| Colori di git e degli errori anche sul nome della scheda | VS Code | fatto | 1 |
+| La scheda delle differenze con l'icona del suo linguaggio | — | fatto | 2 |
+| Due file con lo stesso nome: la scheda aggiunge la cartella, `index.ts · components` | VS Code | fatto | 4 |
+| Aprendo un file la barra delle schede scorre fino a lui, se era nascosto | VS Code | fatto | 4 |
+| Clic con il tasto centrale chiude; doppio clic sullo spazio vuoto crea un file | VS Code | fatto | 4 |
+| «Chiudi i salvati» (Cmd+K U) | VS Code | fatto | 4 |
+| Ctrl+1…9 va alla scheda numero 1…9 | VS Code, Safari | fatto | 4 |
+| Schede su più righe quando non ci stanno, a scelta (`workbench.editor.wrapTabs`) | VS Code | fatto | 9 |
+| Trascinare una scheda fuori dalla finestra apre una finestra nuova | VS Code | non ancora: trascinata fuori, la scheda porta il suo file nel Finder o in Mail; una finestra nuova per un file dello stesso progetto vuole finestre che condividano i documenti | 8 |
 
 ### Salvataggio e file
 
 | Cosa | Da dove | Keel oggi | Giro |
 |---|---|---|---|
-| Salvataggio automatico acceso di serie, con la spunta nel menu File | VS Code, Cursor | a metà | 1 |
-| «Cambiando editor» salva anche andando nel terminale, nella barra o in Claude | VS Code, Zed | rotto | 1 |
-| Salva prima di avviare uno script npm o un'attività | — | manca | 1 |
-| Menu File completo: Salva con nome, Salva tutto (Cmd+Alt+S), Ripristina il file, Chiudi la cartella | VS Code | manca | 1 |
-| Cronologia locale: ogni salvataggio conservato, con una linea del tempo per file da cui tornare indietro, anche per un file cancellato | VS Code, JetBrains | manca | 3 |
-| Confronta il file con gli appunti (Cmd+K C) | VS Code | manca | 3 |
+| Salvataggio automatico acceso di serie, con la spunta nel menu File | VS Code, Cursor | fatto | 1 |
+| «Cambiando editor» salva anche andando nel terminale, nella barra o in Claude | VS Code, Zed | fatto | 1 |
+| Salva prima di avviare uno script npm o un'attività | — | fatto | 1 |
+| Menu File completo: Salva con nome, Salva tutto (Cmd+Alt+S), Ripristina il file, Chiudi la cartella | VS Code | fatto | 1 |
+| Cronologia locale: ogni salvataggio conservato, con una linea del tempo per file da cui tornare indietro, anche per un file cancellato | VS Code, JetBrains | fatto | 3 |
+| Confronta il file con gli appunti (Cmd+K C) | VS Code | fatto | 3 |
 
 ### Git: la vista e il commit
 
 | Cosa | Da dove | Keel oggi | Giro |
 |---|---|---|---|
-| Avvisi dopo push, pull, fetch, commit, stash e cambio di branch | JetBrains, Tower | manca | 1 |
-| Finestra d'errore con il messaggio di git e l'azione che risolve | VS Code, JetBrains | manca | 1 |
-| «Annulla l'ultimo commit» subito dopo il commit, e dal menu | GitHub Desktop, Zed, VS Code | manca | 3 |
-| Campo del commit: ↑ e ↓ ripescano i messaggi precedenti | VS Code | manca | 3 |
-| Campo del commit: avviso oltre i 50 caratteri nel titolo e i 72 nel corpo, con il segno dei 72 | VS Code, Zed | manca | 3 |
-| Niente in stage: chiede «Metto in stage tutto e faccio il commit?», con «Sempre» | VS Code | manca | 3 |
-| Commit su `main` o `master`: chiede conferma | VS Code | manca | 3 |
-| Commit e push in un gesto, scelto come azione predefinita del pulsante | VS Code, JetBrains | a metà: c'è nel menu | 3 |
-| Prima del push, l'elenco dei commit che stanno per partire | JetBrains | manca | 3 |
-| Fetch da solo ogni 3 minuti, «ultimo fetch 2 minuti fa», e il numero dei commit in arrivo | VS Code, GitHub Desktop | manca | 3 |
-| Cambio di branch con modifiche non salvate in un commit: «Portale con te» o «Lasciale qui» (stash) | GitHub Desktop | manca | 3 |
-| Elenco degli stash, con Applica, Estrai, Elimina e le differenze | VS Code, Zed | manca | 3 |
-| Branch nuovo senza remoto: «Pubblica il branch» al posto di Push, poi «Crea pull request» | VS Code, GitHub Desktop | manca | 3 |
-| Vista ad albero o a elenco dei file cambiati | VS Code, Zed | manca | 3 |
-| Commit con il campo più grande in una scheda (Maiusc+Esc), per i messaggi lunghi | Zed, VS Code | manca | 3 |
+| Avvisi dopo push, pull, fetch, commit, stash e cambio di branch | JetBrains, Tower | fatto | 1 |
+| Finestra d'errore con il messaggio di git e l'azione che risolve | VS Code, JetBrains | fatto | 1 |
+| «Annulla l'ultimo commit» subito dopo il commit, e dal menu | GitHub Desktop, Zed, VS Code | fatto | 3 |
+| Campo del commit: ↑ e ↓ ripescano i messaggi precedenti | VS Code | fatto | 3 |
+| Campo del commit: avviso oltre i 50 caratteri nel titolo e i 72 nel corpo, con il segno dei 72 | VS Code, Zed | fatto | 3 |
+| Niente in stage: chiede «Metto in stage tutto e faccio il commit?», con «Sempre» | VS Code | fatto | 3 |
+| Commit su `main` o `master`: chiede conferma | VS Code | fatto | 3 |
+| Commit e push in un gesto, scelto come azione predefinita del pulsante | VS Code, JetBrains | a metà: «Commit e push» e «Commit e sincronizza» nel menu del pulsante, non come scelta predefinita | 3 |
+| Prima del push, l'elenco dei commit che stanno per partire | JetBrains | fatto | 3 |
+| Fetch da solo ogni 3 minuti, «ultimo fetch 2 minuti fa», e il numero dei commit in arrivo | VS Code, GitHub Desktop | fatto | 3 |
+| Cambio di branch con modifiche non salvate in un commit: «Portale con te» o «Lasciale qui» (stash) | GitHub Desktop | fatto | 3 |
+| Elenco degli stash, con Applica, Estrai, Elimina e le differenze | VS Code, Zed | fatto | 3 |
+| Branch nuovo senza remoto: «Pubblica il branch» al posto di Push, poi «Crea pull request» | VS Code, GitHub Desktop | fatto | 3 |
+| Vista ad albero o a elenco dei file cambiati | VS Code, Zed | fatto | 3 |
+| Commit con il campo più grande in una scheda (Maiusc+Esc), per i messaggi lunghi | Zed, VS Code | non ancora | 3 |
 
 ### Git: dentro l'editor
 
 | Cosa | Da dove | Keel oggi | Giro |
 |---|---|---|---|
-| Chi ha cambiato la riga del cursore, in grigio a fine riga: «Manuel, 3 giorni fa · fix: …» | VS Code, Zed | manca: c'è solo la colonna | 3 |
-| Passando sopra: il messaggio intero, l'autore, «Apri il commit» e «Apri su GitHub» | VS Code, JetBrains | manca | 3 |
-| Clic sulla barra colorata a sinistra: la differenza dentro l'editor, con Stage, Annulla, Successiva, Precedente | VS Code | a metà: c'è la barra dei pulsanti | 2 |
-| «Copia il link su GitHub» della riga o della selezione | Zed | manca | 3 |
-| Storia delle righe selezionate (`git log -L`) | JetBrains | manca | 3 |
+| Chi ha cambiato la riga del cursore, in grigio a fine riga: «Manuel, 3 giorni fa · fix: …» | VS Code, Zed | fatto | 3 |
+| Passando sopra: il messaggio intero, l'autore, «Apri il commit» e «Apri su GitHub» | VS Code, JetBrains | non ancora: l'autore della riga c'è nella barra di stato | 3 |
+| Clic sulla barra colorata a sinistra: la differenza dentro l'editor, con Stage, Annulla, Successiva, Precedente | VS Code | fatto | 2 |
+| «Copia il link su GitHub» della riga o della selezione | Zed | fatto | 3 |
+| Storia delle righe selezionate (`git log -L`) | JetBrains | fatto | 3 |
 
 ### Git: le differenze
 
 | Cosa | Da dove | Keel oggi | Giro |
 |---|---|---|---|
-| Colonne a metà, con il divisorio trascinabile | VS Code | rotto | 2 |
-| Intestazioni dei blocchi leggibili, con la funzione in cui si trovano | GitHub | rotto | 2 |
-| Righe nascoste da aprire: 20 in su, 20 in giù o tutte | VS Code, GitHub | manca | 2 |
-| Parole cambiate evidenziate dentro la riga | Zed, VS Code | manca | 2 |
-| Colonna di destra modificabile, con il salvataggio | VS Code, Zed | manca | 2 |
-| Stage e Annulla per ogni blocco, accanto ai numeri di riga | VS Code | manca | 2 |
-| F7 e Maiusc+F7 per passare da una modifica all'altra; i segni nella barra di scorrimento | VS Code | manca | 2 |
-| In linea da sola quando la finestra è stretta (sotto i 900 pixel) | VS Code | manca | 2 |
-| «Ignora gli spazi», per vedere solo i cambiamenti veri | VS Code, GitHub Desktop | manca | 2 |
-| In cima: nome del file, «+12 −3» e «Apri il file» alla stessa riga | VS Code, GitHub | a metà | 2 |
-| Tutte le modifiche in una sola pagina che scorre, file dopo file, modificabile | Zed, VS Code | manca | 2 |
-| Immagini cambiate: prima e dopo affiancate, o una sopra l'altra con un cursore | GitHub Desktop | manca | 9 |
-| Codice spostato riconosciuto come spostato, non come tolto e aggiunto | VS Code | manca | 9 |
+| Colonne a metà, con il divisorio trascinabile | VS Code | fatto | 2 |
+| Intestazioni dei blocchi leggibili, con la funzione in cui si trovano | GitHub | fatto | 2 |
+| Righe nascoste da aprire: 20 in su, 20 in giù o tutte | VS Code, GitHub | fatto | 2 |
+| Parole cambiate evidenziate dentro la riga | Zed, VS Code | fatto | 2 |
+| Colonna di destra modificabile, con il salvataggio | VS Code, Zed | non ancora | 2 |
+| Stage e Annulla per ogni blocco, accanto ai numeri di riga | VS Code | fatto | 2 |
+| F7 e Maiusc+F7 per passare da una modifica all'altra; i segni nella barra di scorrimento | VS Code | fatto | 2 |
+| In linea da sola quando la finestra è stretta (sotto i 900 pixel) | VS Code | fatto | 2 |
+| «Ignora gli spazi», per vedere solo i cambiamenti veri | VS Code, GitHub Desktop | fatto | 2 |
+| In cima: nome del file, «+12 −3» e «Apri il file» alla stessa riga | VS Code, GitHub | fatto | 2 |
+| Tutte le modifiche in una sola pagina che scorre, file dopo file, modificabile | Zed, VS Code | a metà: una pagina sola, file dopo file, ma non modificabile | 2 |
+| Immagini cambiate: prima e dopo affiancate, o una sopra l'altra con un cursore | GitHub Desktop | fatto | 9 |
+| Codice spostato riconosciuto come spostato, non come tolto e aggiunto | VS Code | fatto | 9 |
 
 ### Navigare
 
 | Cosa | Da dove | Keel oggi | Giro |
 |---|---|---|---|
-| Indietro e avanti tra i punti visitati (Ctrl+- e Ctrl+Maiusc+-), anche con i tasti laterali del mouse | VS Code | manca | 4 |
-| Torna all'ultima modifica (Cmd+K Cmd+Q) | VS Code, JetBrains | manca | 4 |
-| Ctrl+Tab: elenco dei file recenti, tenendo Ctrl si scorre | VS Code | manca | 4 |
-| Luoghi recenti: i punti dove sei stato, con un pezzetto di codice ciascuno | JetBrains | manca | 4 |
-| Cmd+P: scorrendo l'elenco il file si vede già nell'editor, Esc torna dov'eri | Sublime, VS Code | manca | 4 |
-| Cmd+P: `file.ts:42` apre alla riga 42; `@` i simboli del file, `#` quelli del progetto, `>` i comandi | VS Code, Sublime | manca | 4 |
-| Cmd+P: freccia a destra apre il file in secondo piano e lascia aperto l'elenco | VS Code | manca | 4 |
-| Sbirciare la definizione e i riferimenti in un riquadro dentro l'editor (Alt+F12, Maiusc+F12) | VS Code | manca | 4 |
-| Gerarchia delle chiamate: chi chiama questa funzione, e chi chiama quelli | VS Code, JetBrains | manca | 4 |
-| Struttura del file in una vista della barra laterale, che segue il cursore | VS Code, Zed | manca | 4 |
-| Breadcrumb: un clic su un pezzo apre l'elenco dei fratelli, file o simboli | VS Code, Xcode | a metà: una cartella si apre nell'albero | 4 |
-| Vai alla parentesi corrispondente (Cmd+Maiusc+\\) | VS Code | manca | 6 |
-| Segnalibri sulle righe, con l'elenco per tornarci | JetBrains, Xcode | manca | 9 |
+| Indietro e avanti tra i punti visitati (Ctrl+- e Ctrl+Maiusc+-), anche con i tasti laterali del mouse | VS Code | fatto | 4 |
+| Torna all'ultima modifica (Cmd+K Cmd+Q) | VS Code, JetBrains | fatto | 4 |
+| Ctrl+Tab: elenco dei file recenti, tenendo Ctrl si scorre | VS Code | fatto | 4 |
+| Luoghi recenti: i punti dove sei stato, con un pezzetto di codice ciascuno | JetBrains | fatto | 4 |
+| Cmd+P: scorrendo l'elenco il file si vede già nell'editor, Esc torna dov'eri | Sublime, VS Code | fatto | 4 |
+| Cmd+P: `file.ts:42` apre alla riga 42; `@` i simboli del file, `#` quelli del progetto, `>` i comandi | VS Code, Sublime | fatto | 4 |
+| Cmd+P: freccia a destra apre il file in secondo piano e lascia aperto l'elenco | VS Code | non ancora | 4 |
+| Sbirciare la definizione e i riferimenti in un riquadro dentro l'editor (Alt+F12, Maiusc+F12) | VS Code | fatto | 4 |
+| Gerarchia delle chiamate: chi chiama questa funzione, e chi chiama quelli | VS Code, JetBrains | fatto | 4 |
+| Struttura del file in una vista della barra laterale, che segue il cursore | VS Code, Zed | fatto | 4 |
+| Breadcrumb: un clic su un pezzo apre l'elenco dei fratelli, file o simboli | VS Code, Xcode | a metà: una cartella elenca cosa contiene; i simboli no | 4 |
+| Vai alla parentesi corrispondente (Cmd+Maiusc+\\) | VS Code | fatto | 6 |
+| Segnalibri sulle righe, con l'elenco per tornarci | JetBrains, Xcode | fatto | 9 |
 
 ### Scrivere
 
 | Cosa | Da dove | Keel oggi | Giro |
 |---|---|---|---|
-| Rinominando un tag HTML o JSX si rinomina anche quello di chiusura | VS Code | manca | 6 |
-| Parentesi colorate per livello, con la guida della coppia attiva | VS Code, Zed | manca | 6 |
-| Selezioni del testo e scrivi `"` o `(`: il testo finisce dentro | VS Code, Sublime | manca | 6 |
-| Spazi visibili nella selezione o ai bordi (`editor.renderWhitespace`) | VS Code, Zed | manca | 6 |
-| Righelli verticali a 80 o 100 colonne (`editor.rulers`) | VS Code | manca | 6 |
-| Suggerimenti in riga: tipi e nomi dei parametri, attenuati, tenendo premuto un tasto (`editor.inlayHints`) | VS Code, Zed | manca | 6 |
-| Quadratino del colore accanto a `#2F74F5` o `rgb(…)`, con il selettore | VS Code | manca | 6 |
-| «3 riferimenti» sopra le funzioni, cliccabile (CodeLens) | VS Code | manca | 6 |
-| Le altre occorrenze del simbolo evidenziate, e segnate nella barra di scorrimento | VS Code, Zed | manca | 6 |
-| Errori, risultati della ricerca e modifiche segnati nella barra di scorrimento | VS Code, Zed | manca: l'editor li sa disegnare, Keel non glieli passa | 6 |
-| Cmd+C senza selezione copia la riga intera; Cmd+X la taglia | VS Code, Sublime | manca | 6 |
-| Ordina le righe, togli i doppioni, unisci le righe, maiuscole e minuscole, snake e camel case | VS Code, Sublime | manca | 6 |
-| Espandi e restringi la selezione per blocchi (Ctrl+Maiusc+Cmd+→ e ←) | VS Code, JetBrains | manca | 6 |
-| Spostando un file, gli import che lo usano si aggiornano da soli (TypeScript) | VS Code | manca | 5 |
-| Cursore che scivola invece di saltare, e scorrimento morbido | VS Code, Zed | manca | 9 |
-| Incollare un'immagine in un Markdown la salva nel progetto e scrive il link | VS Code | manca | 9 |
-| Appunti con la cronologia: Cmd+Maiusc+V incolla una delle ultime cose copiate | JetBrains | manca | 9 |
+| Rinominando un tag HTML o JSX si rinomina anche quello di chiusura | VS Code | fatto | 6 |
+| Parentesi colorate per livello, con la guida della coppia attiva | VS Code, Zed | fatto | 6 |
+| Selezioni del testo e scrivi `"` o `(`: il testo finisce dentro | VS Code, Sublime | fatto | 6 |
+| Spazi visibili nella selezione o ai bordi (`editor.renderWhitespace`) | VS Code, Zed | a metà: `editor.renderWhitespace` con «all» | 6 |
+| Righelli verticali a 80 o 100 colonne (`editor.rulers`) | VS Code | non ancora | 6 |
+| Suggerimenti in riga: tipi e nomi dei parametri, attenuati, tenendo premuto un tasto (`editor.inlayHints`) | VS Code, Zed | non ancora | 6 |
+| Quadratino del colore accanto a `#2F74F5` o `rgb(…)`, con il selettore | VS Code | fatto | 6 |
+| «3 riferimenti» sopra le funzioni, cliccabile (CodeLens) | VS Code | non ancora | 6 |
+| Le altre occorrenze del simbolo evidenziate, e segnate nella barra di scorrimento | VS Code, Zed | fatto | 6 |
+| Errori, risultati della ricerca e modifiche segnati nella barra di scorrimento | VS Code, Zed | a metà: errori, avvisi, modifiche, occorrenze e segnalibri; non i risultati della ricerca | 6 |
+| Cmd+C senza selezione copia la riga intera; Cmd+X la taglia | VS Code, Sublime | fatto | 6 |
+| Ordina le righe, togli i doppioni, unisci le righe, maiuscole e minuscole, snake e camel case | VS Code, Sublime | fatto | 6 |
+| Espandi e restringi la selezione per blocchi (Ctrl+Maiusc+Cmd+→ e ←) | VS Code, JetBrains | fatto | 6 |
+| Spostando un file, gli import che lo usano si aggiornano da soli (TypeScript) | VS Code | fatto | 5 |
+| Cursore che scivola invece di saltare, e scorrimento morbido | VS Code, Zed | a metà: il cursore scivola; lo scorrimento è quello di macOS | 9 |
+| Incollare un'immagine in un Markdown la salva nel progetto e scrive il link | VS Code | fatto | 9 |
+| Appunti con la cronologia: Cmd+Maiusc+V incolla una delle ultime cose copiate | JetBrains | fatto, con Cmd+Alt+V: Cmd+Maiusc+V resta l'anteprima del Markdown, come in VS Code | 9 |
 
 ### Cerca
 
 | Cosa | Da dove | Keel oggi | Giro |
 |---|---|---|---|
-| I risultati si aprono in una scheda che puoi tenere e modificare, come in Zed | Zed, VS Code | manca | 4 |
-| «Cerca nella cartella…» dall'albero riempie «file da includere» | VS Code | manca | 5 |
-| Cerca solo nei file aperti | VS Code | manca | 4 |
-| Togli un risultato o un file dall'elenco con la ×, prima di sostituire | VS Code | manca | 4 |
-| Il testo selezionato o la parola sotto il cursore riempie già il campo di ricerca | VS Code | manca | 4 |
+| I risultati si aprono in una scheda che puoi tenere e modificare, come in Zed | Zed, VS Code | non ancora | 4 |
+| «Cerca nella cartella…» dall'albero riempie «file da includere» | VS Code | fatto | 5 |
+| Cerca solo nei file aperti | VS Code | fatto | 4 |
+| Togli un risultato o un file dall'elenco con la ×, prima di sostituire | VS Code | fatto | 4 |
+| Il testo selezionato o la parola sotto il cursore riempie già il campo di ricerca | VS Code | fatto | 4 |
 
 ### Terminale
 
 | Cosa | Da dove | Keel oggi | Giro |
 |---|---|---|---|
-| Un pallino accanto a ogni comando: blu se è andato bene, rosso se è fallito (integrazione con la shell) | VS Code | manca | 7 |
-| Cmd+↑ e Cmd+↓ saltano da un comando all'altro | VS Code, iTerm | manca | 7 |
-| Il comando in cima resta appiccicato mentre scorri il suo output | VS Code | manca | 7 |
-| «Copia l'output dell'ultimo comando» e «Esegui un comando recente» | VS Code | manca | 7 |
-| Correzioni rapide: porta occupata → «Chiudi il processo»; push senza upstream → «Imposta upstream» | VS Code | manca | 7 |
-| Nome della scheda preso dal programma che gira (node, cargo, claude) | VS Code, iTerm | manca | 7 |
-| Barra di avanzamento nella scheda, per i programmi che la mandano | VS Code, Ghostty | manca | 7 |
-| Notifica quando un comando lungo finisce e Keel è in secondo piano | iTerm, Ghostty | manca | 7 |
-| Riaprendo Keel, i terminali tornano con il loro testo | VS Code | manca | 7 |
-| Selezione o comando fallito → «Chiedi a Claude» | Cursor | manca | 7 |
+| Un pallino accanto a ogni comando: blu se è andato bene, rosso se è fallito (integrazione con la shell) | VS Code | fatto | 7 |
+| Cmd+↑ e Cmd+↓ saltano da un comando all'altro | VS Code, iTerm | fatto | 7 |
+| Il comando in cima resta appiccicato mentre scorri il suo output | VS Code | fatto | 7 |
+| «Copia l'output dell'ultimo comando» e «Esegui un comando recente» | VS Code | fatto | 7 |
+| Correzioni rapide: porta occupata → «Chiudi il processo»; push senza upstream → «Imposta upstream» | VS Code | fatto | 7 |
+| Nome della scheda preso dal programma che gira (node, cargo, claude) | VS Code, iTerm | fatto | 7 |
+| Barra di avanzamento nella scheda, per i programmi che la mandano | VS Code, Ghostty | fatto | 7 |
+| Notifica quando un comando lungo finisce e Keel è in secondo piano | iTerm, Ghostty | fatto | 7 |
+| Riaprendo Keel, i terminali tornano con il loro testo | VS Code | fatto | 7 |
+| Selezione o comando fallito → «Chiedi a Claude» | Cursor | fatto | 7 |
 
 ### Avvisi e avanzamento
 
 | Cosa | Da dove | Keel oggi | Giro |
 |---|---|---|---|
-| Avvisi in basso a destra, che entrano e escono con un movimento, impilati se sono più di uno | VS Code, Zed | manca | 1 |
-| Ogni avviso con le sue azioni, e «Non mostrare più» per quelli che si ripetono | VS Code, JetBrains | manca | 1 |
-| Campanella con gli avvisi passati e «Non disturbare» | VS Code | manca | 1 |
-| Avanzamento nella barra di stato per git, i language server e le installazioni | VS Code | a metà | 1 |
-| Notifiche di macOS solo quando Keel è in secondo piano | macOS | manca | 1 |
+| Avvisi in basso a destra, che entrano e escono con un movimento, impilati se sono più di uno | VS Code, Zed | fatto | 1 |
+| Ogni avviso con le sue azioni, e «Non mostrare più» per quelli che si ripetono | VS Code, JetBrains | a metà: le azioni sì, «Non mostrare più» no | 1 |
+| Campanella con gli avvisi passati e «Non disturbare» | VS Code | fatto | 1 |
+| Avanzamento nella barra di stato per git, i language server e le installazioni | VS Code | fatto | 1 |
+| Notifiche di macOS solo quando Keel è in secondo piano | macOS | fatto | 1 |
 
 ### Barra di stato
 
 | Cosa | Da dove | Keel oggi | Giro |
 |---|---|---|---|
-| Clic su riga e colonna → vai alla riga | VS Code, Zed | manca | 8 |
-| Clic sul rientro → spazi o tab, 2 o 4, e converti il file | VS Code | manca | 8 |
-| Clic sulla codifica → riapri o salva con un'altra codifica; oggi è sempre scritto «UTF-8» | VS Code | rotto | 8 |
-| LF o CRLF, con il clic per cambiarlo | VS Code, Zed | manca | 8 |
-| Clic sul linguaggio → cambialo per questo file | VS Code, Zed | manca | 8 |
-| Quanti caratteri e righe sono selezionati, e quanti cursori ci sono | VS Code | manca | 8 |
-| Dopo Cmd+K: «Cmd+K premuto, aspetto il secondo tasto» | VS Code, Zed | manca | 8 |
-| Branch con ↓2 ↑3: un clic sincronizza, il cerchio gira mentre lavora | VS Code | a metà | 3 |
+| Clic su riga e colonna → vai alla riga | VS Code, Zed | fatto | 8 |
+| Clic sul rientro → spazi o tab, 2 o 4, e converti il file | VS Code | fatto | 8 |
+| Clic sulla codifica → riapri o salva con un'altra codifica; oggi è sempre scritto «UTF-8» | VS Code | fatto | 8 |
+| LF o CRLF, con il clic per cambiarlo | VS Code, Zed | fatto | 8 |
+| Clic sul linguaggio → cambialo per questo file | VS Code, Zed | fatto | 8 |
+| Quanti caratteri e righe sono selezionati, e quanti cursori ci sono | VS Code | a metà: i caratteri selezionati sì, il numero dei cursori no | 8 |
+| Dopo Cmd+K: «Cmd+K premuto, aspetto il secondo tasto» | VS Code, Zed | fatto | 8 |
+| Branch con ↓2 ↑3: un clic sincronizza, il cerchio gira mentre lavora | VS Code | fatto | 3 |
 
 ### Claude, i dettagli piccoli
 
 | Cosa | Da dove | Keel oggi | Giro |
 |---|---|---|---|
-| I file creati o cambiati da Claude segnati nell'albero finché non li guardi | Cursor | manca | 9 |
-| Barra di revisione in basso nell'editor: «file 1 di 3», Tieni e Annulla per ogni blocco e per tutto | Cursor | a metà | 9 |
-| Trascinare un file o una cartella nella chat la allega; incollare un'immagine la allega | Cursor | manca | 9 |
-| Problemi e test falliti: «Correggi con Claude» | Cursor | manca | 9 |
-| Notifica di macOS e numero sul Dock quando Claude ha finito o aspetta un permesso | Cursor | manca | 8 |
+| I file creati o cambiati da Claude segnati nell'albero finché non li guardi | Cursor | fatto | 9 |
+| Barra di revisione in basso nell'editor: «file 1 di 3», Tieni e Annulla per ogni blocco e per tutto | Cursor | fatto | 9 |
+| Trascinare un file o una cartella nella chat la allega; incollare un'immagine la allega | Cursor | fatto | 9 |
+| Problemi e test falliti: «Correggi con Claude» | Cursor | fatto | 9 |
+| Notifica di macOS e numero sul Dock quando Claude ha finito o aspetta un permesso | Cursor | fatto | 8 |
 
 ### Il Mac per davvero
 
 | Cosa | Da dove | Keel oggi | Giro |
 |---|---|---|---|
-| Icona del file nel titolo: Cmd+clic mostra il percorso, trascinarla trascina il file | macOS, Xcode | manca | 8 |
-| Pallino nel pulsante rosso della finestra quando ci sono modifiche non salvate | macOS | manca | 8 |
-| Menu Finestra: Contrai (Cmd+M), Ingrandisci, l'elenco delle finestre aperte | macOS | manca | 8 |
-| Menu Aiuto con la ricerca dei comandi, come in ogni app del Mac | macOS | manca | 8 |
-| Menu Vai: indietro, avanti, simboli, definizione, problema successivo | VS Code | a metà | 8 |
-| Tasto destro sull'icona nel Dock: i progetti recenti | macOS | manca | 8 |
-| Rispetta «Riduci movimento», «Aumenta contrasto» e «Riduci trasparenza» di macOS | macOS | a metà: c'è l'interruttore dei movimenti | 8 |
-| Nei campi di testo funzionano Ctrl+A, Ctrl+E e Ctrl+K, come in tutto il Mac | macOS | a metà: manca Ctrl+K | 8 |
+| Icona del file nel titolo: Cmd+clic mostra il percorso, trascinarla trascina il file | macOS, Xcode | fatto: Cmd+clic o tasto destro sul nome del progetto, in alto a sinistra; trascinare un file fuori si fa dall'albero o dalla scheda | 8 |
+| Pallino nel pulsante rosso della finestra quando ci sono modifiche non salvate | macOS | fatto | 8 |
+| Menu Finestra: Contrai (Cmd+M), Ingrandisci, l'elenco delle finestre aperte | macOS | fatto | 8 |
+| Menu Aiuto con la ricerca dei comandi, come in ogni app del Mac | macOS | fatto | 8 |
+| Menu Vai: indietro, avanti, simboli, definizione, problema successivo | VS Code | fatto | 8 |
+| Tasto destro sull'icona nel Dock: i progetti recenti | macOS | fatto | 8 |
+| Rispetta «Riduci movimento», «Aumenta contrasto» e «Riduci trasparenza» di macOS | macOS | fatto per «Riduci movimento» e «Aumenta contrasto»; Keel non usa trasparenze, quindi «Riduci trasparenza» non cambia niente | 8 |
+| Nei campi di testo funzionano Ctrl+A, Ctrl+E e Ctrl+K, come in tutto il Mac | macOS | fatto | 8 |
 
 ### Movimento e rifinitura
 
 | Cosa | Da dove | Keel oggi | Giro |
 |---|---|---|---|
-| Nella vista Git, un file messo in stage scivola nella sua sezione invece di sparire | Linear, Things | manca | 9 |
-| I numeri dei contatori cambiano con un breve scorrimento | Apple | manca | 9 |
-| Le liste che si caricano mostrano righe grigie che pulsano, non uno spazio vuoto | GitHub, Linear | manca | 9 |
-| Raggio e spazio dei pannelli regolabili nello stile a card, come la nuova «Modern UI» di VS Code 1.147 | VS Code | manca | 9 |
+| Nella vista Git, un file messo in stage scivola nella sua sezione invece di sparire | Linear, Things | fatto | 9 |
+| I numeri dei contatori cambiano con un breve scorrimento | Apple | fatto | 9 |
+| Le liste che si caricano mostrano righe grigie che pulsano, non uno spazio vuoto | GitHub, Linear | fatto | 9 |
+| Raggio e spazio dei pannelli regolabili nello stile a card, come la nuova «Modern UI» di VS Code 1.147 | VS Code | fatto | 9 |
 
 ---
 
@@ -329,7 +368,7 @@ Ho riguardato un'immagine della vista delle differenze, disegnata ieri da `scrip
 
 Ho deciso io, come mi hai chiesto. Si comincia dalle sei cose che hai chiesto tu, poi le differenze, poi il resto partendo da quello che userai di più. Ogni giro si chiude come le fasi del piano: test automatici, immagini da `scripts/snapshots.sh`, le prove a mano per te e un commit su `develop`.
 
-**Giro 1 — Esplora risorse e Git che si parlano**
+**Giro 1 — Esplora risorse e Git che si parlano** · fatto
 - **Cosa:**
   - lo scorrimento che resta;
   - l'albero che segue anche le differenze e scorre fino al file;
@@ -339,7 +378,7 @@ Ho deciso io, come mi hai chiesto. Si comincia dalle sei cose che hai chiesto tu
   - avvisi, finestra degli errori, campanella e notifiche di macOS.
 - **Fatto quando:** scorri in fondo all'albero, vai in Git, clicchi un file cambiato e torni ai file: sei sul file giusto, alla stessa altezza. Il file ha la sua M, la cartella il suo pallino. Fai un push e vedi «Push di N commit»; ne fai uno che deve fallire e la finestra ti dice perché e cosa fare.
 
-**Giro 2 — Le differenze nuove**
+**Giro 2 — Le differenze nuove** · fatto
 - **Cosa:**
   - la vista delle differenze rifatta con l'editor di Keel, affiancata o in linea;
   - parole evidenziate, righe nascoste da aprire, colonna di destra modificabile;
@@ -348,7 +387,7 @@ Ho deciso io, come mi hai chiesto. Si comincia dalle sei cose che hai chiesto tu
   - la differenza dentro l'editor dalla barra colorata.
 - **Fatto quando:** rivedi e metti in stage un commit intero senza uscire dalle differenze.
 
-**Giro 3 — Git di tutti i giorni**
+**Giro 3 — Git di tutti i giorni** · fatto
 - **Cosa:**
   - Annulla l'ultimo commit;
   - storico dei messaggi e i limiti 50 e 72;
@@ -359,7 +398,7 @@ Ho deciso io, come mi hai chiesto. Si comincia dalle sei cose che hai chiesto tu
   - cronologia locale dei file.
 - **Fatto quando:** per una settimana non apri mai il terminale per git.
 
-**Giro 4 — Navigare**
+**Giro 4 — Navigare** · fatto
 - **Cosa:**
   - indietro e avanti;
   - Ctrl+Tab e i luoghi recenti;
@@ -370,7 +409,7 @@ Ho deciso io, come mi hai chiesto. Si comincia dalle sei cose che hai chiesto tu
   - la ricerca in una scheda.
 - **Fatto quando:** salti avanti e indietro tra definizioni senza perdere il filo.
 
-**Giro 5 — L'Esplora risorse completo**
+**Giro 5 — L'Esplora risorse completo** · fatto
 - **Cosa:**
   - più file selezionati, copia e incolla, Cmd+Z;
   - cerca scrivendo;
@@ -379,7 +418,7 @@ Ho deciso io, come mi hai chiesto. Si comincia dalle sei cose che hai chiesto tu
   - import aggiornati quando sposti un file.
 - **Fatto quando:** riorganizzi le cartelle di un progetto vero senza uscire da Keel e senza rompere un import.
 
-**Giro 6 — Scrivere**
+**Giro 6 — Scrivere** · fatto
 - **Cosa:**
   - tag rinominati in coppia, parentesi colorate, testo racchiuso;
   - spazi visibili e righelli;
@@ -388,11 +427,11 @@ Ho deciso io, come mi hai chiesto. Si comincia dalle sei cose che hai chiesto tu
   - i comandi sulle righe.
 - **Fatto quando:** scrivendo un componente React non ti manca niente di Cursor, Tab a parte.
 
-**Giro 7 — Terminale**
+**Giro 7 — Terminale** · fatto
 - **Cosa:** integrazione con la shell (pallini, salti fra comandi, comando appiccicato, correzioni rapide), avanzamento, notifiche, terminali che tornano, «Chiedi a Claude».
 - **Fatto quando:** un comando fallito si trova, si copia e si passa a Claude in due tasti.
 
-**Giro 8 — Il Mac per davvero e la barra di stato**
+**Giro 8 — Il Mac per davvero e la barra di stato** · fatto
 - **Cosa:**
   - icona del file nel titolo e pallino delle modifiche;
   - menu Finestra e Aiuto, menu del Dock;
@@ -401,7 +440,7 @@ Ho deciso io, come mi hai chiesto. Si comincia dalle sei cose che hai chiesto tu
   - la barra di stato cliccabile.
 - **Fatto quando:** Keel si comporta come un'app di Apple in ogni gesto che fai senza pensarci.
 
-**Giro 9 — Movimento e il resto**
+**Giro 9 — Movimento e il resto** · fatto
 - **Cosa:**
   - le animazioni delle liste e dei contatori;
   - cursore e scorrimento morbidi;

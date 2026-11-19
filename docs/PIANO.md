@@ -6,7 +6,7 @@ Si lavora **una fase alla volta**. All'inizio di ogni fase ne dettagliamo i pass
 
 *Scritto il 14 novembre 2026, aggiornato il 16 novembre. Stato: fasi 0–8 fatte, restano le tue prove a mano.*
 
-*I piccoli dettagli che mancano, con l'ordine in cui farli, sono in [`DETTAGLI.md`](DETTAGLI.md) (19 novembre 2026).*
+*I piccoli dettagli, con l'ordine in cui farli, sono in [`DETTAGLI.md`](DETTAGLI.md) (19 novembre 2026). Il 20 novembre i nove giri sono fatti: 125 dettagli su 143, gli altri sono a metà o spiegati lì, con la lista di cosa provare.*
 
 ---
 

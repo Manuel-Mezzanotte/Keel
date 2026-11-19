@@ -133,9 +133,10 @@ Dopo le prime prove dell'app vera (18 novembre) sono arrivati altri giri di rito
   - etichette «Funziona in parte» e «Non funziona in Keel»;
 - correzione dei controlli della pagina Impostazioni, che non salvavano (`8fbd01c`);
 - **nuovo aspetto** (sera del 18 novembre): due stili della finestra, «Pannelli sospesi» e «Piatto», scelti dalla nuova pagina Impostazioni → Interfaccia (`keel.interfaceStyle`); animazioni di pannelli, selettore e sezioni (`keel.animations`); Controllo versione con messaggio più grande, pulsante Commit largo e grafico ridimensionabile; Cerca, Estensioni e benvenuto senza spazi vuoti; pulsanti più grandi; Cmd+P e tavolozza su una superficie sola. Il dettaglio è in `PIANO.md`, «Nuovo aspetto». Poi l'icona nel formato di Icon Composer, senza il riquadro nero di macOS, e il pannello di Claude che si apre sulla chat con le chat di Claude Code del progetto («Icona nuova e pannello di Claude»).
+- **i dettagli** (19–20 novembre): 143 piccoli dettagli raccolti da VS Code, Cursor, Zed, JetBrains, Xcode e dal Mac, fatti in nove giri, dal commit `db6bbbe` al `66e6bfb`. Tra gli altri: avvisi e finestre d'errore di git, differenze rifatte, salvataggio automatico, cronologia locale, segnalibri, cronologia degli appunti, terminale con l'integrazione della shell (pallini, salti fra i comandi, correzioni rapide, testo che torna dopo il riavvio), menu Finestra e Aiuto, barra di stato cliccabile con codifiche e fine riga, Quick Look, file trascinati fuori da Keel. Voce per voce, con cosa resta e come provarlo, in [`DETTAGLI.md`](DETTAGLI.md). Questi commit sono su `develop` ma non ancora su GitHub: il push si fa dopo le tue prove.
 
 Stato dei controlli all'ultimo commit:
-- tutti i test passano, 201 solo nell'app e 15 nel crate `ai`;
+- tutti i test passano, 478 in tutto, 243 solo nell'app e 12 nel crate `ai`;
 - clippy non segnala niente;
 - con un progetto web aperto Keel occupa circa 130–150 MB e mostra la prima schermata in circa 400 ms.
 
