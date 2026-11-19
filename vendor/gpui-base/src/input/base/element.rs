@@ -4027,13 +4027,36 @@ impl<M: InputModeKind> Element for TextElement<M> {
             placeholder.paint(window, cx);
         }
 
-        // Paint blinking cursors (shared blink state for all carets)
-        if focused && show_cursor {
-            for cursor_info in prepaint.cursor_infos_with_scroll() {
-                window.paint_quad(fill(
-                    snap_caret_to_device_pixels(cursor_info.bounds, window.scale_factor()),
-                    editor_style.caret,
-                ));
+        // Paint blinking cursors (shared blink state for all carets). One
+        // caret alone may glide to where it goes.
+        if focused {
+            let single = prepaint.cursor_infos.len() == 1;
+            let line_height = window.line_height();
+            let glide = prepaint
+                .cursor_infos
+                .first()
+                .filter(|_| single)
+                .map(|info| {
+                    self.state
+                        .update(cx, |state, _| state.glide_caret(info.bounds.origin, line_height))
+                });
+            if let Some((_, true)) = glide {
+                window.request_animation_frame();
+            }
+            if show_cursor || matches!(glide, Some((_, true))) {
+                for (index, cursor_info) in prepaint.cursor_infos.iter().enumerate() {
+                    let mut bounds = cursor_info.bounds;
+                    if index == 0
+                        && let Some((origin, _)) = glide
+                    {
+                        bounds.origin = origin;
+                    }
+                    bounds.origin.y += prepaint.cursor_scroll_offset.y;
+                    window.paint_quad(fill(
+                        snap_caret_to_device_pixels(bounds, window.scale_factor()),
+                        editor_style.caret,
+                    ));
+                }
             }
         }
 

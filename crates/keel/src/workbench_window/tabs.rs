@@ -168,6 +168,13 @@ pub(super) fn replace_text(
 }
 
 impl Workbench {
+    /// Whether the caret glides, as VS Code's
+    /// `editor.cursorSmoothCaretAnimation`: on in Keel unless turned off,
+    /// and never with Reduce Motion.
+    pub(super) fn smooth_caret(&self) -> bool {
+        self.look.motion && self.settings.string("editor.cursorSmoothCaretAnimation") != Some("off")
+    }
+
     /// A new editor for a loaded document, known to extensions by its id.
     pub(super) fn create_pane(
         &mut self,
@@ -191,6 +198,8 @@ impl Workbench {
                 .show_whitespaces(whitespace)
                 .default_value(text)
         });
+        let smooth = self.smooth_caret();
+        editor.update(cx, |editor, _| editor.set_smooth_caret(smooth));
         let editor_id = format!("editor-{}", self.next_editor);
         self.next_editor += 1;
         let watched_uri = uri.to_owned();

@@ -524,6 +524,11 @@ pub struct InputBaseState<M: InputModeKind> {
     pub(super) touch_selection: super::touch::TouchSelection,
     pub(crate) disabled: bool,
     pub(crate) readonly: bool,
+    /// The caret glides to where it goes instead of jumping, as VS Code's
+    /// `editor.cursorSmoothCaretAnimation`.
+    pub(crate) smooth_caret: bool,
+    /// The glide under way: from, to, and when it started.
+    pub(super) caret_glide: Option<(Point<Pixels>, Point<Pixels>, std::time::Instant)>,
     pub(crate) text_align: TextAlign,
     pub(super) masked: bool,
     pub(super) clean_on_escape: bool,
@@ -1021,6 +1026,8 @@ impl<M: InputModeKind> InputBaseState<M> {
             touch_selection: Default::default(),
             disabled: false,
             readonly: false,
+            smooth_caret: false,
+            caret_glide: None,
             text_align: TextAlign::Left,
             masked: false,
             clean_on_escape: false,
@@ -13162,5 +13169,56 @@ impl InputBaseState<crate::input::EditorMode> {
     pub fn set_smart_indent(&mut self, smart_indent: bool, _: &mut Window, cx: &mut Context<Self>) {
         self.mode.set_smart_indent(smart_indent);
         cx.notify();
+    }
+}
+
+impl<M: InputModeKind> InputBaseState<M> {
+    /// Lets the caret glide to where it goes instead of jumping.
+    pub fn set_smooth_caret(&mut self, smooth: bool) {
+        self.smooth_caret = smooth;
+        if !smooth {
+            self.caret_glide = None;
+        }
+    }
+
+    /// Where to draw the caret this frame on its way to `target`, in the
+    /// text's own coordinates, and whether it is still on its way. Moves of
+    /// more than a few lines jump, as a search or Go to Line does.
+    pub(super) fn glide_caret(
+        &mut self,
+        target: Point<Pixels>,
+        line_height: Pixels,
+    ) -> (Point<Pixels>, bool) {
+        const GLIDE: f32 = 0.09;
+        if !self.smooth_caret {
+            return (target, false);
+        }
+        let now = std::time::Instant::now();
+        let at = |(from, to, started): (Point<Pixels>, Point<Pixels>, std::time::Instant)| {
+            let t = (now.duration_since(started).as_secs_f32() / GLIDE).min(1.);
+            // Quick, then settling.
+            let eased = 1. - (1. - t).powi(3);
+            (
+                point(from.x + (to.x - from.x) * eased, from.y + (to.y - from.y) * eased),
+                t < 1.,
+            )
+        };
+        match self.caret_glide {
+            Some(glide) if glide.1 == target => at(glide),
+            Some(glide) => {
+                let (current, _) = at(glide);
+                if (target.y - current.y).abs() > line_height * 3. {
+                    self.caret_glide = Some((target, target, now));
+                    (target, false)
+                } else {
+                    self.caret_glide = Some((current, target, now));
+                    (current, true)
+                }
+            }
+            None => {
+                self.caret_glide = Some((target, target, now));
+                (target, false)
+            }
+        }
     }
 }

@@ -225,6 +225,17 @@ pub(super) const CATALOG: &[Entry] = &[
         ),
     },
     Entry {
+        key: "editor.cursorSmoothCaretAnimation",
+        page: Page::Editor,
+        kind: Kind::Choice(&[("on", "Acceso", "On"), ("off", "Spento", "Off")]),
+        default: "\"on\"",
+        title: ("Cursore che scivola", "Smooth Caret Animation"),
+        description: (
+            "Il cursore scivola dove va invece di saltare. Riduci movimento di macOS lo ferma.",
+            "The caret glides to where it goes instead of jumping. macOS's Reduce Motion stops it.",
+        ),
+    },
+    Entry {
         key: "editor.detectIndentation",
         page: Page::Editor,
         kind: Kind::Switch,
@@ -742,11 +753,23 @@ impl Workbench {
                 crate::theme::apply(&choice, Some(window), cx);
             }
             "editor.tabSize" | "editor.insertSpaces" => self.apply_tab_size(cx),
+            "editor.cursorSmoothCaretAnimation" => {
+                let smooth = self.smooth_caret();
+                for pane in &self.panes {
+                    pane.editor
+                        .update(cx, |editor, _| editor.set_smooth_caret(smooth));
+                }
+            }
             super::look::STYLE_SETTING
             | super::look::MOTION_SETTING
             | super::look::RADIUS_SETTING
             | super::look::GAP_SETTING => {
                 self.look = super::look::Look::from_settings(&self.settings);
+                let smooth = self.smooth_caret();
+                for pane in &self.panes {
+                    pane.editor
+                        .update(cx, |editor, _| editor.set_smooth_caret(smooth));
+                }
                 // The toolbar's height changes with the style: the traffic
                 // lights stay in its middle.
                 window.set_traffic_light_position(self.look.traffic_lights());
