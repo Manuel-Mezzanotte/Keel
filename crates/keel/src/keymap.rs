@@ -21,7 +21,7 @@ use crate::workbench_window::{
     GitRefresh, GitStash, GitStashPop, GitSync, StageAll, UnstageAll,
 };
 use crate::workbench_window::{
-    ClearBookmarks, ListBookmarks, NextBookmark, PreviousBookmark, ToggleBookmark,
+    ClearBookmarks, ListBookmarks, NextBookmark, PasteFromHistory, PreviousBookmark, ToggleBookmark,
 };
 use crate::workbench_window::{
     ClearNotifications, CloseFolder, RevertFile, SaveAll, SaveAs, ToggleAutoSave,
@@ -245,6 +245,12 @@ pub const COMMANDS: &[KeelCommand] = &[
         action: || Box::new(FocusPreviousTerminal),
         default_key: Some("cmd+shift+["),
         context: Some(TERMINAL_CONTEXT),
+    },
+    KeelCommand {
+        id: "keel.pasteFromHistory",
+        action: || Box::new(PasteFromHistory),
+        default_key: Some("cmd+alt+v"),
+        context: Some(EDITOR_CONTEXT_INPUT),
     },
     KeelCommand {
         id: "bookmarks.toggle",
@@ -1436,7 +1442,7 @@ mod tests {
         let (bindings, warnings) =
             read_user_bindings(Path::new("/nonexistent/keel/keybindings.json"));
         assert!(bindings.is_empty() && warnings.is_empty());
-        assert_eq!(keel_bindings(&[]).len(), 109);
+        assert_eq!(keel_bindings(&[]).len(), 110);
     }
 
     #[test]

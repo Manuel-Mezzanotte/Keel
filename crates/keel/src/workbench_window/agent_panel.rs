@@ -1936,6 +1936,14 @@ impl Workbench {
                     this.attach_to_agent(paths.paths().to_vec(), window, cx)
                 }),
             )
+            // A pasted picture, such as a screenshot, is attached too.
+            .capture_action(
+                cx.listener(|this, _: &gpui_component::input::Paste, window, cx| {
+                    if this.paste_image_into_chat(window, cx) {
+                        cx.stop_propagation();
+                    }
+                }),
+            )
             .flex_none()
             .m_2()
             .pt_1()

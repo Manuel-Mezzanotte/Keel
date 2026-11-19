@@ -1730,6 +1730,15 @@ impl Workbench {
                             .relative()
                             .flex()
                             .key_context(super::EDITOR_CONTEXT)
+                            // An image pasted into Markdown is saved beside
+                            // the file, and its link written, as in VS Code.
+                            .capture_action(cx.listener(
+                                move |this, _: &gpui_component::input::Paste, window, cx| {
+                                    if this.paste_image_into_markdown(index, window, cx) {
+                                        cx.stop_propagation();
+                                    }
+                                },
+                            ))
                             .children(self.render_blame_column(index, cx))
                             .child(
                                 div()
@@ -2403,6 +2412,7 @@ impl Render for Workbench {
         let root = self.terminal_actions(root, cx);
         let root = self.terminal_command_actions(root, cx);
         let root = self.bookmark_actions(root, cx);
+        let root = self.clipboard_actions(root, cx);
         let root = self.npm_actions(root, cx);
         let root = self.source_control_actions(root, cx);
         let root = self.git_gutter_actions(root, cx);

@@ -1018,6 +1018,10 @@ pub struct Strings {
     pub command_previous_bookmark: &'static str,
     pub command_list_bookmarks: &'static str,
     pub command_clear_bookmarks: &'static str,
+    pub clipboard_history_title: &'static str,
+    pub clipboard_history_empty: &'static str,
+    pub clipboard_lines: &'static str,
+    pub command_paste_from_history: &'static str,
 }
 
 impl Strings {
@@ -1060,6 +1064,7 @@ impl Strings {
             "workbench.action.terminal.copyLastCommand" => self.command_copy_last_command,
             "workbench.action.terminal.runRecentCommand" => self.command_run_recent,
             "keel.terminal.askClaude" => self.command_ask_claude_terminal,
+            "keel.pasteFromHistory" => self.command_paste_from_history,
             "bookmarks.toggle" => self.command_toggle_bookmark,
             "bookmarks.jumpToNext" => self.command_next_bookmark,
             "bookmarks.jumpToPrevious" => self.command_previous_bookmark,
@@ -2462,6 +2467,10 @@ pub const ITALIAN: Strings = Strings {
     command_previous_bookmark: "Segnalibri: vai al precedente",
     command_list_bookmarks: "Segnalibri: mostra l'elenco",
     command_clear_bookmarks: "Segnalibri: togli tutti quelli del file",
+    clipboard_history_title: "Cronologia degli appunti",
+    clipboard_history_empty: "Non hai ancora copiato niente",
+    clipboard_lines: "{count} righe",
+    command_paste_from_history: "Modifica: incolla dalla cronologia degli appunti…",
 };
 
 pub const ENGLISH: Strings = Strings {
@@ -3343,6 +3352,10 @@ pub const ENGLISH: Strings = Strings {
     command_previous_bookmark: "Bookmarks: Jump to Previous",
     command_list_bookmarks: "Bookmarks: List",
     command_clear_bookmarks: "Bookmarks: Clear in File",
+    clipboard_history_title: "Clipboard History",
+    clipboard_history_empty: "Nothing copied yet",
+    clipboard_lines: "{count} lines",
+    command_paste_from_history: "Edit: Paste from Clipboard History…",
 };
 
 #[cfg(test)]

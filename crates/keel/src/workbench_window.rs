@@ -8,6 +8,7 @@ mod bookmarks;
 mod claude_code;
 mod claude_diff;
 mod claude_ide;
+mod clipboard_history;
 mod code_actions;
 mod code_navigation;
 mod commit_view;
@@ -88,6 +89,7 @@ pub(crate) use bookmarks::{
 pub(crate) use claude_code::{OpenClaudeCode, OpenClaudeCodeInPanel};
 pub(crate) use claude_diff::{AcceptProposedDiff, RejectProposedDiff};
 pub(crate) use claude_ide::InsertAtMention;
+pub(crate) use clipboard_history::PasteFromHistory;
 pub(crate) use code_actions::{FormatDocument, OrganizeImports};
 pub(crate) use code_navigation::{
     GoToImplementation, GoToReferences, GoToSymbolInFile, GoToSymbolInWorkspace,
@@ -272,6 +274,7 @@ pub fn init(cx: &mut App) {
 /// top of Keel's defaults. Returns problems found in the user's bindings.
 pub fn init_with_user_bindings(user: &[crate::keymap::UserBinding], cx: &mut App) -> Vec<String> {
     let warnings = crate::keymap::bind(user, cx);
+    clipboard_history::init(cx);
     // Reached only when no window handles Quit, so nothing is left unsaved.
     cx.on_action(|_: &Quit, cx| cx.quit());
     warnings
@@ -639,6 +642,8 @@ impl Workbench {
             // Files may have changed in another app, such as Claude Code.
             if window.is_window_active() {
                 crate::mac::attention_seen();
+                // What was copied in another app joins the history.
+                clipboard_history::remember_clipboard(cx);
                 crate::menus::set_auto_save(this.auto_save_is_on(), cx);
                 this.project.refresh_branch();
                 this.refresh_git(cx);
