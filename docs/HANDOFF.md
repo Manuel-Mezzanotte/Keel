@@ -57,7 +57,7 @@ Nasce dalla curiosità per le app native in Rust e dal desiderio di un editor tu
 | `vendor/gpui-base` | copia dell'editor di gpui-component, con le correzioni che servivano (pieghe, più cursori) |
 | `fixtures/` | file e pacchetti di estensioni per i test |
 | `scripts/` | `bundle-macos.sh` (crea `Keel.app`), `make-dmg.sh` (crea il DMG), `measure-memory.sh` |
-| `docs/` | questo documento, il piano e le bozze grafiche, in italiano |
+| `docs/` | questo documento, il piano, i dettagli da aggiungere (`DETTAGLI.md`) e le bozze grafiche, in italiano |
 
 L'interfaccia sta quasi tutta in `crates/keel/src/workbench_window/`, un file per vista:
 - `shell.rs`: disposizione e schede;
