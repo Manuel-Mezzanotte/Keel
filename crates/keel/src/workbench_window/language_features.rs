@@ -443,6 +443,58 @@ impl HoverProvider for LanguageFeatures {
     }
 }
 
+/// The colours in a file, as CSS and Tailwind servers find them, for the
+/// small squares beside `#2F74F5` or `rgb(…)`.
+impl gpui_component::input::DocumentColorProvider for LanguageFeatures {
+    fn document_colors(
+        &self,
+        text: &Rope,
+        _window: &mut Window,
+        cx: &mut App,
+    ) -> Task<anyhow::Result<Vec<lsp_types::ColorInformation>>> {
+        let text = text.to_string();
+        let Some(document) = self.document() else {
+            return Task::ready(Ok(Vec::new()));
+        };
+        let requests: Vec<_> = self
+            .servers(&text)
+            .into_iter()
+            .filter(|running| {
+                running
+                    .server
+                    .capabilities()
+                    .is_some_and(|capabilities| capabilities.color_provider.is_some())
+            })
+            .map(|running| {
+                running.server.request::<lsp_types::request::DocumentColor>(
+                    lsp_types::DocumentColorParams {
+                        text_document: document.clone(),
+                        work_done_progress_params: Default::default(),
+                        partial_result_params: Default::default(),
+                    },
+                )
+            })
+            .collect();
+        cx.background_spawn(async move {
+            let lines = LineIndex::new(&text);
+            let mut colors = Vec::new();
+            for request in requests {
+                if let Ok(found) = request.await {
+                    colors.extend(found.into_iter().map(|mut color| {
+                        // The editor counts columns in characters.
+                        color.range = lsp_types::Range::new(
+                            lines.editor_position(color.range.start),
+                            lines.editor_position(color.range.end),
+                        );
+                        color
+                    }));
+                }
+            }
+            Ok(colors)
+        })
+    }
+}
+
 impl Workbench {
     /// Gives a pane's editor the language features: completions from the
     /// servers, snippets and extensions, and hover.
@@ -478,6 +530,7 @@ impl Workbench {
             lsp.completion_provider = Some(features.clone());
             if file {
                 lsp.hover_provider = Some(features.clone());
+                lsp.document_color_provider = Some(features.clone());
                 lsp.code_action_providers = vec![features.clone()];
                 if let Some(actions) = extension_actions {
                     lsp.code_action_providers.push(actions);

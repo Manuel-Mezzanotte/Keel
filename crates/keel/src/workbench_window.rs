@@ -60,6 +60,7 @@ mod source_control;
 mod tabs;
 mod terminal_view;
 mod terminals;
+mod writing;
 
 pub(crate) use editing::{
     CopyLinesDown, CopyLinesUp, DeleteLines, EDITOR_CONTEXT, Fold, FoldAll, InsertLineAfter,
@@ -122,6 +123,11 @@ pub(crate) use terminal_view::{TERMINAL_CONTEXT, bindings as terminal_bindings};
 pub(crate) use terminals::{
     FocusNextTerminal, FocusPreviousTerminal, KillTerminal, NewTerminal, RenameTerminal,
     SplitTerminal, ToggleMaximizedPanel,
+};
+pub(crate) use writing::{
+    DeleteDuplicateLines, ExpandSelection, JoinLines, JumpToBracket, ShrinkSelection,
+    SortLinesAscending, SortLinesDescending, TransformToCamelcase, TransformToKebabcase,
+    TransformToLowercase, TransformToSnakecase, TransformToTitlecase, TransformToUppercase,
 };
 
 use std::cell::RefCell;
@@ -496,6 +502,9 @@ pub struct Workbench {
     git_daily: git_daily::GitDaily,
     /// Where you have been, for Back, Forward and Ctrl+Tab.
     nav: nav_history::NavHistory,
+    /// What each editor shows on its text: brackets' colours, the word's
+    /// places, the scrollbar's marks.
+    decor: writing::DecorMap,
     /// The Explorer's selection of several rows, its clipboard, Undo and
     /// filter.
     tree_extras: explorer_more::TreeExtras,
@@ -727,6 +736,7 @@ impl Workbench {
             nav: Default::default(),
             outline: Default::default(),
             tree_extras: Default::default(),
+            decor: Default::default(),
             peek: None,
             watcher: None,
             watching: Task::ready(()),
@@ -1875,6 +1885,16 @@ impl Workbench {
             && self.tree_edit.is_none()
             && !keystroke.modifiers.modified()
             && self.tree_type_ahead(&keystroke.key, cx)
+        {
+            return true;
+        }
+        // A quote or a bracket typed over a selection surrounds it.
+        if self.active_editor_focused(window, cx)
+            && !keystroke.modifiers.platform
+            && !keystroke.modifiers.control
+            && !keystroke.modifiers.alt
+            && let Some(typed) = keystroke.key_char.clone()
+            && self.surround_selection(&typed, window, cx)
         {
             return true;
         }

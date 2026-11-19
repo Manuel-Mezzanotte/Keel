@@ -41,6 +41,11 @@ use crate::workbench_window::{
     ZoomOut, ZoomReset,
 };
 use crate::workbench_window::{
+    DeleteDuplicateLines, ExpandSelection, JoinLines, JumpToBracket, ShrinkSelection,
+    SortLinesAscending, SortLinesDescending, TransformToCamelcase, TransformToKebabcase,
+    TransformToLowercase, TransformToSnakecase, TransformToTitlecase, TransformToUppercase,
+};
+use crate::workbench_window::{
     FocusNextTerminal, FocusPreviousTerminal, KillTerminal, NewTerminal, OpenClaudeCode,
     OpenClaudeCodeInPanel, RenameTerminal, RunNpmScript, SplitTerminal, TERMINAL_CONTEXT,
     ToggleMaximizedPanel,
@@ -1032,6 +1037,84 @@ pub const COMMANDS: &[KeelCommand] = &[
         default_key: None,
         context: Some(EDITOR_CONTEXT),
     },
+    KeelCommand {
+        id: "editor.action.sortLinesAscending",
+        action: || Box::new(SortLinesAscending),
+        default_key: None,
+        context: Some(EDITOR_CONTEXT),
+    },
+    KeelCommand {
+        id: "editor.action.sortLinesDescending",
+        action: || Box::new(SortLinesDescending),
+        default_key: None,
+        context: Some(EDITOR_CONTEXT),
+    },
+    KeelCommand {
+        id: "editor.action.removeDuplicateLines",
+        action: || Box::new(DeleteDuplicateLines),
+        default_key: None,
+        context: Some(EDITOR_CONTEXT),
+    },
+    KeelCommand {
+        id: "editor.action.joinLines",
+        action: || Box::new(JoinLines),
+        default_key: Some("ctrl+j"),
+        context: Some(EDITOR_CONTEXT),
+    },
+    KeelCommand {
+        id: "editor.action.transformToUppercase",
+        action: || Box::new(TransformToUppercase),
+        default_key: None,
+        context: Some(EDITOR_CONTEXT),
+    },
+    KeelCommand {
+        id: "editor.action.transformToLowercase",
+        action: || Box::new(TransformToLowercase),
+        default_key: None,
+        context: Some(EDITOR_CONTEXT),
+    },
+    KeelCommand {
+        id: "editor.action.transformToTitlecase",
+        action: || Box::new(TransformToTitlecase),
+        default_key: None,
+        context: Some(EDITOR_CONTEXT),
+    },
+    KeelCommand {
+        id: "editor.action.transformToSnakecase",
+        action: || Box::new(TransformToSnakecase),
+        default_key: None,
+        context: Some(EDITOR_CONTEXT),
+    },
+    KeelCommand {
+        id: "editor.action.transformToCamelcase",
+        action: || Box::new(TransformToCamelcase),
+        default_key: None,
+        context: Some(EDITOR_CONTEXT),
+    },
+    KeelCommand {
+        id: "editor.action.transformToKebabcase",
+        action: || Box::new(TransformToKebabcase),
+        default_key: None,
+        context: Some(EDITOR_CONTEXT),
+    },
+    KeelCommand {
+        id: "editor.action.jumpToBracket",
+        action: || Box::new(JumpToBracket),
+        default_key: Some("cmd+shift+\\"),
+        context: Some(EDITOR_CONTEXT),
+    },
+    KeelCommand {
+        id: "editor.action.smartSelect.expand",
+        action: || Box::new(ExpandSelection),
+        default_key: Some("ctrl+shift+cmd+right"),
+        context: Some(EDITOR_CONTEXT),
+    },
+    KeelCommand {
+        id: "editor.action.smartSelect.shrink",
+        action: || Box::new(ShrinkSelection),
+        default_key: Some("ctrl+shift+cmd+left"),
+        context: Some(EDITOR_CONTEXT),
+    },
 ];
 
 /// The editor's own key that VS Code uses for something else: gpui-component
@@ -1280,7 +1363,7 @@ mod tests {
         let (bindings, warnings) =
             read_user_bindings(Path::new("/nonexistent/keel/keybindings.json"));
         assert!(bindings.is_empty() && warnings.is_empty());
-        assert_eq!(keel_bindings(&[]).len(), 97);
+        assert_eq!(keel_bindings(&[]).len(), 101);
     }
 
     #[test]

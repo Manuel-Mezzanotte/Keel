@@ -54,6 +54,10 @@ pub(crate) enum ScrollPadding {
     SurroundingLines,
 }
 
+
+/// The clipboard's mark for a whole line copied with nothing selected.
+const WHOLE_LINE: &str = "keel-whole-line";
+
 #[derive(Action, Clone, PartialEq, Eq, Deserialize)]
 #[action(namespace = input, no_json)]
 pub struct Enter {
@@ -3191,7 +3195,29 @@ impl<M: InputModeKind> InputBaseState<M> {
             .collect()
     }
 
+    /// Keel: with nothing selected in a code editor, Copy and Cut take the
+    /// cursor's whole line, as VS Code's `editor.emptySelectionClipboard`;
+    /// Paste then puts it above the cursor's line.
+    fn whole_line_at_cursor(&self) -> Option<std::ops::Range<usize>> {
+        if !self.is_multi_line() || !self.selections.is_single() || !self.selected_range().is_empty() {
+            return None;
+        }
+        let text = self.text.to_string();
+        let cursor = self.cursor().min(text.len());
+        let start = text[..cursor].rfind('\n').map_or(0, |at| at + 1);
+        let end = text[cursor..].find('\n').map_or(text.len(), |at| cursor + at + 1);
+        Some(start..end)
+    }
+
     pub(super) fn copy(&mut self, _: &Copy, _: &mut Window, cx: &mut Context<Self>) {
+        if let Some(line) = self.whole_line_at_cursor().filter(|_| !self.masked) {
+            let mut text = self.text.to_string()[line].to_owned();
+            if !text.ends_with('\n') {
+                text.push('\n');
+            }
+            cx.write_to_clipboard(ClipboardItem::new_string_with_metadata(text, WHOLE_LINE.to_owned()));
+            return;
+        }
         if !self.is_copyable() {
             return;
         }
@@ -3202,6 +3228,20 @@ impl<M: InputModeKind> InputBaseState<M> {
     }
 
     pub(super) fn cut(&mut self, _: &Cut, window: &mut Window, cx: &mut Context<Self>) {
+        if let Some(line) = self
+            .whole_line_at_cursor()
+            .filter(|_| !self.masked && self.is_editable())
+        {
+            let mut text = self.text.to_string()[line.clone()].to_owned();
+            if !text.ends_with('\n') {
+                text.push('\n');
+            }
+            cx.write_to_clipboard(ClipboardItem::new_string_with_metadata(text, WHOLE_LINE.to_owned()));
+            self.undo_manager.set_pending_intent(EditIntent::Atomic);
+            self.set_selected_range(line, cx);
+            self.replace_text_in_range_silent(None, "", window, cx);
+            return;
+        }
         if !self.is_copyable() {
             return;
         }
@@ -3219,6 +3259,20 @@ impl<M: InputModeKind> InputBaseState<M> {
             return;
         }
         if let Some(clipboard) = cx.read_from_clipboard() {
+            // A whole line copied with nothing selected goes above the
+            // cursor's line, as in VS Code.
+            if clipboard.metadata().map(String::as_str) == Some(WHOLE_LINE)
+                && let Some(line) = self.whole_line_at_cursor()
+                && let Some(text) = clipboard.text()
+            {
+                let cursor = self.cursor();
+                self.undo_manager.set_pending_intent(EditIntent::Atomic);
+                self.set_selected_range(line.start..line.start, cx);
+                self.replace_text_in_range_silent(None, &text, window, cx);
+                let moved = cursor + text.len();
+                self.set_selected_range(moved..moved, cx);
+                return;
+            }
             self.insert_clipboard(clipboard, window, cx);
             return;
         }

@@ -45,7 +45,7 @@ impl Workbench {
     /// Runs a line command on the active editor as one undoable edit, at
     /// every cursor: cursors on the same or neighboring lines act as one, as
     /// in VS Code.
-    fn edit_lines(
+    pub(super) fn edit_lines(
         &mut self,
         command: impl Fn(&str, Range<usize>, &str) -> Option<LineEdit>,
         window: &mut Window,

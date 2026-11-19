@@ -180,6 +180,7 @@ impl Workbench {
         let text = document.synced_text.clone();
         let tab_size = self.tab_size_for(&document.language_id);
         let soft_wrap = self.word_wrap;
+        let whitespace = self.settings.string("editor.renderWhitespace") == Some("all");
         let editor = cx.new(|cx| {
             EditorState::new(window, cx)
                 .language(language.highlighter_name())
@@ -187,6 +188,7 @@ impl Workbench {
                 // Cmd+F opens Keel's own find bar.
                 .searchable(false)
                 .soft_wrap(soft_wrap)
+                .show_whitespaces(whitespace)
                 .default_value(text)
         });
         let editor_id = format!("editor-{}", self.next_editor);
@@ -199,14 +201,18 @@ impl Workbench {
             move |this, editor, event: &InputEvent, window, cx| {
                 if matches!(event, InputEvent::Change) {
                     this.note_edit(&watched_uri, editor, cx);
+                    this.mirror_tag(&watched_uri, &watched_id, editor, window, cx);
+                    this.redecorate(&watched_id, editor, true, cx);
                     this.sync_document_from(&watched_uri, Some(&watched_id), window, cx);
                 }
             },
         );
         // The block bar and the signature follow the cursor.
         let cursor_uri = uri.to_owned();
+        let cursor_id = editor_id.clone();
         let cursor = cx.observe_in(&editor, window, move |this, editor, window, cx| {
             this.note_cursor(&cursor_uri, &editor, cx);
+            this.redecorate(&cursor_id, &editor, true, cx);
             this.update_hunk_bar(cx);
             this.signature_after_cursor_move(window, cx);
             this.sync_preview_from_editor(&editor, cx);
@@ -218,6 +224,7 @@ impl Workbench {
             this.auto_save_on(false, window, cx)
         });
         self.underline_editor(uri, &editor, cx);
+        self.start_decor(&editor_id, &editor, cx);
         // VS Code has both on unless the settings say otherwise.
         let on = |key: &str| {
             self.settings
@@ -465,6 +472,18 @@ impl Workbench {
             return;
         }
         let was_active = self.groups[group].active == tab;
+        // The closed tab's editor takes its decorations with it.
+        let closed_editor = if was_active {
+            self.panes.get(group).map(|pane| pane.editor_id.clone())
+        } else {
+            self.groups[group].tabs[tab]
+                .parked
+                .as_ref()
+                .map(|pane| pane.editor_id.clone())
+        };
+        if let Some(id) = closed_editor {
+            self.forget_decor(&id);
+        }
         let closed = self.groups[group].tabs.remove(tab);
         if self.groups[group].tabs.is_empty() {
             self.groups.remove(group);

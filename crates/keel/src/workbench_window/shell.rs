@@ -2324,6 +2324,7 @@ impl Render for Workbench {
         let root = self.local_history_actions(root, cx);
         let root = self.nav_actions(root, cx);
         let root = self.tree_extra_actions(root, cx);
+        let root = self.writing_actions(root, cx);
         let notice_center = self.render_notice_center(colors, window, cx);
         self.explorer_actions(root, cx)
             .relative()

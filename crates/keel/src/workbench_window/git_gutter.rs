@@ -132,6 +132,8 @@ impl Workbench {
                     }));
                 }
             }
+            let id = self.panes[index].editor_id.clone();
+            self.refresh_ruler(&id, &editor, cx);
         }
     }
 

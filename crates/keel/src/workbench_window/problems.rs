@@ -330,6 +330,15 @@ impl Workbench {
             }
             cx.notify();
         });
+        // The errors' marks along the scrollbar follow too.
+        let id = self
+            .panes
+            .iter()
+            .find(|pane| pane.editor == *editor)
+            .map(|pane| pane.editor_id.clone());
+        if let Some(id) = id {
+            self.refresh_ruler(&id, editor, cx);
+        }
     }
 
     /// Keeps the underlines of `uri` in place across an edit: called as the
