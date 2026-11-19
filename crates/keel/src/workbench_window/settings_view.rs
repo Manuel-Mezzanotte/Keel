@@ -52,6 +52,7 @@ pub(super) enum Page {
     Editor,
     Files,
     Terminal,
+    Git,
     Languages,
     Extensions,
 }
@@ -450,6 +451,76 @@ pub(super) const CATALOG: &[Entry] = &[
         ),
     },
     Entry {
+        key: "git.autofetch",
+        page: Page::Git,
+        kind: Kind::Switch,
+        default: "true",
+        title: ("Fetch automatico", "Auto Fetch"),
+        description: (
+            "Chiede al remoto ogni tanto se ci sono commit nuovi, e te lo dice.",
+            "Asks the remote now and then for new commits, and tells you.",
+        ),
+    },
+    Entry {
+        key: "git.autofetchPeriod",
+        page: Page::Git,
+        kind: Kind::Number {
+            min: 30.,
+            max: 86_400.,
+        },
+        default: "180",
+        title: ("Ogni quanto", "Auto Fetch Period"),
+        description: ("In secondi.", "In seconds."),
+    },
+    Entry {
+        key: "git.enableSmartCommit",
+        page: Page::Git,
+        kind: Kind::Switch,
+        default: "false",
+        title: ("Commit di tutto", "Smart Commit"),
+        description: (
+            "Senza niente in stage, il commit prende tutte le modifiche senza chiedere.",
+            "With nothing staged, a commit takes every change without asking.",
+        ),
+    },
+    Entry {
+        key: "git.postCommitCommand",
+        page: Page::Git,
+        kind: Kind::Choice(&[
+            ("none", "Niente", "None"),
+            ("push", "Push", "Push"),
+            ("sync", "Sincronizza", "Sync"),
+        ]),
+        default: "\"none\"",
+        title: ("Dopo il commit", "After Commit"),
+        description: (
+            "Cosa fare subito dopo ogni commit.",
+            "What to do right after each commit.",
+        ),
+    },
+    Entry {
+        key: "git.branchProtection",
+        page: Page::Git,
+        kind: Kind::Json,
+        default: "[]",
+        title: ("Branch protetti", "Protected Branches"),
+        description: (
+            "Prima di un commit su questi chiede conferma, per esempio [\"main\"].",
+            "Asks before a commit on these, for example [\"main\"].",
+        ),
+    },
+    Entry {
+        key: "git.blame.statusBarItem.enabled",
+        page: Page::Git,
+        kind: Kind::Switch,
+        default: "true",
+        title: ("Autore della riga", "Line Author"),
+        description: (
+            "Nella barra di stato: chi ha cambiato la riga del cursore, quando e perché.",
+            "In the status bar: who changed the cursor's line, when and why.",
+        ),
+    },
+    Entry {
         key: "extensions.autoCheckUpdates",
         page: Page::Extensions,
         kind: Kind::Switch,
@@ -661,6 +732,7 @@ impl Workbench {
             (Page::Editor, ("Editor", "Editor")),
             (Page::Files, ("File e finestre", "Files and Windows")),
             (Page::Terminal, ("Terminale", "Terminal")),
+            (Page::Git, ("Git", "Git")),
             (Page::Languages, ("Linguaggi", "Languages")),
             (Page::Extensions, ("Estensioni", "Extensions")),
         ];
@@ -824,6 +896,7 @@ impl Workbench {
             Page::Editor,
             Page::Files,
             Page::Terminal,
+            Page::Git,
             Page::Languages,
             Page::Extensions,
         ]
@@ -1344,7 +1417,11 @@ mod tests {
         cx.run_until_parked();
         view.read_with(cx, |view, _| {
             assert!(view.documents.contains_key(PageKind::Settings.uri()));
-            assert_eq!(view.settings_jump_page(), Some(6), "after Keel's six pages");
+            assert_eq!(
+                view.settings_jump_page(),
+                Some(7),
+                "after Keel's seven pages"
+            );
         });
 
         // From the page: its controls write while the window is handling

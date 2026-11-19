@@ -152,9 +152,18 @@ pub(super) fn fill(text: &str, values: &[(&str, &str)]) -> String {
     })
 }
 
-/// How long ago, in a few words: «adesso», «3 min fa», or the time.
-fn ago(at: i64, now: i64, strings: &Strings) -> String {
+/// How long ago, in a few words: «adesso», «3 min fa», «ieri», «2 mesi fa».
+pub(super) fn ago(at: i64, now: i64, strings: &Strings) -> String {
     let seconds = (now - at).max(0);
+    let count = |unit: i64, one: &str, many: &str| {
+        let count = (seconds / unit).max(1);
+        if count == 1 {
+            one.to_owned()
+        } else {
+            fill(many, &[("count", &count.to_string())])
+        }
+    };
+    const DAY: i64 = 86_400;
     if seconds < 60 {
         strings.notice_now.to_owned()
     } else if seconds < 3600 {
@@ -162,8 +171,18 @@ fn ago(at: i64, now: i64, strings: &Strings) -> String {
             strings.notice_minutes_ago,
             &[("count", &(seconds / 60).to_string())],
         )
+    } else if seconds < DAY {
+        count(3600, strings.ago_hour_one, strings.ago_hours)
+    } else if seconds < 2 * DAY {
+        strings.ago_yesterday.to_owned()
+    } else if seconds < 7 * DAY {
+        count(DAY, strings.ago_yesterday, strings.ago_days)
+    } else if seconds < 30 * DAY {
+        count(7 * DAY, strings.ago_week_one, strings.ago_weeks)
+    } else if seconds < 365 * DAY {
+        count(30 * DAY, strings.ago_month_one, strings.ago_months)
     } else {
-        super::git_graph::format_date(at, std::ptr::eq(strings, &crate::i18n::ITALIAN))
+        count(365 * DAY, strings.ago_year_one, strings.ago_years)
     }
 }
 
@@ -585,5 +604,9 @@ mod tests {
         assert_eq!(ago(1000, 1030, &ITALIAN), "adesso");
         assert_eq!(ago(1000, 1000 + 180, &ITALIAN), "3 min fa");
         assert_eq!(ago(1000, 1000 + 180, &ENGLISH), "3 min ago");
+        assert_eq!(ago(0, 2 * 3600, &ITALIAN), "2 ore fa");
+        assert_eq!(ago(0, 30 * 3600, &ITALIAN), "ieri");
+        assert_eq!(ago(0, 3 * 86_400, &ENGLISH), "3 days ago");
+        assert_eq!(ago(0, 70 * 86_400, &ITALIAN), "2 mesi fa");
     }
 }

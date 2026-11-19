@@ -2080,6 +2080,9 @@ impl Workbench {
         let (left, right) = self.status_texts(cx);
         let branch = self.project.branch.is_some();
         let sync = self.sync_text();
+        let sync_tip: SharedString = self.sync_tooltip().into();
+        let publish = self.scm.status.upstream.is_none() && self.scm.busy.is_none();
+        let syncing = self.scm.busy.is_some();
         let has_repo = self.scm.repo.is_some();
         let custom = self.custom_colors(cx);
         let look = self.look;
@@ -2135,10 +2138,29 @@ impl Workbench {
                                         .rounded(px(4.))
                                         .cursor_pointer()
                                         .hover(|item| item.bg(colors.hover).text_color(colors.text))
+                                        .flex()
+                                        .items_center()
+                                        .gap_1()
+                                        .tooltip({
+                                            let tip = sync_tip.clone();
+                                            move |window, cx| {
+                                                gpui_component::tooltip::Tooltip::new(tip.clone())
+                                                    .build(window, cx)
+                                            }
+                                        })
                                         .on_click(cx.listener(|this, _, window, cx| {
                                             window.dispatch_action(Box::new(super::GitSync), cx);
                                             let _ = this;
                                         }))
+                                        .when(publish, |item| {
+                                            item.child(Icon::new(IconName::CloudUpload).xsmall())
+                                        })
+                                        .when(syncing, |item| {
+                                            item.child(super::agent_panel::spinner(
+                                                colors.muted,
+                                                look.motion,
+                                            ))
+                                        })
                                         .child(sync),
                                 )
                             })
@@ -2253,6 +2275,8 @@ impl Render for Workbench {
         let root = self.notice_actions(root, cx);
         let root = self.file_command_actions(root, cx);
         let root = self.diff_actions(root, cx);
+        let root = self.git_daily_actions(root, cx);
+        let root = self.local_history_actions(root, cx);
         let notice_center = self.render_notice_center(colors, window, cx);
         self.explorer_actions(root, cx)
             .relative()

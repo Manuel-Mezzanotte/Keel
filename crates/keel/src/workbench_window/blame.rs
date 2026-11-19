@@ -40,6 +40,9 @@ type Placed = Rc<std::cell::RefCell<Vec<(Bounds<Pixels>, String)>>>;
 #[derive(Default)]
 pub(super) struct BlameState {
     pub(super) lines: Vec<BlameLine>,
+    /// The column beside the editor is on; without it, the authors are
+    /// only for the status bar.
+    pub(super) column: bool,
     task: Option<Task<()>>,
 }
 
@@ -59,11 +62,40 @@ impl Workbench {
             cx.notify();
             return;
         };
-        if self.blame.remove(&uri).is_none() {
+        match self.blame.get_mut(&uri) {
+            Some(state) => state.column = !state.column,
+            None => {
+                self.blame.insert(
+                    uri.clone(),
+                    BlameState {
+                        column: true,
+                        ..Default::default()
+                    },
+                );
+                self.refresh_blame(&uri, false, cx);
+            }
+        }
+        cx.notify();
+    }
+
+    /// Reads who wrote the active file's lines, for the status bar, as
+    /// VS Code's `git.blame.statusBarItem.enabled`.
+    pub(super) fn ensure_line_blame(&mut self, cx: &mut Context<Self>) {
+        let on = self
+            .settings
+            .get("git.blame.statusBarItem.enabled")
+            .and_then(Value::as_bool)
+            .unwrap_or(true);
+        if !on {
+            return;
+        }
+        let Some((uri, _)) = self.active_git_path() else {
+            return;
+        };
+        if !self.blame.contains_key(&uri) {
             self.blame.insert(uri.clone(), BlameState::default());
             self.refresh_blame(&uri, false, cx);
         }
-        cx.notify();
     }
 
     /// Asks git again who wrote each line of `uri`, unsaved text included;
@@ -110,10 +142,13 @@ impl Workbench {
         if blame.is_uncommitted() {
             return Some(self.strings().blame_uncommitted.to_owned());
         }
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map_or(0, |time| time.as_secs() as i64);
         Some(format!(
             "{}, {} · {}",
             blame.author,
-            format_date(blame.time, self.language == UiLanguage::Italian),
+            super::notices::ago(blame.time, now, self.strings()),
             blame.summary
         ))
     }
@@ -125,7 +160,7 @@ impl Workbench {
         cx: &mut Context<Self>,
     ) -> Option<AnyElement> {
         let pane = self.panes.get(index)?;
-        let state = self.blame.get(&pane.uri)?;
+        let state = self.blame.get(&pane.uri).filter(|state| state.column)?;
         let editor = pane.editor.read(cx);
         let rows = editor.visible_row_range().unwrap_or(0..0);
         let italian = self.language == UiLanguage::Italian;
@@ -446,8 +481,11 @@ mod tests {
             Some("Non ancora committato")
         );
 
-        // Off again.
+        // Off again: the column goes, the status bar keeps the author.
         view.update(cx, |view, cx| view.toggle_blame(cx));
-        view.read_with(cx, |view, _| assert!(view.blame.is_empty()));
+        view.update(cx, |view, cx| {
+            assert!(view.blame.values().all(|state| !state.column));
+            assert!(view.render_blame_column(view.active, cx).is_none());
+        });
     }
 }

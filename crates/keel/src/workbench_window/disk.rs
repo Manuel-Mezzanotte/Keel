@@ -230,7 +230,7 @@ impl Workbench {
         .detach();
     }
 
-    fn save_file_now(
+    pub(super) fn save_file_now(
         &mut self,
         uri: &str,
         after: Option<AfterConfirm>,
@@ -249,6 +249,7 @@ impl Workbench {
         match file.save(&text) {
             Ok(()) => {
                 document.modified = false;
+                self.record_local_history(&saved, &text);
                 // A settings file saved by hand counts at once.
                 if self
                     .settings

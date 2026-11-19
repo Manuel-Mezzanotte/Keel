@@ -495,7 +495,9 @@ impl Workbench {
             if let Some(document) = self.documents.get_mut(&uri) {
                 document.synced_text = text.to_owned();
             }
-            self.save_document(&uri, None, window, cx);
+            // Asked for on purpose: written even over a change made
+            // outside Keel meanwhile.
+            self.save_file_now(&uri, None, window, cx);
         } else if let Err(error) = std::fs::write(path, text) {
             self.report(format!("{}: {error}", path.display()));
         }

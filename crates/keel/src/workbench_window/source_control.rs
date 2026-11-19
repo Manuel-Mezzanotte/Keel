@@ -31,6 +31,7 @@ const REFRESH_PAUSE: Duration = Duration::from_millis(250);
 actions!(
     keel,
     [
+        ToggleScmFolders,
         Commit,
         CommitAmend,
         StageAll,
@@ -60,11 +61,18 @@ pub(super) enum Section {
     Changes,
 }
 
-/// A row of the view's list: a section's title, or one of its files.
+/// A row of the view's list: a section's title, or one of its files;
+/// grouped by folder, a folder's row, by its first file.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum Row {
     Title(Section, usize),
+    Folder(Section, usize, usize),
     File(Section, usize),
+}
+
+/// A file's folder, from the repository's top folder.
+fn folder_of(path: &str) -> &str {
+    path.rsplit_once('/').map_or("", |(folder, _)| folder)
 }
 
 /// The repository of the project and what the view shows of it.
@@ -74,11 +82,18 @@ pub(super) struct SourceControl {
     pub(super) message: Entity<TextareaState>,
     /// What git is doing now, such as "Push", shown while it runs.
     pub(super) busy: Option<&'static str>,
+    /// What to run after the next commit: Commit & Push, Commit & Sync.
+    pub(super) then: Option<RemoteAction>,
+    /// The commit on a protected branch was confirmed.
+    protection_ok: bool,
     /// When the last commit was made, for the check on the button.
     pub(super) committed_at: Option<std::time::Instant>,
     committed_task: Task<()>,
     /// Sections closed to their header.
     pub(super) collapsed: std::collections::HashSet<Section>,
+    /// Grouped by folder, as VS Code's tree, and the folders closed.
+    pub(super) by_folder: bool,
+    folders_closed: std::collections::HashSet<(Section, String)>,
     refresh_task: Task<()>,
     operation: Task<()>,
     _message_grows: Subscription,
@@ -121,9 +136,13 @@ impl SourceControl {
             status: git::Status::default(),
             message,
             busy: None,
+            then: None,
+            protection_ok: false,
             committed_at: None,
             committed_task: Task::ready(()),
             collapsed: Default::default(),
+            by_folder: false,
+            folders_closed: Default::default(),
             refresh_task: Task::ready(()),
             operation: Task::ready(()),
             _message_grows: message_grows,
@@ -149,8 +168,36 @@ impl SourceControl {
                 continue;
             }
             rows.push(Row::Title(section, files.len()));
-            if !self.collapsed.contains(&section) {
+            if self.collapsed.contains(&section) {
+                continue;
+            }
+            if !self.by_folder {
                 rows.extend(files.into_iter().map(|index| Row::File(section, index)));
+                continue;
+            }
+            let mut files = files;
+            files.sort_by(|a, b| {
+                let (a, b) = (&self.status.files[*a].path, &self.status.files[*b].path);
+                (folder_of(a), a).cmp(&(folder_of(b), b))
+            });
+            let mut index = 0;
+            while index < files.len() {
+                let folder = folder_of(&self.status.files[files[index]].path).to_owned();
+                let count = files[index..]
+                    .iter()
+                    .take_while(|file| folder_of(&self.status.files[**file].path) == folder)
+                    .count();
+                if !folder.is_empty() {
+                    rows.push(Row::Folder(section, files[index], count));
+                }
+                if folder.is_empty() || !self.folders_closed.contains(&(section, folder)) {
+                    rows.extend(
+                        files[index..index + count]
+                            .iter()
+                            .map(|file| Row::File(section, *file)),
+                    );
+                }
+                index += count;
             }
         }
         rows
@@ -189,7 +236,11 @@ impl Workbench {
         });
     }
 
-    fn git_status_arrived(&mut self, status: git::Result<git::Status>, cx: &mut Context<Self>) {
+    pub(super) fn git_status_arrived(
+        &mut self,
+        status: git::Result<git::Status>,
+        cx: &mut Context<Self>,
+    ) {
         match status {
             Ok(status) => {
                 if status.branch.is_some() || status.head.is_some() {
@@ -203,6 +254,8 @@ impl Workbench {
                     }
                     _ => Default::default(),
                 };
+                self.status_counts_changed(cx);
+                self.ensure_line_blame(cx);
                 self.git_status_changed(cx);
             }
             Err(error) => self.log(format!("git: {error}")),
@@ -407,20 +460,86 @@ impl Workbench {
         }
         let nothing_staged = self.scm.status.staged().next().is_none();
         let changes = self.file_paths(Section::Changes);
+        // A protected branch asks first, as VS Code's git.branchProtection.
+        let branch = self.scm.status.branch.clone().unwrap_or_default();
+        let protected = self
+            .settings
+            .get("git.branchProtection")
+            .and_then(Value::as_array)
+            .is_some_and(|list| {
+                list.iter()
+                    .any(|name| name.as_str() == Some(branch.as_str()))
+            });
+        if protected && !amend && !std::mem::take(&mut self.scm.protection_ok) {
+            let question = notices::fill(strings.git_protected_question, &[("branch", &branch)]);
+            let detail = notices::fill(strings.git_protected_detail, &[("branch", &branch)]);
+            let answer = window.prompt(
+                PromptLevel::Warning,
+                &question,
+                Some(&detail),
+                &[
+                    strings.git_protected_commit,
+                    strings.git_protected_branch,
+                    strings.cancel,
+                ],
+                cx,
+            );
+            cx.spawn_in(window, async move |this, cx| {
+                let Ok(choice) = answer.await else {
+                    return;
+                };
+                this.update_in(cx, |this, window, cx| match choice {
+                    0 => {
+                        this.scm.protection_ok = true;
+                        this.commit(false, window, cx)
+                    }
+                    1 => this.ask_branch_name(window, cx),
+                    _ => this.scm.then = None,
+                })
+                .ok();
+            })
+            .detach();
+            return;
+        }
         if nothing_staged && !amend && !changes.is_empty() {
+            let smart = self
+                .settings
+                .get("git.enableSmartCommit")
+                .and_then(Value::as_bool)
+                .unwrap_or(false);
+            if smart {
+                self.run_commit(message, false, Some(changes), window, cx);
+                return;
+            }
             let answer = window.prompt(
                 PromptLevel::Info,
                 strings.scm_stage_and_commit_question,
                 None,
-                &[strings.scm_stage_and_commit, strings.cancel],
+                &[
+                    strings.scm_stage_and_commit,
+                    strings.scm_stage_always,
+                    strings.cancel,
+                ],
                 cx,
             );
             cx.spawn_in(window, async move |this, cx| {
-                if answer.await != Ok(0) {
+                let Ok(choice) = answer.await else {
                     return;
-                }
+                };
                 this.update_in(cx, |this, window, cx| {
-                    this.run_commit(message, false, Some(changes), window, cx)
+                    if choice == 1 {
+                        this.change_setting(
+                            "git.enableSmartCommit",
+                            Some(Value::Bool(true)),
+                            window,
+                            cx,
+                        );
+                    }
+                    if choice <= 1 {
+                        this.run_commit(message, false, Some(changes), window, cx)
+                    } else {
+                        this.scm.then = None;
+                    }
                 })
                 .ok();
             })
@@ -462,6 +581,18 @@ impl Workbench {
                     .ok();
                 });
                 this.notify_committed(&written, amend, window, cx);
+                this.commit_messages_changed();
+                // Commit & Push, or what the settings want after a commit.
+                let after = this.scm.then.take().or_else(|| {
+                    match this.settings.string("git.postCommitCommand") {
+                        Some("push") => Some(RemoteAction::Push),
+                        Some("sync") => Some(RemoteAction::Sync),
+                        _ => None,
+                    }
+                });
+                if let Some(after) = after {
+                    this.remote_command(after, window, cx);
+                }
             },
             window,
             cx,
@@ -650,25 +781,7 @@ impl Workbench {
                     return;
                 }
                 let branch = choices[index - 1].clone();
-                let label = this.strings().scm_checkout;
-                this.run_git(
-                    label,
-                    move |repo| repo.switch(&branch),
-                    |this, window, cx| {
-                        let strings = this.strings();
-                        let name = this.scm.status.branch.clone().unwrap_or_default();
-                        this.notify_user(
-                            notices::Notice::info(notices::fill(
-                                strings.git_switched,
-                                &[("branch", &name)],
-                            )),
-                            window,
-                            cx,
-                        );
-                    },
-                    window,
-                    cx,
-                );
+                this.switch_branch(branch, window, cx);
             })
             .ok();
         })
@@ -755,6 +868,12 @@ impl Workbench {
                 this.remote_command(RemoteAction::StashPop, window, cx)
             }))
             .on_action(cx.listener(|this, _: &GitRefresh, _, cx| this.refresh_git(cx)))
+            .on_action(cx.listener(|this, _: &ToggleScmFolders, window, cx| {
+                this.scm.by_folder = !this.scm.by_folder;
+                let mode = if this.scm.by_folder { "tree" } else { "list" };
+                this.change_setting("scm.defaultViewMode", Some(Value::from(mode)), window, cx);
+                cx.notify();
+            }))
             .on_action(
                 cx.listener(|this, _: &CheckoutBranch, window, cx| this.choose_branch(window, cx)),
             )
@@ -780,7 +899,7 @@ impl Workbench {
         }
         self.scm.repo.as_ref()?;
         match (&status.upstream, &status.branch) {
-            (None, Some(_)) => Some("↑".to_owned()),
+            (None, Some(_)) => Some(self.strings().git_publish_short.to_owned()),
             (Some(_), _) if status.ahead > 0 || status.behind > 0 => {
                 Some(format!("↓{} ↑{}", status.behind, status.ahead))
             }
@@ -810,6 +929,7 @@ impl Workbench {
                 .into_any_element();
         }
         let focus = self.focus_handle.clone();
+        let by_folder = self.scm.by_folder;
         let header = view_header(strings.view_source_control, colors)
             .child(
                 Button::new("scm-all-changes")
@@ -850,6 +970,13 @@ impl Workbench {
                             .separator()
                             .menu(strings.scm_stash, Box::new(GitStash))
                             .menu(strings.scm_stash_pop, Box::new(GitStashPop))
+                            .menu(strings.command_show_stashes, Box::new(super::ShowStashes))
+                            .separator()
+                            .menu_with_check(
+                                strings.scm_group_by_folder,
+                                by_folder,
+                                Box::new(ToggleScmFolders),
+                            )
                     })
             });
 
@@ -953,7 +1080,28 @@ impl Workbench {
                     .border_color(colors.border.opacity(0.6))
                     .child(branch_chip)
                     .children(sync)
-                    .child(div().pr_1().child(key_hint("⌘↩", colors))),
+                    .child(match self.commit_message_hint(cx) {
+                        // Past what reads well: the count, in yellow.
+                        Some((hint, over)) => div()
+                            .id("scm-message-hint")
+                            .pr_1()
+                            .text_xs()
+                            .text_color(if over {
+                                cx.theme().warning
+                            } else {
+                                colors.faint
+                            })
+                            .tooltip(move |window, cx| {
+                                gpui_component::tooltip::Tooltip::new(strings.commit_title_long_tip)
+                                    .build(window, cx)
+                            })
+                            .child(hint)
+                            .into_any_element(),
+                        None => div()
+                            .pr_1()
+                            .child(key_hint("⌘↩", colors))
+                            .into_any_element(),
+                    }),
             );
         let just_committed = self.scm.committed_at.is_some();
         let commit = DropdownButton::new("scm-commit-split")
@@ -981,6 +1129,8 @@ impl Workbench {
             .dropdown_menu(move |menu, _, _| {
                 menu.action_context(focus.clone())
                     .menu(strings.scm_commit_amend, Box::new(CommitAmend))
+                    .menu(strings.scm_commit_push, Box::new(super::CommitAndPush))
+                    .menu(strings.scm_commit_sync, Box::new(super::CommitAndSync))
                     .separator()
                     .menu(strings.scm_push, Box::new(GitPush))
                     .menu(strings.scm_pull, Box::new(GitPull))
@@ -1147,12 +1297,81 @@ impl Workbench {
                 )
                 .into_any_element()
             }
+            Row::Folder(section, first, count) => {
+                let Some(file) = self.scm.status.files.get(first) else {
+                    return div().into_any_element();
+                };
+                let folder = folder_of(&file.path).to_owned();
+                let open = !self.scm.folders_closed.contains(&(section, folder.clone()));
+                let turn = chevron_turn(
+                    ElementId::Name(format!("scm-folder-turn-{section:?}-{folder}").into()),
+                    open,
+                    self.look,
+                    window,
+                    cx,
+                );
+                let key = (section, folder.clone());
+                div()
+                    .id(ElementId::Name(
+                        format!("scm-folder-{section:?}-{folder}").into(),
+                    ))
+                    .h(px(24.))
+                    .w_full()
+                    .pl_1()
+                    .pr_2()
+                    .flex()
+                    .items_center()
+                    .gap_1()
+                    .rounded(px(6.))
+                    .text_sm()
+                    .cursor_pointer()
+                    .hover(|row| row.bg(colors.hover))
+                    .on_click(cx.listener(move |this, _, _, cx| {
+                        if !this.scm.folders_closed.remove(&key) {
+                            this.scm.folders_closed.insert(key.clone());
+                        }
+                        cx.notify();
+                    }))
+                    .child(
+                        Icon::new(IconName::ChevronRight)
+                            .xsmall()
+                            .rotate(gpui::radians(turn * std::f32::consts::FRAC_PI_2))
+                            .text_color(colors.faint),
+                    )
+                    .child(
+                        Icon::new(if open {
+                            IconName::FolderOpen
+                        } else {
+                            IconName::Folder
+                        })
+                        .small()
+                        .text_color(colors.accent),
+                    )
+                    .child(
+                        div()
+                            .flex_1()
+                            .min_w_0()
+                            .truncate()
+                            .text_color(colors.muted)
+                            .child(folder),
+                    )
+                    .child(
+                        div()
+                            .text_xs()
+                            .text_color(colors.faint)
+                            .child(count.to_string()),
+                    )
+                    .into_any_element()
+            }
             Row::File(section, index) => {
                 let Some(file) = self.scm.status.files.get(index) else {
                     return div().into_any_element();
                 };
+                let in_folder = self.scm.by_folder && !folder_of(&file.path).is_empty();
                 let path = file.path.clone();
                 let (folder, name) = match path.rsplit_once('/') {
+                    // Grouped, the folder is on its own row above.
+                    Some((_, name)) if in_folder => (String::new(), name.to_owned()),
                     Some((folder, name)) => (folder.to_owned(), name.to_owned()),
                     None => (String::new(), path.clone()),
                 };
@@ -1246,7 +1465,7 @@ impl Workbench {
                     .relative()
                     .h(px(24.))
                     .w_full()
-                    .pl_2()
+                    .pl(px(if in_folder { 26. } else { 8. }))
                     .pr_1()
                     .flex()
                     .items_center()

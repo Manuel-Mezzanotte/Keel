@@ -1955,7 +1955,7 @@ fn claude_label(name: &'static str, colors: Colors) -> gpui::Div {
 }
 
 /// A small circle turning while something runs; still without movements.
-fn spinner(color: Hsla, motion: bool) -> AnyElement {
+pub(super) fn spinner(color: Hsla, motion: bool) -> AnyElement {
     let icon = Icon::new(IconName::LoaderCircle).xsmall().text_color(color);
     if !motion {
         return icon.into_any_element();

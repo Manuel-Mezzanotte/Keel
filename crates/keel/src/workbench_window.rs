@@ -24,6 +24,7 @@ mod extension_features;
 mod extensions_view;
 mod file_commands;
 mod find_bar;
+mod git_daily;
 mod git_feedback;
 mod git_graph;
 mod git_gutter;
@@ -33,6 +34,7 @@ mod interface_page;
 mod keybindings_view;
 mod language_features;
 mod language_servers;
+mod local_history;
 pub(crate) mod look;
 mod markdown_preview;
 mod navigation;
@@ -89,9 +91,13 @@ pub(crate) use file_commands::{
     CloseFolder, RevertFile, SaveAll, SaveAs, ToggleAutoSave, UndoLastCommit,
 };
 pub(crate) use find_bar::bindings as find_bindings;
+pub(crate) use git_daily::{
+    CommitAndPush, CommitAndSync, CopyPermalink, OpenPermalink, ShowLineHistory, ShowStashes,
+};
 pub(crate) use git_graph::ShowGitGraph;
 pub(crate) use git_gutter::{NextChange, PreviousChange, RevertChange, StageChange};
 pub(crate) use language_servers::RestartLanguageServers;
+pub(crate) use local_history::{CompareWithClipboard, FindDeletedFile, ShowLocalHistory};
 pub(crate) use markdown_preview::{ShowMarkdownPreview, ShowMarkdownPreviewToSide};
 pub(crate) use notices::{ClearNotifications, ToggleDoNotDisturb, ToggleNotifications};
 pub(crate) use npm_scripts::RunNpmScript;
@@ -477,6 +483,9 @@ pub struct Workbench {
     git_marks: git_marks::GitMarks,
     /// The notices shown lately, for the bell in the status bar.
     notices: notices::Notices,
+    /// Git day by day: fetching by itself, the commits to push and pull,
+    /// the last messages.
+    git_daily: git_daily::GitDaily,
     /// Watches the project for changes made outside Keel.
     watcher: Option<files::ProjectWatcher>,
     watching: Task<()>,
@@ -506,6 +515,8 @@ pub struct Workbench {
     diff_split: bool,
     /// Differences without the lines changed only in their spaces.
     diff_ignore_spaces: bool,
+    /// What the clipboard held for Compare with Clipboard.
+    clipboard_text: String,
     /// The project's git repository and the Source Control view.
     scm: source_control::SourceControl,
     /// The scripts of the project's `package.json`.
@@ -695,6 +706,7 @@ impl Workbench {
             side_scroll: Default::default(),
             git_marks: Default::default(),
             notices: Default::default(),
+            git_daily: Default::default(),
             watcher: None,
             watching: Task::ready(()),
             file_index: None,
@@ -716,6 +728,7 @@ impl Workbench {
             scm,
             diff_split: true,
             diff_ignore_spaces: false,
+            clipboard_text: String::new(),
             git_baselines: HashMap::new(),
             hunk_bar: None,
             first_frame_drawn: false,
@@ -745,7 +758,9 @@ impl Workbench {
             .get("diffEditor.renderSideBySide")
             .and_then(Value::as_bool)
             .unwrap_or(true);
+        workbench.scm.by_folder = workbench.settings.string("scm.defaultViewMode") == Some("tree");
         workbench.refresh_git(cx);
+        workbench.start_autofetch(window, cx);
         workbench.index_files(cx);
         workbench.watch_project(window, cx);
         workbench.data_dir = opening.data_dir.clone();
@@ -977,6 +992,7 @@ impl Workbench {
         let editor = self.panes[index].editor.clone();
         editor.update(cx, |editor, cx| editor.focus(window, cx));
         self.reveal_active_in_tree();
+        self.ensure_line_blame(cx);
     }
 
     /// Closes the tab in view in group `index`, without asking.
@@ -1007,6 +1023,7 @@ impl Workbench {
             self.auto_save_on(false, window, cx);
             self.active = index;
             self.reveal_active_in_tree();
+            self.ensure_line_blame(cx);
             self.publish_editors(window, cx);
             self.refresh_title(window);
         }
@@ -1820,6 +1837,9 @@ impl Workbench {
         cx: &mut Context<Self>,
     ) -> bool {
         let keystroke = &event.keystroke;
+        if !keystroke.modifiers.modified() && self.commit_message_key(&keystroke.key, window, cx) {
+            return true;
+        }
         if self.active_editor_focused(window, cx) {
             self.track_completion_keys(keystroke, cx);
             let menu_open = self

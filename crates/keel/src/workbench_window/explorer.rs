@@ -1063,6 +1063,12 @@ impl Workbench {
                             path: menu_path.clone(),
                         }),
                     )
+                    .menu(
+                        strings.history_menu,
+                        Box::new(super::local_history::ShowLocalHistoryOf {
+                            path: menu_path.clone(),
+                        }),
+                    )
                 };
                 menu.menu(
                     strings.explorer_reveal,

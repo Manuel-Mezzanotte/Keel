@@ -31,6 +31,10 @@ use crate::workbench_window::{
     ToggleOutput, TogglePanel, ToggleProblems, ToggleSidebar, ToggleTerminal,
 };
 use crate::workbench_window::{
+    CommitAndPush, CommitAndSync, CopyPermalink, OpenPermalink, ShowLineHistory, ShowStashes,
+};
+use crate::workbench_window::{CompareWithClipboard, FindDeletedFile, ShowLocalHistory};
+use crate::workbench_window::{
     CopyLinesDown, CopyLinesUp, DeleteLines, EDITOR_CONTEXT, InsertLineAfter, InsertLineBefore,
     MoveLinesDown, MoveLinesUp, ToggleBlockComment, ToggleLineComment, ToggleWordWrap, ZoomIn,
     ZoomOut, ZoomReset,
@@ -855,6 +859,60 @@ pub const COMMANDS: &[KeelCommand] = &[
         default_key: Some("shift+f7"),
         context: None,
     },
+    KeelCommand {
+        id: "git.viewStash",
+        action: || Box::new(ShowStashes),
+        default_key: None,
+        context: None,
+    },
+    KeelCommand {
+        id: "keel.git.copyPermalink",
+        action: || Box::new(CopyPermalink),
+        default_key: None,
+        context: None,
+    },
+    KeelCommand {
+        id: "keel.git.openPermalink",
+        action: || Box::new(OpenPermalink),
+        default_key: None,
+        context: None,
+    },
+    KeelCommand {
+        id: "keel.git.lineHistory",
+        action: || Box::new(ShowLineHistory),
+        default_key: None,
+        context: None,
+    },
+    KeelCommand {
+        id: "keel.git.commitAndPush",
+        action: || Box::new(CommitAndPush),
+        default_key: None,
+        context: None,
+    },
+    KeelCommand {
+        id: "keel.git.commitAndSync",
+        action: || Box::new(CommitAndSync),
+        default_key: None,
+        context: None,
+    },
+    KeelCommand {
+        id: "keel.localHistory.show",
+        action: || Box::new(ShowLocalHistory),
+        default_key: None,
+        context: None,
+    },
+    KeelCommand {
+        id: "workbench.action.localHistory.restoreViaPicker",
+        action: || Box::new(FindDeletedFile),
+        default_key: None,
+        context: None,
+    },
+    KeelCommand {
+        id: "workbench.files.action.compareWithClipboard",
+        action: || Box::new(CompareWithClipboard),
+        default_key: Some("cmd+k c"),
+        context: None,
+    },
 ];
 
 /// The editor's own key that VS Code uses for something else: gpui-component
@@ -1102,7 +1160,7 @@ mod tests {
         let (bindings, warnings) =
             read_user_bindings(Path::new("/nonexistent/keel/keybindings.json"));
         assert!(bindings.is_empty() && warnings.is_empty());
-        assert_eq!(keel_bindings(&[]).len(), 80);
+        assert_eq!(keel_bindings(&[]).len(), 81);
     }
 
     #[test]

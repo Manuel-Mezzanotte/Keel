@@ -30,6 +30,11 @@ pub(super) enum DiffSource {
     Proposed(String),
     /// Every change not staged yet, file after file, in one page.
     AllChanges,
+    /// A version kept by the local history, by its file, against the file
+    /// now; the tab's path is the file's own.
+    LocalHistory(String),
+    /// The clipboard against the file in view.
+    Clipboard,
     /// A change the agent made to a file, by its path: what Keel kept
     /// before against the file now.
     Agent(String),
@@ -56,6 +61,8 @@ pub(super) fn diff_uri(path: &str, source: &DiffSource) -> String {
         DiffSource::Commit(hash, _) => hash.as_str(),
         DiffSource::Proposed(name) => return format!("keel-claude-diff:{name}"),
         DiffSource::AllChanges => return "keel-diff:all-changes".to_owned(),
+        DiffSource::LocalHistory(version) => return format!("keel-history:{version}"),
+        DiffSource::Clipboard => return format!("keel-clipboard:{path}"),
         DiffSource::Agent(path) => return format!("keel-agent-diff:{path}"),
     };
     format!("keel-diff:{kind}/{path}")
@@ -82,7 +89,11 @@ impl Workbench {
                     .map_err(|error| error.to_string())?;
                 DiffFile::parse(&patch).map_err(|error| error.message().to_string())?
             }
-            DiffSource::Proposed(_) | DiffSource::Agent(_) | DiffSource::AllChanges => {
+            DiffSource::Proposed(_)
+            | DiffSource::Agent(_)
+            | DiffSource::AllChanges
+            | DiffSource::LocalHistory(_)
+            | DiffSource::Clipboard => {
                 return Err("not a git difference".to_owned());
             }
             DiffSource::Changes | DiffSource::Staged => {
@@ -107,6 +118,14 @@ impl Workbench {
         cx: &mut Context<Self>,
     ) {
         let uri = diff_uri(path, &source);
+        // The clipboard may hold something else since the last time.
+        if source == DiffSource::Clipboard
+            && let Some(Backing::Diff(tab)) =
+                self.documents.get(&uri).map(|document| &document.backing)
+            && let (Some(doc), Ok(files)) = (tab.doc.clone(), self.diff_docs(path, &source))
+        {
+            doc.set_files(files);
+        }
         if !self.documents.contains_key(&uri) && source != DiffSource::Conflict {
             let files = match self.diff_docs(path, &source) {
                 Ok(files) => files,
@@ -125,6 +144,8 @@ impl Workbench {
                 DiffSource::Staged => format!("{name} ({})", strings.diff_index),
                 DiffSource::Commit(hash, _) => format!("{name} ({})", &hash[..hash.len().min(8)]),
                 DiffSource::AllChanges => strings.diff_all_changes.to_owned(),
+                DiffSource::LocalHistory(_) => format!("{name} ({})", strings.history_version),
+                DiffSource::Clipboard => format!("{name} ↔ {}", strings.diff_clipboard),
                 _ => name.to_owned(),
             };
             let state = cx.new(|cx| DiffState::new(Vec::new(), cx));
@@ -172,7 +193,9 @@ impl Workbench {
                 DiffSource::Commit(hash, _) => format!("{name} ({})", &hash[..hash.len().min(8)]),
                 DiffSource::Proposed(tab_name) => tab_name.clone(),
                 DiffSource::Agent(_) => format!("{name} (Claude)"),
-                DiffSource::AllChanges => strings.diff_all_changes.to_owned(),
+                DiffSource::AllChanges | DiffSource::LocalHistory(_) | DiffSource::Clipboard => {
+                    strings.diff_all_changes.to_owned()
+                }
             };
             self.documents.insert(
                 uri.clone(),
@@ -203,8 +226,54 @@ impl Workbench {
         path: &str,
         source: &DiffSource,
     ) -> Result<Vec<super::diff_model::FileDiff>, String> {
-        let repo = self.scm.repo.as_ref().ok_or_else(String::new)?;
         let ignore = self.diff_ignore_spaces;
+        // Not git's: a kept version, or the clipboard, against the file now.
+        let shown = |path: &str| {
+            let full = Path::new(path);
+            self.project
+                .root
+                .as_ref()
+                .and_then(|root| full.strip_prefix(root).ok())
+                .unwrap_or(full)
+                .to_string_lossy()
+                .into_owned()
+        };
+        let now = |path: &str| {
+            let uri = Uri::file(Path::new(path)).to_string();
+            self.documents
+                .get(&uri)
+                .map(|document| document.synced_text.clone())
+                .or_else(|| std::fs::read_to_string(path).ok())
+                .or_else(|| {
+                    // An untitled file, by its name.
+                    self.documents
+                        .values()
+                        .find(|document| self.display_name(document) == path)
+                        .map(|document| document.synced_text.clone())
+                })
+                .unwrap_or_default()
+        };
+        match source {
+            DiffSource::LocalHistory(version) => {
+                let old = std::fs::read_to_string(version).map_err(|error| error.to_string())?;
+                return Ok(vec![super::diff_model::FileDiff::new(
+                    shown(path),
+                    &old,
+                    &now(path),
+                    ignore,
+                )]);
+            }
+            DiffSource::Clipboard => {
+                return Ok(vec![super::diff_model::FileDiff::new(
+                    shown(path),
+                    &self.clipboard_text,
+                    &now(path),
+                    ignore,
+                )]);
+            }
+            _ => {}
+        }
+        let repo = self.scm.repo.as_ref().ok_or_else(String::new)?;
         let disk = |path: &str| std::fs::read_to_string(repo.absolute(path)).unwrap_or_default();
         let one = |old: String, new: String| {
             vec![super::diff_model::FileDiff::new(path, &old, &new, ignore)]
@@ -218,7 +287,14 @@ impl Workbench {
             DiffSource::Commit(hash, original) => one(
                 repo.text_at(&format!("{hash}^"), original.as_deref().unwrap_or(path))
                     .unwrap_or_default(),
-                repo.text_at(hash, path).unwrap_or_default(),
+                repo.text_at(hash, path)
+                    // A stash keeps its new files in its third parent.
+                    .or_else(|| {
+                        hash.starts_with("stash@")
+                            .then(|| repo.text_at(&format!("{hash}^3"), path))
+                            .flatten()
+                    })
+                    .unwrap_or_default(),
             ),
             DiffSource::AllChanges => self
                 .scm
@@ -405,6 +481,19 @@ impl Workbench {
                         this.unstage_paths(vec![path.clone()], window, cx)
                     })),
             ),
+            DiffSource::LocalHistory(version) => {
+                let (file, version) = (PathBuf::from(&path), PathBuf::from(version));
+                toolbar.child(
+                    Button::new("diff-restore-version")
+                        .ghost()
+                        .small()
+                        .icon(Icon::new(IconName::RotateCcw))
+                        .label(strings.history_restore)
+                        .on_click(cx.listener(move |this, _, window, cx| {
+                            this.restore_version(&file, &version, window, cx)
+                        })),
+                )
+            }
             DiffSource::AllChanges => toolbar.child(
                 Button::new("diff-stage-all")
                     .ghost()
@@ -489,14 +578,17 @@ impl Workbench {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let Some(repo) = self.scm.repo.clone() else {
-            return;
+        let file = if Path::new(path).is_absolute() {
+            PathBuf::from(path)
+        } else {
+            let Some(repo) = self.scm.repo.clone() else {
+                return;
+            };
+            self.project_spelling(&repo.absolute(path))
         };
-        let file = repo.absolute(path);
         if !file.is_file() {
             return;
         }
-        let file = self.project_spelling(&file);
         self.open_file(&file, window, cx);
         self.go_to(line as u32 + 1, 1, window, cx);
     }
