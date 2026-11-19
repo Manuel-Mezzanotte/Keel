@@ -58,6 +58,8 @@ mod signature_help;
 pub(crate) mod snapshots;
 mod source_control;
 mod tabs;
+mod terminal_commands;
+mod terminal_fixes;
 mod terminal_view;
 mod terminals;
 mod writing;
@@ -118,6 +120,10 @@ pub(crate) use source_control::{
     CheckoutBranch, Commit, CommitAmend, CreateBranch, DiscardAll, GitFetch, GitPull, GitPush,
     GitRefresh, GitStash, GitStashPop, GitSync, StageAll, UnstageAll,
     bindings as source_control_bindings,
+};
+pub(crate) use terminal_commands::{
+    AskClaudeAboutTerminal, CopyLastCommand, CopyLastCommandOutput, RunRecentCommand,
+    ScrollToNextCommand, ScrollToPreviousCommand,
 };
 pub(crate) use terminal_view::{TERMINAL_CONTEXT, bindings as terminal_bindings};
 pub(crate) use terminals::{
@@ -604,7 +610,7 @@ impl Workbench {
             // Leaving Keel keeps everything, and may save files.
             if !window.is_window_active() {
                 this.auto_save_on(true, window, cx);
-                this.persist_now();
+                this.persist_now(cx);
             }
             // Files may have changed in another app, such as Claude Code.
             if window.is_window_active() {
@@ -1404,7 +1410,8 @@ impl Workbench {
     /// chose not to save are dropped.
     fn before_close(&mut self, cx: &mut Context<Self>) {
         self.stop_claude();
-        self.save_session_now();
+        self.save_session_now(cx);
+        self.save_terminal_contents(cx);
         if self.discard_changes {
             self.discard_backups();
         } else {
@@ -1418,7 +1425,7 @@ impl Workbench {
     fn quit(&mut self, _: &Quit, window: &mut Window, cx: &mut Context<Self>) {
         let hot_exit = self.settings.string("files.hotExit") != Some("off");
         if hot_exit && self.data_dir.is_some() {
-            self.persist_now();
+            self.persist_now(cx);
             crate::windows::quit_keeping_everything(cx.entity_id(), cx);
             return;
         }

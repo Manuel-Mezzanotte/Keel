@@ -179,7 +179,7 @@ pub fn quit_keeping_everything(asking: gpui::EntityId, cx: &mut App) {
             .collect();
         for (workbench, _) in &open {
             if workbench.entity_id() != asking {
-                workbench.read(cx).persist_now();
+                workbench.read(cx).persist_now(cx);
             }
         }
         let roots: Vec<Option<PathBuf>> = open.into_iter().map(|(_, root)| root).collect();

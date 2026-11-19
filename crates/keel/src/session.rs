@@ -61,6 +61,25 @@ pub struct WindowState {
     /// The latest searches of the Search view.
     #[serde(default)]
     pub recent_searches: Vec<String>,
+    /// The terminals of the bottom panel; what they showed is kept apart,
+    /// in `terminals_dir`.
+    #[serde(default)]
+    pub terminals: Vec<TerminalState>,
+    #[serde(default)]
+    pub active_terminal: usize,
+}
+
+/// A terminal of the bottom panel, as kept between runs.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct TerminalState {
+    /// The name the user gave it.
+    #[serde(default)]
+    pub name: Option<String>,
+    /// The folder its shell was in.
+    pub cwd: PathBuf,
+    /// Terminals with the same group were side by side under one tab.
+    #[serde(default)]
+    pub group: usize,
 }
 
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
@@ -93,6 +112,11 @@ pub fn state_file(data: &Path, root: &Path) -> PathBuf {
 
 pub fn backup_dir(data: &Path, root: Option<&Path>) -> PathBuf {
     data.join("backups").join(key(root))
+}
+
+/// Where the text of a window's terminals waits for the next run.
+pub fn terminals_dir(data: &Path, root: Option<&Path>) -> PathBuf {
+    data.join("terminals").join(key(root))
 }
 
 pub fn windows_file(data: &Path) -> PathBuf {

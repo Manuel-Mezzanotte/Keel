@@ -41,7 +41,7 @@ pub use input::{
 pub use links::{Link, LinkTarget, find_links};
 pub use marks::Progress;
 pub use palette::{Palette, Rgb};
-pub use ports::{ListeningPort, listening_ports};
+pub use ports::{ListeningPort, end_process, listeners_on, listening_ports};
 
 /// The lines a terminal keeps above the screen, as Alacritty does.
 pub const SCROLLBACK: usize = 10_000;
@@ -688,6 +688,15 @@ impl Terminal {
     pub fn scroll_to_command(&self, older: bool) -> Option<u64> {
         let mut term = self.term.lock();
         self.shared.tracker().scroll_to_command(&mut term, older)
+    }
+
+    /// The command kept at the top of the screen while its output fills
+    /// it, without taking a whole snapshot.
+    pub fn sticky(&self) -> Option<StickyCommand> {
+        let mut term = self.term.lock();
+        let mut tracker = self.shared.tracker();
+        tracker.catch_up(&mut term);
+        tracker.on_screen(&term).1
     }
 
     /// Shows a command's prompt at the top of the screen.

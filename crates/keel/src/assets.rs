@@ -63,7 +63,8 @@ gpui_kit_assets::icon_assets!(
         CloudUpload,
         CloudDownload,
         ExternalLink,
-        Undo2
+        Undo2,
+        Wrench
     ]
 );
 

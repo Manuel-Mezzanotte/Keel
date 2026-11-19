@@ -21,6 +21,25 @@ pub(super) const AGENT_WIDTH: f32 = 320.;
 const AGENT_TERMINAL_WIDTH: f32 = 600.;
 const AGENT_MIN_WIDTH: f32 = 240.;
 
+/// `claude` with a first prompt, quoted so the shell passes it whole, on
+/// one line: zsh's `$'…'` with `\n` for each newline.
+fn claude_with(prompt: &str) -> String {
+    let mut quoted = String::from("$'");
+    for c in prompt.chars() {
+        match c {
+            '\\' => quoted.push_str("\\\\"),
+            '\'' => quoted.push_str("\\'"),
+            '\n' => quoted.push_str("\\n"),
+            '\t' => quoted.push_str("\\t"),
+            '\r' => quoted.push_str("\\r"),
+            c if c.is_control() => quoted.push_str(&format!("\\x{:02x}", c as u32)),
+            c => quoted.push(c),
+        }
+    }
+    quoted.push('\'');
+    format!("{CLAUDE} {quoted}")
+}
+
 /// The handle on the left edge of Claude Code's panel.
 #[derive(Clone)]
 pub(super) struct AgentResize;
@@ -45,7 +64,7 @@ impl Workbench {
         self.agent_panel.view = super::agent_panel::AgentView::Terminal;
         if self.agent_terminal.is_none() {
             let spawn = terminal_view::shell_spawn(self.terminal_folder(), cx);
-            if !self.start_agent_terminal(spawn, window, cx) {
+            if !self.start_agent_terminal(spawn, None, window, cx) {
                 return;
             }
         }
@@ -56,18 +75,54 @@ impl Workbench {
         cx.notify();
     }
 
+    /// Asks Claude Code something: typed into its prompt and sent when it
+    /// runs on the right, else Claude Code starts with it.
+    pub(super) fn ask_claude(
+        &mut self,
+        prompt: String,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.layout.agent = true;
+        self.agent_panel.view = super::agent_panel::AgentView::Terminal;
+        match &self.agent_terminal {
+            // The shell is at its prompt: Claude Code ended, so it starts
+            // again with the question, which the shell must not run.
+            Some(agent) if agent.view.read(cx).runs_shell() => {
+                agent.view.read(cx).run(&claude_with(&prompt));
+            }
+            Some(agent) => agent.view.read(cx).send(&prompt, true),
+            None => {
+                let spawn = terminal_view::shell_spawn(self.terminal_folder(), cx);
+                if !self.start_agent_terminal(spawn, Some(&prompt), window, cx) {
+                    return;
+                }
+            }
+        }
+        if let Some(agent) = &self.agent_terminal {
+            agent.view.read(cx).focus_handle(cx).focus(window, cx);
+        }
+        self.session_changed(cx);
+        cx.notify();
+    }
+
     /// Starts the terminal on the right and runs Claude Code in it, with
-    /// the panel wide enough for its screen.
+    /// the panel wide enough for its screen; with a prompt, Claude Code
+    /// starts on it.
     fn start_agent_terminal(
         &mut self,
         spawn: terminal::Spawn,
+        prompt: Option<&str>,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> bool {
         let Some(view) = self.start_terminal_view(spawn, window, cx) else {
             return false;
         };
-        view.read(cx).run(CLAUDE);
+        match prompt {
+            Some(prompt) => view.read(cx).run(&claude_with(prompt)),
+            None => view.read(cx).run(CLAUDE),
+        }
         let subscription = cx.subscribe_in(&view, window, Self::terminal_event);
         self.agent_terminal = Some(AgentTerminal {
             view,
@@ -192,7 +247,7 @@ mod tests {
                     "read line; echo \"ran:$line\"; sleep 30".into(),
                 ],
             ));
-            assert!(view.start_agent_terminal(spawn, window, cx));
+            assert!(view.start_agent_terminal(spawn, None, window, cx));
             view.layout.agent = false;
             // Cmd+Esc shows the panel, keeps the terminal and gives it the keyboard.
             view.open_claude_code(window, cx);

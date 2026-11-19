@@ -481,7 +481,7 @@ mod tests {
             view.sidebar_width = 320.;
             view.scm_graph_height = 180.;
         });
-        let state = view.read_with(cx, |view, _| view.window_state());
+        let state = view.read_with(cx, |view, cx| view.window_state(cx));
         assert_eq!(state.collapsed, ["npm-scripts", "git-graph"]);
         assert_eq!(state.sidebar_width, Some(320.));
         assert_eq!(state.graph_height, Some(180.));

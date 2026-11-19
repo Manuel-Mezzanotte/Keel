@@ -1,10 +1,11 @@
 //! A terminal drawn in the window: the cells of its screen, the cursor,
 //! the selection, and keys, mouse and clipboard sent to the shell.
 
-use std::cell::Cell;
+use std::cell::{Cell, RefCell};
 use std::path::PathBuf;
 use std::rc::Rc;
 use std::sync::Arc;
+use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use futures::StreamExt as _;
 use gpui::prelude::FluentBuilder as _;
@@ -13,19 +14,30 @@ use gpui::{
     FocusHandle, Focusable, Font, FontStyle, FontWeight, Hsla, InteractiveElement as _,
     IntoElement, KeyBinding, KeyDownEvent, MouseButton, MouseDownEvent, MouseMoveEvent,
     MouseUpEvent, NoAction, ParentElement as _, Pixels, Point, Render, Rgba, ScrollEvent,
-    SharedString, StrikethroughStyle, Styled as _, Task, TextAlign, TextRun, UnderlineStyle,
-    Window, actions, canvas, div, fill, outline, point, px, size,
+    SharedString, StatefulInteractiveElement as _, StrikethroughStyle, Styled as _, Task,
+    TextAlign, TextRun, UnderlineStyle, Window, actions, canvas, div, fill, outline, point, px,
+    relative, size,
 };
 use gpui_component::button::{Button, ButtonVariants as _};
 use gpui_component::input::{Input, InputEvent, InputState};
 use gpui_component::{ActiveTheme as _, Icon, Selectable as _, Sizable as _};
 use gpui_kit_assets::IconName;
 
+use super::notices::{ago, fill as fill_text};
+use super::terminal_fixes::{QuickFix, quick_fix};
 use crate::i18n::Strings;
 use terminal::{
-    CellPoint, CellView, CursorShape, Found, Key, LinkTarget, Modifiers, MouseAction, Palette, Rgb,
-    SelectionKind, Side, Snapshot, Spawn, TermMode, Terminal, TerminalEvent,
+    CellPoint, CellView, CommandState, CursorShape, Found, Key, LinkTarget, Modifiers, MouseAction,
+    Palette, Progress, PromptMark, Rgb, SelectionKind, ShellCommand, Side, Snapshot, Spawn,
+    TermMode, Terminal, TerminalEvent,
 };
+
+/// The lines of a terminal kept for the next run, as VS Code's
+/// `terminal.integrated.persistentSessionScrollback`.
+const RESTORED_LINES: usize = 1000;
+
+/// How long the prompt Cmd+↑ went to stays lit.
+const FLASH: Duration = Duration::from_millis(1200);
 
 /// The key context of a terminal, for its own shortcuts.
 pub(crate) const TERMINAL_CONTEXT: &str = "Terminal";
@@ -87,6 +99,41 @@ pub(crate) enum TerminalViewEvent {
         line: Option<u32>,
         column: Option<u32>,
     },
+    /// A command ended (shell integration).
+    CommandFinished(ShellCommand),
+    /// A question for Claude Code, ready to send.
+    AskClaude(String),
+    /// A short message for the status bar.
+    Status(String),
+}
+
+/// How a terminal's tab looks.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub(crate) struct TabStatus {
+    /// The last command failed.
+    pub failed: bool,
+    pub progress: Option<Progress>,
+}
+
+/// The menu a command's dot opens.
+struct DotMenu {
+    id: u64,
+    row: usize,
+}
+
+/// What the dot's menu does.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum DotAction {
+    CopyCommand,
+    CopyOutput,
+    Rerun,
+    AskClaude,
+}
+
+/// The bar after a command failed, with its fix if one is known.
+struct Failure {
+    command: ShellCommand,
+    fix: Option<QuickFix>,
 }
 
 /// Font and size of the cells, measured when the terminal is drawn.
@@ -133,6 +180,14 @@ pub(crate) struct TerminalView {
     selecting: bool,
     exited: bool,
     find: Option<FindBar>,
+    /// How far the program in front says it is (OSC 9;4).
+    progress: Option<Progress>,
+    /// The command Cmd+↑ went to, lit for a moment.
+    flash: Option<(u64, Instant)>,
+    failure: Option<Failure>,
+    dot_menu: Option<DotMenu>,
+    /// The prompts drawn last, for clicks on their dots.
+    prompts: Rc<RefCell<Vec<PromptMark>>>,
     strings: &'static Strings,
     _events: Task<()>,
     _subscriptions: Vec<gpui::Subscription>,
@@ -219,7 +274,8 @@ pub(crate) fn shell_spawn(cwd: PathBuf, cx: &App) -> Spawn {
 }
 
 /// Starts a terminal; tests run a script instead of the login shell.
-pub(crate) fn start(spawn: Spawn) -> std::io::Result<Started> {
+pub(crate) fn start(mut spawn: Spawn) -> std::io::Result<Started> {
+    spawn.integrate_shell();
     let cwd = spawn.cwd.clone();
     let (sender, events) = futures::channel::mpsc::unbounded();
     let terminal = Terminal::spawn(spawn, move |event| {
@@ -284,6 +340,11 @@ impl TerminalView {
             selecting: false,
             exited: false,
             find: None,
+            progress: None,
+            flash: None,
+            failure: None,
+            dot_menu: None,
+            prompts: Rc::new(RefCell::new(Vec::new())),
             strings: look.strings,
             _events: pump,
             _subscriptions: subscriptions,
@@ -336,12 +397,245 @@ impl TerminalView {
                     self.exited = true;
                     cx.emit(TerminalViewEvent::Exited);
                 }
-                TerminalEvent::CommandStarted(_)
-                | TerminalEvent::CommandFinished(_)
-                | TerminalEvent::Progress(_) => {}
+                TerminalEvent::CommandStarted(_) => {
+                    self.failure = None;
+                    self.dot_menu = None;
+                    cx.emit(TerminalViewEvent::TitleChanged);
+                }
+                TerminalEvent::CommandFinished(command) => {
+                    self.failure = match command.state() {
+                        // Ctrl+C is not a failure to fix.
+                        Some(CommandState::Failed(code)) if code != 130 => {
+                            let output = self.terminal.output_of(command.id).unwrap_or_default();
+                            let fix = command
+                                .text
+                                .as_deref()
+                                .and_then(|text| quick_fix(text, &output));
+                            Some(Failure {
+                                command: command.clone(),
+                                fix,
+                            })
+                        }
+                        _ => None,
+                    };
+                    cx.emit(TerminalViewEvent::CommandFinished(command));
+                    cx.emit(TerminalViewEvent::TitleChanged);
+                }
+                TerminalEvent::Progress(progress) => {
+                    self.progress = progress;
+                    cx.emit(TerminalViewEvent::TitleChanged);
+                }
             }
         }
         cx.notify();
+    }
+
+    // -----------------------------------------------------------------
+    // Commands (shell integration)
+
+    /// Cmd+↑ and Cmd+↓: to the command before or after the one shown.
+    pub(crate) fn jump_to_command(&mut self, older: bool, cx: &mut Context<Self>) {
+        let id = self.terminal.scroll_to_command(older);
+        self.flash(id, cx);
+    }
+
+    fn flash(&mut self, id: Option<u64>, cx: &mut Context<Self>) {
+        self.flash = id.map(|id| (id, Instant::now()));
+        cx.notify();
+    }
+
+    /// Whether the shell itself is in front, at its prompt, rather than a
+    /// program it started.
+    pub(crate) fn runs_shell(&self) -> bool {
+        self.terminal.foreground_name().is_none_or(|name| {
+            matches!(
+                name.trim_start_matches('-'),
+                "zsh" | "bash" | "fish" | "sh" | "login"
+            )
+        })
+    }
+
+    /// What the terminal shows, to write back after a restart.
+    pub(crate) fn contents(&self) -> Option<Vec<u8>> {
+        self.terminal.contents(RESTORED_LINES)
+    }
+
+    /// The menu of the last command's dot, for the snapshots.
+    #[cfg(feature = "snapshots")]
+    pub(crate) fn open_last_dot_menu(&mut self, cx: &mut Context<Self>) {
+        let id = self.terminal.last_command().map(|command| command.id);
+        let row = self
+            .prompts
+            .borrow()
+            .iter()
+            .find(|prompt| Some(prompt.id) == id)
+            .map(|prompt| prompt.row);
+        if let (Some(id), Some(row)) = (id, row) {
+            self.dot_menu = Some(DotMenu { id, row });
+            cx.notify();
+        }
+    }
+
+    /// Scrolls up into the output, for the snapshots.
+    #[cfg(feature = "snapshots")]
+    pub(crate) fn scroll_for_snapshot(&mut self, lines: i32, cx: &mut Context<Self>) {
+        self.terminal.scroll(lines);
+        cx.notify();
+    }
+
+    pub(crate) fn last_command(&self) -> Option<ShellCommand> {
+        self.terminal.last_command()
+    }
+
+    pub(crate) fn commands(&self) -> Vec<ShellCommand> {
+        self.terminal.commands()
+    }
+
+    pub(crate) fn output_of(&self, id: u64) -> Option<String> {
+        self.terminal.output_of(id)
+    }
+
+    /// Puts text at the prompt of the program in front, as a paste, and
+    /// sends it when asked.
+    pub(crate) fn send(&self, text: &str, submit: bool) {
+        self.terminal.paste(text);
+        if submit {
+            self.terminal.write(&b"\r"[..]);
+        }
+    }
+
+    pub(crate) fn status(&self) -> TabStatus {
+        TabStatus {
+            failed: self.failure.is_some(),
+            progress: self.progress,
+        }
+    }
+
+    /// What to ask Claude about a command: why it failed, or what its
+    /// output means.
+    pub(crate) fn claude_prompt_for(&self, command: &ShellCommand) -> String {
+        let output = tail(&self.terminal.output_of(command.id).unwrap_or_default());
+        let text = command.text.clone().unwrap_or_default();
+        match command.state() {
+            Some(CommandState::Failed(code)) => fill_text(
+                self.strings.terminal_claude_failed,
+                &[
+                    ("command", &text),
+                    ("code", &code.to_string()),
+                    ("output", &output),
+                ],
+            ),
+            _ => fill_text(
+                self.strings.terminal_claude_command,
+                &[("command", &text), ("output", &output)],
+            ),
+        }
+    }
+
+    /// Cmd+L: the selected text, else the last command, for Claude Code.
+    pub(crate) fn claude_prompt(&self) -> Option<String> {
+        if let Some(text) = self.terminal.selected_text() {
+            return Some(fill_text(
+                self.strings.terminal_claude_selection,
+                &[("text", &tail(&text))],
+            ));
+        }
+        let command = self.terminal.last_command()?;
+        Some(self.claude_prompt_for(&command))
+    }
+
+    fn dot_action(&mut self, id: u64, action: DotAction, cx: &mut Context<Self>) {
+        self.dot_menu = None;
+        cx.notify();
+        let Some(command) = self
+            .terminal
+            .commands()
+            .into_iter()
+            .find(|command| command.id == id)
+        else {
+            return;
+        };
+        match action {
+            DotAction::CopyCommand => {
+                if let Some(text) = command.text {
+                    cx.write_to_clipboard(ClipboardItem::new_string(text));
+                    cx.emit(TerminalViewEvent::Status(
+                        self.strings.terminal_command_copied.to_owned(),
+                    ));
+                }
+            }
+            DotAction::CopyOutput => {
+                if let Some(output) = self.terminal.output_of(id) {
+                    cx.write_to_clipboard(ClipboardItem::new_string(output));
+                    cx.emit(TerminalViewEvent::Status(
+                        self.strings.terminal_output_copied.to_owned(),
+                    ));
+                }
+            }
+            DotAction::Rerun => {
+                if let Some(text) = command.text {
+                    self.run(&text);
+                }
+            }
+            DotAction::AskClaude => {
+                let prompt = self.claude_prompt_for(&command);
+                cx.emit(TerminalViewEvent::AskClaude(prompt));
+            }
+        }
+    }
+
+    /// The bar's fix: runs what the program suggested, or frees the port
+    /// and runs the command again.
+    fn apply_fix(&mut self, cx: &mut Context<Self>) {
+        let Some(failure) = self.failure.take() else {
+            return;
+        };
+        cx.notify();
+        match failure.fix {
+            Some(QuickFix::Run(command)) => self.run(&command),
+            Some(QuickFix::FreePort { port }) => {
+                let rerun = failure.command.text.clone();
+                let strings = self.strings;
+                cx.spawn(async move |this, cx| {
+                    let background = cx.background_executor().clone();
+                    let free = background
+                        .spawn(async move {
+                            for pid in terminal::listeners_on(port) {
+                                terminal::end_process(pid);
+                            }
+                            // The port is free once the program has let go.
+                            for _ in 0..30 {
+                                if terminal::listeners_on(port).is_empty() {
+                                    return true;
+                                }
+                                std::thread::sleep(Duration::from_millis(100));
+                            }
+                            false
+                        })
+                        .await;
+                    this.update(cx, |this, cx| {
+                        let port = port.to_string();
+                        if free {
+                            if let Some(rerun) = &rerun {
+                                this.run(rerun);
+                            }
+                            cx.emit(TerminalViewEvent::Status(fill_text(
+                                strings.terminal_port_freed,
+                                &[("port", &port)],
+                            )));
+                        } else {
+                            cx.emit(TerminalViewEvent::Status(fill_text(
+                                strings.terminal_port_still_taken,
+                                &[("port", &port)],
+                            )));
+                        }
+                    })
+                    .ok();
+                })
+                .detach();
+            }
+            None => {}
+        }
     }
 
     fn send_focus(&self, focused: bool) {
@@ -357,6 +651,9 @@ impl TerminalView {
         // Keys typed in the find field are not for the shell.
         if !self.focus_handle.is_focused(window) {
             return;
+        }
+        if self.dot_menu.take().is_some() {
+            cx.notify();
         }
         let keystroke = &event.keystroke;
         let modifiers = Modifiers {
@@ -656,6 +953,28 @@ impl TerminalView {
 
     fn mouse_down(&mut self, event: &MouseDownEvent, window: &mut Window, cx: &mut Context<Self>) {
         self.focus_handle.focus(window, cx);
+        if self.dot_menu.take().is_some() {
+            cx.notify();
+        }
+        // A click on a command's dot, in the margin, opens its menu.
+        if event.button == MouseButton::Left
+            && let Some(metrics) = self.metrics.get()
+            && event.position.x < metrics.origin.x
+            && event.position.y >= metrics.origin.y
+        {
+            let row = ((event.position.y - metrics.origin.y) / metrics.line_height) as usize;
+            let prompt = self
+                .prompts
+                .borrow()
+                .iter()
+                .find(|prompt| prompt.row == row && prompt.state.is_some())
+                .cloned();
+            if let Some(prompt) = prompt {
+                self.dot_menu = Some(DotMenu { id: prompt.id, row });
+                cx.notify();
+                return;
+            }
+        }
         let button = match event.button {
             MouseButton::Left => terminal::MouseButton::Left,
             MouseButton::Middle => terminal::MouseButton::Middle,
@@ -828,19 +1147,37 @@ impl Render for TerminalView {
         let palette = palette(cx);
         self.terminal.set_palette(palette);
         let theme = cx.theme();
+        let flash = self.flash.and_then(|(id, at)| {
+            let gone = at.elapsed().as_secs_f32() / FLASH.as_secs_f32();
+            (gone < 1.).then_some((id, 0.22 * (1. - gone)))
+        });
+        if flash.is_some() {
+            window.request_animation_frame();
+        } else {
+            self.flash = None;
+        }
+        let mut font = gpui::font(self.font_family.clone());
+        font.fallbacks = symbol_fonts(window);
         let style = PaintStyle {
-            font: gpui::font(self.font_family.clone()),
+            font,
             font_size: self.font_size,
             palette,
             selection: theme.selection,
             found: theme.warning.opacity(0.35),
             found_current: theme.warning.opacity(0.8),
             focused: self.focus_handle.is_focused(window),
+            dots: DotColors::new(cx),
+            flash,
+            flash_color: theme.info,
         };
         let terminal = self.terminal.clone();
         let metrics = self.metrics.clone();
         let grid_size = self.grid_size.clone();
+        let prompts = self.prompts.clone();
         let find = self.render_find(cx);
+        let sticky = self.render_sticky(cx);
+        let failure = self.render_failure(cx);
+        let dot_menu = self.render_dot_menu(cx);
         div()
             .id("terminal")
             .relative()
@@ -910,6 +1247,7 @@ impl Render for TerminalView {
                         let snapshot = terminal.snapshot();
                         metrics.set(Some(measured));
                         grid_size.set((snapshot.columns, snapshot.lines));
+                        *prompts.borrow_mut() = snapshot.prompts.clone();
                         (snapshot, measured, style)
                     },
                     move |_bounds, (snapshot, measured, style), window, cx| {
@@ -918,7 +1256,394 @@ impl Render for TerminalView {
                 )
                 .size_full(),
             )
+            .children(sticky)
+            .children(failure)
+            .children(dot_menu)
             .children(find)
+    }
+}
+
+impl TerminalView {
+    fn line_height(&self) -> Pixels {
+        self.metrics
+            .get()
+            .map(|metrics| metrics.line_height)
+            .unwrap_or((self.font_size * 1.25).round())
+    }
+
+    /// The command whose output fills the screen, kept at its top; a click
+    /// goes to it.
+    fn render_sticky(&self, cx: &mut Context<Self>) -> Option<gpui::AnyElement> {
+        let sticky = self.terminal.sticky()?;
+        let theme = cx.theme();
+        let dots = DotColors::new(cx);
+        let id = sticky.id;
+        let go_to = self.strings.terminal_go_to_command;
+        let background = to_hsla(palette(cx).background);
+        Some(
+            div()
+                .id("terminal-sticky")
+                .absolute()
+                .top_0()
+                .left_0()
+                .right_0()
+                .h(self.line_height() + px(6.))
+                .pl(px(3.5))
+                .pr_3()
+                .flex()
+                .items_center()
+                .gap(px(1.5))
+                .bg(background)
+                .border_b_1()
+                .border_color(theme.border)
+                .shadow_sm()
+                .font_family(self.font_family.clone())
+                .text_size(self.font_size)
+                .text_color(theme.foreground)
+                .cursor_pointer()
+                .hover(|row| row.bg(theme.secondary))
+                .tooltip(move |window, cx| {
+                    gpui_component::tooltip::Tooltip::new(go_to).build(window, cx)
+                })
+                .occlude()
+                .on_mouse_down(
+                    MouseButton::Left,
+                    cx.listener(move |this, _, _, cx| {
+                        this.terminal.scroll_to(id);
+                        this.flash(Some(id), cx);
+                        cx.stop_propagation();
+                    }),
+                )
+                .child(dot(sticky.state, dots))
+                .child(div().flex_1().min_w_0().truncate().child(sticky.text))
+                .into_any_element(),
+        )
+    }
+
+    /// After a failed command: its fix when one is known, and Claude.
+    fn render_failure(&self, cx: &mut Context<Self>) -> Option<gpui::AnyElement> {
+        let failure = self.failure.as_ref()?;
+        let strings = self.strings;
+        let theme = cx.theme();
+        let name = failure.command.text.clone().unwrap_or_default();
+        let code = match failure.command.state() {
+            Some(CommandState::Failed(code)) => code,
+            _ => 1,
+        };
+        let title = format!(
+            "{} · {}",
+            fill_text(
+                strings.terminal_fix_failed_title,
+                &[("command", &format!("«{}»", short(&name, 32)))]
+            ),
+            fill_text(strings.terminal_exit_code, &[("code", &code.to_string())]),
+        );
+        let fix = failure.fix.as_ref().map(|fix| {
+            let label = match fix {
+                QuickFix::FreePort { port } => {
+                    fill_text(strings.terminal_free_port, &[("port", &port.to_string())])
+                }
+                QuickFix::Run(command) => fill_text(
+                    strings.terminal_run_fix,
+                    &[("command", &short(command, 40))],
+                ),
+            };
+            Button::new("terminal-fix")
+                .primary()
+                .xsmall()
+                .icon(Icon::new(IconName::Wrench))
+                .label(label)
+                .on_click(cx.listener(|this, _, _, cx| this.apply_fix(cx)))
+        });
+        let id = failure.command.id;
+        Some(
+            div()
+                .id("terminal-failure")
+                .absolute()
+                .bottom_2()
+                .right_3()
+                .max_w(relative(0.94))
+                .p_1()
+                .pl_2()
+                .flex()
+                .items_center()
+                .gap_1()
+                .rounded(px(8.))
+                .border_1()
+                .border_color(theme.danger.opacity(0.45))
+                .bg(theme.popover)
+                .shadow_md()
+                .text_xs()
+                .occlude()
+                .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
+                .child(
+                    Icon::new(IconName::CircleX)
+                        .xsmall()
+                        .text_color(theme.danger),
+                )
+                .child(
+                    div()
+                        .min_w_0()
+                        .truncate()
+                        .text_color(theme.muted_foreground)
+                        .child(title),
+                )
+                .children(fix)
+                .child(
+                    Button::new("terminal-ask-claude")
+                        .ghost()
+                        .xsmall()
+                        .icon(Icon::new(IconName::Sparkles))
+                        .label(strings.terminal_ask_claude)
+                        .on_click(cx.listener(move |this, _, _, cx| {
+                            this.failure = None;
+                            this.dot_action(id, DotAction::AskClaude, cx);
+                        })),
+                )
+                .child(
+                    Button::new("terminal-failure-close")
+                        .ghost()
+                        .xsmall()
+                        .icon(Icon::new(IconName::X))
+                        .tooltip(strings.terminal_dismiss)
+                        .on_click(cx.listener(|this, _, _, cx| {
+                            this.failure = None;
+                            cx.notify();
+                        })),
+                )
+                .into_any_element(),
+        )
+    }
+
+    /// The menu of a command's dot: how it went, and what to do with it.
+    fn render_dot_menu(&self, cx: &mut Context<Self>) -> Option<gpui::AnyElement> {
+        let menu = self.dot_menu.as_ref()?;
+        let command = self
+            .terminal
+            .commands()
+            .into_iter()
+            .find(|command| command.id == menu.id)?;
+        let strings = self.strings;
+        let theme = cx.theme();
+        let state = match command.state()? {
+            CommandState::Succeeded => strings.terminal_command_ok.to_owned(),
+            CommandState::Failed(code) => fill_text(
+                strings.terminal_command_failed,
+                &[("code", &code.to_string())],
+            ),
+            CommandState::Running => strings.terminal_command_running.to_owned(),
+            CommandState::Ended => strings.terminal_command_ended.to_owned(),
+        };
+        let mut summary = vec![state];
+        if let Some(started) = command.started {
+            let now = SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .map(|time| time.as_secs() as i64)
+                .unwrap_or_default();
+            summary.push(ago(now - started.elapsed().as_secs() as i64, now, strings));
+        }
+        if let Some(duration) = command.duration {
+            summary.push(duration_text(duration));
+        }
+        let id = command.id;
+        let item = |key: &'static str, icon: IconName, label: &'static str, action: DotAction| {
+            div()
+                .id((key, id))
+                .px_2()
+                .py(px(5.))
+                .rounded(px(5.))
+                .flex()
+                .items_center()
+                .gap_2()
+                .text_sm()
+                .cursor_pointer()
+                .hover(|row| row.bg(theme.secondary))
+                .on_click(cx.listener(move |this, _, _, cx| this.dot_action(id, action, cx)))
+                .child(Icon::new(icon).xsmall().text_color(theme.muted_foreground))
+                .child(label)
+        };
+        let metrics = self.metrics.get()?;
+        // Under the dot, over everything else: a low panel does not cut it,
+        // and near the window's edge it moves to fit.
+        let at = point(
+            metrics.origin.x - px(10.),
+            metrics.origin.y + metrics.line_height * (menu.row as f32 + 1.) + px(2.),
+        );
+        let has_text = command.text.is_some();
+        let menu_box = div().id("terminal-dot-menu").w(px(280.));
+        Some(
+            gpui::deferred(
+                gpui::anchored()
+                    .position(at)
+                    .snap_to_window_with_margin(px(8.))
+                    .child(
+                        menu_box
+                            .p_1()
+                            .flex()
+                            .flex_col()
+                            .rounded(px(8.))
+                            .border_1()
+                            .border_color(theme.border)
+                            .bg(theme.popover)
+                            .shadow_lg()
+                            .occlude()
+                            .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
+                            .child(
+                                div()
+                                    .px_2()
+                                    .pt_1()
+                                    .text_xs()
+                                    .truncate()
+                                    .text_color(theme.muted_foreground)
+                                    .child(summary.join(" · ")),
+                            )
+                            .children(command.text.clone().map(|text| {
+                                div()
+                                    .px_2()
+                                    .pb_1()
+                                    .text_sm()
+                                    .truncate()
+                                    .font_family(self.font_family.clone())
+                                    .child(text)
+                            }))
+                            .when(has_text, |menu_box| {
+                                menu_box.child(item(
+                                    "dot-copy-command",
+                                    IconName::Copy,
+                                    strings.terminal_copy_command,
+                                    DotAction::CopyCommand,
+                                ))
+                            })
+                            .child(item(
+                                "dot-copy-output",
+                                IconName::Copy,
+                                strings.terminal_copy_output,
+                                DotAction::CopyOutput,
+                            ))
+                            .when(has_text, |menu_box| {
+                                menu_box.child(item(
+                                    "dot-rerun",
+                                    IconName::RotateCcw,
+                                    strings.terminal_rerun,
+                                    DotAction::Rerun,
+                                ))
+                            })
+                            .child(item(
+                                "dot-ask-claude",
+                                IconName::Sparkles,
+                                strings.terminal_ask_claude,
+                                DotAction::AskClaude,
+                            )),
+                    ),
+            )
+            .with_priority(1)
+            .into_any_element(),
+        )
+    }
+}
+
+/// The colors of the dots by the commands, as VS Code's: blue when it
+/// went well, red when it failed, a ring while it runs.
+#[derive(Clone, Copy)]
+struct DotColors {
+    ok: Hsla,
+    failed: Hsla,
+    running: Hsla,
+}
+
+impl DotColors {
+    fn new(cx: &App) -> Self {
+        let theme = cx.theme();
+        Self {
+            ok: theme.info.opacity(0.85),
+            failed: theme.danger,
+            running: theme.muted_foreground,
+        }
+    }
+
+    fn of(self, state: Option<CommandState>) -> Option<Hsla> {
+        match state? {
+            CommandState::Succeeded | CommandState::Ended => Some(self.ok),
+            CommandState::Failed(_) => Some(self.failed),
+            CommandState::Running => Some(self.running),
+        }
+    }
+}
+
+/// A dot as an element, for the command at the top.
+fn dot(state: Option<CommandState>, dots: DotColors) -> gpui::Div {
+    let color = dots.of(state).unwrap_or(dots.running);
+    let size = px(7.);
+    let dot = div().flex_none().size(size).rounded_full();
+    if state == Some(CommandState::Running) || state.is_none() {
+        dot.border_1().border_color(color)
+    } else {
+        dot.bg(color)
+    }
+}
+
+/// A command line cut to fit a button, with an ellipsis.
+fn short(text: &str, most: usize) -> String {
+    let text = text.trim();
+    if text.chars().count() <= most {
+        return text.to_owned();
+    }
+    let cut: String = text.chars().take(most.saturating_sub(1)).collect();
+    format!("{cut}…")
+}
+
+/// The end of a long output, which says what went wrong: its last lines.
+fn tail(text: &str) -> String {
+    const LINES: usize = 120;
+    const CHARS: usize = 8000;
+    let lines: Vec<&str> = text.lines().collect();
+    let start = lines.len().saturating_sub(LINES);
+    let mut tail = lines[start..].join("\n");
+    let mut cut = start > 0;
+    if tail.len() > CHARS {
+        let from = (tail.len() - CHARS..tail.len())
+            .find(|&index| tail.is_char_boundary(index))
+            .unwrap_or(0);
+        tail = tail[from..].to_owned();
+        cut = true;
+    }
+    if cut { format!("…\n{tail}") } else { tail }
+}
+
+/// A moment as the day and the time where Keel runs: `19/11/2026 14:32`.
+pub(crate) fn local_time_text(at: Option<SystemTime>) -> String {
+    let seconds = at
+        .unwrap_or_else(SystemTime::now)
+        .duration_since(UNIX_EPOCH)
+        .map(|time| time.as_secs() as libc::time_t)
+        .unwrap_or_default();
+    // SAFETY: localtime_r fills the struct given; nothing is kept.
+    let local = unsafe {
+        let mut local: libc::tm = std::mem::zeroed();
+        libc::localtime_r(&seconds, &mut local);
+        local
+    };
+    format!(
+        "{:02}/{:02}/{} {:02}:{:02}",
+        local.tm_mday,
+        local.tm_mon + 1,
+        local.tm_year + 1900,
+        local.tm_hour,
+        local.tm_min
+    )
+}
+
+/// How long a command took: `850 ms`, `12 s`, `1 min 12 s`, `2 h 5 min`.
+pub(crate) fn duration_text(duration: Duration) -> String {
+    let seconds = duration.as_secs();
+    if seconds < 1 {
+        format!("{} ms", duration.as_millis())
+    } else if seconds < 60 {
+        format!("{seconds} s")
+    } else if seconds < 3600 {
+        format!("{} min {} s", seconds / 60, seconds % 60)
+    } else {
+        format!("{} h {} min", seconds / 3600, seconds % 3600 / 60)
     }
 }
 
@@ -931,6 +1656,30 @@ struct PaintStyle {
     found: Hsla,
     found_current: Hsla,
     focused: bool,
+    dots: DotColors,
+    /// The prompt Cmd+↑ went to, and how strongly it is still lit.
+    flash: Option<(u64, f32)>,
+    flash_color: Hsla,
+}
+
+/// The Nerd Fonts installed, for the symbols themes such as Powerlevel10k
+/// and Starship draw in the prompt, which Menlo and SF Mono do not have.
+fn symbol_fonts(window: &Window) -> Option<gpui::FontFallbacks> {
+    static FONTS: std::sync::OnceLock<Vec<String>> = std::sync::OnceLock::new();
+    let fonts = FONTS.get_or_init(|| {
+        let mut fonts: Vec<String> = window
+            .text_system()
+            .all_font_names()
+            .into_iter()
+            .filter(|name| {
+                name.contains("Nerd Font") || name.ends_with(" NF") || name.contains("Powerline")
+            })
+            .collect();
+        // The ones made for terminals, one cell wide, first.
+        fonts.sort_by_key(|name| !(name.contains("Mono") || name.ends_with(" NF")));
+        fonts
+    });
+    (!fonts.is_empty()).then(|| gpui::FontFallbacks::from_fonts(fonts.clone()))
 }
 
 fn measure(style: &PaintStyle, origin: Point<Pixels>, window: &mut Window) -> Metrics {
@@ -999,7 +1748,21 @@ fn paint_snapshot(
         )
     };
 
+    let flashed = style.flash.and_then(|(id, strength)| {
+        snapshot
+            .prompts
+            .iter()
+            .find(|prompt| prompt.id == id)
+            .map(|prompt| (prompt.row, strength))
+    });
     for (line, row) in snapshot.rows.iter().enumerate() {
+        if let Some((_, strength)) = flashed.filter(|(row, _)| *row == line) {
+            let band = Bounds::new(
+                point(origin.x - px(12.), origin.y + line_height * line as f32),
+                size(cell_width * row.len() as f32 + px(12.), line_height),
+            );
+            window.paint_quad(fill(band, style.flash_color.opacity(strength)));
+        }
         // Backgrounds, joined while the color stays the same.
         let mut column = 0;
         while column < row.len() {
@@ -1055,6 +1818,25 @@ fn paint_snapshot(
                 cx,
             );
         }
+    }
+
+    // Each command's dot in the margin, by how it went.
+    for prompt in &snapshot.prompts {
+        let Some(color) = style.dots.of(prompt.state) else {
+            continue;
+        };
+        let diameter = px(7.);
+        let middle = origin.y + line_height * (prompt.row as f32 + 0.5);
+        let bounds = Bounds::new(
+            point(origin.x - px(9.5), middle - diameter / 2.),
+            size(diameter, diameter),
+        );
+        let quad = if prompt.state == Some(CommandState::Running) {
+            outline(bounds, color, gpui::BorderStyle::Solid)
+        } else {
+            fill(bounds, color)
+        };
+        window.paint_quad(quad.corner_radii(diameter / 2.));
     }
 
     let Some(cursor) = snapshot.cursor else {
@@ -1224,6 +2006,99 @@ mod tests {
                 })
                 .map(|line| snapshot.line_text(line))
         })
+    }
+
+    /// zsh with Keel's shell integration, in a home of its own.
+    fn zsh<'a>(
+        cx: &'a mut TestAppContext,
+        home: &std::path::Path,
+    ) -> (Entity<TerminalView>, &'a mut VisualTestContext) {
+        cx.executor().allow_parking();
+        cx.update(|cx| {
+            gpui_component::init(cx);
+            crate::workbench_window::init(cx);
+        });
+        std::fs::write(home.join(".zshrc"), "PS1='$ '\n").unwrap();
+        let home = home.to_path_buf();
+        let (view, cx) = cx.add_window_view(|window, cx| {
+            let mut spawn = shell_spawn(home.clone(), cx);
+            spawn.command = Some(("/bin/zsh".into(), vec!["-i".into()]));
+            spawn
+                .env
+                .insert("HOME".into(), home.to_string_lossy().into_owned());
+            spawn.integrate_zsh(&home).unwrap();
+            let look = TerminalLook {
+                font_family: "Menlo".into(),
+                font_size: 12.,
+                option_is_meta: false,
+                strings: &crate::i18n::ENGLISH,
+            };
+            TerminalView::new(start(spawn).unwrap(), look, window, cx)
+        });
+        view.update_in(cx, |view, window, cx| view.focus_handle.focus(window, cx));
+        (view, cx)
+    }
+
+    fn at_prompt(view: &Entity<TerminalView>, cx: &mut VisualTestContext) {
+        wait_until(cx, |cx| {
+            view.read_with(cx, |view, _| {
+                let snapshot = view.terminal.snapshot();
+                snapshot
+                    .cursor
+                    .is_some_and(|cursor| snapshot.line_text(cursor.line) == "$")
+            })
+        });
+    }
+
+    #[gpui::test]
+    fn a_failed_command_gets_its_fix_its_dot_and_a_question_for_claude(cx: &mut TestAppContext) {
+        let home = tempfile::tempdir().unwrap();
+        let (view, cx) = zsh(cx, home.path());
+        at_prompt(&view, cx);
+        view.read_with(cx, |view, _| {
+            view.terminal.write(
+                b"echo 'Error: listen EADDRINUSE: address already in use :::3999'; false\r"
+                    .to_vec(),
+            )
+        });
+        wait_until(cx, |cx| {
+            view.read_with(cx, |view, _| view.failure.is_some())
+        });
+        let (fix, failed, prompt, id) = view.read_with(cx, |view, _| {
+            let failure = view.failure.as_ref().unwrap();
+            (
+                failure.fix.clone(),
+                view.status().failed,
+                view.claude_prompt().unwrap(),
+                failure.command.id,
+            )
+        });
+        assert_eq!(fix, Some(QuickFix::FreePort { port: 3999 }));
+        assert!(failed);
+        assert!(
+            prompt.contains("`echo 'Error: listen EADDRINUSE"),
+            "{prompt}"
+        );
+        assert!(
+            prompt.contains("(exit code 1)") && prompt.contains("\n```\nError: listen"),
+            "{prompt}"
+        );
+
+        // Its dot is red, and Cmd+↑ goes to it and lights it.
+        at_prompt(&view, cx);
+        view.update(cx, |view, cx| view.jump_to_command(true, cx));
+        view.read_with(cx, |view, _| {
+            assert_eq!(view.flash.map(|(flashed, _)| flashed), Some(id));
+            let prompts = view.terminal.snapshot().prompts;
+            let prompt = prompts.iter().find(|prompt| prompt.id == id).unwrap();
+            assert_eq!(prompt.state, Some(CommandState::Failed(1)));
+        });
+
+        // The next command takes the bar away.
+        view.read_with(cx, |view, _| view.terminal.write(b"true\r".to_vec()));
+        wait_until(cx, |cx| {
+            view.read_with(cx, |view, _| view.failure.is_none())
+        });
     }
 
     #[gpui::test]

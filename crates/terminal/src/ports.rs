@@ -40,6 +40,33 @@ pub fn listening_ports(roots: &[u32]) -> Vec<ListeningPort> {
     parse_lsof(&output)
 }
 
+/// The processes listening on a TCP port, whoever started them: for
+/// «Free port» when a server finds its port taken.
+pub fn listeners_on(port: u16) -> Vec<u32> {
+    let Some(output) = run(
+        "lsof",
+        &["-nP", &format!("-iTCP:{port}"), "-sTCP:LISTEN", "-t"],
+    ) else {
+        return Vec::new();
+    };
+    let mut pids: Vec<u32> = output
+        .lines()
+        .filter_map(|line| line.trim().parse().ok())
+        .collect();
+    pids.sort_unstable();
+    pids.dedup();
+    pids
+}
+
+/// Asks a process to end, as `kill` does.
+pub fn end_process(pid: u32) -> bool {
+    let Ok(pid) = i32::try_from(pid) else {
+        return false;
+    };
+    // SAFETY: kill only sends a signal; a pid that is gone fails.
+    pid > 0 && unsafe { libc::kill(pid, libc::SIGTERM) } == 0
+}
+
 fn run(program: &str, args: &[&str]) -> Option<String> {
     let output = Command::new(program).args(args).output().ok()?;
     // lsof exits with 1 when nothing listens.
@@ -170,5 +197,7 @@ mod tests {
             ports.iter().any(|found| found.port == port),
             "{port} not in {ports:?}"
         );
+        assert_eq!(listeners_on(port), vec![std::process::id()]);
+        assert!(!end_process(0));
     }
 }

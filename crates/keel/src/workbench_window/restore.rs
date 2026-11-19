@@ -23,6 +23,13 @@ impl Workbench {
         ))
     }
 
+    fn terminals_folder(&self) -> Option<PathBuf> {
+        Some(session::terminals_dir(
+            self.data_dir.as_ref()?,
+            self.project.root.as_deref(),
+        ))
+    }
+
     fn backup_folder(&self) -> Option<PathBuf> {
         Some(session::backup_dir(
             self.data_dir.as_ref()?,
@@ -32,7 +39,7 @@ impl Workbench {
 
     /// The window's tabs and layout, as kept between runs. Only files on
     /// disk are kept as tabs; untitled documents come back from backups.
-    pub(super) fn window_state(&self) -> WindowState {
+    pub(super) fn window_state(&self, cx: &App) -> WindowState {
         let groups = self
             .groups
             .iter()
@@ -79,6 +86,100 @@ impl Workbench {
             graph_height: Some(self.scm_graph_height),
             collapsed: self.collapsed_sections(),
             recent_searches: self.search.recent.clone(),
+            terminals: self
+                .terminals
+                .iter()
+                .map(|terminal| session::TerminalState {
+                    name: terminal.name.clone(),
+                    cwd: terminal.view.read(cx).current_dir(),
+                    group: terminal.group,
+                })
+                .collect(),
+            active_terminal: self.active_terminal,
+        }
+    }
+
+    /// Keeps what each terminal of the panel shows, to write it back when
+    /// the window opens again, as VS Code does.
+    pub(super) fn save_terminal_contents(&self, cx: &App) {
+        let Some(folder) = self.terminals_folder() else {
+            return;
+        };
+        if let Ok(entries) = std::fs::read_dir(&folder) {
+            for entry in entries.flatten() {
+                if entry.path().extension().is_some_and(|ext| ext == "ansi") {
+                    let _ = std::fs::remove_file(entry.path());
+                }
+            }
+        }
+        if self.terminals.is_empty() || std::fs::create_dir_all(&folder).is_err() {
+            return;
+        }
+        for (index, terminal) in self.terminals.iter().enumerate() {
+            if let Some(bytes) = terminal.view.read(cx).contents() {
+                let _ = std::fs::write(folder.join(format!("{index}.ansi")), bytes);
+            }
+        }
+    }
+
+    /// The terminals of the last run, with their names, folders and text.
+    fn restore_terminals(
+        &mut self,
+        state: &WindowState,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let folder = self.terminals_folder();
+        let restored_at = super::terminal_view::local_time_text(
+            folder
+                .as_ref()
+                .and_then(|folder| std::fs::metadata(folder).ok())
+                .and_then(|meta| meta.modified().ok()),
+        );
+        let mut groups: Vec<(usize, usize)> = Vec::new();
+        for (index, saved) in state.terminals.iter().enumerate() {
+            let cwd = if saved.cwd.is_dir() {
+                saved.cwd.clone()
+            } else {
+                self.terminal_folder()
+            };
+            let mut spawn = terminal_view::shell_spawn(cwd, cx);
+            // Tests never start the login shell of whoever runs them.
+            if cfg!(test) {
+                spawn.command = Some(("/bin/sh".into(), vec!["-c".into(), "sleep 30".into()]));
+            }
+            let file = folder
+                .as_ref()
+                .map(|folder| folder.join(format!("{index}.ansi")));
+            if let Some(mut text) = file.as_ref().and_then(|file| std::fs::read(file).ok()) {
+                let line = super::notices::fill(
+                    self.strings().terminal_restored,
+                    &[("time", &restored_at)],
+                );
+                text.extend_from_slice(format!("\x1b[2m{line}\x1b[0m\r\n\r\n").as_bytes());
+                spawn.restore = Some(text);
+            }
+            if let Some(file) = &file {
+                let _ = std::fs::remove_file(file);
+            }
+            let group = groups
+                .iter()
+                .find(|(old, _)| *old == saved.group)
+                .map(|(_, new)| *new);
+            let Some(view) = self.add_terminal(spawn, group, false, window, cx) else {
+                continue;
+            };
+            if group.is_none()
+                && let Some(terminal) = self.terminals.iter().find(|terminal| terminal.view == view)
+            {
+                groups.push((saved.group, terminal.group));
+            }
+            if let Some(name) = &saved.name {
+                self.name_terminal(&view, name.clone());
+            }
+        }
+        if !self.terminals.is_empty() {
+            self.active_terminal = state.active_terminal.min(self.terminals.len() - 1);
         }
     }
 
@@ -95,9 +196,9 @@ impl Workbench {
         .collect()
     }
 
-    pub(super) fn save_session_now(&self) {
+    pub(super) fn save_session_now(&self, cx: &App) {
         if let Some(file) = self.session_file()
-            && let Err(error) = session::save_state(&file, &self.window_state())
+            && let Err(error) = session::save_state(&file, &self.window_state(cx))
         {
             eprintln!("keel: could not keep the session: {error}");
         }
@@ -110,7 +211,7 @@ impl Workbench {
         }
         self.session_task = cx.spawn(async move |this, cx| {
             cx.background_executor().timer(SESSION_DELAY).await;
-            this.update(cx, |this, _| this.save_session_now()).ok();
+            this.update(cx, |this, cx| this.save_session_now(cx)).ok();
         });
     }
 
@@ -180,9 +281,10 @@ impl Workbench {
     }
 
     /// Keeps everything now: the session and the unsaved changes.
-    pub(crate) fn persist_now(&self) {
-        self.save_session_now();
+    pub(crate) fn persist_now(&self, cx: &App) {
+        self.save_session_now(cx);
         self.write_backups_now();
+        self.save_terminal_contents(cx);
     }
 
     /// Brings back the project's tabs and layout, then the unsaved changes.
@@ -262,9 +364,15 @@ impl Workbench {
             self.active = state.active_group.min(self.panes.len() - 1);
             self.focus_pane(self.active, window, cx);
         }
-        // The panel was showing a terminal: a fresh one takes its place,
-        // without taking the keyboard from the editor.
-        if self.layout.panel && self.layout.panel_view == PanelView::Terminal {
+        // The terminals come back with their text, without taking the
+        // keyboard from the editor; a panel showing none gets a fresh one.
+        let panel_view = self.layout.panel_view;
+        self.restore_terminals(state, window, cx);
+        self.layout.panel_view = panel_view;
+        if self.terminals.is_empty()
+            && self.layout.panel
+            && self.layout.panel_view == PanelView::Terminal
+        {
             let spawn = terminal_view::shell_spawn(self.terminal_folder(), cx);
             self.add_terminal(spawn, None, false, window, cx);
         }
@@ -500,16 +608,66 @@ mod tests {
             view.layout.agent = false;
         });
         window.simulate_keystrokes("cmd-\\");
-        let before = view.read_with(window, |view, _| view.window_state());
-        view.read_with(window, |view, _| view.persist_now());
+        let before = view.read_with(window, |view, cx| view.window_state(cx));
+        view.read_with(window, |view, cx| view.persist_now(cx));
 
         let (again, window) = open_window(cx, &project);
-        let after = again.read_with(window, |view, _| view.window_state());
+        let after = again.read_with(window, |view, cx| view.window_state(cx));
         assert_eq!(after, before);
         assert_eq!(after.groups.len(), 2);
         assert!(after.groups[0].tabs[0].pinned);
         assert!(!after.agent);
         assert!(after.expanded.contains(&project.root.join("src")));
+    }
+
+    #[gpui::test]
+    fn terminals_come_back_with_their_text(cx: &mut TestAppContext) {
+        cx.executor().allow_parking();
+        set_up(cx);
+        let project = project(r#"{ "keel.language": "en" }"#);
+        let (view, window) = open_window(cx, &project);
+        view.update_in(window, |view, window, cx| {
+            let mut spawn = terminal_view::shell_spawn(project.root.clone(), cx);
+            spawn.command = Some((
+                "/bin/sh".into(),
+                vec![
+                    "-c".into(),
+                    "printf '\\033[32mverde\\033[0m\\n'; sleep 30".into(),
+                ],
+            ));
+            let terminal = view.add_terminal(spawn, None, false, window, cx).unwrap();
+            view.name_terminal(&terminal, "server".into());
+        });
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
+        while !view.read_with(window, |view, cx| {
+            view.terminals[0]
+                .view
+                .read(cx)
+                .contents()
+                .is_some_and(|text| String::from_utf8_lossy(&text).contains("verde"))
+        }) {
+            assert!(std::time::Instant::now() < deadline, "no output");
+            std::thread::sleep(std::time::Duration::from_millis(20));
+        }
+        view.read_with(window, |view, cx| view.persist_now(cx));
+
+        let (again, window) = open_window(cx, &project);
+        let screen = again.read_with(window, |view, cx| {
+            assert_eq!(view.terminals.len(), 1);
+            assert_eq!(view.terminals[0].name.as_deref(), Some("server"));
+            let snapshot = view.terminals[0].view.read(cx).terminal().snapshot();
+            assert_eq!(snapshot.line_text(0), "verde");
+            // With its color.
+            assert_ne!(snapshot.rows[0][0].fg, snapshot.rows[1][0].fg);
+            snapshot.text()
+        });
+        assert!(
+            screen.contains("Session contents restored from"),
+            "{screen}"
+        );
+        // Written back once: the next run starts clean.
+        let folder = session::terminals_dir(&project.data, Some(&project.root));
+        assert!(!folder.join("0.ansi").exists());
     }
 
     #[gpui::test]

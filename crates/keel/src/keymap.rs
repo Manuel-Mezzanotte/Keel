@@ -13,6 +13,10 @@ use crate::workbench_window::{
     SelectIconTheme, ShowFileHistory, ToggleBlame, UpdateAllExtensions,
 };
 use crate::workbench_window::{
+    AskClaudeAboutTerminal, CopyLastCommand, CopyLastCommandOutput, RunRecentCommand,
+    ScrollToNextCommand, ScrollToPreviousCommand,
+};
+use crate::workbench_window::{
     CheckoutBranch, Commit, CommitAmend, CreateBranch, DiscardAll, GitFetch, GitPull, GitPush,
     GitRefresh, GitStash, GitStashPop, GitSync, StageAll, UnstageAll,
 };
@@ -237,6 +241,42 @@ pub const COMMANDS: &[KeelCommand] = &[
         id: "workbench.action.terminal.focusPrevious",
         action: || Box::new(FocusPreviousTerminal),
         default_key: Some("cmd+shift+["),
+        context: Some(TERMINAL_CONTEXT),
+    },
+    KeelCommand {
+        id: "workbench.action.terminal.scrollToPreviousCommand",
+        action: || Box::new(ScrollToPreviousCommand),
+        default_key: Some("cmd+up"),
+        context: Some(TERMINAL_CONTEXT),
+    },
+    KeelCommand {
+        id: "workbench.action.terminal.scrollToNextCommand",
+        action: || Box::new(ScrollToNextCommand),
+        default_key: Some("cmd+down"),
+        context: Some(TERMINAL_CONTEXT),
+    },
+    KeelCommand {
+        id: "workbench.action.terminal.copyLastCommandOutput",
+        action: || Box::new(CopyLastCommandOutput),
+        default_key: None,
+        context: None,
+    },
+    KeelCommand {
+        id: "workbench.action.terminal.copyLastCommand",
+        action: || Box::new(CopyLastCommand),
+        default_key: None,
+        context: None,
+    },
+    KeelCommand {
+        id: "workbench.action.terminal.runRecentCommand",
+        action: || Box::new(RunRecentCommand),
+        default_key: Some("ctrl+alt+r"),
+        context: Some(TERMINAL_CONTEXT),
+    },
+    KeelCommand {
+        id: "keel.terminal.askClaude",
+        action: || Box::new(AskClaudeAboutTerminal),
+        default_key: Some("cmd+l"),
         context: Some(TERMINAL_CONTEXT),
     },
     KeelCommand {
@@ -1363,7 +1403,7 @@ mod tests {
         let (bindings, warnings) =
             read_user_bindings(Path::new("/nonexistent/keel/keybindings.json"));
         assert!(bindings.is_empty() && warnings.is_empty());
-        assert_eq!(keel_bindings(&[]).len(), 101);
+        assert_eq!(keel_bindings(&[]).len(), 105);
     }
 
     #[test]

@@ -52,7 +52,7 @@ pub(super) struct TerminalTab {
     pub(super) view: Entity<TerminalView>,
     /// The name the user gave it, if any.
     pub(super) name: Option<String>,
-    group: usize,
+    pub(super) group: usize,
     _subscription: Subscription,
 }
 
@@ -214,6 +214,14 @@ impl Workbench {
                 if let Some(line) = line {
                     self.go_to(*line, column.unwrap_or(1), window, cx);
                 }
+            }
+            TerminalViewEvent::CommandFinished(command) => {
+                self.terminal_command_finished(view, command, window, cx)
+            }
+            TerminalViewEvent::AskClaude(prompt) => self.ask_claude(prompt.clone(), window, cx),
+            TerminalViewEvent::Status(message) => {
+                self.status_message = Some(message.clone());
+                cx.notify();
             }
         }
     }
@@ -488,76 +496,105 @@ impl Workbench {
             .get(self.active_terminal)
             .map(|terminal| terminal.group);
         let focus = self.focus_handle.clone();
-        let tabs = self
-            .terminal_groups()
-            .into_iter()
-            .map(|(group, members)| {
-                let first = members[0];
-                let is_active = Some(group) == active_group;
-                let label = members
-                    .iter()
-                    .map(|&index| self.terminal_name(index, cx))
-                    .collect::<Vec<_>>()
-                    .join(" | ");
-                let entries = [
-                    (strings.terminal_split, TerminalCommand::Split),
-                    (strings.terminal_rename, TerminalCommand::Rename),
-                    (strings.terminal_kill, TerminalCommand::Kill),
-                ];
-                let focus = focus.clone();
-                div()
-                    .id(("terminal-tab", group))
-                    .h(px(22.))
-                    .pl_2()
-                    .pr_1()
-                    .flex()
-                    .items_center()
-                    .gap_1()
-                    .rounded(px(6.))
-                    .text_xs()
-                    .cursor_pointer()
-                    .text_color(if is_active { colors.text } else { colors.muted })
-                    .when(is_active, |tab| tab.bg(colors.selected))
-                    .when(!is_active, |tab| tab.hover(|tab| tab.bg(colors.hover)))
-                    .on_click(cx.listener(move |this, _: &ClickEvent, window, cx| {
-                        this.active_terminal = first;
-                        this.focus_terminal(window, cx);
-                        cx.notify();
-                    }))
-                    .context_menu(move |menu, _, _| {
-                        let mut menu = menu.action_context(focus.clone());
-                        for (label, command) in entries {
-                            menu = menu.menu(
-                                label,
-                                Box::new(TerminalTabCommand {
-                                    index: first,
-                                    command,
+        let (danger, warning) = (cx.theme().danger, cx.theme().warning);
+        let tabs =
+            self.terminal_groups()
+                .into_iter()
+                .map(|(group, members)| {
+                    let first = members[0];
+                    let is_active = Some(group) == active_group;
+                    let label = members
+                        .iter()
+                        .map(|&index| self.terminal_name(index, cx))
+                        .collect::<Vec<_>>()
+                        .join(" | ");
+                    let statuses: Vec<_> = members
+                        .iter()
+                        .map(|&index| self.terminals[index].view.read(cx).status())
+                        .collect();
+                    let failed = statuses.iter().any(|status| status.failed);
+                    let progress = statuses.iter().find_map(|status| status.progress);
+                    let entries = [
+                        (strings.terminal_split, TerminalCommand::Split),
+                        (strings.terminal_rename, TerminalCommand::Rename),
+                        (strings.terminal_kill, TerminalCommand::Kill),
+                    ];
+                    let focus = focus.clone();
+                    div()
+                        .id(("terminal-tab", group))
+                        .relative()
+                        .overflow_hidden()
+                        .h(px(22.))
+                        .pl_2()
+                        .pr_1()
+                        .flex()
+                        .items_center()
+                        .gap_1()
+                        .rounded(px(6.))
+                        .text_xs()
+                        .cursor_pointer()
+                        .text_color(if is_active { colors.text } else { colors.muted })
+                        .when(is_active, |tab| tab.bg(colors.selected))
+                        .when(!is_active, |tab| tab.hover(|tab| tab.bg(colors.hover)))
+                        .on_click(cx.listener(move |this, _: &ClickEvent, window, cx| {
+                            this.active_terminal = first;
+                            this.focus_terminal(window, cx);
+                            cx.notify();
+                        }))
+                        .context_menu(move |menu, _, _| {
+                            let mut menu = menu.action_context(focus.clone());
+                            for (label, command) in entries {
+                                menu = menu.menu(
+                                    label,
+                                    Box::new(TerminalTabCommand {
+                                        index: first,
+                                        command,
+                                    }),
+                                );
+                            }
+                            menu
+                        })
+                        .child(
+                            div()
+                                .relative()
+                                .child(Icon::new(IconName::SquareTerminal).xsmall())
+                                // The last command failed: a red dot, as on
+                                // VS Code's tabs.
+                                .when(failed, |icon| {
+                                    icon.child(
+                                        div()
+                                            .absolute()
+                                            .top(px(-2.))
+                                            .right(px(-2.))
+                                            .size(px(6.))
+                                            .rounded_full()
+                                            .bg(danger),
+                                    )
                                 }),
-                            );
-                        }
-                        menu
-                    })
-                    .child(Icon::new(IconName::SquareTerminal).xsmall())
-                    .child(div().max_w(px(220.)).truncate().child(label))
-                    .child(
-                        Button::new(("kill-terminal", group))
-                            .ghost()
-                            .small()
-                            .icon(Icon::new(IconName::X).xsmall())
-                            .tooltip(strings.terminal_kill)
-                            .on_click(cx.listener(move |this, _, window, cx| {
-                                // Closing a tab ends every terminal in it.
-                                while let Some(index) = this
-                                    .terminals
-                                    .iter()
-                                    .position(|terminal| terminal.group == group)
-                                {
-                                    this.remove_terminal(index, window, cx);
-                                }
-                            })),
-                    )
-            })
-            .collect::<Vec<_>>();
+                        )
+                        .child(div().max_w(px(220.)).truncate().child(label))
+                        .children(progress.map(|progress| {
+                            render_progress(progress, colors.accent, danger, warning)
+                        }))
+                        .child(
+                            Button::new(("kill-terminal", group))
+                                .ghost()
+                                .small()
+                                .icon(Icon::new(IconName::X).xsmall())
+                                .tooltip(strings.terminal_kill)
+                                .on_click(cx.listener(move |this, _, window, cx| {
+                                    // Closing a tab ends every terminal in it.
+                                    while let Some(index) = this
+                                        .terminals
+                                        .iter()
+                                        .position(|terminal| terminal.group == group)
+                                    {
+                                        this.remove_terminal(index, window, cx);
+                                    }
+                                })),
+                        )
+                })
+                .collect::<Vec<_>>();
         div()
             .ml_auto()
             .flex()
@@ -639,6 +676,47 @@ impl Workbench {
         self.panel_maximized = false;
         self.session_changed(cx);
         cx.notify();
+    }
+}
+
+/// A program's progress (OSC 9;4) along the bottom of its tab, as
+/// Windows Terminal and Ghostty show it.
+fn render_progress(
+    progress: terminal::Progress,
+    accent: gpui::Hsla,
+    danger: gpui::Hsla,
+    warning: gpui::Hsla,
+) -> AnyElement {
+    use gpui::{AnimationExt as _, relative};
+    use terminal::Progress;
+    let bar = div()
+        .absolute()
+        .left_0()
+        .bottom_0()
+        .h(px(2.))
+        .rounded_full();
+    match progress {
+        Progress::Normal(percent) => bar
+            .w(relative(f32::from(percent) / 100.))
+            .bg(accent)
+            .into_any_element(),
+        Progress::Error(percent) => bar
+            .w(relative(f32::from(percent.max(8)) / 100.))
+            .bg(danger)
+            .into_any_element(),
+        Progress::Paused(percent) => bar
+            .w(relative(f32::from(percent.max(8)) / 100.))
+            .bg(warning)
+            .into_any_element(),
+        Progress::Indeterminate => bar
+            .w(relative(0.3))
+            .bg(accent)
+            .with_animation(
+                "terminal-progress",
+                gpui::Animation::new(std::time::Duration::from_millis(1400)).repeat(),
+                |bar, delta| bar.left(relative(delta * 1.3 - 0.3)),
+            )
+            .into_any_element(),
     }
 }
 

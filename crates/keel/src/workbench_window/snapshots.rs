@@ -157,6 +157,47 @@ fn shots() -> Vec<Shot> {
         shots.push(shot(name("terminal"), |workbench, window, cx| {
             workbench.show_terminal(window, cx);
         }));
+        if style == "floating" {
+            // Commands with their dots: one fails, with its fix and Claude.
+            shots.push(shot(name("terminal-failed"), |workbench, _, cx| {
+                let Some(view) = workbench.active_terminal_view().cloned() else {
+                    return;
+                };
+                // After the Esc of the picture before has gone by, so zsh
+                // does not read it as Meta.
+                cx.spawn(async move |_, cx| {
+                    cx.background_executor()
+                        .timer(Duration::from_millis(450))
+                        .await;
+                    view.update(cx, |view, _| {
+                        view.run("echo pronto; echo 'Error: listen EADDRINUSE: address already in use :::3000'; false")
+                    });
+                })
+                .detach();
+            }));
+            shots.push(shot(name("terminal-menu"), |workbench, _, cx| {
+                if let Some(view) = workbench.active_terminal_view().cloned() {
+                    view.update(cx, |view, cx| view.open_last_dot_menu(cx));
+                }
+            }));
+            // A long output scrolled into: its command stays at the top.
+            shots.push(shot(name("terminal-sticky"), |workbench, _, cx| {
+                let Some(view) = workbench.active_terminal_view().cloned() else {
+                    return;
+                };
+                cx.spawn(async move |_, cx| {
+                    cx.background_executor()
+                        .timer(Duration::from_millis(450))
+                        .await;
+                    view.update(cx, |view, _| view.run("seq 1 200"));
+                    cx.background_executor()
+                        .timer(Duration::from_millis(200))
+                        .await;
+                    view.update(cx, |view, cx| view.scroll_for_snapshot(60, cx));
+                })
+                .detach();
+            }));
+        }
         shots.push(shot(name("graph"), |workbench, window, cx| {
             workbench.layout.panel = false;
             workbench.open_git_graph(window, cx);
