@@ -1365,6 +1365,27 @@ impl Workbench {
             .drag_over::<super::tabs::DraggedTab>(move |style, _, _, _| {
                 style.border_l_2().border_color(colors.accent)
             })
+            // A tab dragged out of the window takes its file to the Finder,
+            // Mail or Slack, as a window title's icon does.
+            .on_drag_move::<super::tabs::DraggedTab>(cx.listener(
+                |this, event: &gpui::DragMoveEvent<super::tabs::DraggedTab>, window, cx| {
+                    if !super::left_the_window(event.event.position, window) {
+                        return;
+                    }
+                    let tab = event.drag(cx);
+                    let path = this
+                        .groups
+                        .get(tab.group)
+                        .and_then(|group| group.tabs.get(tab.index))
+                        .and_then(|tab| this.documents.get(&tab.uri))
+                        .and_then(|document| document.disk_path().map(Path::to_path_buf));
+                    if let Some(path) = path
+                        && crate::mac::drag_files_out(&[path])
+                    {
+                        cx.stop_active_drag(window);
+                    }
+                },
+            ))
             .on_drop(
                 cx.listener(move |this, dragged: &super::tabs::DraggedTab, window, cx| {
                     this.move_tab(dragged.group, dragged.index, group, index, window, cx)

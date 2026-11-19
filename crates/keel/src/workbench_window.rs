@@ -339,6 +339,15 @@ struct OpenDocument {
     modified: bool,
 }
 
+/// Whether a drag went past the window's edge, where other apps take it.
+pub(super) fn left_the_window(position: gpui::Point<gpui::Pixels>, window: &Window) -> bool {
+    let size = window.viewport_size();
+    position.x < px(0.)
+        || position.y < px(0.)
+        || position.x > size.width
+        || position.y > size.height
+}
+
 impl OpenDocument {
     fn name(&self) -> String {
         match &self.backing {

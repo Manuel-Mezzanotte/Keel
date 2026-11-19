@@ -37,16 +37,112 @@ pub struct Accessibility {
 
 #[cfg(target_os = "macos")]
 mod native {
+    use std::cell::OnceCell;
     use std::path::PathBuf;
 
-    use objc2::MainThreadMarker;
     use objc2::rc::Retained;
-    use objc2::runtime::ProtocolObject;
+    use objc2::runtime::{NSObject, ProtocolObject};
+    use objc2::{AnyThread as _, MainThreadMarker, MainThreadOnly, define_class, msg_send};
     use objc2_app_kit::{
-        NSApplication, NSMenu, NSPasteboard, NSPasteboardItem, NSPasteboardTypeFileURL,
-        NSPasteboardTypeString, NSPasteboardWriting, NSRequestUserAttentionType, NSWorkspace,
+        NSApplication, NSDragOperation, NSDraggingContext, NSDraggingItem, NSDraggingSession,
+        NSDraggingSource, NSEventType, NSMenu, NSPasteboard, NSPasteboardItem,
+        NSPasteboardTypeFileURL, NSPasteboardTypeString, NSPasteboardWriting,
+        NSRequestUserAttentionType, NSWorkspace,
     };
-    use objc2_foundation::{NSArray, NSString, NSURL};
+    use objc2_foundation::{NSArray, NSObjectProtocol, NSPoint, NSRect, NSSize, NSString, NSURL};
+
+    define_class!(
+        // A file dragged out of Keel, which other apps take as a copy.
+        #[unsafe(super(NSObject))]
+        #[thread_kind = MainThreadOnly]
+        #[name = "KeelFileDragSource"]
+        struct FileDragSource;
+
+        unsafe impl NSObjectProtocol for FileDragSource {}
+
+        unsafe impl NSDraggingSource for FileDragSource {
+            #[unsafe(method(draggingSession:sourceOperationMaskForDraggingContext:))]
+            fn source_operation_mask(
+                &self,
+                _session: &NSDraggingSession,
+                context: NSDraggingContext,
+            ) -> NSDragOperation {
+                if context == NSDraggingContext::OutsideApplication {
+                    NSDragOperation::Copy
+                } else {
+                    NSDragOperation::None
+                }
+            }
+        }
+    );
+
+    impl FileDragSource {
+        fn new(mtm: MainThreadMarker) -> Retained<Self> {
+            let this = Self::alloc(mtm).set_ivars(());
+            // SAFETY: NSObject's init, on a fresh object.
+            unsafe { msg_send![super(this), init] }
+        }
+    }
+
+    thread_local! {
+        /// AppKit does not keep the source of a drag: Keel does.
+        static SOURCE: OnceCell<Retained<FileDragSource>> = const { OnceCell::new() };
+    }
+
+    pub fn drag_files_out(paths: &[std::path::PathBuf]) -> bool {
+        let Some(mtm) = MainThreadMarker::new() else {
+            return false;
+        };
+        if paths.is_empty() {
+            return false;
+        }
+        let app = NSApplication::sharedApplication(mtm);
+        // Only a real drag of the mouse can start one: GPUI also replays
+        // the last move on a timer, when no event is under way.
+        let Some(event) = app
+            .currentEvent()
+            .filter(|event| event.r#type() == NSEventType::LeftMouseDragged)
+        else {
+            return false;
+        };
+        let Some(window) = event.window(mtm).or_else(|| app.keyWindow()) else {
+            return false;
+        };
+        let Some(view) = window.contentView() else {
+            return false;
+        };
+        let at = view.convertPoint_fromView(event.locationInWindow(), None);
+        let workspace = NSWorkspace::sharedWorkspace();
+        let items: Vec<Retained<NSDraggingItem>> = paths
+            .iter()
+            .enumerate()
+            .map(|(index, path)| {
+                let path = NSString::from_str(&path.to_string_lossy());
+                let url = NSURL::fileURLWithPath(&path);
+                let item = NSDraggingItem::initWithPasteboardWriter(
+                    NSDraggingItem::alloc(),
+                    ProtocolObject::from_ref(&*url),
+                );
+                // Each file's icon under the pointer, fanned out a little.
+                let shift = index.min(4) as f64 * 6.;
+                let frame = NSRect::new(
+                    NSPoint::new(at.x - 16. + shift, at.y - 16. - shift),
+                    NSSize::new(32., 32.),
+                );
+                let icon = workspace.iconForFile(&path);
+                // SAFETY: an NSImage is what the frame's contents take.
+                unsafe { item.setDraggingFrame_contents(frame, Some(&icon)) };
+                item
+            })
+            .collect();
+        let source = SOURCE.with(|source| source.get_or_init(|| FileDragSource::new(mtm)).clone());
+        view.beginDraggingSessionWithItems_event_source(
+            &NSArray::from_retained_slice(&items),
+            &event,
+            ProtocolObject::from_ref(&*source),
+        );
+        true
+    }
 
     use super::Accessibility;
 
@@ -170,6 +266,18 @@ pub fn accessibility() -> Accessibility {
     return native::accessibility();
     #[cfg(not(target_os = "macos"))]
     Accessibility::default()
+}
+
+/// Drags files out of Keel, to the Finder, Mail or Slack, from the mouse
+/// event under way: called when a drag inside Keel leaves the window.
+pub fn drag_files_out(paths: &[PathBuf]) -> bool {
+    #[cfg(target_os = "macos")]
+    return native::drag_files_out(paths);
+    #[cfg(not(target_os = "macos"))]
+    {
+        let _ = paths;
+        false
+    }
 }
 
 /// Puts files on the pasteboard as files, so Finder pastes them and Mail

@@ -1281,7 +1281,16 @@ impl Workbench {
             .drag_over::<DraggedPath>(move |style, _, _, _| style.bg(colors.selected))
             .drag_over::<gpui::ExternalPaths>(move |style, _, _, _| style.bg(colors.selected))
             .on_drag_move::<DraggedPath>(cx.listener(
-                move |this, event: &gpui::DragMoveEvent<DraggedPath>, _, cx| {
+                move |this, event: &gpui::DragMoveEvent<DraggedPath>, window, cx| {
+                    // Out of the window, the files go on to the Finder,
+                    // Mail or Slack.
+                    if super::left_the_window(event.event.position, window) {
+                        let paths = event.drag(cx).all();
+                        if crate::mac::drag_files_out(&paths) {
+                            cx.stop_active_drag(window);
+                        }
+                        return;
+                    }
                     if event.bounds.contains(&event.event.position) {
                         this.drag_over_folder(hover_folder.clone(), cx);
                     }
