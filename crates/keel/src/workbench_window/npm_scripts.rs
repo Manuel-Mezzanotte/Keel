@@ -100,6 +100,10 @@ impl Workbench {
             return;
         };
         let command = scripts.command(script);
+        // As VS Code's `task.saveBeforeRun`: the script sees what you wrote.
+        if self.settings.string("task.saveBeforeRun") != Some("never") {
+            self.save_all_quietly(window, cx);
+        }
         let spawn = terminal_view::shell_spawn(self.terminal_folder(), cx);
         if let Some(view) = self.add_terminal(spawn, None, true, window, cx) {
             view.read(cx).run(&command);
