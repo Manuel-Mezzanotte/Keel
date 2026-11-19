@@ -17,6 +17,12 @@ use super::shell::Colors;
 
 pub(crate) const STYLE_SETTING: &str = "keel.interfaceStyle";
 pub(crate) const MOTION_SETTING: &str = "keel.animations";
+/// The corners and the space around the floating panels, in points, as
+/// VS Code's Modern UI lets them change.
+pub(crate) const RADIUS_SETTING: &str = "keel.panels.radius";
+pub(crate) const GAP_SETTING: &str = "keel.panels.gap";
+const RADIUS: f32 = 12.;
+const GAP: f32 = 8.;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum InterfaceStyle {
@@ -45,10 +51,13 @@ impl InterfaceStyle {
 }
 
 /// How the window looks: its style, and whether things move.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub(crate) struct Look {
     pub(crate) style: InterfaceStyle,
     pub(crate) motion: bool,
+    /// The floating panels' corners and the space around them.
+    pub(crate) card_radius: f32,
+    pub(crate) card_gap: f32,
 }
 
 /// Whether things move when nobody says otherwise. Tests run still: their
@@ -60,6 +69,8 @@ impl Default for Look {
         Self {
             style: InterfaceStyle::Floating,
             motion: MOTION_BY_DEFAULT,
+            card_radius: RADIUS,
+            card_gap: GAP,
         }
     }
 }
@@ -67,6 +78,14 @@ impl Default for Look {
 /// The toolbar is lower in the flat style, as Cursor's title bar.
 const FLOATING_TOOLBAR: f32 = 52.;
 const FLAT_TOOLBAR: f32 = 40.;
+
+/// A size in points from the settings, kept between 0 and 24.
+fn points(settings: &Settings, key: &str, default: f32) -> f32 {
+    settings
+        .get(key)
+        .and_then(serde_json::Value::as_f64)
+        .map_or(default, |value| (value as f32).clamp(0., 24.))
+}
 
 impl Look {
     pub(crate) fn from_settings(settings: &Settings) -> Self {
@@ -77,6 +96,8 @@ impl Look {
                 .get(MOTION_SETTING)
                 .and_then(serde_json::Value::as_bool)
                 .unwrap_or_else(|| MOTION_BY_DEFAULT && !crate::motion::reduced()),
+            card_radius: points(settings, RADIUS_SETTING, RADIUS),
+            card_gap: points(settings, GAP_SETTING, GAP),
         }
     }
 
@@ -86,12 +107,12 @@ impl Look {
 
     /// The space between the panels and around them.
     pub(crate) fn gap(self) -> f32 {
-        if self.flat() { 0. } else { 8. }
+        if self.flat() { 0. } else { self.card_gap }
     }
 
     /// The corners of the panels.
     pub(crate) fn radius(self) -> f32 {
-        if self.flat() { 0. } else { 12. }
+        if self.flat() { 0. } else { self.card_radius }
     }
 
     pub(crate) fn toolbar_height(self) -> f32 {
@@ -210,6 +231,10 @@ mod tests {
         // A value Keel does not know keeps the floating panels.
         let odd = Look::from_settings(&settings(r#"{ "keel.interfaceStyle": "glass" }"#));
         assert_eq!(odd.style, InterfaceStyle::Floating);
+        let roomy = Look::from_settings(&settings(
+            r#"{ "keel.panels.radius": 18, "keel.panels.gap": 40 }"#,
+        ));
+        assert_eq!((roomy.radius(), roomy.gap()), (18., 24.));
     }
 
     #[test]
@@ -218,6 +243,7 @@ mod tests {
         let flat = Look {
             style: InterfaceStyle::Flat,
             motion: true,
+            ..Look::default()
         };
         assert_eq!((flat.gap(), flat.radius()), (0., 0.));
         assert!(floating.gap() > 0. && floating.radius() > 0.);

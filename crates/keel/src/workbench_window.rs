@@ -491,6 +491,9 @@ pub struct Workbench {
     indent_overrides: HashMap<String, gpui_component::input::TabSize>,
     /// The keys of a chord waiting for its second key, as `⌘K`.
     pending_chord: Option<String>,
+    /// Files Claude changed, marked in the Explorer until they are opened,
+    /// as Cursor marks them.
+    claude_touched: HashSet<PathBuf>,
     discard_changes: bool,
     gutter_refresh: Task<()>,
     /// Whether the first frame was already drawn, for `KEEL_STARTUP_TIMING`.
@@ -744,6 +747,7 @@ impl Workbench {
             status_message,
             indent_overrides: HashMap::new(),
             pending_chord: None,
+            claude_touched: HashSet::new(),
             discard_changes: false,
             gutter_refresh: Task::ready(()),
             known_selections: HashMap::new(),
@@ -859,6 +863,8 @@ impl Workbench {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
+        // Seen: no longer marked as Claude's.
+        self.claude_touched.remove(path);
         let path = std::path::absolute(path).unwrap_or_else(|_| path.to_path_buf());
         let uri = Uri::file(&path).to_string();
         if !self.documents.contains_key(&uri) {

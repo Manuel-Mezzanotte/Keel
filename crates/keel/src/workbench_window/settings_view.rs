@@ -97,6 +97,39 @@ pub(super) const CATALOG: &[Entry] = &[
         ),
     },
     Entry {
+        key: super::look::RADIUS_SETTING,
+        page: Page::Appearance,
+        kind: Kind::Number { min: 0., max: 24. },
+        default: "12",
+        title: ("Raggio dei pannelli", "Panel Corner Radius"),
+        description: (
+            "Quanto sono arrotondati gli angoli dei pannelli sospesi, in punti.",
+            "How round the corners of the floating panels are, in points.",
+        ),
+    },
+    Entry {
+        key: super::look::GAP_SETTING,
+        page: Page::Appearance,
+        kind: Kind::Number { min: 0., max: 24. },
+        default: "8",
+        title: ("Spazio fra i pannelli", "Panel Spacing"),
+        description: (
+            "Lo spazio attorno ai pannelli sospesi, in punti.",
+            "The space around the floating panels, in points.",
+        ),
+    },
+    Entry {
+        key: "workbench.editor.wrapTabs",
+        page: Page::Appearance,
+        kind: Kind::Switch,
+        default: "false",
+        title: ("Schede su più righe", "Wrap Tabs"),
+        description: (
+            "Quando le schede non ci stanno, vanno a capo invece di scorrere.",
+            "When the tabs do not fit, they wrap to more rows instead of scrolling.",
+        ),
+    },
+    Entry {
         key: "keel.language",
         page: Page::Appearance,
         kind: Kind::Choice(&[
@@ -189,6 +222,17 @@ pub(super) const CATALOG: &[Entry] = &[
         description: (
             "Quanti spazi vale un rientro.",
             "How many spaces an indentation is.",
+        ),
+    },
+    Entry {
+        key: "editor.detectIndentation",
+        page: Page::Editor,
+        kind: Kind::Switch,
+        default: "true",
+        title: ("Rileva il rientro", "Detect Indentation"),
+        description: (
+            "Il rientro di ogni file si legge dalle sue righe, sopra le impostazioni.",
+            "Each file's indentation is read from its lines, over the settings.",
         ),
     },
     Entry {
@@ -698,7 +742,10 @@ impl Workbench {
                 crate::theme::apply(&choice, Some(window), cx);
             }
             "editor.tabSize" | "editor.insertSpaces" => self.apply_tab_size(cx),
-            super::look::STYLE_SETTING | super::look::MOTION_SETTING => {
+            super::look::STYLE_SETTING
+            | super::look::MOTION_SETTING
+            | super::look::RADIUS_SETTING
+            | super::look::GAP_SETTING => {
                 self.look = super::look::Look::from_settings(&self.settings);
                 // The toolbar's height changes with the style: the traffic
                 // lights stay in its middle.

@@ -1209,6 +1209,19 @@ impl Workbench {
                     .text_color(git.color(cx))
                     .child(text)
             });
+            // Changed by Claude and not looked at yet: a spark, on the file
+            // and on the closed folders holding it.
+            let touched = !self.claude_touched.is_empty()
+                && if is_dir {
+                    !expanded
+                        && self
+                            .claude_touched
+                            .iter()
+                            .any(|file| file.starts_with(&path))
+                } else {
+                    self.claude_touched.contains(&path)
+                };
+            let touched_tip = self.strings().explorer_touched_by_claude;
             div()
                 .flex_1()
                 .min_w_0()
@@ -1217,6 +1230,21 @@ impl Workbench {
                 .gap_1()
                 .text_color(color)
                 .child(div().flex_1().min_w_0().truncate().child(name.clone()))
+                .when(touched, |label| {
+                    label.child(
+                        div()
+                            .id(("claude-touched", index))
+                            .flex_none()
+                            .tooltip(move |window, cx| {
+                                gpui_component::tooltip::Tooltip::new(touched_tip).build(window, cx)
+                            })
+                            .child(
+                                Icon::new(IconName::Sparkles)
+                                    .xsmall()
+                                    .text_color(colors.accent),
+                            ),
+                    )
+                })
                 .when_some(mark.filter(|(_, count)| *count > 0), |label, (_, count)| {
                     label.child(div().flex_none().text_xs().child(count.to_string()))
                 })

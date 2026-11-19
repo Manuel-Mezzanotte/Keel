@@ -600,6 +600,7 @@ impl Workbench {
     /// Keeps the text `path` has now, the first time the agent is about to
     /// change it, so the change can be undone.
     pub(super) fn remember_before_agent_edit(&mut self, path: &Path) {
+        self.claude_touched.insert(path.to_path_buf());
         if self
             .agent_panel
             .snapshots
@@ -646,6 +647,46 @@ impl Workbench {
                 Ok(json!({ "outcome": { "outcome": "selected", "optionId": option } })),
             );
         }
+        cx.notify();
+    }
+
+    /// Asks the chat something: written in its box and sent, or left
+    /// there to send while Claude is still at work.
+    pub(super) fn ask_claude_in_chat(
+        &mut self,
+        prompt: String,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.open_agent(window, cx);
+        self.agent_panel
+            .input
+            .update(cx, |input, cx| input.set_value(prompt, window, cx));
+        if !self.agent_panel.running {
+            self.send_to_agent(window, cx);
+        }
+    }
+
+    /// Files and folders dropped on the chat's box are attached to the
+    /// next message.
+    pub(super) fn attach_to_agent(
+        &mut self,
+        paths: Vec<PathBuf>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        for path in paths {
+            let attachment = Attachment {
+                path,
+                selection: None,
+            };
+            if !self.agent_panel.attachments.contains(&attachment) {
+                self.agent_panel.attachments.push(attachment);
+            }
+        }
+        self.agent_panel
+            .input
+            .update(cx, |input, cx| input.focus(window, cx));
         cx.notify();
     }
 
@@ -1872,6 +1913,29 @@ impl Workbench {
         };
         let typing = panel.input.read(cx).focus_handle(cx).is_focused(window);
         div()
+            .id("agent-input-box")
+            // Files from the Explorer or the Finder become attachments, as in
+            // Cursor's chat.
+            .drag_over::<super::explorer::DraggedPath>(move |style, _, _, _| {
+                style
+                    .border_color(colors.accent)
+                    .bg(colors.accent.opacity(0.06))
+            })
+            .drag_over::<gpui::ExternalPaths>(move |style, _, _, _| {
+                style
+                    .border_color(colors.accent)
+                    .bg(colors.accent.opacity(0.06))
+            })
+            .on_drop(
+                cx.listener(|this, dragged: &super::explorer::DraggedPath, window, cx| {
+                    this.attach_to_agent(dragged.all(), window, cx)
+                }),
+            )
+            .on_drop(
+                cx.listener(|this, paths: &gpui::ExternalPaths, window, cx| {
+                    this.attach_to_agent(paths.paths().to_vec(), window, cx)
+                }),
+            )
             .flex_none()
             .m_2()
             .pt_1()
@@ -2143,6 +2207,27 @@ mod tests {
             Some(Entry::Agent(text)) if !view.agent_panel.running => Some(text.clone()),
             _ => None,
         })
+    }
+
+    #[gpui::test]
+    fn files_claude_changed_are_marked_until_opened_and_drops_attach(cx: &mut TestAppContext) {
+        cx.update(|cx| {
+            gpui_component::init(cx);
+            init(cx);
+        });
+        let project = tempfile::tempdir().unwrap();
+        let path = std::path::absolute(project.path().join("booking.ts")).unwrap();
+        std::fs::write(&path, "const price = 90;\n").unwrap();
+        let (view, cx) = cx
+            .add_window_view(|window, cx| Workbench::new(None, test_settings(), None, window, cx));
+        view.update_in(cx, |view, window, cx| {
+            view.remember_before_agent_edit(&path);
+            assert!(view.claude_touched.contains(&path));
+            view.attach_to_agent(vec![path.clone(), path.clone()], window, cx);
+            assert_eq!(view.agent_panel.attachments.len(), 1);
+            view.open_file(&path, window, cx);
+            assert!(!view.claude_touched.contains(&path));
+        });
     }
 
     #[gpui::test]

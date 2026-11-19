@@ -65,6 +65,7 @@ fn style_preview(style: InterfaceStyle, colors: Colors) -> Div {
     let look = super::look::Look {
         style,
         motion: false,
+        ..super::look::Look::default()
     };
     let desk = look.desk(colors, colors.dark);
     let line =

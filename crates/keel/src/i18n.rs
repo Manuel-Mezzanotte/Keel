@@ -1004,6 +1004,12 @@ pub struct Strings {
     pub agent_done_title: &'static str,
     pub agent_waiting_permission: &'static str,
     pub terminal_bell_title: &'static str,
+    /// A button on each problem.
+    pub problem_fix_with_claude: &'static str,
+    /// What Keel asks Claude about a problem.
+    pub claude_fix_problem: &'static str,
+    /// The mark on a file Claude changed, until it is opened.
+    pub explorer_touched_by_claude: &'static str,
 }
 
 impl Strings {
@@ -2433,6 +2439,9 @@ pub const ITALIAN: Strings = Strings {
     agent_done_title: "Claude ha finito",
     agent_waiting_permission: "Claude aspetta il tuo permesso",
     terminal_bell_title: "Il terminale {name} ti chiama",
+    problem_fix_with_claude: "Correggi con Claude",
+    claude_fix_problem: "In `{path}`, alla riga {line}, c'è questo problema ({source}):\n\n{message}\n\nCorreggilo.",
+    explorer_touched_by_claude: "Cambiato da Claude",
 };
 
 pub const ENGLISH: Strings = Strings {
@@ -3304,6 +3313,9 @@ pub const ENGLISH: Strings = Strings {
     agent_done_title: "Claude finished",
     agent_waiting_permission: "Claude is waiting for your permission",
     terminal_bell_title: "Terminal {name} needs you",
+    problem_fix_with_claude: "Fix with Claude",
+    claude_fix_problem: "In `{path}`, at line {line}, there is this problem ({source}):\n\n{message}\n\nFix it.",
+    explorer_touched_by_claude: "Changed by Claude",
 };
 
 #[cfg(test)]

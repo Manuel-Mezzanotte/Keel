@@ -1583,6 +1583,11 @@ impl Workbench {
     ) -> Div {
         let look = self.look;
         let flat = look.flat();
+        let wrap_tabs = self
+            .settings
+            .get("workbench.editor.wrapTabs")
+            .and_then(Value::as_bool)
+            .unwrap_or(false);
         let panes = self.panes.iter().enumerate().map(|(index, pane)| {
             // A tab come in front out of sight scrolls into view, once.
             let group = &self.groups[index];
@@ -1609,7 +1614,8 @@ impl Workbench {
                 })
                 .child(
                     div()
-                        .h(px(look.bar_height()))
+                        .when(!wrap_tabs, |bar| bar.h(px(look.bar_height())))
+                        .when(wrap_tabs, |bar| bar.min_h(px(look.bar_height())))
                         .flex_none()
                         .flex()
                         .items_center()
@@ -1618,13 +1624,14 @@ impl Workbench {
                         .child(
                             div()
                                 .id(("tab-strip", index))
-                                .h_full()
+                                .when(!wrap_tabs, |strip| strip.h_full().overflow_x_scroll())
+                                // `workbench.editor.wrapTabs`: rows of tabs.
+                                .when(wrap_tabs, |strip| strip.flex_wrap().py_1().gap_y_1())
                                 .flex_1()
                                 .min_w_0()
                                 .flex()
                                 .items_center()
                                 .when(!flat, |strip| strip.px_2().gap_0p5())
-                                .overflow_x_scroll()
                                 .track_scroll(&self.groups[index].scroll)
                                 // Dropped after the last tab: at the end.
                                 .on_drop(cx.listener(

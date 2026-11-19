@@ -23,6 +23,8 @@ pub(super) const PROPOSED_SCHEME: &str = "keel-claude-diff:";
 pub(super) struct ProposedEdit {
     pub(super) tab_name: String,
     pub(super) uri: String,
+    /// The file it changes.
+    path: PathBuf,
     pub(super) proposed: String,
     reply: Option<oneshot::Sender<Value>>,
 }
@@ -141,6 +143,7 @@ impl Workbench {
         self.claude_diffs.push(ProposedEdit {
             tab_name,
             uri: uri.clone(),
+            path: path.clone(),
             proposed,
             reply: Some(reply),
         });
@@ -201,6 +204,12 @@ impl Workbench {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
+        let Some(edit) = self.claude_diffs.iter_mut().find(|edit| edit.uri == uri) else {
+            return;
+        };
+        if accept {
+            self.claude_touched.insert(edit.path.clone());
+        }
         let Some(edit) = self.claude_diffs.iter_mut().find(|edit| edit.uri == uri) else {
             return;
         };

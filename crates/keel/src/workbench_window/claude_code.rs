@@ -75,14 +75,20 @@ impl Workbench {
         cx.notify();
     }
 
-    /// Asks Claude Code something: typed into its prompt and sent when it
-    /// runs on the right, else Claude Code starts with it.
+    /// Asks Claude something: in the chat on the right, or, with Claude Code
+    /// in its terminal there, typed into its prompt and sent (Claude Code
+    /// starts with it when it had ended).
     pub(super) fn ask_claude(
         &mut self,
         prompt: String,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
+        // The chat on the right, unless Claude Code runs in its terminal.
+        if self.agent_terminal.is_none() {
+            self.ask_claude_in_chat(prompt, window, cx);
+            return;
+        }
         self.layout.agent = true;
         self.agent_panel.view = super::agent_panel::AgentView::Terminal;
         match &self.agent_terminal {

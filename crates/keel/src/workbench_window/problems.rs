@@ -4,7 +4,8 @@
 use std::collections::{HashMap, HashSet};
 use std::ops::Range;
 
-use gpui::{AnyElement, StatefulInteractiveElement as _, uniform_list};
+use gpui::{AnyElement, SharedString, StatefulInteractiveElement as _, uniform_list};
+use gpui_component::button::{Button, ButtonVariants as _};
 use gpui_component::highlighter::Diagnostic as EditorDiagnostic;
 use gpui_component::input::Position as EditorPosition;
 use gpui_component::{ActiveTheme as _, Icon, Sizable as _};
@@ -634,9 +635,21 @@ impl Workbench {
             .unwrap_or_default()
             .to_owned();
         let (uri, range) = (uri.to_owned(), diagnostic.range);
+        let strings = self.strings();
+        let fix_prompt = super::notices::fill(
+            strings.claude_fix_problem,
+            &[
+                ("path", &self.shown_path(&uri)),
+                ("line", &(diagnostic.range.start.line + 1).to_string()),
+                ("source", &detail),
+                ("message", &diagnostic.message),
+            ],
+        );
+        let hover_group = SharedString::from(format!("problem-{index}"));
         Some(
             div()
                 .id(("problem", index))
+                .group(hover_group.clone())
                 .h(px(ROW_HEIGHT))
                 .w_full()
                 .pl(px(26.))
@@ -672,6 +685,24 @@ impl Workbench {
                         .text_xs()
                         .text_color(colors.faint)
                         .child(position),
+                )
+                // Seen on hover, as Cursor's «Fix in Chat».
+                .child(
+                    div()
+                        .flex_none()
+                        .invisible()
+                        .group_hover(hover_group, |button| button.visible())
+                        .child(
+                            Button::new(("problem-fix", index))
+                                .ghost()
+                                .xsmall()
+                                .icon(Icon::new(IconName::Sparkles))
+                                .label(strings.problem_fix_with_claude)
+                                .on_click(cx.listener(move |this, _, window, cx| {
+                                    cx.stop_propagation();
+                                    this.ask_claude(fix_prompt.clone(), window, cx)
+                                })),
+                        ),
                 )
                 .into_any_element(),
         )
