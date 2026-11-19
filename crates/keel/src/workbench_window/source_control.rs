@@ -82,6 +82,10 @@ pub(super) struct SourceControl {
     pub(super) message: Entity<TextareaState>,
     /// What git is doing now, such as "Push", shown while it runs.
     pub(super) busy: Option<&'static str>,
+    /// Files just staged or unstaged, which slide into their section, and
+    /// a count that makes each move its own.
+    pub(super) arrived: Vec<String>,
+    pub(super) arrival: usize,
     /// What to run after the next commit: Commit & Push, Commit & Sync.
     pub(super) then: Option<RemoteAction>,
     /// The commit on a protected branch was confirmed.
@@ -136,6 +140,8 @@ impl SourceControl {
             status: git::Status::default(),
             message,
             busy: None,
+            arrived: Vec::new(),
+            arrival: 0,
             then: None,
             protection_ok: false,
             committed_at: None,
@@ -345,6 +351,8 @@ impl Workbench {
             return;
         }
         let label = self.strings().scm_stage;
+        self.scm.arrived = paths.clone();
+        self.scm.arrival += 1;
         self.run_git(
             label,
             move |repo| repo.stage(&paths.iter().map(String::as_str).collect::<Vec<_>>()),
@@ -364,6 +372,8 @@ impl Workbench {
             return;
         }
         let label = self.strings().scm_unstage;
+        self.scm.arrived = paths.clone();
+        self.scm.arrival += 1;
         self.run_git(
             label,
             move |repo| repo.unstage(&paths.iter().map(String::as_str).collect::<Vec<_>>()),
@@ -1459,7 +1469,13 @@ impl Workbench {
                 }
                 let open_path = path.clone();
                 let icon = self.file_icon_element(Path::new(&path), cx);
-                div()
+                // Just staged or unstaged: it slides into its section.
+                let arrived = self
+                    .scm
+                    .arrived
+                    .contains(&path)
+                    .then(|| format!("{}-{}-{path}", self.scm.arrival, section as u8));
+                let row = div()
                     .id(id.clone())
                     .group("scm-row")
                     .relative()
@@ -1537,7 +1553,11 @@ impl Workbench {
                             .group_hover("scm-row", |buttons| buttons.visible())
                             .children(buttons),
                     )
-                    .into_any_element()
+                    .into_any_element();
+                match arrived {
+                    Some(key) => super::motion_bits::arriving(row, &key, self.look),
+                    None => row,
+                }
             }
         }
     }

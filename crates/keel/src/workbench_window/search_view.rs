@@ -563,6 +563,7 @@ impl Workbench {
                 text
             }
         };
+        let waiting = view.searching && view.results.files.is_empty() && view.error.is_none();
         let list = uniform_list(
             "search-results",
             view.rows.len(),
@@ -570,6 +571,12 @@ impl Workbench {
         )
         .track_scroll(&self.search_scroll)
         .size_full();
+        // While the first results are on their way: rows pulsing in grey.
+        let list = if waiting {
+            super::motion_bits::placeholder_rows(7, colors.hover, self.look)
+        } else {
+            list.into_any_element()
+        };
 
         let header = view_header(strings.view_search, colors)
             .child(

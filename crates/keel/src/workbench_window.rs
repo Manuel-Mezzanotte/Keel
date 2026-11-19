@@ -41,6 +41,7 @@ mod language_servers;
 mod local_history;
 pub(crate) mod look;
 mod markdown_preview;
+mod motion_bits;
 mod nav_history;
 mod navigation;
 mod notices;

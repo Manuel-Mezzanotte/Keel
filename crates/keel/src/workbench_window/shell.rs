@@ -712,9 +712,9 @@ impl Workbench {
                             .text_size(px(9.5))
                             .font_weight(FontWeight::SEMIBOLD)
                             .child(if count > 999 {
-                                "999+".to_owned()
+                                "999+".into_any_element()
                             } else {
-                                count.to_string()
+                                super::motion_bits::ticker("scm-badge", count, look)
                             }),
                     )
                 })

@@ -716,7 +716,8 @@ impl Workbench {
         cx: &mut Context<Self>,
     ) -> AnyElement {
         let theme = cx.theme();
-        let count = |icon: IconName, value: usize, color: Hsla| {
+        let look = self.look;
+        let count = |icon: IconName, name: &str, value: usize, color: Hsla| {
             div()
                 .flex()
                 .items_center()
@@ -726,7 +727,7 @@ impl Workbench {
                 } else {
                     colors.muted
                 }))
-                .child(value.to_string())
+                .child(super::motion_bits::ticker(name, value, look))
         };
         div()
             .id("status-problems")
@@ -736,9 +737,15 @@ impl Workbench {
             .gap_2()
             .cursor_pointer()
             .hover(|item| item.text_color(colors.accent))
-            .child(count(IconName::CircleX, self.problems.errors, theme.danger))
+            .child(count(
+                IconName::CircleX,
+                "errors",
+                self.problems.errors,
+                theme.danger,
+            ))
             .child(count(
                 IconName::TriangleAlert,
+                "warnings",
                 self.problems.warnings,
                 theme.warning,
             ))
