@@ -173,6 +173,18 @@ fn shots() -> Vec<Shot> {
                 workbench.open_change(&path, source_control::Section::Changes, window, cx);
             }
         }));
+        shots.push(shot(name("diff-inline"), |workbench, _, cx| {
+            workbench.set_diff_split(false, cx);
+        }));
+        shots.push(shot(name("diff-wide"), |workbench, _, cx| {
+            workbench.set_diff_split(true, cx);
+            workbench.layout.agent = false;
+            cx.notify();
+        }));
+        shots.push(shot(name("all-changes"), |workbench, window, cx| {
+            workbench.set_diff_split(true, cx);
+            workbench.open_diff("", super::diff_view::DiffSource::AllChanges, window, cx);
+        }));
         shots.push(shot(name("notices"), |workbench, window, cx| {
             workbench.notify_pulled((2, 5), window, cx);
             workbench.notify_pushed(

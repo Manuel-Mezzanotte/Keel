@@ -51,6 +51,7 @@ use crate::workbench_window::{
     ImportCursorSettings, OpenKeybindings, OpenSettings, OpenSettingsJson,
 };
 use crate::workbench_window::{NextChange, PreviousChange, RevertChange, StageChange};
+use crate::workbench_window::{NextDiffChange, OpenAllChanges, PreviousDiffChange};
 use crate::workbench_window::{
     NextProblem, PreviousProblem, RestartLanguageServers, TriggerParameterHints,
 };
@@ -836,6 +837,24 @@ pub const COMMANDS: &[KeelCommand] = &[
         default_key: None,
         context: None,
     },
+    KeelCommand {
+        id: "git.viewChanges",
+        action: || Box::new(OpenAllChanges),
+        default_key: None,
+        context: None,
+    },
+    KeelCommand {
+        id: "workbench.action.compareEditor.nextChange",
+        action: || Box::new(NextDiffChange),
+        default_key: Some("f7"),
+        context: None,
+    },
+    KeelCommand {
+        id: "workbench.action.compareEditor.previousChange",
+        action: || Box::new(PreviousDiffChange),
+        default_key: Some("shift+f7"),
+        context: None,
+    },
 ];
 
 /// The editor's own key that VS Code uses for something else: gpui-component
@@ -1083,7 +1102,7 @@ mod tests {
         let (bindings, warnings) =
             read_user_bindings(Path::new("/nonexistent/keel/keybindings.json"));
         assert!(bindings.is_empty() && warnings.is_empty());
-        assert_eq!(keel_bindings(&[]).len(), 78);
+        assert_eq!(keel_bindings(&[]).len(), 80);
     }
 
     #[test]

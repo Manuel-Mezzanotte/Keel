@@ -748,6 +748,36 @@ pub struct Strings {
     pub command_close_folder: &'static str,
     /// In the command palette.
     pub command_undo_commit: &'static str,
+    /// In a differences tab.
+    pub diff_no_changes: &'static str,
+    /// An arrow of a fold of unchanged lines.
+    pub diff_show_below: &'static str,
+    /// An arrow of a fold of unchanged lines.
+    pub diff_show_above: &'static str,
+    /// A fold of unchanged lines; a click shows them.
+    pub diff_hidden_lines: &'static str,
+    pub diff_stage_block: &'static str,
+    pub diff_undo_block: &'static str,
+    pub diff_unstage_block: &'static str,
+    /// The tab with every change.
+    pub diff_all_changes: &'static str,
+    pub diff_previous_change: &'static str,
+    pub diff_next_change: &'static str,
+    pub diff_files_count: &'static str,
+    /// A switch of the differences tab.
+    pub diff_ignore_spaces: &'static str,
+    pub diff_ignore_spaces_tip: &'static str,
+    pub diff_stage_all: &'static str,
+    pub diff_open_file_here: &'static str,
+    /// In the command palette.
+    pub command_next_diff_change: &'static str,
+    /// In the command palette.
+    pub command_previous_diff_change: &'static str,
+    /// In the command palette.
+    pub command_view_changes: &'static str,
+    /// A button of Source Control's header.
+    pub scm_all_changes: &'static str,
+    pub diff_too_narrow: &'static str,
 }
 
 impl Strings {
@@ -799,6 +829,9 @@ impl Strings {
             "git.cleanAll" => self.command_git_discard_all,
             "git.push" => self.command_git_push,
             "git.undoCommit" => self.command_undo_commit,
+            "git.viewChanges" => self.command_view_changes,
+            "workbench.action.compareEditor.nextChange" => self.command_next_diff_change,
+            "workbench.action.compareEditor.previousChange" => self.command_previous_diff_change,
             "workbench.action.files.saveAs" => self.command_save_as,
             "workbench.action.files.saveAll" => self.command_save_all,
             "workbench.action.files.revert" => self.command_revert_file,
@@ -1885,6 +1918,26 @@ pub const ITALIAN: Strings = Strings {
     command_toggle_auto_save: "File: Salvataggio automatico",
     command_close_folder: "Workspace: Chiudi la cartella",
     command_undo_commit: "Git: Annulla l'ultimo commit",
+    diff_no_changes: "Nessuna differenza in questo file.",
+    diff_show_below: "Mostra {count} righe sotto",
+    diff_show_above: "Mostra {count} righe sopra",
+    diff_hidden_lines: "{count} righe uguali",
+    diff_stage_block: "Metti in stage questo blocco",
+    diff_undo_block: "Annulla questo blocco nel file",
+    diff_unstage_block: "Togli questo blocco dallo stage",
+    diff_all_changes: "Tutte le modifiche",
+    diff_previous_change: "Modifica precedente",
+    diff_next_change: "Modifica successiva",
+    diff_files_count: "File cambiati: {count}",
+    diff_ignore_spaces: "Ignora spazi",
+    diff_ignore_spaces_tip: "Non mostrare le righe cambiate solo negli spazi",
+    diff_stage_all: "Metti tutto in stage",
+    diff_open_file_here: "Apri il file a questa riga",
+    command_next_diff_change: "Differenze: modifica successiva",
+    command_previous_diff_change: "Differenze: modifica precedente",
+    command_view_changes: "Git: Apri tutte le modifiche",
+    scm_all_changes: "Tutte le modifiche in una pagina",
+    diff_too_narrow: "Troppo stretto per due colonne: allarga la finestra o chiudi un pannello",
 };
 
 pub const ENGLISH: Strings = Strings {
@@ -2535,6 +2588,26 @@ pub const ENGLISH: Strings = Strings {
     command_toggle_auto_save: "File: Toggle Auto Save",
     command_close_folder: "Workspaces: Close Folder",
     command_undo_commit: "Git: Undo Last Commit",
+    diff_no_changes: "No differences in this file.",
+    diff_show_below: "Show {count} lines below",
+    diff_show_above: "Show {count} lines above",
+    diff_hidden_lines: "{count} unchanged lines",
+    diff_stage_block: "Stage This Block",
+    diff_undo_block: "Undo This Block in the File",
+    diff_unstage_block: "Unstage This Block",
+    diff_all_changes: "All Changes",
+    diff_previous_change: "Previous Change",
+    diff_next_change: "Next Change",
+    diff_files_count: "Changed files: {count}",
+    diff_ignore_spaces: "Ignore Spaces",
+    diff_ignore_spaces_tip: "Hide lines that changed only in their spaces",
+    diff_stage_all: "Stage All",
+    diff_open_file_here: "Open the File at This Line",
+    command_next_diff_change: "Compare: Next Change",
+    command_previous_diff_change: "Compare: Previous Change",
+    command_view_changes: "Git: Open All Changes",
+    scm_all_changes: "All changes in one page",
+    diff_too_narrow: "Too narrow for two columns: widen the window or close a panel",
 };
 
 #[cfg(test)]

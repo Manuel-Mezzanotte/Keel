@@ -13,6 +13,8 @@ mod commit_view;
 mod contributions;
 mod cursor_import;
 mod cursor_settings;
+mod diff_model;
+mod diff_pane;
 mod diff_view;
 mod disk;
 mod editing;
@@ -79,6 +81,7 @@ pub(crate) use code_navigation::{
 };
 pub(crate) use contributions::SelectIconTheme;
 pub(crate) use cursor_import::ImportFromCursor;
+pub(crate) use diff_view::{NextDiffChange, OpenAllChanges, PreviousDiffChange};
 pub(crate) use extensions_view::{
     CheckExtensionUpdates, InstallFromVsix, RestartExtensions, UpdateAllExtensions,
 };
@@ -501,6 +504,8 @@ pub struct Workbench {
     hunk_bar: Option<(usize, usize, usize)>,
     /// Differences side by side, from `diffEditor.renderSideBySide`.
     diff_split: bool,
+    /// Differences without the lines changed only in their spaces.
+    diff_ignore_spaces: bool,
     /// The project's git repository and the Source Control view.
     scm: source_control::SourceControl,
     /// The scripts of the project's `package.json`.
@@ -710,6 +715,7 @@ impl Workbench {
             scm_graph: Default::default(),
             scm,
             diff_split: true,
+            diff_ignore_spaces: false,
             git_baselines: HashMap::new(),
             hunk_bar: None,
             first_frame_drawn: false,

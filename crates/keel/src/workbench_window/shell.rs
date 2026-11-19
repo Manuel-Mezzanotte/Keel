@@ -1144,6 +1144,12 @@ impl Workbench {
             }
             Backing::ExtensionDetails(_) => symbol(IconName::Blocks),
             Backing::Graph(_) => symbol(IconName::GitGraph),
+            Backing::Diff(tab) if tab.source == super::diff_view::DiffSource::AllChanges => {
+                symbol(IconName::Layers)
+            }
+            Backing::Diff(tab) if !tab.path.is_empty() => {
+                Some(self.file_icon_element(Path::new(&tab.path), cx))
+            }
             Backing::Untitled => Some(self.file_icon_element(Path::new("untitled.txt"), cx)),
             _ => {
                 let path = document
@@ -1564,7 +1570,7 @@ impl Workbench {
                         Some(Backing::Diff(tab)) => div()
                             .flex_1()
                             .min_h_0()
-                            .child(self.render_diff(tab, colors, cx)),
+                            .child(self.render_diff(&pane.uri, tab, colors, window, cx)),
                         Some(Backing::ExtensionDetails(tab)) => div()
                             .flex_1()
                             .min_h_0()
@@ -2246,6 +2252,7 @@ impl Render for Workbench {
         let root = self.find_actions(root, cx);
         let root = self.notice_actions(root, cx);
         let root = self.file_command_actions(root, cx);
+        let root = self.diff_actions(root, cx);
         let notice_center = self.render_notice_center(colors, window, cx);
         self.explorer_actions(root, cx)
             .relative()

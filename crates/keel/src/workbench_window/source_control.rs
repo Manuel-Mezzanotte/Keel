@@ -812,6 +812,17 @@ impl Workbench {
         let focus = self.focus_handle.clone();
         let header = view_header(strings.view_source_control, colors)
             .child(
+                Button::new("scm-all-changes")
+                    .ghost()
+                    .small()
+                    .icon(Icon::new(IconName::Layers))
+                    .tooltip(strings.scm_all_changes)
+                    .disabled(self.scm.status.changed().next().is_none())
+                    .on_click(cx.listener(|this, _, window, cx| {
+                        this.open_diff("", diff_view::DiffSource::AllChanges, window, cx)
+                    })),
+            )
+            .child(
                 Button::new("scm-refresh")
                     .ghost()
                     .small()

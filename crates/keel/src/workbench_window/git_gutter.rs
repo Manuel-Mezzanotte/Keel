@@ -210,10 +210,15 @@ impl Workbench {
             ..
         }) = self.documents.get(&uri)
         {
-            let position =
-                DiffLinePosition::new(path.clone(), DiffSide::Modified, hunk.new.start + 1);
-            tab.state
-                .update(cx, |state, cx| state.scroll_to_line(position, cx));
+            if let Some(doc) = &tab.doc {
+                // A block that only took lines away starts where they were.
+                doc.scroll_to_new_line(hunk.new.start);
+            } else {
+                let position =
+                    DiffLinePosition::new(path.clone(), DiffSide::Modified, hunk.new.start + 1);
+                tab.state
+                    .update(cx, |state, cx| state.scroll_to_line(position, cx));
+            }
         }
     }
 

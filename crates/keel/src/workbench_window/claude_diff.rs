@@ -91,6 +91,16 @@ impl Workbench {
             .to_string_lossy()
             .into_owned();
         let patch = git::unified_patch(&shown, &current, &proposed, 3);
+        let doc = super::diff_pane::DiffDoc::new(
+            vec![super::diff_model::FileDiff::new(
+                shown.clone(),
+                &current,
+                &proposed,
+                false,
+            )],
+            self.diff_split,
+            false,
+        );
         let language = Language::for_path(&path).highlighter_name();
         let files: Vec<DiffFile> = DiffFile::parse(&patch)
             .map(|files| {
@@ -119,6 +129,8 @@ impl Workbench {
                     source,
                     state,
                     title: tab_name.clone(),
+
+                    doc: Some(doc),
                 }),
                 language_id: "diff".to_owned(),
                 version: 1,
@@ -229,6 +241,7 @@ impl Workbench {
         name: &str,
         tab: &DiffTab,
         colors: Colors,
+        window: &mut Window,
         cx: &mut Context<Self>,
     ) -> AnyElement {
         let strings = self.strings();
@@ -237,7 +250,7 @@ impl Workbench {
             .claude_diffs
             .iter()
             .any(|edit| edit.uri == uri && edit.reply.is_some());
-        let (accept, reject) = (uri.clone(), uri);
+        let (accept, reject) = (uri.clone(), uri.clone());
         let toolbar = div()
             .h(px(34.))
             .flex_none()
@@ -301,12 +314,21 @@ impl Workbench {
             .flex_col()
             .child(toolbar)
             .child(
-                div().flex_1().min_h_0().child(
-                    Diff::new(&tab.state)
+                div().flex_1().min_h_0().child(match &tab.doc {
+                    Some(doc) => self.render_diff_doc(
+                        &uri,
+                        doc,
+                        super::diff_pane::BlockActions::None,
+                        colors,
+                        window,
+                        cx,
+                    ),
+                    None => Diff::new(&tab.state)
                         .line_number(true)
                         .syntax_highlight(true)
-                        .header_visible(false),
-                ),
+                        .header_visible(false)
+                        .into_any_element(),
+                }),
             )
             .into_any_element()
     }

@@ -153,6 +153,12 @@ impl Repo {
         self.run(&["show", &format!("HEAD:{path}")]).ok()
     }
 
+    /// A file as it was in a commit, such as `abc123` or `abc123^`;
+    /// `None` when it was not there.
+    pub fn text_at(&self, revision: &str, path: &str) -> Option<String> {
+        self.run(&["show", &format!("{revision}:{path}")]).ok()
+    }
+
     /// A file as it is staged; `None` when it is not in the index.
     pub fn index_text(&self, path: &str) -> Option<String> {
         self.run(&["show", &format!(":{path}")]).ok()
