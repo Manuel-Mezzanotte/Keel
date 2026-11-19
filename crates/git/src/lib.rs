@@ -397,11 +397,144 @@ impl Repo {
         web_url(self.run(&["remote", "get-url", remote]).ok()?.trim())
     }
 
+    /// The messages of the last `most` commits, the latest first, for
+    /// going back through them in the commit field.
+    pub fn recent_messages(&self, most: usize) -> Vec<String> {
+        self.run(&["log", "-n", &most.to_string(), "--format=%B%x1e"])
+            .map(|output| {
+                output
+                    .split('\x1e')
+                    .map(str::trim)
+                    .filter(|message| !message.is_empty())
+                    .map(str::to_owned)
+                    .collect()
+            })
+            .unwrap_or_default()
+    }
+
+    /// Puts every change aside under a name, new files included.
+    pub fn stash_named(&self, message: &str) -> Result<()> {
+        self.run(&["stash", "push", "--include-untracked", "-m", message])
+            .map(drop)
+    }
+
+    /// The changes put aside, the latest first.
+    pub fn stashes(&self) -> Result<Vec<Stash>> {
+        let output = self.run(&["stash", "list", "--format=%gd%x1f%gs%x1f%ct"])?;
+        Ok(output
+            .lines()
+            .filter_map(|line| {
+                let mut parts = line.split('\x1f');
+                let name = parts.next()?;
+                let message = parts.next()?.to_owned();
+                let time = parts.next()?.trim().parse().unwrap_or(0);
+                let index = name
+                    .strip_prefix("stash@{")?
+                    .strip_suffix('}')?
+                    .parse()
+                    .ok()?;
+                Some(Stash {
+                    index,
+                    message,
+                    time,
+                })
+            })
+            .collect())
+    }
+
+    /// Brings back a stash and drops it, or keeps it with `keep`.
+    pub fn stash_restore(&self, index: usize, keep: bool) -> Result<()> {
+        let name = format!("stash@{{{index}}}");
+        let verb = if keep { "apply" } else { "pop" };
+        self.run(&["stash", verb, "--index", &name])
+            .or_else(|_| self.run(&["stash", verb, &name]))
+            .map(drop)
+    }
+
+    pub fn stash_drop(&self, index: usize) -> Result<()> {
+        self.run(&["stash", "drop", &format!("stash@{{{index}}}")])
+            .map(drop)
+    }
+
+    /// The files a stash changed, new ones included.
+    pub fn stash_files(&self, index: usize) -> Result<Vec<String>> {
+        let name = format!("stash@{{{index}}}");
+        let mut files: Vec<String> = self
+            .run(&["stash", "show", "--name-only", &name])?
+            .lines()
+            .map(str::to_owned)
+            .collect();
+        // New files sit in the stash's third parent.
+        if let Ok(untracked) = self.run(&["show", "--name-only", "--format=", &format!("{name}^3")])
+        {
+            files.extend(
+                untracked
+                    .lines()
+                    .filter(|line| !line.is_empty())
+                    .map(str::to_owned),
+            );
+        }
+        files.sort();
+        files.dedup();
+        Ok(files)
+    }
+
+    /// The titles of the commits to push and of those to pull, at most
+    /// `most` each; nothing when the branch follows no upstream.
+    pub fn ahead_and_behind(&self, most: usize) -> (Vec<String>, Vec<String>) {
+        let list = |range: &str| {
+            self.run(&["log", "--format=%s", "-n", &most.to_string(), range])
+                .map(|output| output.lines().map(str::to_owned).collect())
+                .unwrap_or_default()
+        };
+        (list("@{upstream}..HEAD"), list("HEAD..@{upstream}"))
+    }
+
+    /// The commits that changed lines `start..=end` (from one) of a file,
+    /// the latest first.
+    pub fn line_history(
+        &self,
+        path: &str,
+        start: usize,
+        end: usize,
+    ) -> Result<Vec<history::Commit>> {
+        let range = format!("-L{start},{end}:{path}");
+        let output = self.run(&[
+            "log",
+            &range,
+            "--no-patch",
+            "--format=%H%x1f%an%x1f%ct%x1f%s",
+            "-n",
+            "200",
+        ])?;
+        Ok(output
+            .lines()
+            .filter_map(|line| {
+                let mut parts = line.split('\x1f');
+                Some(history::Commit::summary(
+                    parts.next()?.to_owned(),
+                    parts.next()?.to_owned(),
+                    parts.next()?.parse().unwrap_or(0),
+                    parts.next().unwrap_or_default().to_owned(),
+                ))
+            })
+            .collect())
+    }
+
     pub fn stash_count(&self) -> usize {
         self.run(&["stash", "list"])
             .map(|list| list.lines().count())
             .unwrap_or(0)
     }
+}
+
+/// Changes put aside with `git stash`.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Stash {
+    /// The `n` of `stash@{n}`.
+    pub index: usize,
+    pub message: String,
+    pub time: i64,
 }
 
 /// The web page of a repository from the address git pushes to:
@@ -606,6 +739,48 @@ mod tests {
         let status = repo.status().unwrap();
         assert_eq!((status.ahead, status.behind), (0, 0));
         assert!(folder.path().join("b.txt").exists());
+    }
+
+    #[test]
+    fn stashes_are_listed_brought_back_and_dropped() {
+        let folder = tempfile::tempdir().unwrap();
+        git(folder.path(), &["init", "-q", "-b", "main"]);
+        git(folder.path(), &["config", "user.email", "me@example.com"]);
+        git(folder.path(), &["config", "user.name", "Me"]);
+        let repo = Repo::discover(folder.path()).unwrap();
+        fs::write(folder.path().join("a.txt"), "uno\n").unwrap();
+        repo.stage(&["a.txt"]).unwrap();
+        repo.commit("first", false).unwrap();
+        fs::write(folder.path().join("a.txt"), "due\n").unwrap();
+        fs::write(folder.path().join("new.txt"), "nuovo\n").unwrap();
+        repo.stash_named("keel: main").unwrap();
+        let stashes = repo.stashes().unwrap();
+        assert_eq!(stashes.len(), 1);
+        assert_eq!(stashes[0].index, 0);
+        assert!(
+            stashes[0].message.ends_with("keel: main"),
+            "{:?}",
+            stashes[0]
+        );
+        assert_eq!(repo.stash_files(0).unwrap(), ["a.txt", "new.txt"]);
+        repo.stash_restore(0, true).unwrap();
+        assert_eq!(
+            fs::read_to_string(folder.path().join("a.txt")).unwrap(),
+            "due\n"
+        );
+        assert_eq!(repo.stashes().unwrap().len(), 1, "kept");
+        repo.stash_drop(0).unwrap();
+        assert!(repo.stashes().unwrap().is_empty());
+
+        // The lines' own history.
+        repo.stage(&["a.txt", "new.txt"]).unwrap();
+        repo.commit("second", false).unwrap();
+        let history = repo.line_history("a.txt", 1, 1).unwrap();
+        let subjects: Vec<&str> = history
+            .iter()
+            .map(|commit| commit.subject.as_str())
+            .collect();
+        assert_eq!(subjects, ["second", "first"]);
     }
 
     #[test]

@@ -50,6 +50,19 @@ pub struct Commit {
 }
 
 impl Commit {
+    /// A commit known only by its hash, author, time and title.
+    pub fn summary(hash: String, author: String, time: i64, subject: String) -> Self {
+        Self {
+            hash,
+            parents: Vec::new(),
+            author,
+            email: String::new(),
+            time,
+            refs: Vec::new(),
+            subject,
+        }
+    }
+
     pub fn short_hash(&self) -> &str {
         &self.hash[..self.hash.len().min(8)]
     }
