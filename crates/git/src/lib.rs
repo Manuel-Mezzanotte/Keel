@@ -351,11 +351,82 @@ impl Repo {
         self.run(&["stash", "pop"]).map(drop)
     }
 
+    /// The commit checked out, in full; `None` before the first commit.
+    pub fn head_hash(&self) -> Option<String> {
+        self.run(&["rev-parse", "--verify", "-q", "HEAD"])
+            .ok()
+            .map(|hash| hash.trim().to_owned())
+            .filter(|hash| !hash.is_empty())
+    }
+
+    /// How many commits `to` has that `from` has not, and how many files
+    /// changed between them: what a pull brought.
+    pub fn changes_between(&self, from: &str, to: &str) -> (usize, usize) {
+        let range = format!("{from}..{to}");
+        let commits = self
+            .run(&["rev-list", "--count", &range])
+            .ok()
+            .and_then(|count| count.trim().parse().ok())
+            .unwrap_or(0);
+        let files = self
+            .run(&["diff", "--name-only", from, to])
+            .map(|names| names.lines().filter(|name| !name.is_empty()).count())
+            .unwrap_or(0);
+        (commits, files)
+    }
+
+    /// Undoes the last commit and keeps its changes staged, as VS Code's
+    /// Undo Last Commit. The first commit has nothing before it, so its
+    /// branch goes back to having no commit.
+    pub fn undo_last_commit(&self) -> Result<()> {
+        if self.run(&["rev-parse", "--verify", "-q", "HEAD~1"]).is_ok() {
+            self.run(&["reset", "--soft", "HEAD~1"]).map(drop)
+        } else {
+            self.run(&["update-ref", "-d", "HEAD"]).map(drop)
+        }
+    }
+
+    /// The web page of a remote, such as `origin`, when it has one.
+    pub fn remote_web_url(&self, remote: &str) -> Option<String> {
+        web_url(self.run(&["remote", "get-url", remote]).ok()?.trim())
+    }
+
     pub fn stash_count(&self) -> usize {
         self.run(&["stash", "list"])
             .map(|list| list.lines().count())
             .unwrap_or(0)
     }
+}
+
+/// The web page of a repository from the address git pushes to:
+/// `git@github.com:me/app.git`, `ssh://git@host/me/app` and
+/// `https://user@host/me/app.git` all become `https://host/me/app`.
+pub fn web_url(remote: &str) -> Option<String> {
+    let remote = remote.trim();
+    let (host, path) = if let Some(rest) = remote.strip_prefix("https://") {
+        rest.split_once('/')?
+    } else if let Some(rest) = remote
+        .strip_prefix("ssh://")
+        .or_else(|| remote.strip_prefix("git://"))
+    {
+        rest.split_once('/')?
+    } else if let Some((user_host, path)) = remote.split_once(':') {
+        // scp-like: git@github.com:me/app.git
+        if user_host.contains('/') {
+            return None;
+        }
+        (user_host, path)
+    } else {
+        return None;
+    };
+    let host = host.rsplit('@').next()?;
+    // An ssh port is not the web page's.
+    let host = host.split(':').next()?;
+    let path = path.trim_end_matches('/').trim_end_matches(".git");
+    if host.is_empty() || path.is_empty() {
+        return None;
+    }
+    Some(format!("https://{host}/{path}"))
 }
 
 #[cfg(test)]
@@ -529,6 +600,51 @@ mod tests {
         let status = repo.status().unwrap();
         assert_eq!((status.ahead, status.behind), (0, 0));
         assert!(folder.path().join("b.txt").exists());
+    }
+
+    #[test]
+    fn remotes_have_web_pages() {
+        for remote in [
+            "git@github.com:me/app.git",
+            "https://github.com/me/app.git",
+            "https://token@github.com/me/app",
+            "ssh://git@github.com:22/me/app.git",
+        ] {
+            assert_eq!(
+                web_url(remote).as_deref(),
+                Some("https://github.com/me/app"),
+                "{remote}"
+            );
+        }
+        assert_eq!(web_url("/Users/me/backup.git"), None);
+        assert_eq!(web_url("../other"), None);
+    }
+
+    #[test]
+    fn the_last_commit_is_undone_and_its_changes_stay_staged() {
+        let folder = tempfile::tempdir().unwrap();
+        git(folder.path(), &["init", "-q", "-b", "main"]);
+        git(folder.path(), &["config", "user.email", "me@example.com"]);
+        git(folder.path(), &["config", "user.name", "Me"]);
+        let repo = Repo::discover(folder.path()).unwrap();
+        fs::write(folder.path().join("a.txt"), "one\n").unwrap();
+        repo.stage(&["a.txt"]).unwrap();
+        repo.commit("first", false).unwrap();
+        let first = repo.head_hash().unwrap();
+        fs::write(folder.path().join("a.txt"), "two\n").unwrap();
+        fs::write(folder.path().join("b.txt"), "new\n").unwrap();
+        repo.stage(&["a.txt", "b.txt"]).unwrap();
+        repo.commit("second", false).unwrap();
+        let second = repo.head_hash().unwrap();
+        assert_eq!(repo.changes_between(&first, &second), (1, 2));
+
+        repo.undo_last_commit().unwrap();
+        assert_eq!(repo.head_hash().as_deref(), Some(first.as_str()));
+        assert_eq!(repo.status().unwrap().staged().count(), 2);
+        // The first commit too: the branch has no commit again.
+        repo.undo_last_commit().unwrap();
+        assert_eq!(repo.head_hash(), None);
+        assert_eq!(repo.status().unwrap().staged().count(), 2);
     }
 }
 
