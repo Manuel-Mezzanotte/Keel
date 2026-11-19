@@ -37,9 +37,19 @@ actions!(
         PasteFiles,
         UndoFileChange,
         FilterTree,
-        DuplicateFiles
+        DuplicateFiles,
+        QuickLookSelected
     ]
 );
+
+/// What Quick Look shows better than Keel, as in the Finder: pictures
+/// Keel does not open, video, sound, documents of other apps, archives.
+const QUICK_LOOK: &[&str] = &[
+    "png", "jpg", "jpeg", "gif", "webp", "heic", "heif", "tif", "tiff", "bmp", "ico", "icns",
+    "svg", "psd", "pdf", "mp4", "mov", "m4v", "avi", "mkv", "webm", "mp3", "wav", "m4a", "aac",
+    "flac", "aiff", "ogg", "key", "pages", "numbers", "doc", "docx", "xls", "xlsx", "ppt", "pptx",
+    "rtf", "zip", "dmg", "ttf", "otf", "woff", "woff2", "usdz",
+];
 
 /// The Explorer's menu actions on one file or folder.
 #[derive(Clone, Debug, PartialEq, gpui::Action)]
@@ -109,11 +119,18 @@ pub(super) struct TreeExtras {
     hover_task: Option<Task<()>>,
     /// A file chosen to compare with another one.
     pub(super) compare_with: Option<PathBuf>,
+    /// The Quick Look window open, to close it before the next.
+    quick_look: Option<std::process::Child>,
 }
 
 impl Workbench {
     pub(super) fn tree_extra_actions(&self, root: Div, cx: &mut Context<Self>) -> Div {
         root.on_action(cx.listener(|this, _: &CopyFiles, _, cx| this.copy_files(false, cx)))
+            .on_action(cx.listener(|this, _: &QuickLookSelected, window, cx| {
+                if !this.typing_a_name(cx) {
+                    this.quick_look_selected(window, cx)
+                }
+            }))
             .on_action(cx.listener(|this, _: &CutFiles, _, cx| this.copy_files(true, cx)))
             .on_action(cx.listener(|this, _: &PasteFiles, window, cx| this.paste_files(window, cx)))
             .on_action(cx.listener(|this, _: &DuplicateFiles, window, cx| {
@@ -226,18 +243,53 @@ impl Workbench {
     // -----------------------------------------------------------------
     // Copy, Cut, Paste
 
+    /// Space, as in the Finder: Quick Look for what Keel would not show as
+    /// well; a text file opens, a folder opens or closes.
+    fn quick_look_selected(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let Some(index) = self.selected_index() else {
+            return;
+        };
+        let row = self.tree_rows[index].clone();
+        let looks = !row.is_dir
+            && row
+                .path
+                .extension()
+                .and_then(|ext| ext.to_str())
+                .is_some_and(|ext| QUICK_LOOK.contains(&ext.to_lowercase().as_str()));
+        if !looks {
+            self.open_selected(window, cx);
+            return;
+        }
+        if let Some(mut open) = self.tree_extras.quick_look.take() {
+            let _ = open.kill();
+            let _ = open.wait();
+        }
+        self.tree_extras.quick_look = std::process::Command::new("/usr/bin/qlmanage")
+            .arg("-p")
+            .arg(&row.path)
+            .stdin(std::process::Stdio::null())
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null())
+            .spawn()
+            .ok();
+    }
+
     fn copy_files(&mut self, cut: bool, cx: &mut Context<Self>) {
         let chosen = self.chosen_paths();
         if chosen.is_empty() {
             return;
         }
-        // The paths go to the system clipboard too, for the terminal.
+        // The files go to the system clipboard too: as files, so Finder
+        // pastes them and Mail attaches them, and as their paths, for the
+        // terminal.
         let text = chosen
             .iter()
             .map(|path| path.to_string_lossy().into_owned())
             .collect::<Vec<_>>()
             .join("\n");
-        cx.write_to_clipboard(gpui::ClipboardItem::new_string(text));
+        if !crate::mac::copy_files(&chosen, &text) {
+            cx.write_to_clipboard(gpui::ClipboardItem::new_string(text));
+        }
         self.tree_extras.clipboard = Some((chosen, cut));
         cx.notify();
     }

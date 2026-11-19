@@ -747,12 +747,7 @@ impl Workbench {
             )
             .collect();
         for (editor, uri) in editors {
-            let language = self
-                .documents
-                .get(&uri)
-                .map(|document| document.language_id.clone())
-                .unwrap_or_default();
-            let tab_size = self.tab_size_for(&language);
+            let tab_size = self.indent_of(&uri);
             editor.update(cx, |editor, cx| editor.set_tab_size(tab_size, cx));
         }
     }

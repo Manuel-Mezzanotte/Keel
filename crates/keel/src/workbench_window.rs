@@ -57,6 +57,7 @@ mod signature_help;
 #[cfg(feature = "snapshots")]
 pub(crate) mod snapshots;
 mod source_control;
+mod status_items;
 mod tabs;
 mod terminal_commands;
 mod terminal_fixes;
@@ -476,6 +477,11 @@ pub struct Workbench {
     extensions: Option<Extensions>,
     context: WhenContext,
     status_message: Option<String>,
+    /// The indentation of documents, as their lines say or the user
+    /// chose from the status bar, over the settings of their language.
+    indent_overrides: HashMap<String, gpui_component::input::TabSize>,
+    /// The keys of a chord waiting for its second key, as `⌘K`.
+    pending_chord: Option<String>,
     discard_changes: bool,
     gutter_refresh: Task<()>,
     /// Whether the first frame was already drawn, for `KEEL_STARTUP_TIMING`.
@@ -614,12 +620,16 @@ impl Workbench {
             }
             // Files may have changed in another app, such as Claude Code.
             if window.is_window_active() {
+                crate::mac::attention_seen();
                 crate::menus::set_auto_save(this.auto_save_is_on(), cx);
                 this.project.refresh_branch();
                 this.refresh_git(cx);
                 this.refresh_tree(cx);
                 this.index_files(cx);
             }
+        }));
+        subscriptions.push(cx.observe_pending_input(window, |this, window, cx| {
+            this.pending_input_changed(window, cx)
         }));
         subscriptions.push(cx.observe_window_appearance(window, |this, window, cx| {
             let choice = crate::theme::ThemeChoice::from_settings(&this.settings);
@@ -723,6 +733,8 @@ impl Workbench {
             extensions: None,
             context: WhenContext::default(),
             status_message,
+            indent_overrides: HashMap::new(),
+            pending_chord: None,
             discard_changes: false,
             gutter_refresh: Task::ready(()),
             known_selections: HashMap::new(),
@@ -962,7 +974,9 @@ impl Workbench {
         let uri = Uri::file(&path).to_string();
         let text = document.saved_text().to_owned();
         let language_id = self.language_id_for(&path);
-        self.add_document(uri, Backing::File(document), language_id, text)
+        let uri = self.add_document(uri, Backing::File(document), language_id, text.clone());
+        self.detect_indent(&uri, &text);
+        uri
     }
 
     fn add_untitled_document(&mut self) -> String {

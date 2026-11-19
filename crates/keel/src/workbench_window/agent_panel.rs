@@ -470,7 +470,7 @@ impl Workbench {
         id: Value,
         method: &str,
         params: &Value,
-        _window: &mut Window,
+        window: &mut Window,
         cx: &mut Context<Self>,
     ) {
         let Some(agent) = self.agent_panel.agent.clone() else {
@@ -562,16 +562,39 @@ impl Workbench {
                     .collect();
                 self.agent_panel.permissions.push(Permission {
                     id,
-                    title,
+                    title: title.clone(),
                     content,
                     options,
                 });
                 self.agent_panel.scroll.scroll_to_bottom();
+                self.agent_needs_you(self.strings().agent_waiting_permission, title, window, cx);
             }
             _ => {
                 let _ = agent.respond(id, Err((-32601, format!("Keel does not offer {method}"))));
             }
         }
+    }
+
+    /// Claude finished or asks something with Keel in the background: a
+    /// notice in macOS's Notification Center and a number on the Dock, as
+    /// Cursor does.
+    fn agent_needs_you(
+        &mut self,
+        title: &str,
+        message: String,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        if window.is_window_active() {
+            return;
+        }
+        crate::mac::needs_attention();
+        let notice = super::notices::Notice::info(title)
+            .message(message)
+            .action(self.strings().terminal_show, |this, window, cx| {
+                this.open_agent(window, cx)
+            });
+        self.notify_user(notice, window, cx);
     }
 
     /// Keeps the text `path` has now, the first time the agent is about to
@@ -691,6 +714,8 @@ impl Workbench {
                     }
                     Err(error) => this.agent_panel.notice = Some(format!("{error:#}")),
                 }
+                let said = this.agent_panel.notice.clone().unwrap_or_default();
+                this.agent_needs_you(this.strings().agent_done_title, said, window, cx);
                 this.refresh_agent_history(window, cx);
                 cx.notify();
             })

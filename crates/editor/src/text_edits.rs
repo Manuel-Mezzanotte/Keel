@@ -538,6 +538,104 @@ pub fn occurrences(text: &str, word: &str, most: usize) -> Vec<Range<usize>> {
         .collect()
 }
 
+/// How a file indents, read from its lines as VS Code's
+/// `editor.detectIndentation` does: tabs, or spaces and how many for each
+/// level. `None` when too few lines are indented to tell.
+pub fn detect_indentation(text: &str) -> Option<(bool, usize)> {
+    let mut tabs = 0usize;
+    let mut spaced = 0usize;
+    // How often each step between the indents of lines that follow.
+    let mut steps = [0usize; 9];
+    let mut previous = 0usize;
+    for line in text.lines().take(10_000) {
+        if line.trim().is_empty() {
+            continue;
+        }
+        let leading = &line[..line.len() - line.trim_start().len()];
+        if leading.starts_with('\t') {
+            tabs += 1;
+            continue;
+        }
+        let spaces = leading.chars().take_while(|&c| c == ' ').count();
+        if spaces > 0 {
+            spaced += 1;
+        }
+        let step = spaces.abs_diff(previous);
+        if (2..=8).contains(&step) {
+            steps[step] += 1;
+        }
+        previous = spaces;
+    }
+    if tabs + spaced < 2 {
+        return None;
+    }
+    if tabs > spaced {
+        return Some((true, 0));
+    }
+    // A step of 4 is also two of 2: the smaller one wins when it is common.
+    let best = (2..=8).max_by_key(|&step| (steps[step], std::cmp::Reverse(step)))?;
+    (steps[best] > 0).then_some((false, best))
+}
+
+/// Line endings, as the status bar shows them.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum LineEnding {
+    Lf,
+    CrLf,
+}
+
+impl LineEnding {
+    pub fn name(self) -> &'static str {
+        match self {
+            LineEnding::Lf => "LF",
+            LineEnding::CrLf => "CRLF",
+        }
+    }
+
+    /// The ending most lines of `text` have; LF for a single line.
+    pub fn of(text: &str) -> Self {
+        let crlf = text.matches("\r\n").count();
+        let lf = text.matches('\n').count() - crlf;
+        if crlf > lf {
+            LineEnding::CrLf
+        } else {
+            LineEnding::Lf
+        }
+    }
+
+    /// `text` with every line ending this one.
+    pub fn apply(self, text: &str) -> String {
+        let plain = text.replace("\r\n", "\n");
+        match self {
+            LineEnding::Lf => plain,
+            LineEnding::CrLf => plain.replace('\n', "\r\n"),
+        }
+    }
+}
+
+/// `text` with its indentation in tabs or in spaces, `size` columns a
+/// level, as «Convert Indentation to Tabs/Spaces».
+pub fn convert_indentation(text: &str, to_tabs: bool, size: usize) -> String {
+    let size = size.max(1);
+    let mut out = String::with_capacity(text.len());
+    for line in text.split_inclusive('\n') {
+        let rest = line.trim_start_matches([' ', '\t']);
+        let leading = &line[..line.len() - rest.len()];
+        let columns = leading.chars().fold(0, |columns, c| match c {
+            '\t' => columns / size * size + size,
+            _ => columns + 1,
+        });
+        if to_tabs {
+            out.push_str(&"\t".repeat(columns / size));
+            out.push_str(&" ".repeat(columns % size));
+        } else {
+            out.push_str(&" ".repeat(columns));
+        }
+        out.push_str(rest);
+    }
+    out
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -663,5 +761,32 @@ mod tests {
     fn words_are_found_whole() {
         let text = "total = total + subtotal";
         assert_eq!(occurrences(text, "total", 10), [0..5, 8..13]);
+    }
+
+    #[test]
+    fn indentation_is_read_from_the_lines() {
+        let two = "fn a() {\n  if x {\n    y();\n  }\n}\n";
+        assert_eq!(detect_indentation(two), Some((false, 2)));
+        let four = "def a():\n    if x:\n        y()\n    return 1\n";
+        assert_eq!(detect_indentation(four), Some((false, 4)));
+        let tabs = "func a() {\n\tif x {\n\t\ty()\n\t}\n}\n";
+        assert_eq!(detect_indentation(tabs), Some((true, 0)));
+        assert_eq!(detect_indentation("one line\n"), None);
+    }
+
+    #[test]
+    fn line_endings_and_indentation_convert() {
+        assert_eq!(LineEnding::of("a\r\nb\r\nc\n"), LineEnding::CrLf);
+        assert_eq!(LineEnding::of("a\nb"), LineEnding::Lf);
+        assert_eq!(LineEnding::CrLf.apply("a\nb\r\n"), "a\r\nb\r\n");
+        assert_eq!(LineEnding::Lf.apply("a\r\nb\r\n"), "a\nb\n");
+        assert_eq!(
+            convert_indentation("    a\n        b\n  c\n", true, 4),
+            "\ta\n\t\tb\n  c\n"
+        );
+        assert_eq!(
+            convert_indentation("\ta\n\t\tb\n", false, 2),
+            "  a\n    b\n"
+        );
     }
 }

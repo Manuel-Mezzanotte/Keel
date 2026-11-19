@@ -89,7 +89,7 @@ pub fn tree_bindings() -> Vec<gpui::KeyBinding> {
         KeyBinding::new("enter", RenameSelected, context),
         KeyBinding::new("f2", RenameSelected, context),
         KeyBinding::new("cmd-down", OpenSelected, context),
-        KeyBinding::new("space", OpenSelected, context),
+        KeyBinding::new("space", super::explorer_more::QuickLookSelected, context),
         KeyBinding::new("cmd-backspace", TrashSelected, context),
         KeyBinding::new("cmd-c", super::explorer_more::CopyFiles, context),
         KeyBinding::new("cmd-x", super::explorer_more::CutFiles, context),
@@ -409,7 +409,7 @@ impl Workbench {
         }
     }
 
-    fn selected_index(&self) -> Option<usize> {
+    pub(super) fn selected_index(&self) -> Option<usize> {
         let selection = self.tree_selection.as_ref()?;
         self.tree_rows.iter().position(|row| &row.path == selection)
     }
@@ -474,7 +474,7 @@ impl Workbench {
 
     /// While a name is being typed, the tree's keys (arrows, Enter, space,
     /// Backspace) belong to the name field.
-    fn typing_a_name(&self, cx: &mut Context<Self>) -> bool {
+    pub(super) fn typing_a_name(&self, cx: &mut Context<Self>) -> bool {
         if self.tree_edit.is_some() {
             cx.propagate();
             return true;
@@ -533,7 +533,7 @@ impl Workbench {
         cx.notify();
     }
 
-    fn open_selected(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+    pub(super) fn open_selected(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let Some(index) = self.selected_index() else {
             return;
         };

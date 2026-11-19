@@ -223,6 +223,10 @@ impl Workbench {
                 self.status_message = Some(message.clone());
                 cx.notify();
             }
+            TerminalViewEvent::Notify(text) => {
+                self.terminal_wants_you(view, Some(text), window, cx)
+            }
+            TerminalViewEvent::Bell => self.terminal_wants_you(view, None, window, cx),
         }
     }
 

@@ -440,14 +440,71 @@ impl Workbench {
     // -----------------------------------------------------------------
     // Drawing
 
+    /// The file in front and the folders it is in, up to the disk, as the
+    /// icon in a Mac window's title lists them; the project's without one.
+    pub(super) fn title_path(&self) -> Vec<PathBuf> {
+        let start = self
+            .panes
+            .get(self.active)
+            .and_then(|pane| self.documents.get(&pane.uri))
+            .and_then(|document| document.disk_path().map(Path::to_path_buf))
+            .or_else(|| self.project.root.clone());
+        let mut path = Vec::new();
+        let mut at = start.as_deref();
+        while let Some(here) = at {
+            path.push(here.to_path_buf());
+            at = here.parent();
+        }
+        path
+    }
+
+    /// Cmd+click on the project's name: where the file in front is, to show
+    /// any of its folders in the Finder.
+    fn pick_title_path(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let path = self.title_path();
+        if path.is_empty() {
+            return;
+        }
+        let items = path
+            .iter()
+            .map(|place| crate::quick_pick::PickItem::new(path_label(place)))
+            .collect();
+        let chosen = crate::quick_pick::show(None, None, items, window, cx);
+        cx.spawn_in(window, async move |_, cx| {
+            if let Ok(Some(picked)) = chosen.await {
+                cx.update(|_, cx| cx.reveal_path(&path[picked])).ok();
+            }
+        })
+        .detach();
+    }
+
     fn render_toolbar(&self, colors: Colors, window: &Window, cx: &mut Context<Self>) -> TitleBar {
         let strings = self.strings();
         let look = self.look;
+        let title_path = self.title_path();
         let project = div()
+            .id("toolbar-project")
             .flex_none()
             .flex()
             .items_center()
             .gap_2()
+            // As the icon in a Mac window's title: Cmd+click or a right
+            // click lists the folders of the file in front.
+            .on_click(cx.listener(|this, event: &gpui::ClickEvent, window, cx| {
+                if event.modifiers().platform {
+                    this.pick_title_path(window, cx);
+                }
+            }))
+            .context_menu(move |menu, _, _| {
+                title_path.iter().fold(menu, |menu, place| {
+                    menu.menu(
+                        path_label(place),
+                        Box::new(super::explorer::RevealInFinder {
+                            path: place.clone(),
+                        }),
+                    )
+                })
+            })
             .child(
                 svg()
                     .path(crate::assets::LOGO)
@@ -2041,11 +2098,29 @@ impl Workbench {
                     .child(self.render_agent_resize(colors)),
             )
     }
+    #[cfg(test)]
     pub(super) fn status_texts(&self, cx: &App) -> (Vec<String>, Vec<String>) {
+        let (left, right) = self.status_items(cx);
+        (left, right.into_iter().map(|(text, _)| text).collect())
+    }
+
+    /// The status bar's texts, and on the right what a click on each opens.
+    #[allow(clippy::type_complexity)]
+    pub(super) fn status_items(
+        &self,
+        cx: &App,
+    ) -> (
+        Vec<String>,
+        Vec<(String, Option<super::status_items::StatusClick>)>,
+    ) {
         let strings = self.strings();
         let (mut left, mut right) = (Vec::new(), Vec::new());
         if let Some(branch) = &self.project.branch {
             left.push(branch.clone());
+        }
+        // After Cmd+K, the chord waits for its second key: VS Code says so.
+        if let Some(chord) = self.pending_chord_text() {
+            left.push(chord);
         }
         if let Some(extensions) = &self.extensions {
             let mut items: Vec<&StatusItem> = extensions
@@ -2057,7 +2132,7 @@ impl Workbench {
             for item in items {
                 let text = strip_codicons(&item.text);
                 if item.right {
-                    right.push(text);
+                    right.push((text, None));
                 } else {
                     left.push(text);
                 }
@@ -2094,35 +2169,25 @@ impl Workbench {
             && let Some(Backing::Pdf(tab)) =
                 self.documents.get(&uri).map(|document| &document.backing)
         {
-            right.push(strings.pdf_page_of(tab.current_page() + 1, tab.page_count()));
+            right.push((
+                strings.pdf_page_of(tab.current_page() + 1, tab.page_count()),
+                None,
+            ));
         }
         // An image: its size and its zoom, as VS Code shows them.
         if let Some((size, zoom)) = self.image_status() {
-            right.push(size);
-            right.push(zoom);
+            right.push((size, None));
+            right.push((zoom, None));
         }
         if let Some(pane) = self.panes.get(self.active).filter(|_| !image) {
-            let position = pane.editor.read(cx).cursor_position();
-            right.push(
-                strings.line_column(position.line as usize + 1, position.character as usize + 1),
-            );
-            let language_id = self
-                .documents
-                .get(&pane.uri)
-                .map(|document| document.language_id.clone())
-                .unwrap_or_default();
-            let tab_size = self.tab_size_for(&language_id);
-            right.push(strings.indentation(tab_size.tab_size, tab_size.hard_tabs));
-            right.push("UTF-8".to_owned());
-            if let Some(document) = self.documents.get(&pane.uri) {
-                right.push(language_name(&document.language_id, strings));
-            }
+            right.extend(self.editor_status(&pane.uri, cx));
         }
         (left, right)
     }
 
     fn render_status_bar(&self, colors: Colors, cx: &mut Context<Self>) -> Div {
-        let (left, right) = self.status_texts(cx);
+        let (left, right) = self.status_items(cx);
+        let strings = self.strings();
         let branch = self.project.branch.is_some();
         let sync = self.sync_text();
         let sync_tip: SharedString = self.sync_tooltip().into();
@@ -2223,13 +2288,26 @@ impl Workbench {
                     .flex()
                     .items_center()
                     .gap_1()
-                    .children(right.into_iter().map(|text| {
+                    .children(right.into_iter().enumerate().map(|(index, (text, click))| {
                         div()
+                            .id(("status-right", index))
                             .h(px(20.))
                             .px(px(6.))
+                            .rounded(px(5.))
                             .flex()
                             .items_center()
                             .child(text)
+                            .when_some(click, |item, click| {
+                                let tip = click.tooltip(strings);
+                                item.cursor_pointer()
+                                    .hover(|item| item.bg(colors.hover).text_color(colors.text))
+                                    .tooltip(move |window, cx| {
+                                        gpui_component::tooltip::Tooltip::new(tip).build(window, cx)
+                                    })
+                                    .on_click(cx.listener(move |this, _, window, cx| {
+                                        this.status_clicked(click, window, cx)
+                                    }))
+                            })
                             .into_any_element()
                     }))
                     .child(self.render_bell(colors, cx)),
@@ -2398,6 +2476,14 @@ impl Render for Workbench {
     }
 }
 
+/// A file or folder as the title's menu names it; the disk for `/`.
+fn path_label(path: &Path) -> String {
+    match path.file_name() {
+        Some(name) => name.to_string_lossy().into_owned(),
+        None => "Macintosh HD".to_owned(),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use gpui::{Keystroke, TestAppContext, VisualTestContext};
@@ -2500,10 +2586,65 @@ mod tests {
 
         let (left, right) = view.read_with(cx, |view, cx| view.status_texts(cx));
         assert_eq!(left, ["develop"]);
-        assert_eq!(right, ["Ln 2, Col 15", "Spaces: 2", "UTF-8", "TypeScript"]);
+        assert_eq!(
+            right,
+            ["Ln 2, Col 15", "Spaces: 2", "UTF-8", "LF", "TypeScript"]
+        );
         view.read_with(cx, |view, _| {
             assert_eq!(view.project.name, "GestionaleHospitality");
         });
+
+        // After Cmd+K the chord waits, and the status bar says so.
+        cx.simulate_keystrokes("cmd-k");
+        cx.run_until_parked();
+        let (left, _) = view.read_with(cx, |view, cx| view.status_texts(cx));
+        assert!(
+            left.iter().any(|text| text.starts_with("(⌘K) was pressed")),
+            "{left:?}"
+        );
+        cx.simulate_keystrokes("escape");
+        cx.run_until_parked();
+        let (left, _) = view.read_with(cx, |view, cx| view.status_texts(cx));
+        assert_eq!(left, ["develop"]);
+    }
+
+    #[gpui::test]
+    fn the_status_bar_reads_the_file_and_changes_it(cx: &mut TestAppContext) {
+        set_up(cx);
+        let folder = tempfile::tempdir().unwrap();
+        let path = folder.path().join("vecchio.py");
+        // Four spaces, Windows line endings, «città» as Windows 1252 has it.
+        std::fs::write(
+            &path,
+            b"def a():\r\n    if x:\r\n        print('citt\xE0')\r\n    return 1\r\n",
+        )
+        .unwrap();
+        let document = Document::open(&path).unwrap();
+        let settings = english(folder.path());
+        let (view, cx) = cx.add_window_view(|window, cx| {
+            Workbench::new(Some(document), settings, None, window, cx)
+        });
+        let (_, right) = view.read_with(cx, |view, cx| view.status_texts(cx));
+        assert_eq!(
+            right,
+            ["Ln 1, Col 1", "Spaces: 4", "Windows 1252", "CRLF", "Python"]
+        );
+
+        cx.simulate_keystrokes("shift-end");
+        let (_, right) = view.read_with(cx, |view, cx| view.status_texts(cx));
+        assert_eq!(right[0], "Ln 1, Col 9 (8 selected)");
+
+        let uri = view.read_with(cx, |view, _| view.panes[0].uri.clone());
+        view.update_in(cx, |view, window, cx| {
+            view.set_document_language(&uri, "plaintext".into(), cx);
+            view.save_with(&uri, editor::Encoding::Utf8, window, cx);
+        });
+        let (_, right) = view.read_with(cx, |view, cx| view.status_texts(cx));
+        assert_eq!(&right[2..], ["UTF-8", "CRLF", "Plain Text"]);
+        assert_eq!(
+            std::fs::read_to_string(&path).unwrap(),
+            "def a():\r\n    if x:\r\n        print('città')\r\n    return 1\r\n"
+        );
     }
 
     #[gpui::test]

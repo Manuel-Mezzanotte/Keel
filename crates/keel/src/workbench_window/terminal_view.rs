@@ -105,6 +105,10 @@ pub(crate) enum TerminalViewEvent {
     AskClaude(String),
     /// A short message for the status bar.
     Status(String),
+    /// A program asked for a notification (OSC 9 or 777).
+    Notify(String),
+    /// A program rang the bell.
+    Bell,
 }
 
 /// How a terminal's tab looks.
@@ -387,7 +391,9 @@ impl TerminalView {
     fn handle_events(&mut self, events: Vec<TerminalEvent>, cx: &mut Context<Self>) {
         for event in events {
             match event {
-                TerminalEvent::Changed | TerminalEvent::Bell => {}
+                TerminalEvent::Changed => {}
+                TerminalEvent::Bell => cx.emit(TerminalViewEvent::Bell),
+                TerminalEvent::Notify(text) => cx.emit(TerminalViewEvent::Notify(text)),
                 TerminalEvent::Title(title) => {
                     self.title = title.filter(|title| !title.trim().is_empty());
                     cx.emit(TerminalViewEvent::TitleChanged);

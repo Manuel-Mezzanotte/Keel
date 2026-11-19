@@ -278,6 +278,9 @@ impl Tracker {
             self.progress = progress;
             return vec![TerminalEvent::Progress(progress)];
         }
+        if let Mark::Notify(text) = mark {
+            return vec![TerminalEvent::Notify(text)];
+        }
         if term.mode().contains(TermMode::ALT_SCREEN) {
             return Vec::new();
         }
@@ -369,7 +372,7 @@ impl Tracker {
                 }
                 events
             }
-            Mark::Progress(_) => Vec::new(),
+            Mark::Progress(_) | Mark::Notify(_) => Vec::new(),
         }
     }
 

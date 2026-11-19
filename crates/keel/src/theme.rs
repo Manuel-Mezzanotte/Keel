@@ -71,6 +71,7 @@ pub fn apply(choice: &ThemeChoice, window: Option<&mut Window>, cx: &mut App) {
             theme.light_theme = light;
         }
         Theme::sync_system_appearance(window, cx);
+        follow_accessibility(cx);
         return;
     }
     let Some(chosen) = chosen else {
@@ -85,6 +86,20 @@ pub fn apply(choice: &ThemeChoice, window: Option<&mut Window>, cx: &mut App) {
         theme.light_theme = chosen;
         Theme::change(ThemeMode::Light, window, cx);
     }
+    follow_accessibility(cx);
+}
+
+/// Increase Contrast of macOS: lines and secondary text stand out more, as
+/// they do in Apple's apps with it on.
+fn follow_accessibility(cx: &mut App) {
+    if !crate::mac::accessibility().increase_contrast {
+        return;
+    }
+    let theme = Theme::global_mut(cx);
+    let foreground = theme.foreground;
+    theme.border = foreground.opacity(0.45);
+    theme.input = foreground.opacity(0.5);
+    theme.muted_foreground = foreground.opacity(0.82);
 }
 
 /// Notices come in at the bottom right, just above the status bar, as in

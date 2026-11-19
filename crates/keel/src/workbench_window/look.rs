@@ -72,10 +72,11 @@ impl Look {
     pub(crate) fn from_settings(settings: &Settings) -> Self {
         Self {
             style: InterfaceStyle::from_id(settings.string(STYLE_SETTING)),
+            // Unset, it follows Reduce Motion of macOS.
             motion: settings
                 .get(MOTION_SETTING)
                 .and_then(serde_json::Value::as_bool)
-                .unwrap_or(MOTION_BY_DEFAULT),
+                .unwrap_or_else(|| MOTION_BY_DEFAULT && !crate::motion::reduced()),
         }
     }
 

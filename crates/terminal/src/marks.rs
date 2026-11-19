@@ -36,6 +36,9 @@ pub(crate) enum Mark {
     },
     /// `None` takes the progress away.
     Progress(Option<Progress>),
+    /// A program asks for a notification (OSC 9 as iTerm2, OSC 777 as
+    /// rxvt and Ghostty), as Claude Code does when it waits for you.
+    Notify(String),
 }
 
 /// The longest sequence kept: long command lines fit, a runaway one does
@@ -142,7 +145,37 @@ fn parse(payload: &[u8]) -> Option<Mark> {
     let mut parts = text.split(';');
     match parts.next()? {
         "133" | "633" => {}
-        "9" => return parse_progress(parts),
+        "9" => {
+            let rest = text.get(2..).unwrap_or_default();
+            if rest.starts_with("4;") || rest == "4" {
+                return parse_progress(parts);
+            }
+            // ConEmu's other commands, such as `9;9;folder`, start with a
+            // number: they are not notifications.
+            if rest
+                .split(';')
+                .next()
+                .is_some_and(|first| !first.is_empty() && first.chars().all(|c| c.is_ascii_digit()))
+            {
+                return None;
+            }
+            return (!rest.trim().is_empty()).then(|| Mark::Notify(rest.trim().to_owned()));
+        }
+        "777" => {
+            // `777;notify;title;body`
+            if parts.next()? != "notify" {
+                return None;
+            }
+            let title = parts.next().unwrap_or_default();
+            let body = parts.collect::<Vec<_>>().join(";");
+            let text = [title, body.as_str()]
+                .iter()
+                .filter(|part| !part.trim().is_empty())
+                .copied()
+                .collect::<Vec<_>>()
+                .join(" — ");
+            return (!text.is_empty()).then_some(Mark::Notify(text));
+        }
         _ => return None,
     }
     let kind = parts.next()?;
@@ -280,7 +313,15 @@ mod tests {
             parse(b"9;4;2"),
             Some(Mark::Progress(Some(Progress::Error(100))))
         );
-        assert_eq!(parse(b"9;1;whatever"), None);
+        assert_eq!(
+            parse(b"9;Claude is waiting for your input"),
+            Some(Mark::Notify("Claude is waiting for your input".into()))
+        );
+        assert_eq!(parse(b"9;9;/Users/me"), None);
+        assert_eq!(
+            parse(b"777;notify;Claude Code;Task done"),
+            Some(Mark::Notify("Claude Code — Task done".into()))
+        );
         assert_eq!(parse(b"133;D"), Some(Mark::CommandEnd(None)));
     }
 }

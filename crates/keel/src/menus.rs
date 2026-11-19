@@ -17,11 +17,26 @@ use crate::workbench_window::{
     ToggleWordWrap, ZoomIn, ZoomOut, ZoomReset,
 };
 use crate::workbench_window::{
+    GoBack, GoForward, GoToImplementation, GoToLastEdit, GoToReferences, GoToSymbolInFile,
+    GoToSymbolInWorkspace, GoToTypeDefinition, NextChange, NextProblem, PreviousChange,
+    PreviousProblem, RevealDefinition,
+};
+use crate::workbench_window::{
     KillTerminal, NewTerminal, OpenClaudeCode, OpenClaudeCodeInPanel, RenameTerminal,
     SplitTerminal, ToggleMaximizedPanel,
 };
 
-actions!(keel, [HideKeel, HideOtherApps, ShowAllApps]);
+actions!(
+    keel,
+    [
+        HideKeel,
+        HideOtherApps,
+        ShowAllApps,
+        MinimizeWindow,
+        ZoomWindow,
+        BringAllToFront
+    ]
+);
 
 /// The actions every Mac app has in its menu, with macOS's keys: hide
 /// Keel, hide the other apps, show them all. They work with no window.
@@ -29,9 +44,21 @@ pub fn init(cx: &mut App) {
     cx.on_action(|_: &HideKeel, cx| cx.hide());
     cx.on_action(|_: &HideOtherApps, cx| cx.hide_other_apps());
     cx.on_action(|_: &ShowAllApps, cx| cx.unhide_other_apps());
+    cx.on_action(|_: &MinimizeWindow, cx| {
+        if let Some(window) = cx.active_window() {
+            let _ = window.update(cx, |_, window, _| window.minimize_window());
+        }
+    });
+    cx.on_action(|_: &ZoomWindow, cx| {
+        if let Some(window) = cx.active_window() {
+            let _ = window.update(cx, |_, window, _| window.zoom_window());
+        }
+    });
+    cx.on_action(|_: &BringAllToFront, _| crate::mac::bring_all_to_front());
     cx.bind_keys([
         KeyBinding::new("cmd-h", HideKeel, None),
         KeyBinding::new("cmd-alt-h", HideOtherApps, None),
+        KeyBinding::new("cmd-m", MinimizeWindow, None),
     ]);
 }
 
@@ -195,8 +222,24 @@ pub fn set(language: UiLanguage, cx: &mut App) {
         menu(
             strings.menu_go,
             vec![
+                MenuItem::action(strings.menu_back, GoBack),
+                MenuItem::action(strings.menu_forward, GoForward),
+                MenuItem::action(strings.menu_last_edit, GoToLastEdit),
+                MenuItem::separator(),
                 MenuItem::action(strings.menu_go_to_file, QuickOpen),
+                MenuItem::action(strings.menu_go_to_symbol, GoToSymbolInFile),
+                MenuItem::action(strings.menu_go_to_workspace_symbol, GoToSymbolInWorkspace),
                 MenuItem::action(strings.menu_go_to_line, GoToLine),
+                MenuItem::separator(),
+                MenuItem::action(strings.menu_go_to_definition, RevealDefinition),
+                MenuItem::action(strings.menu_go_to_type_definition, GoToTypeDefinition),
+                MenuItem::action(strings.menu_go_to_implementation, GoToImplementation),
+                MenuItem::action(strings.menu_go_to_references, GoToReferences),
+                MenuItem::separator(),
+                MenuItem::action(strings.menu_next_problem, NextProblem),
+                MenuItem::action(strings.menu_previous_problem, PreviousProblem),
+                MenuItem::action(strings.menu_next_change, NextChange),
+                MenuItem::action(strings.menu_previous_change, PreviousChange),
             ],
         ),
         menu(
@@ -213,7 +256,46 @@ pub fn set(language: UiLanguage, cx: &mut App) {
                 MenuItem::action(strings.command_claude_code_panel, OpenClaudeCodeInPanel),
             ],
         ),
+        // macOS lists the open windows here.
+        menu(
+            strings.menu_window,
+            vec![
+                MenuItem::action(strings.menu_minimize, MinimizeWindow),
+                MenuItem::action(strings.menu_zoom, ZoomWindow),
+                MenuItem::separator(),
+                MenuItem::action(strings.menu_bring_all_to_front, BringAllToFront),
+            ],
+        ),
+        // macOS puts its field that searches every menu at the top.
+        menu(
+            strings.menu_help,
+            vec![
+                MenuItem::action(strings.menu_show_all_commands, ShowCommands),
+                MenuItem::action(strings.menu_keybindings, OpenKeybindings),
+                MenuItem::separator(),
+                MenuItem::action(strings.menu_show_log, ToggleOutput),
+            ],
+        ),
     ]);
+    crate::mac::mark_menus(strings.menu_window, strings.menu_help);
+    // A right click on the Dock's icon: a new window and the recent
+    // projects, as Xcode and VS Code offer.
+    let mut dock = vec![MenuItem::action(strings.menu_new_window, NewWindow)];
+    let recent: Vec<MenuItem> = crate::recent::projects(cx)
+        .into_iter()
+        .take(10)
+        .map(|project| {
+            MenuItem::action(
+                crate::recent::short_path(&project),
+                OpenProject { path: project },
+            )
+        })
+        .collect();
+    if !recent.is_empty() {
+        dock.push(MenuItem::separator());
+        dock.extend(recent);
+    }
+    cx.set_dock_menu(dock);
 }
 
 #[cfg(test)]
@@ -301,7 +383,9 @@ mod tests {
                 "Selezione",
                 "Vista",
                 "Vai",
-                "Terminale"
+                "Terminale",
+                "Finestra",
+                "Aiuto"
             ]
         );
 
@@ -315,7 +399,9 @@ mod tests {
                 "Selection",
                 "View",
                 "Go",
-                "Terminal"
+                "Terminal",
+                "Window",
+                "Help"
             ]
         );
     }

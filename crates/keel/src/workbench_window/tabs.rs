@@ -178,7 +178,7 @@ impl Workbench {
         let document = self.documents.get(uri)?;
         let language = Language::for_vscode_id(&document.language_id);
         let text = document.synced_text.clone();
-        let tab_size = self.tab_size_for(&document.language_id);
+        let tab_size = self.indent_of(uri);
         let soft_wrap = self.word_wrap;
         let whitespace = self.settings.string("editor.renderWhitespace") == Some("all");
         let editor = cx.new(|cx| {

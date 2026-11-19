@@ -236,6 +236,38 @@ impl Workbench {
         self.notify_user(notice, window, cx);
     }
 
+    /// A program in a terminal asked for you, with a notification or the
+    /// bell: with Keel in the background, a notice and the Dock say so, as
+    /// iTerm and Ghostty do for Claude Code waiting for input.
+    pub(super) fn terminal_wants_you(
+        &mut self,
+        view: &Entity<TerminalView>,
+        text: Option<&String>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        if window.is_window_active() {
+            return;
+        }
+        crate::mac::needs_attention();
+        let strings = self.strings();
+        let name = view.read(cx).name();
+        let title = match text {
+            Some(text) => text.clone(),
+            None => fill(
+                strings.terminal_bell_title,
+                &[("name", &format!("«{name}»"))],
+            ),
+        };
+        let view = view.downgrade();
+        let notice = Notice::info(title).action(strings.terminal_show, move |this, window, cx| {
+            if let Some(view) = view.upgrade() {
+                this.reveal_terminal(&view, window, cx);
+            }
+        });
+        self.notify_user(notice, window, cx);
+    }
+
     /// Brings a terminal to the front and gives it the keyboard.
     pub(super) fn reveal_terminal(
         &mut self,

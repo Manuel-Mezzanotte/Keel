@@ -98,6 +98,8 @@ pub enum TerminalEvent {
     CommandFinished(ShellCommand),
     /// A program reported how far it is (OSC 9;4), or stopped saying.
     Progress(Option<Progress>),
+    /// A program asked for a notification, with its text.
+    Notify(String),
 }
 
 /// How to start a terminal.

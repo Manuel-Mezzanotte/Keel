@@ -10,6 +10,7 @@ mod i18n;
 mod instance;
 mod keymap;
 mod layout;
+mod mac;
 mod menus;
 mod motion;
 mod paths;

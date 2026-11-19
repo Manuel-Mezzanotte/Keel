@@ -5,6 +5,8 @@ use std::fs;
 use std::io::{self, Write as _};
 use std::path::{Path, PathBuf};
 
+use crate::Encoding;
+
 /// A text document backed by a file.
 ///
 /// The document remembers the text as it was last read from or written to
@@ -14,6 +16,7 @@ pub struct Document {
     path: PathBuf,
     saved_text: String,
     exists_on_disk: bool,
+    encoding: Encoding,
 }
 
 /// Why a file could not be opened as a text document.
@@ -21,7 +24,7 @@ pub struct Document {
 pub enum OpenError {
     /// The file could not be read.
     Io(io::Error),
-    /// The file is not valid UTF-8 text.
+    /// The file is not text in any encoding Keel reads.
     NotUtf8,
     /// The path points to a directory.
     IsDirectory,
@@ -31,7 +34,7 @@ impl fmt::Display for OpenError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             OpenError::Io(error) => write!(f, "{error}"),
-            OpenError::NotUtf8 => f.write_str("the file is not UTF-8 text"),
+            OpenError::NotUtf8 => f.write_str("the file is not text"),
             OpenError::IsDirectory => f.write_str("the path is a directory"),
         }
     }
@@ -56,17 +59,19 @@ impl Document {
             Ok(metadata) if metadata.is_dir() => Err(OpenError::IsDirectory),
             Ok(_) => {
                 let bytes = fs::read(&path)?;
-                let saved_text = String::from_utf8(bytes).map_err(|_| OpenError::NotUtf8)?;
+                let (encoding, saved_text) = Encoding::detect(&bytes).ok_or(OpenError::NotUtf8)?;
                 Ok(Self {
                     path,
                     saved_text,
                     exists_on_disk: true,
+                    encoding,
                 })
             }
             Err(error) if error.kind() == io::ErrorKind::NotFound => Ok(Self {
                 path,
                 saved_text: String::new(),
                 exists_on_disk: false,
+                encoding: Encoding::Utf8,
             }),
             Err(error) => Err(error.into()),
         }
@@ -81,8 +86,35 @@ impl Document {
     /// it, for example because Claude Code wrote it. A missing or unreadable
     /// file counts as unchanged.
     pub fn changed_on_disk(&self) -> Option<String> {
-        let text = fs::read_to_string(&self.path).ok()?;
+        let bytes = fs::read(&self.path).ok()?;
+        let text = self
+            .encoding
+            .decode(&bytes)
+            .or_else(|| Encoding::detect(&bytes).map(|(_, text)| text))?;
         (text != self.saved_text).then_some(text)
+    }
+
+    /// How the file's text is written as bytes.
+    pub fn encoding(&self) -> Encoding {
+        self.encoding
+    }
+
+    /// The encoding the next save writes in, as «Save with Encoding».
+    pub fn set_encoding(&mut self, encoding: Encoding) {
+        self.encoding = encoding;
+    }
+
+    /// Reads the file again in another encoding, as «Reopen with
+    /// Encoding»; returns its text, or `None` when its bytes are not valid
+    /// in that encoding.
+    pub fn reopen_with(&mut self, encoding: Encoding) -> io::Result<Option<String>> {
+        let bytes = fs::read(&self.path)?;
+        let Some(text) = encoding.decode(&bytes) else {
+            return Ok(None);
+        };
+        self.encoding = encoding;
+        self.saved_text = text.clone();
+        Ok(Some(text))
     }
 
     /// Takes the text now on disk as the saved one, after a reload.
@@ -127,8 +159,17 @@ impl Document {
     /// file they point to is updated and the link itself stays in place. The
     /// permissions of an existing file are kept.
     pub fn save(&mut self, text: &str) -> io::Result<()> {
+        let bytes = self.encoding.encode(text).map_err(|missing| {
+            io::Error::new(
+                io::ErrorKind::InvalidData,
+                format!(
+                    "«{missing}» cannot be written in {}: save it with another encoding",
+                    self.encoding.name()
+                ),
+            )
+        })?;
         let target = resolve_symlink(&self.path)?;
-        write_atomically(&target, text.as_bytes())?;
+        write_atomically(&target, &bytes)?;
         self.saved_text = text.to_owned();
         self.exists_on_disk = true;
         Ok(())
@@ -322,7 +363,33 @@ mod tests {
         ));
 
         let binary = folder.path().join("image.bin");
-        fs::write(&binary, [0xff, 0xfe, 0x00, 0x80]).unwrap();
+        fs::write(&binary, [0x00, 0xff, 0x00, 0x80]).unwrap();
         assert!(matches!(Document::open(&binary), Err(OpenError::NotUtf8)));
+    }
+
+    #[test]
+    fn a_file_keeps_its_encoding_and_can_change_it() {
+        let folder = tempfile::tempdir().unwrap();
+        let path = folder.path().join("vecchio.txt");
+        fs::write(&path, b"citt\xE0\r\n").unwrap();
+        let mut document = Document::open(&path).unwrap();
+        assert_eq!(document.encoding(), Encoding::Windows1252);
+        assert_eq!(document.saved_text(), "città\r\n");
+        document.save("perché\r\n").unwrap();
+        assert_eq!(fs::read(&path).unwrap(), b"perch\xE9\r\n");
+        assert_eq!(document.changed_on_disk(), None);
+        // Not all of it can be written so: the save says why.
+        assert!(document.save("😀").is_err());
+        document.set_encoding(Encoding::Utf8);
+        document.save("perché\n").unwrap();
+        assert_eq!(fs::read_to_string(&path).unwrap(), "perché\n");
+        // Read as Windows 1252, the UTF-8 bytes of «é» are two letters.
+        assert_eq!(
+            document
+                .reopen_with(Encoding::Windows1252)
+                .unwrap()
+                .as_deref(),
+            Some("perchÃ©\n")
+        );
     }
 }
