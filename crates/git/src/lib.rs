@@ -159,6 +159,14 @@ impl Repo {
         self.run(&["show", &format!("{revision}:{path}")]).ok()
     }
 
+    /// A file's bytes at a revision, as `git show` gives them: for
+    /// pictures, which are not text. `spec` is such as `HEAD:a.png`,
+    /// `:a.png` for the index, or `abc123^:a.png`.
+    pub fn bytes_at(&self, spec: &str) -> Option<Vec<u8>> {
+        let output = self.command(&["show", spec]).output().ok()?;
+        output.status.success().then_some(output.stdout)
+    }
+
     /// A file as it is staged; `None` when it is not in the index.
     pub fn index_text(&self, path: &str) -> Option<String> {
         self.run(&["show", &format!(":{path}")]).ok()

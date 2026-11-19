@@ -131,8 +131,8 @@ impl Workbench {
                     source,
                     state,
                     title: tab_name.clone(),
-
                     doc: Some(doc),
+                    images: None,
                 }),
                 language_id: "diff".to_owned(),
                 version: 1,

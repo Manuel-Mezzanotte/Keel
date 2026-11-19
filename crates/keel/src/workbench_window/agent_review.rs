@@ -193,8 +193,8 @@ impl Workbench {
                     source,
                     state,
                     title: format!("{name} (Claude)"),
-
                     doc: Some(doc),
+                    images: None,
                 }),
                 language_id: "diff".to_owned(),
                 version: 1,

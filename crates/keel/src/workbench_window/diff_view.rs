@@ -53,6 +53,8 @@ pub(super) struct DiffTab {
     /// Keel's own view of the two versions, for all but conflicts and
     /// Claude's proposals.
     pub(super) doc: Option<super::diff_pane::DiffDoc>,
+    /// A changed picture, shown as pictures.
+    pub(super) images: Option<super::image_diff::ImageDiff>,
 }
 
 /// The uri of a differences tab, distinct for each file and source.
@@ -131,6 +133,37 @@ impl Workbench {
         {
             doc.set_files(files);
         }
+        // A changed picture: its two versions as pictures.
+        if !self.documents.contains_key(&uri)
+            && let Some(images) = self.image_diff(path, &source, cx)
+        {
+            let name = path.rsplit('/').next().unwrap_or(path);
+            let state = cx.new(|cx| DiffState::new(Vec::new(), cx));
+            self.documents.insert(
+                uri.clone(),
+                OpenDocument {
+                    uri: uri.clone(),
+                    backing: Backing::Diff(DiffTab {
+                        path: path.to_owned(),
+                        source: source.clone(),
+                        state,
+                        title: match &source {
+                            DiffSource::Staged => format!("{name} ({})", self.strings().diff_index),
+                            DiffSource::Commit(hash, _) => {
+                                format!("{name} ({})", &hash[..hash.len().min(8)])
+                            }
+                            _ => format!("{name} ({})", self.strings().diff_working_tree),
+                        },
+                        doc: None,
+                        images: Some(images),
+                    }),
+                    language_id: "diff".to_owned(),
+                    version: 1,
+                    synced_text: String::new(),
+                    modified: false,
+                },
+            );
+        }
         if !self.documents.contains_key(&uri) && source != DiffSource::Conflict {
             let files = match self.diff_docs(path, &source) {
                 Ok(files) => files,
@@ -167,6 +200,7 @@ impl Workbench {
                         state,
                         title,
                         doc: Some(doc),
+                        images: None,
                     }),
                     language_id: "diff".to_owned(),
                     version: 1,
@@ -216,6 +250,7 @@ impl Workbench {
                         state,
                         title,
                         doc: None,
+                        images: None,
                     }),
                     language_id: "diff".to_owned(),
                     version: 1,
@@ -783,6 +818,9 @@ impl Workbench {
         }
         if let DiffSource::Agent(path) = &tab.source {
             return self.render_agent_change_tab(path, tab, colors, window, cx);
+        }
+        if let Some(images) = &tab.images {
+            return self.render_image_diff(uri, tab, images, colors, cx);
         }
         if let Some(doc) = &tab.doc {
             return self.render_doc_tab(uri, tab, doc, colors, window, cx);

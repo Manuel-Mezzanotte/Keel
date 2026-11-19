@@ -1022,6 +1022,16 @@ pub struct Strings {
     pub clipboard_history_empty: &'static str,
     pub clipboard_lines: &'static str,
     pub command_paste_from_history: &'static str,
+    /// On the first line of code moved elsewhere in the file.
+    pub diff_moved_to: &'static str,
+    pub diff_moved_from: &'static str,
+    /// The two sides of a changed picture.
+    pub image_diff_before: &'static str,
+    pub image_diff_after: &'static str,
+    pub image_diff_side_by_side: &'static str,
+    pub image_diff_overlay: &'static str,
+    pub image_diff_missing_before: &'static str,
+    pub image_diff_missing_after: &'static str,
 }
 
 impl Strings {
@@ -2471,6 +2481,14 @@ pub const ITALIAN: Strings = Strings {
     clipboard_history_empty: "Non hai ancora copiato niente",
     clipboard_lines: "{count} righe",
     command_paste_from_history: "Modifica: incolla dalla cronologia degli appunti…",
+    diff_moved_to: "spostato alla riga {line}",
+    diff_moved_from: "spostato dalla riga {line}",
+    image_diff_before: "Prima",
+    image_diff_after: "Dopo",
+    image_diff_side_by_side: "Affiancate",
+    image_diff_overlay: "Sovrapposte",
+    image_diff_missing_before: "Non c'era",
+    image_diff_missing_after: "Tolta",
 };
 
 pub const ENGLISH: Strings = Strings {
@@ -3356,6 +3374,14 @@ pub const ENGLISH: Strings = Strings {
     clipboard_history_empty: "Nothing copied yet",
     clipboard_lines: "{count} lines",
     command_paste_from_history: "Edit: Paste from Clipboard History…",
+    diff_moved_to: "moved to line {line}",
+    diff_moved_from: "moved from line {line}",
+    image_diff_before: "Before",
+    image_diff_after: "After",
+    image_diff_side_by_side: "Side by Side",
+    image_diff_overlay: "Overlay",
+    image_diff_missing_before: "Not there before",
+    image_diff_missing_after: "Deleted",
 };
 
 #[cfg(test)]

@@ -33,6 +33,7 @@ mod git_graph;
 mod git_gutter;
 mod git_marks;
 mod host_watchdog;
+mod image_diff;
 mod interface_page;
 mod keybindings_view;
 mod language_features;

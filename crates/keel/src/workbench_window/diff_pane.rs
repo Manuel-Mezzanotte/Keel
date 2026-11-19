@@ -745,6 +745,9 @@ enum Cell {
     Same,
     Removed,
     Added,
+    /// Taken away here and written elsewhere, or the other way round.
+    MovedAway,
+    MovedHere,
 }
 
 /// One cell: its line numbers (old, new), whether it has a column for
@@ -758,6 +761,8 @@ struct CellSpec<'a> {
     side: &'a Side,
     line: usize,
     new_side: bool,
+    /// Said at the right, as where a moved stretch went.
+    note: Option<String>,
 }
 
 fn render_code(
@@ -770,33 +775,45 @@ fn render_code(
     cx: &mut App,
 ) -> AnyElement {
     let file = row.file();
+    let strings = look.strings;
     let old_cell = |line: usize, kind: Cell, words: &[Range<usize>], two: bool, cx: &App| {
+        let moved = kind == Cell::Removed && diff.moved_old.contains_key(&line);
         cell(
             CellSpec {
                 numbers: (Some(line), None),
                 two_numbers: two,
-                kind,
+                kind: if moved { Cell::MovedAway } else { kind },
                 text: &diff.old[line],
-                words,
+                words: if moved { &[] } else { words },
                 side: &sides[0],
                 line,
                 new_side: false,
+                note: diff.moved_to_at(line).map(|to| {
+                    super::notices::fill(strings.diff_moved_to, &[("line", &(to + 1).to_string())])
+                }),
             },
             look,
             cx,
         )
     };
     let new_cell = |line: usize, kind: Cell, words: &[Range<usize>], two: bool, cx: &App| {
+        let moved = kind == Cell::Added && diff.moved_new.contains_key(&line);
         cell(
             CellSpec {
                 numbers: (None, Some(line)),
                 two_numbers: two,
-                kind,
+                kind: if moved { Cell::MovedHere } else { kind },
                 text: &diff.new[line],
-                words,
+                words: if moved { &[] } else { words },
                 side: &sides[1],
                 line,
                 new_side: true,
+                note: diff.moved_from_at(line).map(|from| {
+                    super::notices::fill(
+                        strings.diff_moved_from,
+                        &[("line", &(from + 1).to_string())],
+                    )
+                }),
             },
             look,
             cx,
@@ -824,6 +841,7 @@ fn render_code(
                 side: &sides[1],
                 line: new,
                 new_side: true,
+                note: None,
             },
             look,
             cx,
@@ -955,6 +973,7 @@ fn cell(spec: CellSpec, look: &Look, cx: &App) -> AnyElement {
         side,
         line,
         new_side,
+        note,
     } = spec;
     let colors = look.colors;
     let theme = cx.theme();
@@ -970,6 +989,13 @@ fn cell(spec: CellSpec, look: &Look, cx: &App) -> AnyElement {
             theme.danger.opacity(0.32),
             "−",
             theme.danger,
+        ),
+        // Moved code in the blue of the moves of VS Code, with an arrow.
+        Cell::MovedAway | Cell::MovedHere => (
+            Some(theme.info.opacity(0.12)),
+            theme.info.opacity(0.32),
+            "⇅",
+            theme.info,
         ),
         Cell::Same => (None, gpui::transparent_black(), " ", colors.faint),
     };
@@ -1055,6 +1081,16 @@ fn cell(spec: CellSpec, look: &Look, cx: &App) -> AnyElement {
                 .text_color(colors.text)
                 .child(code),
         )
+        .when_some(note, |cell, note| {
+            cell.child(
+                div()
+                    .flex_none()
+                    .pr_3()
+                    .text_xs()
+                    .text_color(theme.info)
+                    .child(note),
+            )
+        })
         .when(new_side, |cell| cell.on_click(open(line)))
         .into_any_element()
 }

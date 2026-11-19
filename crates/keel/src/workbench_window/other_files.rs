@@ -90,7 +90,7 @@ pub(super) fn image_size(path: &Path) -> Option<(u32, u32)> {
 }
 
 /// A size for people: `820 KB`, `3,4 MB`.
-fn readable_size(bytes: u64, italian: bool) -> String {
+pub(super) fn readable_size(bytes: u64, italian: bool) -> String {
     let (value, unit) = if bytes >= 1024 * 1024 {
         (bytes as f64 / (1024. * 1024.), "MB")
     } else {

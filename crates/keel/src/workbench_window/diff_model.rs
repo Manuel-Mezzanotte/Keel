@@ -11,6 +11,9 @@ use std::ops::Range;
 pub(super) const CONTEXT: usize = 3;
 /// How many hidden lines an arrow of a fold shows.
 pub(super) const EXPAND_STEP: usize = 20;
+/// The fewest lines taken away in one place and written in another that
+/// count as moved, as VS Code's `diffEditor.experimental.showMoves`.
+const MOVED_LINES: usize = 3;
 
 /// One file's two versions and its changed blocks.
 pub(super) struct FileDiff {
@@ -27,6 +30,10 @@ pub(super) struct FileDiff {
     pub(super) revealed: HashMap<usize, (usize, usize)>,
     /// Closed to its header, in the page with every change.
     pub(super) collapsed: bool,
+    /// Lines taken away that were written elsewhere: old line to new line,
+    /// and the other way round.
+    pub(super) moved_old: HashMap<usize, usize>,
+    pub(super) moved_new: HashMap<usize, usize>,
 }
 
 fn lines(text: &str) -> Vec<String> {
@@ -59,6 +66,7 @@ impl FileDiff {
             };
             git::hunks(&join(&old), &join(&new))
         };
+        let (moved_old, moved_new) = find_moves(&old, &new, &hunks);
         Self {
             path: path.into(),
             old_text,
@@ -68,7 +76,23 @@ impl FileDiff {
             hunks,
             revealed: HashMap::new(),
             collapsed: false,
+            moved_old,
+            moved_new,
         }
+    }
+
+    /// The line a moved stretch went to, on the first of its old lines.
+    pub(super) fn moved_to_at(&self, old: usize) -> Option<usize> {
+        let to = *self.moved_old.get(&old)?;
+        let continues = old > 0 && self.moved_old.get(&(old - 1)) == Some(&(to.wrapping_sub(1)));
+        (!continues).then_some(to)
+    }
+
+    /// The line a moved stretch came from, on the first of its new lines.
+    pub(super) fn moved_from_at(&self, new: usize) -> Option<usize> {
+        let from = *self.moved_new.get(&new)?;
+        let continues = new > 0 && self.moved_new.get(&(new - 1)) == Some(&(from.wrapping_sub(1)));
+        (!continues).then_some(from)
     }
 
     pub(super) fn additions(&self) -> usize {
@@ -110,6 +134,77 @@ impl FileDiff {
                 short
             })
     }
+}
+
+/// Stretches of at least `MOVED_LINES` lines taken away in one place and
+/// written, the same but for their indentation, in another.
+#[allow(clippy::type_complexity)]
+fn find_moves(
+    old: &[String],
+    new: &[String],
+    hunks: &[git::Hunk],
+) -> (HashMap<usize, usize>, HashMap<usize, usize>) {
+    let mut removed = vec![false; old.len()];
+    let mut added = vec![false; new.len()];
+    for hunk in hunks {
+        for line in hunk.old.clone().filter(|line| *line < old.len()) {
+            removed[line] = true;
+        }
+        for line in hunk.new.clone().filter(|line| *line < new.len()) {
+            added[line] = true;
+        }
+    }
+    let key = |line: &str| line.trim().to_owned();
+    let mut written: HashMap<String, Vec<usize>> = HashMap::new();
+    for (line, text) in new.iter().enumerate().filter(|(line, _)| added[*line]) {
+        let text = key(text);
+        if !text.is_empty() {
+            written.entry(text).or_default().push(line);
+        }
+    }
+    let (mut moved_old, mut moved_new) = (HashMap::new(), HashMap::new());
+    let mut line = 0;
+    while line < old.len() {
+        if !removed[line] {
+            line += 1;
+            continue;
+        }
+        let mut best = (0, 0);
+        for &start in written.get(&key(&old[line])).into_iter().flatten() {
+            let mut length = 0;
+            while line + length < old.len()
+                && start + length < new.len()
+                && removed[line + length]
+                && added[start + length]
+                && !moved_new.contains_key(&(start + length))
+                && key(&old[line + length]) == key(&new[start + length])
+            {
+                length += 1;
+            }
+            if length > best.0 {
+                best = (length, start);
+            }
+        }
+        let (length, start) = best;
+        // Braces and blank lines alone do not make a move.
+        let meaningful = (0..length).any(|offset| {
+            old[line + offset]
+                .chars()
+                .filter(|c| c.is_alphanumeric())
+                .count()
+                >= 4
+        });
+        if length >= MOVED_LINES && meaningful {
+            for offset in 0..length {
+                moved_old.insert(line + offset, start + offset);
+                moved_new.insert(start + offset, line + offset);
+            }
+            line += length;
+        } else {
+            line += 1;
+        }
+    }
+    (moved_old, moved_new)
 }
 
 /// Which hidden lines of a fold to show.
@@ -553,5 +648,22 @@ mod tests {
             Some("fn save(file: &str) {")
         );
         assert_eq!(file.scope_above(0), None);
+    }
+
+    #[test]
+    fn code_moved_elsewhere_is_seen_as_moved() {
+        let helper = "fn helper() {\n    let total = 1;\n    total\n}\n";
+        let body = "fn one() {}\nfn two() {}\nfn three() {}\nfn four() {}\nfn five() {}\n";
+        let old = format!("{helper}{body}");
+        let new = format!("{body}{helper}");
+        let diff = FileDiff::new("x.rs", &old, &new, false);
+        // The helper went from the top to the bottom.
+        assert_eq!(diff.moved_old.get(&0), Some(&5));
+        assert_eq!(diff.moved_to_at(0), Some(5));
+        assert_eq!(diff.moved_to_at(1), None);
+        assert_eq!(diff.moved_from_at(5), Some(0));
+        // A real change is not a move.
+        let changed = FileDiff::new("x.rs", "a\nb\nc\n", "a\nx\nc\n", false);
+        assert!(changed.moved_old.is_empty());
     }
 }
