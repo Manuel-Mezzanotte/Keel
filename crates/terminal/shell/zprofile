@@ -1,0 +1,7 @@
+# Keel: the user's .zprofile, read from where it is.
+if [[ -f "$KEEL_USER_ZDOTDIR/.zprofile" ]]; then
+  ZDOTDIR=$KEEL_USER_ZDOTDIR
+  . "$KEEL_USER_ZDOTDIR/.zprofile"
+  KEEL_USER_ZDOTDIR=$ZDOTDIR
+  ZDOTDIR=$KEEL_ZDOTDIR
+fi

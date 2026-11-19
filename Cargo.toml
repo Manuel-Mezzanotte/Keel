@@ -69,6 +69,8 @@ regex = "1.13.1"
 # Terminals: the emulator of Alacritty, and libc for the shell's process.
 alacritty_terminal = { version = "=0.26.0", default-features = false }
 libc = "0.2.191"
+# The poller Alacritty's event loop waits on, for Keel's copy of that loop.
+polling = "3.11.0"
 
 # Git: line differences for the editor's margin and for staging blocks.
 imara-diff = "=0.2.0"

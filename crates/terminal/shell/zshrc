@@ -1,0 +1,16 @@
+# Keel: the user's .zshrc, then Keel's shell integration. ZDOTDIR goes
+# back to the user's folder for good, so zsh reads their .zlogin and the
+# programs started here see their own.
+ZDOTDIR=$KEEL_USER_ZDOTDIR
+# /etc/zshrc set the history in Keel's folder, which is wrong.
+if [[ $HISTFILE == "$KEEL_ZDOTDIR/.zsh_history" ]]; then
+  HISTFILE=$KEEL_USER_ZDOTDIR/.zsh_history
+fi
+if [[ -f "$ZDOTDIR/.zshrc" ]]; then
+  . "$ZDOTDIR/.zshrc"
+fi
+. "$KEEL_ZDOTDIR/keel.zsh"
+if [[ $ZDOTDIR == "$HOME" ]]; then
+  unset ZDOTDIR
+fi
+unset KEEL_ZDOTDIR KEEL_USER_ZDOTDIR

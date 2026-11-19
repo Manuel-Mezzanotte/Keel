@@ -1,0 +1,10 @@
+# Keel starts zsh with this folder as ZDOTDIR, so it can add its shell
+# integration after the user's own files. This one reads the user's
+# .zshenv, then comes back here for the files zsh reads next.
+if [[ -f "$KEEL_USER_ZDOTDIR/.zshenv" ]]; then
+  ZDOTDIR=$KEEL_USER_ZDOTDIR
+  . "$KEEL_USER_ZDOTDIR/.zshenv"
+  # The user's .zshenv may choose another folder for the rest.
+  KEEL_USER_ZDOTDIR=$ZDOTDIR
+  ZDOTDIR=$KEEL_ZDOTDIR
+fi

@@ -336,6 +336,9 @@ impl TerminalView {
                     self.exited = true;
                     cx.emit(TerminalViewEvent::Exited);
                 }
+                TerminalEvent::CommandStarted(_)
+                | TerminalEvent::CommandFinished(_)
+                | TerminalEvent::Progress(_) => {}
             }
         }
         cx.notify();
