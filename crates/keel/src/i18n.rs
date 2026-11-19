@@ -1032,6 +1032,10 @@ pub struct Strings {
     pub image_diff_overlay: &'static str,
     pub image_diff_missing_before: &'static str,
     pub image_diff_missing_after: &'static str,
+    /// The review bar of Claude's changes.
+    pub agent_file_of: &'static str,
+    pub agent_previous_file: &'static str,
+    pub agent_next_file: &'static str,
 }
 
 impl Strings {
@@ -2489,6 +2493,9 @@ pub const ITALIAN: Strings = Strings {
     image_diff_overlay: "Sovrapposte",
     image_diff_missing_before: "Non c'era",
     image_diff_missing_after: "Tolta",
+    agent_file_of: "File {index} di {count}",
+    agent_previous_file: "File prima",
+    agent_next_file: "File dopo",
 };
 
 pub const ENGLISH: Strings = Strings {
@@ -3382,6 +3389,9 @@ pub const ENGLISH: Strings = Strings {
     image_diff_overlay: "Overlay",
     image_diff_missing_before: "Not there before",
     image_diff_missing_after: "Deleted",
+    agent_file_of: "File {index} of {count}",
+    agent_previous_file: "Previous File",
+    agent_next_file: "Next File",
 };
 
 #[cfg(test)]

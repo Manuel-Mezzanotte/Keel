@@ -359,6 +359,37 @@ impl Workbench {
             .iter()
             .any(|change| change.path == Path::new(path));
         let (accept, reject) = (PathBuf::from(path), PathBuf::from(path));
+        // Where this file is among Claude's changes, as Cursor's review bar
+        // says it, with the files before and after a click away.
+        let changes: Vec<PathBuf> = self
+            .agent_panel
+            .changes
+            .iter()
+            .map(|change| change.path.clone())
+            .collect();
+        let position = changes.iter().position(|change| change == Path::new(path));
+        let step = |forward: bool| {
+            let position = position?;
+            let count = changes.len();
+            (count > 1).then(|| {
+                changes[if forward {
+                    (position + 1) % count
+                } else {
+                    (position + count - 1) % count
+                }]
+                .clone()
+            })
+        };
+        let (previous, next) = (step(false), step(true));
+        let counter = position.map(|position| {
+            super::notices::fill(
+                strings.agent_file_of,
+                &[
+                    ("index", &(position + 1).to_string()),
+                    ("count", &changes.len().to_string()),
+                ],
+            )
+        });
         let toolbar = div()
             .h(px(34.))
             .flex_none()
@@ -377,6 +408,54 @@ impl Workbench {
                     .text_color(colors.muted)
                     .child(format!("{} · {}", strings.agent_change_of_claude, tab.path)),
             )
+            .children(previous.map(|previous| {
+                Button::new("agent-tab-previous")
+                    .ghost()
+                    .small()
+                    .icon(Icon::new(IconName::ChevronLeft))
+                    .tooltip(strings.agent_previous_file)
+                    .on_click(cx.listener(move |this, _, window, cx| {
+                        this.open_agent_change(&previous, window, cx)
+                    }))
+            }))
+            .children(counter.map(|counter| {
+                div()
+                    .px_1()
+                    .text_xs()
+                    .text_color(colors.muted)
+                    .child(counter)
+            }))
+            .children(next.map(|next| {
+                Button::new("agent-tab-next")
+                    .ghost()
+                    .small()
+                    .icon(Icon::new(IconName::ChevronRight))
+                    .tooltip(strings.agent_next_file)
+                    .on_click(cx.listener(move |this, _, window, cx| {
+                        this.open_agent_change(&next, window, cx)
+                    }))
+            }))
+            .when(changes.len() > 1, |toolbar| {
+                toolbar
+                    .child(
+                        Button::new("agent-tab-reject-all")
+                            .ghost()
+                            .small()
+                            .label(strings.agent_reject_all)
+                            .on_click(cx.listener(|this, _, window, cx| {
+                                this.reject_all_agent_changes(window, cx)
+                            })),
+                    )
+                    .child(
+                        Button::new("agent-tab-accept-all")
+                            .ghost()
+                            .small()
+                            .label(strings.agent_accept_all)
+                            .on_click(cx.listener(|this, _, window, cx| {
+                                this.accept_all_agent_changes(window, cx)
+                            })),
+                    )
+            })
             .when(waiting, |toolbar| {
                 toolbar
                     .child(
