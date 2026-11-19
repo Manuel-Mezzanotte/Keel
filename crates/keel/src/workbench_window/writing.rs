@@ -11,7 +11,8 @@ use std::ops::Range;
 use editor::text_edits::{self, Case};
 use gpui::Div;
 use gpui_component::input::{
-    OverviewRulerDecoration, OverviewRulerDecorationCollection, OverviewRulerLane,
+    OverviewRulerDecoration, OverviewRulerDecorationCollection, OverviewRulerLane, RangeDecoration,
+    RangeDecorationCollection, RangeDecorationStyle,
 };
 
 use super::*;
@@ -51,6 +52,9 @@ pub(super) struct Decor {
     ruler: Option<OverviewRulerDecorationCollection>,
     /// The occurrences found last, for the scrollbar.
     places: Vec<Range<usize>>,
+    /// The bookmarked lines, lit, and their places for the scrollbar.
+    bookmarks: Option<RangeDecorationCollection>,
+    bookmarked: Vec<Range<usize>>,
     task: Option<Task<()>>,
     /// Expand Selection's steps, to shrink back through them.
     pub(super) grown: Vec<Range<usize>>,
@@ -248,11 +252,12 @@ impl Workbench {
         editor: &Entity<EditorState>,
         cx: &mut Context<Self>,
     ) {
-        let (brackets, occurrences, ruler) = editor.update(cx, |editor, cx| {
+        let (brackets, occurrences, ruler, bookmarks) = editor.update(cx, |editor, cx| {
             (
                 editor.create_decorations_collection(Vec::new(), cx),
                 editor.create_decorations_collection(Vec::new(), cx),
                 editor.create_overview_ruler_decorations_collection(Vec::new(), cx),
+                editor.create_range_decorations_collection(Vec::new(), cx),
             )
         });
         let text = editor.read(cx).value().to_string();
@@ -261,6 +266,7 @@ impl Workbench {
         decor.brackets = Some(brackets);
         decor.occurrences = Some(occurrences);
         decor.ruler = Some(ruler);
+        decor.bookmarks = Some(bookmarks);
         self.redecorate(editor_id, editor, false, cx);
     }
 
@@ -383,6 +389,32 @@ impl Workbench {
             collection.set(occurrences, cx);
         }
         decor.places = if places.len() > 1 { places } else { Vec::new() };
+        // The bookmarks, following their lines.
+        let path = self
+            .panes
+            .iter()
+            .find(|pane| pane.editor_id == editor_id)
+            .and_then(|pane| self.documents.get(&pane.uri))
+            .and_then(|document| document.disk_path().map(Path::to_path_buf));
+        let bookmarked = match path {
+            Some(path) if !self.bookmarks.is_empty() => self.bookmark_ranges(&path, &text),
+            _ => Vec::new(),
+        };
+        let lit = cx.theme().info.opacity(0.13);
+        if let Some(decor) = self.decor.get_mut(editor_id) {
+            if let Some(collection) = &decor.bookmarks {
+                let lines = bookmarked
+                    .iter()
+                    .map(|range| {
+                        RangeDecoration::new(range.clone())
+                            .with_style(RangeDecorationStyle::Fill)
+                            .with_color(lit)
+                    })
+                    .collect();
+                collection.set(lines, cx);
+            }
+            decor.bookmarked = bookmarked;
+        }
         self.refresh_ruler(editor_id, editor, cx);
     }
 
@@ -464,6 +496,11 @@ impl Workbench {
             OverviewRulerDecoration::new(range.clone())
                 .with_lane(OverviewRulerLane::Center)
                 .with_color(accent.opacity(0.8))
+        }));
+        marks.extend(decor.bookmarked.iter().map(|range| {
+            OverviewRulerDecoration::new(range.start..range.end.max(range.start + 1))
+                .with_lane(OverviewRulerLane::Right)
+                .with_color(info)
         }));
         ruler.set(marks, cx);
     }

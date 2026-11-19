@@ -67,6 +67,18 @@ pub struct WindowState {
     pub terminals: Vec<TerminalState>,
     #[serde(default)]
     pub active_terminal: usize,
+    /// The bookmarks of the project's files.
+    #[serde(default)]
+    pub bookmarks: Vec<BookmarkState>,
+}
+
+/// A bookmark on a line, with the line's text to find it again after edits.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct BookmarkState {
+    pub path: PathBuf,
+    /// From 0.
+    pub line: u32,
+    pub text: String,
 }
 
 /// A terminal of the bottom panel, as kept between runs.

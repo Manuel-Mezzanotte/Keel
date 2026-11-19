@@ -21,6 +21,9 @@ use crate::workbench_window::{
     GitRefresh, GitStash, GitStashPop, GitSync, StageAll, UnstageAll,
 };
 use crate::workbench_window::{
+    ClearBookmarks, ListBookmarks, NextBookmark, PreviousBookmark, ToggleBookmark,
+};
+use crate::workbench_window::{
     ClearNotifications, CloseFolder, RevertFile, SaveAll, SaveAs, ToggleAutoSave,
     ToggleDoNotDisturb, ToggleNotifications, UndoLastCommit,
 };
@@ -242,6 +245,36 @@ pub const COMMANDS: &[KeelCommand] = &[
         action: || Box::new(FocusPreviousTerminal),
         default_key: Some("cmd+shift+["),
         context: Some(TERMINAL_CONTEXT),
+    },
+    KeelCommand {
+        id: "bookmarks.toggle",
+        action: || Box::new(ToggleBookmark),
+        default_key: Some("f3"),
+        context: Some(EDITOR_CONTEXT_INPUT),
+    },
+    KeelCommand {
+        id: "bookmarks.jumpToNext",
+        action: || Box::new(NextBookmark),
+        default_key: Some("cmd+alt+l"),
+        context: None,
+    },
+    KeelCommand {
+        id: "bookmarks.jumpToPrevious",
+        action: || Box::new(PreviousBookmark),
+        default_key: Some("cmd+alt+j"),
+        context: None,
+    },
+    KeelCommand {
+        id: "bookmarks.list",
+        action: || Box::new(ListBookmarks),
+        default_key: Some("cmd+f3"),
+        context: None,
+    },
+    KeelCommand {
+        id: "bookmarks.clear",
+        action: || Box::new(ClearBookmarks),
+        default_key: None,
+        context: None,
     },
     KeelCommand {
         id: "workbench.action.terminal.scrollToPreviousCommand",
@@ -1403,7 +1436,7 @@ mod tests {
         let (bindings, warnings) =
             read_user_bindings(Path::new("/nonexistent/keel/keybindings.json"));
         assert!(bindings.is_empty() && warnings.is_empty());
-        assert_eq!(keel_bindings(&[]).len(), 105);
+        assert_eq!(keel_bindings(&[]).len(), 109);
     }
 
     #[test]

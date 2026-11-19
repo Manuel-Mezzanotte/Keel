@@ -4,6 +4,7 @@
 mod agent_panel;
 mod agent_review;
 mod blame;
+mod bookmarks;
 mod claude_code;
 mod claude_diff;
 mod claude_ide;
@@ -81,6 +82,9 @@ use tabs::{Group, OpenAs};
 
 pub(crate) use agent_panel::{AddToAgent, NewAgentConversation, OpenAgent};
 pub(crate) use blame::{ShowFileHistory, ToggleBlame};
+pub(crate) use bookmarks::{
+    ClearBookmarks, ListBookmarks, NextBookmark, PreviousBookmark, ToggleBookmark,
+};
 pub(crate) use claude_code::{OpenClaudeCode, OpenClaudeCodeInPanel};
 pub(crate) use claude_diff::{AcceptProposedDiff, RejectProposedDiff};
 pub(crate) use claude_ide::InsertAtMention;
@@ -494,6 +498,8 @@ pub struct Workbench {
     /// Files Claude changed, marked in the Explorer until they are opened,
     /// as Cursor marks them.
     claude_touched: HashSet<PathBuf>,
+    /// Lines marked with F3, kept with the session.
+    bookmarks: Vec<crate::session::BookmarkState>,
     discard_changes: bool,
     gutter_refresh: Task<()>,
     /// Whether the first frame was already drawn, for `KEEL_STARTUP_TIMING`.
@@ -748,6 +754,7 @@ impl Workbench {
             indent_overrides: HashMap::new(),
             pending_chord: None,
             claude_touched: HashSet::new(),
+            bookmarks: Vec::new(),
             discard_changes: false,
             gutter_refresh: Task::ready(()),
             known_selections: HashMap::new(),

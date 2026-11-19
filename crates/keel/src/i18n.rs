@@ -1010,6 +1010,14 @@ pub struct Strings {
     pub claude_fix_problem: &'static str,
     /// The mark on a file Claude changed, until it is opened.
     pub explorer_touched_by_claude: &'static str,
+    /// The list of lines marked with F3.
+    pub bookmarks_title: &'static str,
+    pub bookmarks_none: &'static str,
+    pub command_toggle_bookmark: &'static str,
+    pub command_next_bookmark: &'static str,
+    pub command_previous_bookmark: &'static str,
+    pub command_list_bookmarks: &'static str,
+    pub command_clear_bookmarks: &'static str,
 }
 
 impl Strings {
@@ -1052,6 +1060,11 @@ impl Strings {
             "workbench.action.terminal.copyLastCommand" => self.command_copy_last_command,
             "workbench.action.terminal.runRecentCommand" => self.command_run_recent,
             "keel.terminal.askClaude" => self.command_ask_claude_terminal,
+            "bookmarks.toggle" => self.command_toggle_bookmark,
+            "bookmarks.jumpToNext" => self.command_next_bookmark,
+            "bookmarks.jumpToPrevious" => self.command_previous_bookmark,
+            "bookmarks.list" => self.command_list_bookmarks,
+            "bookmarks.clear" => self.command_clear_bookmarks,
             "workbench.action.toggleMaximizedPanel" => self.command_maximize_panel,
             "keel.claudeCode.open" => self.command_claude_code,
             "keel.claudeCode.openInPanel" => self.command_claude_code_panel,
@@ -2442,6 +2455,13 @@ pub const ITALIAN: Strings = Strings {
     problem_fix_with_claude: "Correggi con Claude",
     claude_fix_problem: "In `{path}`, alla riga {line}, c'è questo problema ({source}):\n\n{message}\n\nCorreggilo.",
     explorer_touched_by_claude: "Cambiato da Claude",
+    bookmarks_title: "Segnalibri",
+    bookmarks_none: "Nessun segnalibro: F3 ne mette uno sulla riga del cursore",
+    command_toggle_bookmark: "Segnalibri: metti o togli",
+    command_next_bookmark: "Segnalibri: vai al successivo",
+    command_previous_bookmark: "Segnalibri: vai al precedente",
+    command_list_bookmarks: "Segnalibri: mostra l'elenco",
+    command_clear_bookmarks: "Segnalibri: togli tutti quelli del file",
 };
 
 pub const ENGLISH: Strings = Strings {
@@ -3316,6 +3336,13 @@ pub const ENGLISH: Strings = Strings {
     problem_fix_with_claude: "Fix with Claude",
     claude_fix_problem: "In `{path}`, at line {line}, there is this problem ({source}):\n\n{message}\n\nFix it.",
     explorer_touched_by_claude: "Changed by Claude",
+    bookmarks_title: "Bookmarks",
+    bookmarks_none: "No bookmarks: F3 puts one on the cursor's line",
+    command_toggle_bookmark: "Bookmarks: Toggle",
+    command_next_bookmark: "Bookmarks: Jump to Next",
+    command_previous_bookmark: "Bookmarks: Jump to Previous",
+    command_list_bookmarks: "Bookmarks: List",
+    command_clear_bookmarks: "Bookmarks: Clear in File",
 };
 
 #[cfg(test)]

@@ -2402,6 +2402,7 @@ impl Render for Workbench {
         let root = self.tab_actions(root, cx);
         let root = self.terminal_actions(root, cx);
         let root = self.terminal_command_actions(root, cx);
+        let root = self.bookmark_actions(root, cx);
         let root = self.npm_actions(root, cx);
         let root = self.source_control_actions(root, cx);
         let root = self.git_gutter_actions(root, cx);

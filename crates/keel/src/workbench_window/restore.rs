@@ -96,6 +96,7 @@ impl Workbench {
                 })
                 .collect(),
             active_terminal: self.active_terminal,
+            bookmarks: self.bookmarks.clone(),
         }
     }
 
@@ -331,6 +332,7 @@ impl Workbench {
             .iter()
             .any(|section| section == "npm-scripts");
         self.search.recent = state.recent_searches.clone();
+        self.bookmarks = state.bookmarks.clone();
         self.graph_collapsed = state.collapsed.iter().any(|section| section == "git-graph");
         self.outline.collapsed = state.collapsed.iter().any(|section| section == "outline");
         if let Some(tree) = &mut self.tree {
