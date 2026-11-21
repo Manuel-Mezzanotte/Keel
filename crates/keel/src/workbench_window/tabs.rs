@@ -37,6 +37,37 @@ pub(super) struct Tab {
     pub(super) parked: Option<Pane>,
 }
 
+/// Where on an editor a dragged tab or file is dropped, as VS Code's drop
+/// zones: its left or right part opens a group beside it, its middle puts
+/// the tab in that group.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(super) enum DropZone {
+    Left,
+    Center,
+    Right,
+}
+
+impl DropZone {
+    /// The zone under `position` in an editor's `bounds`: the outer thirds
+    /// open a group, the middle takes the tab.
+    pub(super) fn at(
+        bounds: gpui::Bounds<gpui::Pixels>,
+        position: gpui::Point<gpui::Pixels>,
+    ) -> Option<Self> {
+        if !bounds.contains(&position) || bounds.size.width <= px(0.) {
+            return None;
+        }
+        let x = (position.x - bounds.left()) / bounds.size.width;
+        Some(if x < 0.3 {
+            DropZone::Left
+        } else if x > 0.7 {
+            DropZone::Right
+        } else {
+            DropZone::Center
+        })
+    }
+}
+
 /// A tab being dragged to another place in its group or to another group.
 #[derive(Clone)]
 pub(super) struct DraggedTab {
@@ -676,13 +707,24 @@ impl Workbench {
 
     /// Opens the active file again in a new group to the right.
     fn split_editor(&mut self, group: usize, window: &mut Window, cx: &mut Context<Self>) {
+        self.split_editor_to(group, group + 1, window, cx);
+    }
+
+    /// Opens group `group`'s file again in a new group at position `at`.
+    fn split_editor_to(
+        &mut self,
+        group: usize,
+        at: usize,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
         let Some(uri) = self.panes.get(group).map(|pane| pane.uri.clone()) else {
             return;
         };
         let Some(pane) = self.create_pane(&uri, window, cx) else {
             return;
         };
-        let at = group + 1;
+        let at = at.min(self.panes.len());
         self.panes.insert(at, pane);
         self.groups.insert(
             at,
@@ -811,6 +853,144 @@ impl Workbench {
         self.refresh_title(window);
         self.session_changed(cx);
         cx.notify();
+    }
+
+    /// A tab dropped on an editor: beside it in a new group, or into it.
+    pub(super) fn drop_tab(
+        &mut self,
+        from_group: usize,
+        from_index: usize,
+        on_group: usize,
+        zone: DropZone,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        match zone {
+            DropZone::Center if from_group == on_group => {}
+            DropZone::Center => {
+                let end = self
+                    .groups
+                    .get(on_group)
+                    .map_or(0, |group| group.tabs.len());
+                self.move_tab(from_group, from_index, on_group, end, window, cx);
+            }
+            DropZone::Left => {
+                self.move_tab_to_new_group(from_group, from_index, on_group, window, cx)
+            }
+            DropZone::Right => {
+                self.move_tab_to_new_group(from_group, from_index, on_group + 1, window, cx)
+            }
+        }
+    }
+
+    /// Takes a tab, with its editor, cursor and undo history, into a new
+    /// group at position `at`. A group's only tab dropped beside itself is
+    /// split instead, as VS Code does.
+    pub(super) fn move_tab_to_new_group(
+        &mut self,
+        from_group: usize,
+        from_index: usize,
+        at: usize,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let Some(count) = self.groups.get(from_group).map(|group| group.tabs.len()) else {
+            return;
+        };
+        if from_index >= count {
+            return;
+        }
+        let at = at.min(self.groups.len());
+        if count == 1 {
+            if at == from_group || at == from_group + 1 {
+                self.split_editor_to(from_group, at, window, cx);
+                self.session_changed(cx);
+                return;
+            }
+            // The group goes where it was dropped.
+            let group = self.groups.remove(from_group);
+            let pane = self.panes.remove(from_group);
+            let at = if at > from_group { at - 1 } else { at };
+            self.groups.insert(at, group);
+            self.panes.insert(at, pane);
+            self.settle_new_group(at, window, cx);
+            return;
+        }
+        if self.groups[from_group].active == from_index {
+            let neighbor = if from_index + 1 < count {
+                from_index + 1
+            } else {
+                from_index - 1
+            };
+            self.activate_tab(from_group, neighbor, false, window, cx);
+        }
+        let group = &mut self.groups[from_group];
+        let mut tab = group.tabs.remove(from_index);
+        if from_index < group.active {
+            group.active -= 1;
+        }
+        let Some(pane) = tab.parked.take() else {
+            return;
+        };
+        tab.preview = false;
+        self.groups.insert(at, Group::with(vec![tab]));
+        self.panes.insert(at, pane);
+        self.settle_new_group(at, window, cx);
+    }
+
+    /// A group just placed at `at`: its editor ready and in front.
+    fn settle_new_group(&mut self, at: usize, window: &mut Window, cx: &mut Context<Self>) {
+        self.install_completions(at, cx);
+        self.focus_pane(at, window, cx);
+        self.publish_editors(window, cx);
+        self.schedule_gutter_refresh(window, cx);
+        self.refresh_title(window);
+        self.session_changed(cx);
+        cx.notify();
+    }
+
+    /// Files dropped on an editor: into its group, or into a new group
+    /// beside it.
+    pub(super) fn drop_paths(
+        &mut self,
+        paths: Vec<PathBuf>,
+        on_group: usize,
+        zone: DropZone,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let mut column = match zone {
+            DropZone::Center => on_group,
+            DropZone::Left => on_group,
+            DropZone::Right => on_group + 1,
+        };
+        let mut new_group = zone != DropZone::Center;
+        for path in paths.iter().filter(|path| path.is_file()) {
+            let Ok(uri) = self.load_document(path, window, cx) else {
+                continue;
+            };
+            if new_group {
+                let Some(pane) = self.create_pane(&uri, window, cx) else {
+                    continue;
+                };
+                column = column.min(self.groups.len());
+                self.groups.insert(
+                    column,
+                    Group::with(vec![Tab {
+                        uri,
+                        preview: false,
+                        pinned: false,
+                        parked: None,
+                    }]),
+                );
+                self.panes.insert(column, pane);
+                self.settle_new_group(column, window, cx);
+                new_group = false;
+            } else {
+                self.show_tab(&uri, column, OpenAs::Normal, true, window, cx);
+            }
+        }
+        self.session_changed(cx);
     }
 
     fn toggle_pin(&mut self, group: usize, tab: usize, cx: &mut Context<Self>) {
@@ -1097,6 +1277,60 @@ mod tests {
         view.read_with(cx, |view, cx| {
             view.panes[view.active].editor.read(cx).value().to_string()
         })
+    }
+
+    #[test]
+    fn the_thirds_of_an_editor_are_its_drop_zones() {
+        let bounds = gpui::Bounds::new(gpui::point(px(100.), px(0.)), gpui::size(px(300.), px(200.)));
+        let at = |x: f32| DropZone::at(bounds, gpui::point(px(x), px(50.)));
+        assert_eq!(at(120.), Some(DropZone::Left));
+        assert_eq!(at(250.), Some(DropZone::Center));
+        assert_eq!(at(380.), Some(DropZone::Right));
+        assert_eq!(at(20.), None);
+    }
+
+    #[gpui::test]
+    fn a_tab_dropped_beside_an_editor_splits_it(cx: &mut TestAppContext) {
+        let (_folder, root, view, cx) = project(cx);
+        open(&view, cx, &root.join("a.ts"), OpenAs::Normal);
+        open(&view, cx, &root.join("b.ts"), OpenAs::Normal);
+        // Typed in b, so its editor must travel with it.
+        cx.simulate_input("x");
+        let names = |cx: &mut VisualTestContext| -> Vec<Vec<String>> {
+            tabs(&view, cx)
+                .into_iter()
+                .map(|group| group.into_iter().map(|(name, _, _)| name).collect())
+                .collect()
+        };
+        // b on the right of its own editor: a group of its own.
+        view.update_in(cx, |view, window, cx| {
+            view.drop_tab(0, 1, 0, DropZone::Right, window, cx)
+        });
+        assert_eq!(names(cx), [vec!["a.ts"], vec!["b.ts"]]);
+        assert_eq!(active_text(&view, cx), "xlet b = 1;\n");
+        // b, alone, on the left of a: the groups change places.
+        view.update_in(cx, |view, window, cx| {
+            view.drop_tab(1, 0, 0, DropZone::Left, window, cx)
+        });
+        assert_eq!(names(cx), [vec!["b.ts"], vec!["a.ts"]]);
+        // A group's only tab beside itself: split, as VS Code does.
+        view.update_in(cx, |view, window, cx| {
+            view.drop_tab(0, 0, 0, DropZone::Right, window, cx)
+        });
+        assert_eq!(names(cx), [vec!["b.ts"], vec!["b.ts"], vec!["a.ts"]]);
+        // In the middle of an editor: into its group.
+        view.update_in(cx, |view, window, cx| {
+            view.drop_tab(1, 0, 2, DropZone::Center, window, cx)
+        });
+        assert_eq!(names(cx), [vec!["b.ts"], vec!["a.ts", "b.ts"]]);
+        // A file from the Explorer on the right: a new group with it.
+        view.update_in(cx, |view, window, cx| {
+            view.drop_paths(vec![root.join("c.ts")], 1, DropZone::Right, window, cx)
+        });
+        assert_eq!(
+            names(cx),
+            [vec!["b.ts"], vec!["a.ts", "b.ts"], vec!["c.ts"]]
+        );
     }
 
     #[gpui::test]

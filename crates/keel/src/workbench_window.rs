@@ -505,6 +505,8 @@ pub struct Workbench {
     claude_touched: HashSet<PathBuf>,
     /// Lines marked with F3, kept with the session.
     bookmarks: Vec<crate::session::BookmarkState>,
+    /// The editor and the part of it a dragged tab or file is over.
+    tab_drop: Option<(usize, tabs::DropZone)>,
     discard_changes: bool,
     gutter_refresh: Task<()>,
     /// Whether the first frame was already drawn, for `KEEL_STARTUP_TIMING`.
@@ -762,6 +764,7 @@ impl Workbench {
             pending_chord: None,
             claude_touched: HashSet::new(),
             bookmarks: Vec::new(),
+            tab_drop: None,
             discard_changes: false,
             gutter_refresh: Task::ready(()),
             known_selections: HashMap::new(),

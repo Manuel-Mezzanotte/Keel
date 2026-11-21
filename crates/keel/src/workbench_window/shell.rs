@@ -1686,8 +1686,8 @@ impl Workbench {
                     self.render_breadcrumbs(index, colors, cx),
                     |pane, crumbs| pane.child(crumbs),
                 )
-                .child(
-                    match self
+                .child({
+                    let body = match self
                         .documents
                         .get(&pane.uri)
                         .map(|document| &document.backing)
@@ -1763,8 +1763,9 @@ impl Workbench {
                             .children(self.render_hunk_bar(index, colors, cx))
                             .children(self.render_find_bar(index, colors, cx))
                             .children(self.render_signature_help(index, colors, cx)),
-                    },
-                )
+                    };
+                    self.drop_target(index, colors, cx, body)
+                })
         });
 
         let content = if self.panes.is_empty() {
@@ -1789,6 +1790,85 @@ impl Workbench {
             .on_drag_move::<super::terminals::PanelResize>(
                 cx.listener(|this, event, _, cx| this.resize_panel(event, cx)),
             )
+    }
+
+    /// An editor's body, where a dragged tab or file shows where it would
+    /// go and goes there when dropped: beside it on its left or right
+    /// part, into its group in the middle, as in VS Code.
+    fn drop_target(
+        &self,
+        index: usize,
+        colors: Colors,
+        cx: &mut Context<Self>,
+        body: Div,
+    ) -> AnyElement {
+        use super::explorer::DraggedPath;
+        use super::tabs::{DraggedTab, DropZone};
+        let zone = self
+            .tab_drop
+            .filter(|(group, _)| *group == index && cx.has_active_drag())
+            .map(|(_, zone)| zone);
+        let follow = move |this: &mut Self,
+                           bounds: gpui::Bounds<Pixels>,
+                           position: gpui::Point<Pixels>,
+                           cx: &mut Context<Self>| {
+            let over = DropZone::at(bounds, position).map(|zone| (index, zone));
+            // Each editor answers for itself: it clears only its own zone.
+            let mine = this.tab_drop.is_some_and(|(group, _)| group == index);
+            if over != this.tab_drop && (over.is_some() || mine) {
+                this.tab_drop = over;
+                cx.notify();
+            }
+        };
+        let dropped_zone = move |this: &mut Self| {
+            this.tab_drop
+                .take()
+                .filter(|(group, _)| *group == index)
+                .map_or(DropZone::Center, |(_, zone)| zone)
+        };
+        let overlay = zone.map(|zone| {
+            let shade = div()
+                .absolute()
+                .top_0()
+                .bottom_0()
+                .rounded(px(6.))
+                .border_2()
+                .border_color(colors.accent.opacity(0.7))
+                .bg(colors.accent.opacity(0.12));
+            match zone {
+                DropZone::Left => shade.left_0().w(relative(0.5)),
+                DropZone::Right => shade.right_0().w(relative(0.5)),
+                DropZone::Center => shade.left_0().right_0(),
+            }
+        });
+        div()
+            .id(("pane-drop", index))
+            .flex_1()
+            .min_h_0()
+            .relative()
+            .flex()
+            .flex_col()
+            .on_drag_move::<DraggedTab>(cx.listener(
+                move |this, event: &gpui::DragMoveEvent<DraggedTab>, _, cx| {
+                    follow(this, event.bounds, event.event.position, cx)
+                },
+            ))
+            .on_drag_move::<DraggedPath>(cx.listener(
+                move |this, event: &gpui::DragMoveEvent<DraggedPath>, _, cx| {
+                    follow(this, event.bounds, event.event.position, cx)
+                },
+            ))
+            .on_drop(cx.listener(move |this, dragged: &DraggedTab, window, cx| {
+                let zone = dropped_zone(this);
+                this.drop_tab(dragged.group, dragged.index, index, zone, window, cx);
+            }))
+            .on_drop(cx.listener(move |this, dragged: &DraggedPath, window, cx| {
+                let zone = dropped_zone(this);
+                this.drop_paths(dragged.all(), index, zone, window, cx);
+            }))
+            .child(body)
+            .children(overlay)
+            .into_any_element()
     }
 
     fn render_bottom_panel(&self, colors: Colors, open: f32, cx: &mut Context<Self>) -> Div {
