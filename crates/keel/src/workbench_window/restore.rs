@@ -62,7 +62,11 @@ impl Workbench {
                         pinned: tab.pinned,
                     });
                 }
-                GroupState { tabs, active }
+                GroupState {
+                    tabs,
+                    active,
+                    column: Some(group.column),
+                }
             })
             .filter(|group| !group.tabs.is_empty())
             .collect();
@@ -349,7 +353,7 @@ impl Workbench {
                 .base_handle
                 .set_offset(gpui::point(px(0.), px(-top)));
         }
-        for group in &state.groups {
+        for (index, group) in state.groups.iter().enumerate() {
             let column = self.groups.len();
             for tab in group.tabs.iter().filter(|tab| tab.path.is_file()) {
                 let Ok(uri) = self.load_document(&tab.path, window, cx) else {
@@ -358,6 +362,7 @@ impl Workbench {
                 self.push_tab(column, &uri, tab.pinned, window, cx);
             }
             if column < self.groups.len() {
+                self.groups[column].column = group.column.unwrap_or(index as u64);
                 let active = group.active.min(self.groups[column].tabs.len() - 1);
                 self.activate_tab(column, active, false, window, cx);
             }
@@ -610,13 +615,18 @@ mod tests {
             view.layout.agent = false;
         });
         window.simulate_keystrokes("cmd-\\");
+        // And one below the new group: a column of two.
+        window.simulate_keystrokes("cmd-k cmd-\\");
         let before = view.read_with(window, |view, cx| view.window_state(cx));
         view.read_with(window, |view, cx| view.persist_now(cx));
 
         let (again, window) = open_window(cx, &project);
         let after = again.read_with(window, |view, cx| view.window_state(cx));
         assert_eq!(after, before);
-        assert_eq!(after.groups.len(), 2);
+        assert_eq!(after.groups.len(), 3);
+        let columns: Vec<_> = after.groups.iter().map(|group| group.column).collect();
+        assert_ne!(columns[0], columns[1]);
+        assert_eq!(columns[1], columns[2]);
         assert!(after.groups[0].tabs[0].pinned);
         assert!(!after.agent);
         assert!(after.expanded.contains(&project.root.join("src")));

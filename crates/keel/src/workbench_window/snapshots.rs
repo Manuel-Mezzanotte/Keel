@@ -221,6 +221,17 @@ fn shots() -> Vec<Shot> {
             }));
         }
         if style == "floating" {
+            // Groups side by side and stacked.
+            shots.push(shot(name("groups-grid"), |workbench, window, cx| {
+                let folder = std::env::current_dir().unwrap_or_default();
+                workbench.open_file(&folder.join("crates/editor/src/encoding.rs"), window, cx);
+                let group = workbench.active;
+                workbench.split_editor(group, super::tabs::Side::Right, window, cx);
+                workbench.open_file(&folder.join("crates/git/src/lib.rs"), window, cx);
+                let group = workbench.active;
+                workbench.split_editor(group, super::tabs::Side::Below, window, cx);
+                workbench.open_file(&folder.join("Cargo.toml"), window, cx);
+            }));
             // A file with tests: the ▶ in its margin.
             shots.push(shot(name("tests-margin"), |workbench, window, cx| {
                 workbench.close_inline_edit(false, window, cx);

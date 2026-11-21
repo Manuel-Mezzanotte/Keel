@@ -4,7 +4,9 @@ use gpui::{App, Global, KeyBinding, Menu, MenuItem, OsAction, SystemMenuType, ac
 use gpui_component::input::{Copy, Cut, Paste, Redo, Replace, Search, SelectAll, Undo};
 
 use crate::i18n::UiLanguage;
-use crate::workbench_window::{CloseEditor, GoToLine, QuickOpen, ReopenClosedEditor, SplitEditor};
+use crate::workbench_window::{
+    CloseEditor, GoToLine, QuickOpen, ReopenClosedEditor, SplitEditor, SplitEditorDown,
+};
 use crate::workbench_window::{CloseFolder, RevertFile, SaveAll, SaveAs, ToggleAutoSave};
 use crate::workbench_window::{
     CloseWindow, NewFile, NewWindow, Open, OpenKeybindings, OpenProject, OpenSettings, Quit, Save,
@@ -199,6 +201,7 @@ pub fn set(language: UiLanguage, cx: &mut App) {
                 MenuItem::action(strings.menu_command_palette, ShowCommands),
                 MenuItem::separator(),
                 MenuItem::action(strings.menu_split_editor, SplitEditor),
+                MenuItem::action(strings.menu_split_editor_down, SplitEditorDown),
                 MenuItem::action(strings.menu_word_wrap, ToggleWordWrap),
                 MenuItem::separator(),
                 MenuItem::action(strings.menu_zoom_in, ZoomIn),

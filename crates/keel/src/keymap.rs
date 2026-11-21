@@ -54,6 +54,10 @@ use crate::workbench_window::{
     TransformToLowercase, TransformToSnakecase, TransformToTitlecase, TransformToUppercase,
 };
 use crate::workbench_window::{
+    FocusAboveGroup, FocusBelowGroup, FocusLeftGroup, FocusRightGroup, SplitEditorDown,
+    SplitEditorLeft, SplitEditorOrthogonal, SplitEditorUp,
+};
+use crate::workbench_window::{
     FocusNextTerminal, FocusPreviousTerminal, KillTerminal, NewTerminal, OpenClaudeCode,
     OpenClaudeCodeInPanel, RenameTerminal, RunNpmScript, SplitTerminal, TERMINAL_CONTEXT,
     ToggleMaximizedPanel,
@@ -749,6 +753,54 @@ pub const COMMANDS: &[KeelCommand] = &[
         id: "workbench.action.splitEditor",
         action: || Box::new(SplitEditor),
         default_key: Some("cmd+\\"),
+        context: None,
+    },
+    KeelCommand {
+        id: "workbench.action.splitEditorOrthogonal",
+        action: || Box::new(SplitEditorOrthogonal),
+        default_key: Some("cmd+k cmd+\\"),
+        context: None,
+    },
+    KeelCommand {
+        id: "workbench.action.splitEditorLeft",
+        action: || Box::new(SplitEditorLeft),
+        default_key: None,
+        context: None,
+    },
+    KeelCommand {
+        id: "workbench.action.splitEditorUp",
+        action: || Box::new(SplitEditorUp),
+        default_key: None,
+        context: None,
+    },
+    KeelCommand {
+        id: "workbench.action.splitEditorDown",
+        action: || Box::new(SplitEditorDown),
+        default_key: None,
+        context: None,
+    },
+    KeelCommand {
+        id: "workbench.action.focusLeftGroup",
+        action: || Box::new(FocusLeftGroup),
+        default_key: Some("cmd+k cmd+left"),
+        context: None,
+    },
+    KeelCommand {
+        id: "workbench.action.focusRightGroup",
+        action: || Box::new(FocusRightGroup),
+        default_key: Some("cmd+k cmd+right"),
+        context: None,
+    },
+    KeelCommand {
+        id: "workbench.action.focusAboveGroup",
+        action: || Box::new(FocusAboveGroup),
+        default_key: Some("cmd+k cmd+up"),
+        context: None,
+    },
+    KeelCommand {
+        id: "workbench.action.focusBelowGroup",
+        action: || Box::new(FocusBelowGroup),
+        default_key: Some("cmd+k cmd+down"),
         context: None,
     },
     KeelCommand {
@@ -1474,7 +1526,7 @@ mod tests {
         let (bindings, warnings) =
             read_user_bindings(Path::new("/nonexistent/keel/keybindings.json"));
         assert!(bindings.is_empty() && warnings.is_empty());
-        assert_eq!(keel_bindings(&[]).len(), 115);
+        assert_eq!(keel_bindings(&[]).len(), 120);
     }
 
     #[test]

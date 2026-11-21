@@ -98,6 +98,10 @@ pub struct TerminalState {
 pub struct GroupState {
     pub tabs: Vec<TabState>,
     pub active: usize,
+    /// Groups of the same column are stacked; sessions from before columns
+    /// have none, and each group was a column of its own.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub column: Option<u64>,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -217,6 +221,20 @@ mod tests {
     use super::*;
 
     #[test]
+    fn groups_saved_before_columns_still_read() {
+        let old: GroupState =
+            serde_json::from_str(r#"{ "tabs": [{ "path": "/a.rs" }], "active": 0 }"#).unwrap();
+        assert_eq!(old.column, None);
+        let new = GroupState {
+            column: Some(2),
+            ..old.clone()
+        };
+        let text = serde_json::to_string(&new).unwrap();
+        assert!(text.contains(r#""column":2"#), "{text}");
+        assert!(!serde_json::to_string(&old).unwrap().contains("column"));
+    }
+
+    #[test]
     fn states_backups_and_windows_survive_a_restart() {
         let data = tempfile::tempdir().unwrap();
         let root = Path::new("/Users/manuel/Desktop/MiniPCProgram/Keel");
@@ -227,6 +245,7 @@ mod tests {
                     pinned: true,
                 }],
                 active: 0,
+                column: Some(3),
             }],
             sidebar: true,
             side_view: "explorer".to_owned(),

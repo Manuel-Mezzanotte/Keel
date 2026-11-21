@@ -1,14 +1,20 @@
-//! Tabs and editor groups, as in VS Code. Each group is a column of the
-//! editor area with its tabs. The tab in view keeps its editor in `panes`;
-//! the others keep theirs in the tab, with cursor, scroll and undo history.
+//! Tabs and editor groups, as in VS Code. The editor area is a row of
+//! columns, each a stack of groups with their tabs. The tab in view keeps
+//! its editor in `panes`; the others keep theirs in the tab, with cursor,
+//! scroll and undo history.
 
 use super::*;
 
-/// A column of the editor area.
+/// An editor group: a cell of the editor area, with its tabs. Groups of
+/// the same `column` are stacked top to bottom and come one after another
+/// in `Workbench::groups`, which reads the area left to right and each
+/// column top to bottom, so a group's index is the same as before.
 pub(super) struct Group {
     pub(super) tabs: Vec<Tab>,
     /// The tab in view.
     pub(super) active: usize,
+    /// The column it is in: no order, only the same for its neighbors.
+    pub(super) column: u64,
     /// The strip's scroll, and the tab it was last brought to, so a tab
     /// opened or chosen out of sight scrolls into view once.
     pub(super) scroll: gpui::ScrollHandle,
@@ -16,10 +22,11 @@ pub(super) struct Group {
 }
 
 impl Group {
-    pub(super) fn with(tabs: Vec<Tab>) -> Self {
+    pub(super) fn with(tabs: Vec<Tab>, column: u64) -> Self {
         Self {
             tabs,
             active: 0,
+            column,
             scroll: gpui::ScrollHandle::new(),
             shown: std::cell::Cell::new(None),
         }
@@ -37,34 +44,68 @@ pub(super) struct Tab {
     pub(super) parked: Option<Pane>,
 }
 
+/// Where a new group goes beside another, as Split Editor Left, Right, Up
+/// and Down: left and right open a column beside the group's column,
+/// above and below stack it in the same column.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(super) enum Side {
+    Left,
+    Right,
+    Above,
+    Below,
+}
+
 /// Where on an editor a dragged tab or file is dropped, as VS Code's drop
-/// zones: its left or right part opens a group beside it, its middle puts
-/// the tab in that group.
+/// zones: near an edge it opens a group on that side, in the middle it
+/// goes into that group.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(super) enum DropZone {
     Left,
-    Center,
     Right,
+    Top,
+    Bottom,
+    Center,
 }
 
 impl DropZone {
-    /// The zone under `position` in an editor's `bounds`: the outer thirds
-    /// open a group, the middle takes the tab.
+    /// The zone under `position` in an editor's `bounds`: within the outer
+    /// 30% of a side, the nearest side; elsewhere the middle.
     pub(super) fn at(
         bounds: gpui::Bounds<gpui::Pixels>,
         position: gpui::Point<gpui::Pixels>,
     ) -> Option<Self> {
-        if !bounds.contains(&position) || bounds.size.width <= px(0.) {
+        if !bounds.contains(&position)
+            || bounds.size.width <= px(0.)
+            || bounds.size.height <= px(0.)
+        {
             return None;
         }
         let x = (position.x - bounds.left()) / bounds.size.width;
-        Some(if x < 0.3 {
-            DropZone::Left
-        } else if x > 0.7 {
-            DropZone::Right
+        let y = (position.y - bounds.top()) / bounds.size.height;
+        let (distance, zone) = [
+            (x, DropZone::Left),
+            (1. - x, DropZone::Right),
+            (y, DropZone::Top),
+            (1. - y, DropZone::Bottom),
+        ]
+        .into_iter()
+        .min_by(|a, b| a.0.total_cmp(&b.0))?;
+        Some(if distance < 0.3 {
+            zone
         } else {
             DropZone::Center
         })
+    }
+
+    /// The side a group opens on, or `None` in the middle.
+    pub(super) fn side(self) -> Option<Side> {
+        match self {
+            DropZone::Left => Some(Side::Left),
+            DropZone::Right => Some(Side::Right),
+            DropZone::Top => Some(Side::Above),
+            DropZone::Bottom => Some(Side::Below),
+            DropZone::Center => None,
+        }
     }
 }
 
@@ -123,9 +164,17 @@ actions!(
         NextEditor,
         PreviousEditor,
         SplitEditor,
+        SplitEditorLeft,
+        SplitEditorUp,
+        SplitEditorDown,
+        SplitEditorOrthogonal,
         FocusGroup1,
         FocusGroup2,
-        FocusGroup3
+        FocusGroup3,
+        FocusLeftGroup,
+        FocusRightGroup,
+        FocusAboveGroup,
+        FocusBelowGroup
     ]
 );
 
@@ -138,6 +187,7 @@ pub enum TabCommand {
     CloseAll,
     TogglePin,
     Split,
+    SplitDown,
     CopyPath,
     Reveal,
 }
@@ -375,8 +425,9 @@ impl Workbench {
             group.active = at;
             column
         } else {
+            let column = self.new_column();
             self.panes.push(pane);
-            self.groups.push(Group::with(vec![tab]));
+            self.groups.push(Group::with(vec![tab], column));
             self.panes.len() - 1
         };
         if let Some(uri) = replaced {
@@ -662,8 +713,9 @@ impl Workbench {
             group.tabs.push(tab);
             group.active = group.tabs.len() - 1;
         } else {
+            let column = self.new_column();
             self.panes.push(pane);
-            self.groups.push(Group::with(vec![tab]));
+            self.groups.push(Group::with(vec![tab], column));
         }
         let column = column.min(self.groups.len() - 1);
         self.install_completions(column, cx);
@@ -705,16 +757,40 @@ impl Workbench {
         }
     }
 
-    /// Opens the active file again in a new group to the right.
-    fn split_editor(&mut self, group: usize, window: &mut Window, cx: &mut Context<Self>) {
-        self.split_editor_to(group, group + 1, window, cx);
+    /// A column no group is in yet.
+    pub(super) fn new_column(&self) -> u64 {
+        self.groups
+            .iter()
+            .map(|group| group.column + 1)
+            .max()
+            .unwrap_or(0)
     }
 
-    /// Opens group `group`'s file again in a new group at position `at`.
-    fn split_editor_to(
+    /// Where a group placed on `side` of group `group` goes: its index
+    /// among the groups and its column.
+    pub(super) fn beside(&self, group: usize, side: Side) -> (usize, u64) {
+        let Some(column) = self.groups.get(group).map(|group| group.column) else {
+            return (self.groups.len(), self.new_column());
+        };
+        let same = |index: &usize| self.groups[*index].column == column;
+        let first = (0..group).rev().take_while(same).last().unwrap_or(group);
+        let last = (group..self.groups.len())
+            .take_while(same)
+            .last()
+            .unwrap_or(group);
+        match side {
+            Side::Left => (first, self.new_column()),
+            Side::Right => (last + 1, self.new_column()),
+            Side::Above => (group, column),
+            Side::Below => (group + 1, column),
+        }
+    }
+
+    /// Opens group `group`'s file again in a new group on `side` of it.
+    pub(super) fn split_editor(
         &mut self,
         group: usize,
-        at: usize,
+        side: Side,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
@@ -724,16 +800,20 @@ impl Workbench {
         let Some(pane) = self.create_pane(&uri, window, cx) else {
             return;
         };
+        let (at, column) = self.beside(group, side);
         let at = at.min(self.panes.len());
         self.panes.insert(at, pane);
         self.groups.insert(
             at,
-            Group::with(vec![Tab {
-                uri,
-                preview: false,
-                pinned: false,
-                parked: None,
-            }]),
+            Group::with(
+                vec![Tab {
+                    uri,
+                    preview: false,
+                    pinned: false,
+                    parked: None,
+                }],
+                column,
+            ),
         );
         self.install_completions(at, cx);
         self.focus_pane(at, window, cx);
@@ -865,57 +945,61 @@ impl Workbench {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        match zone {
-            DropZone::Center if from_group == on_group => {}
-            DropZone::Center => {
+        match zone.side() {
+            None if from_group == on_group => {}
+            None => {
                 let end = self
                     .groups
                     .get(on_group)
                     .map_or(0, |group| group.tabs.len());
                 self.move_tab(from_group, from_index, on_group, end, window, cx);
             }
-            DropZone::Left => {
-                self.move_tab_to_new_group(from_group, from_index, on_group, window, cx)
-            }
-            DropZone::Right => {
-                self.move_tab_to_new_group(from_group, from_index, on_group + 1, window, cx)
+            Some(side) => {
+                self.move_tab_to_new_group(from_group, from_index, on_group, side, window, cx)
             }
         }
     }
 
     /// Takes a tab, with its editor, cursor and undo history, into a new
-    /// group at position `at`. A group's only tab dropped beside itself is
-    /// split instead, as VS Code does.
+    /// group on `side` of group `on_group`. A group's only tab dropped on
+    /// its own editor is split instead, as VS Code does.
     pub(super) fn move_tab_to_new_group(
         &mut self,
         from_group: usize,
         from_index: usize,
-        at: usize,
+        on_group: usize,
+        side: Side,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
         let Some(count) = self.groups.get(from_group).map(|group| group.tabs.len()) else {
             return;
         };
-        if from_index >= count {
+        if from_index >= count || on_group >= self.groups.len() {
             return;
         }
-        let at = at.min(self.groups.len());
         if count == 1 {
-            if at == from_group || at == from_group + 1 {
-                self.split_editor_to(from_group, at, window, cx);
+            if on_group == from_group {
+                self.split_editor(from_group, side, window, cx);
                 self.session_changed(cx);
                 return;
             }
             // The group goes where it was dropped.
-            let group = self.groups.remove(from_group);
+            let mut group = self.groups.remove(from_group);
             let pane = self.panes.remove(from_group);
-            let at = if at > from_group { at - 1 } else { at };
+            let on_group = if on_group > from_group {
+                on_group - 1
+            } else {
+                on_group
+            };
+            let (at, column) = self.beside(on_group, side);
+            group.column = column;
             self.groups.insert(at, group);
             self.panes.insert(at, pane);
             self.settle_new_group(at, window, cx);
             return;
         }
+        let (at, column) = self.beside(on_group, side);
         if self.groups[from_group].active == from_index {
             let neighbor = if from_index + 1 < count {
                 from_index + 1
@@ -933,7 +1017,7 @@ impl Workbench {
             return;
         };
         tab.preview = false;
-        self.groups.insert(at, Group::with(vec![tab]));
+        self.groups.insert(at, Group::with(vec![tab], column));
         self.panes.insert(at, pane);
         self.settle_new_group(at, window, cx);
     }
@@ -959,33 +1043,33 @@ impl Workbench {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let mut column = match zone {
-            DropZone::Center => on_group,
-            DropZone::Left => on_group,
-            DropZone::Right => on_group + 1,
-        };
-        let mut new_group = zone != DropZone::Center;
+        // The first file opens the new group; the others go into it.
+        let mut new_group = zone.side().map(|side| self.beside(on_group, side));
+        let mut column = on_group;
         for path in paths.iter().filter(|path| path.is_file()) {
             let Ok(uri) = self.load_document(path, window, cx) else {
                 continue;
             };
-            if new_group {
+            if let Some((at, group_column)) = new_group {
                 let Some(pane) = self.create_pane(&uri, window, cx) else {
                     continue;
                 };
-                column = column.min(self.groups.len());
+                column = at.min(self.groups.len());
                 self.groups.insert(
                     column,
-                    Group::with(vec![Tab {
-                        uri,
-                        preview: false,
-                        pinned: false,
-                        parked: None,
-                    }]),
+                    Group::with(
+                        vec![Tab {
+                            uri,
+                            preview: false,
+                            pinned: false,
+                            parked: None,
+                        }],
+                        group_column,
+                    ),
                 );
                 self.panes.insert(column, pane);
                 self.settle_new_group(column, window, cx);
-                new_group = false;
+                new_group = None;
             } else {
                 self.show_tab(&uri, column, OpenAs::Normal, true, window, cx);
             }
@@ -1037,7 +1121,65 @@ impl Workbench {
             self.refresh_title(window);
             cx.notify();
         } else if group == self.panes.len() {
-            self.split_editor(self.panes.len().saturating_sub(1), window, cx);
+            self.split_editor(self.panes.len().saturating_sub(1), Side::Right, window, cx);
+        }
+    }
+
+    /// The group on `side` of the one in front: above or below in its
+    /// column, or in the next column at the same height.
+    pub(super) fn group_toward(&self, group: usize, side: Side) -> Option<usize> {
+        let column = self.groups.get(group)?.column;
+        match side {
+            Side::Above => group
+                .checked_sub(1)
+                .filter(|above| self.groups[*above].column == column),
+            Side::Below => Some(group + 1).filter(|below| {
+                self.groups
+                    .get(*below)
+                    .is_some_and(|below| below.column == column)
+            }),
+            Side::Left | Side::Right => {
+                let columns = self.columns();
+                let here = columns.iter().position(|cells| cells.contains(&group))?;
+                let there = if side == Side::Left {
+                    columns.get(here.checked_sub(1)?)?
+                } else {
+                    columns.get(here + 1)?
+                };
+                // The same share of the height: the middle of this cell.
+                let cells = &columns[here];
+                let row = cells.iter().position(|cell| *cell == group)?;
+                let middle = (row as f32 + 0.5) / cells.len() as f32;
+                let at = ((middle * there.len() as f32) as usize).min(there.len() - 1);
+                Some(there[at])
+            }
+        }
+    }
+
+    /// Where what opens to the side goes: the group on the right of group
+    /// `group` at the same height, or a new one after the last column.
+    pub(super) fn side_group(&self, group: usize) -> usize {
+        self.group_toward(group, Side::Right)
+            .unwrap_or(self.groups.len())
+    }
+
+    /// The groups of each column, left to right.
+    pub(super) fn columns(&self) -> Vec<Vec<usize>> {
+        let mut columns: Vec<Vec<usize>> = Vec::new();
+        let mut last = None;
+        for (index, group) in self.groups.iter().enumerate() {
+            match columns.last_mut() {
+                Some(cells) if last == Some(group.column) => cells.push(index),
+                _ => columns.push(vec![index]),
+            }
+            last = Some(group.column);
+        }
+        columns
+    }
+
+    fn focus_group_toward(&mut self, side: Side, window: &mut Window, cx: &mut Context<Self>) {
+        if let Some(group) = self.group_toward(self.active, side) {
+            self.focus_group(group, window, cx);
         }
     }
 
@@ -1066,9 +1208,14 @@ impl Workbench {
             }
             TabCommand::CloseAll => self.close_tabs_where(group, |_, _| true, window, cx),
             TabCommand::TogglePin => self.toggle_pin(group, tab, cx),
-            TabCommand::Split => {
+            TabCommand::Split | TabCommand::SplitDown => {
                 self.activate_tab(group, tab, false, window, cx);
-                self.split_editor(group, window, cx);
+                let side = if action.command == TabCommand::Split {
+                    Side::Right
+                } else {
+                    Side::Below
+                };
+                self.split_editor(group, side, window, cx);
             }
             TabCommand::CopyPath | TabCommand::Reveal => {
                 let Some(path) = Uri::parse(&uri).and_then(|uri| uri.file_path()) else {
@@ -1171,8 +1318,32 @@ impl Workbench {
             cx.listener(|this, _: &PreviousEditor, window, cx| this.step_tab(-1, window, cx)),
         )
         .on_action(cx.listener(|this, _: &SplitEditor, window, cx| {
-            let group = this.active;
-            this.split_editor(group, window, cx)
+            this.split_editor(this.active, Side::Right, window, cx)
+        }))
+        .on_action(cx.listener(|this, _: &SplitEditorLeft, window, cx| {
+            this.split_editor(this.active, Side::Left, window, cx)
+        }))
+        .on_action(cx.listener(|this, _: &SplitEditorUp, window, cx| {
+            this.split_editor(this.active, Side::Above, window, cx)
+        }))
+        // Orthogonal to the side-by-side direction, which is to the right.
+        .on_action(cx.listener(|this, _: &SplitEditorDown, window, cx| {
+            this.split_editor(this.active, Side::Below, window, cx)
+        }))
+        .on_action(cx.listener(|this, _: &SplitEditorOrthogonal, window, cx| {
+            this.split_editor(this.active, Side::Below, window, cx)
+        }))
+        .on_action(cx.listener(|this, _: &FocusLeftGroup, window, cx| {
+            this.focus_group_toward(Side::Left, window, cx)
+        }))
+        .on_action(cx.listener(|this, _: &FocusRightGroup, window, cx| {
+            this.focus_group_toward(Side::Right, window, cx)
+        }))
+        .on_action(cx.listener(|this, _: &FocusAboveGroup, window, cx| {
+            this.focus_group_toward(Side::Above, window, cx)
+        }))
+        .on_action(cx.listener(|this, _: &FocusBelowGroup, window, cx| {
+            this.focus_group_toward(Side::Below, window, cx)
         }))
         .on_action(cx.listener(|this, _: &FocusGroup1, window, cx| this.focus_group(0, window, cx)))
         .on_action(cx.listener(|this, _: &FocusGroup2, window, cx| this.focus_group(1, window, cx)))
@@ -1280,16 +1451,99 @@ mod tests {
     }
 
     #[test]
-    fn the_thirds_of_an_editor_are_its_drop_zones() {
+    fn the_edges_of_an_editor_are_its_drop_zones() {
         let bounds = gpui::Bounds::new(
             gpui::point(px(100.), px(0.)),
             gpui::size(px(300.), px(200.)),
         );
-        let at = |x: f32| DropZone::at(bounds, gpui::point(px(x), px(50.)));
-        assert_eq!(at(120.), Some(DropZone::Left));
-        assert_eq!(at(250.), Some(DropZone::Center));
-        assert_eq!(at(380.), Some(DropZone::Right));
-        assert_eq!(at(20.), None);
+        let at = |x: f32, y: f32| DropZone::at(bounds, gpui::point(px(x), px(y)));
+        assert_eq!(at(120., 100.), Some(DropZone::Left));
+        assert_eq!(at(250., 100.), Some(DropZone::Center));
+        assert_eq!(at(380., 100.), Some(DropZone::Right));
+        assert_eq!(at(250., 20.), Some(DropZone::Top));
+        assert_eq!(at(250., 190.), Some(DropZone::Bottom));
+        // In a corner, the nearer edge.
+        assert_eq!(at(105., 40.), Some(DropZone::Left));
+        assert_eq!(at(20., 100.), None);
+    }
+
+    #[gpui::test]
+    fn groups_stack_in_columns_and_the_keys_go_between_them(cx: &mut TestAppContext) {
+        let (_folder, root, view, cx) = project(cx);
+        let names = |cx: &mut VisualTestContext| -> Vec<Vec<String>> {
+            tabs(&view, cx)
+                .into_iter()
+                .map(|group| group.into_iter().map(|(name, _, _)| name).collect())
+                .collect()
+        };
+        let columns = |cx: &mut VisualTestContext| view.read_with(cx, |view, _| view.columns());
+        let active = |cx: &mut VisualTestContext| view.read_with(cx, |view, _| view.active);
+        let split = |cx: &mut VisualTestContext, group: usize, side: Side| {
+            view.update_in(cx, |view, window, cx| {
+                view.split_editor(group, side, window, cx)
+            })
+        };
+        open(&view, cx, &root.join("a.ts"), OpenAs::Normal);
+        split(cx, 0, Side::Below);
+        assert_eq!(columns(cx), [vec![0, 1]]);
+        open(&view, cx, &root.join("b.ts"), OpenAs::Normal);
+        // Right of the lower group: a column the whole height.
+        split(cx, 1, Side::Right);
+        assert_eq!(columns(cx), [vec![0, 1], vec![2]]);
+        split(cx, 2, Side::Above);
+        assert_eq!(columns(cx), [vec![0, 1], vec![2, 3]]);
+        assert_eq!(
+            names(cx),
+            [
+                vec!["a.ts"],
+                vec!["a.ts", "b.ts"],
+                vec!["b.ts"],
+                vec!["b.ts"]
+            ]
+        );
+        assert_eq!(active(cx), 2);
+
+        // Cmd+K and an arrow: the group that way, at the same height.
+        cx.simulate_keystrokes("cmd-k cmd-down");
+        assert_eq!(active(cx), 3);
+        cx.simulate_keystrokes("cmd-k cmd-left");
+        assert_eq!(active(cx), 1);
+        cx.simulate_keystrokes("cmd-k cmd-up");
+        assert_eq!(active(cx), 0);
+        cx.simulate_keystrokes("cmd-k cmd-up");
+        assert_eq!(active(cx), 0);
+        cx.simulate_keystrokes("cmd-k cmd-right");
+        assert_eq!(active(cx), 2);
+
+        // A tab dropped on the top of an editor: a group above it.
+        view.update_in(cx, |view, window, cx| {
+            view.drop_tab(1, 1, 0, DropZone::Top, window, cx)
+        });
+        assert_eq!(columns(cx), [vec![0, 1, 2], vec![3, 4]]);
+        assert_eq!(names(cx)[0], ["b.ts"]);
+        // A group's only tab on the bottom of another: the group moves.
+        view.update_in(cx, |view, window, cx| {
+            view.drop_tab(0, 0, 4, DropZone::Bottom, window, cx)
+        });
+        assert_eq!(columns(cx), [vec![0, 1], vec![2, 3, 4]]);
+        assert_eq!(names(cx)[4], ["b.ts"]);
+        // Closing a stacked group leaves the others where they are.
+        view.update_in(cx, |view, window, cx| view.close_tab(3, 0, window, cx));
+        assert_eq!(columns(cx), [vec![0, 1], vec![2, 3]]);
+        // Open to the side from the lower group on the left: the group on
+        // its right, not the one below it.
+        view.update_in(cx, |view, window, cx| {
+            view.focus_group(1, window, cx);
+            view.open_to_side(&root.join("c.ts"), window, cx);
+        });
+        assert_eq!(active(cx), 3);
+        assert_eq!(names(cx)[3], ["b.ts", "c.ts"]);
+        view.update_in(cx, |view, window, cx| view.close_tab(3, 1, window, cx));
+        // Cmd+K Cmd+\ splits down.
+        view.update_in(cx, |view, window, cx| view.focus_group(0, window, cx));
+        cx.simulate_keystrokes("cmd-k cmd-\\");
+        assert_eq!(columns(cx), [vec![0, 1, 2], vec![3, 4]]);
+        assert_eq!(active(cx), 1);
     }
 
     #[gpui::test]
@@ -1465,7 +1719,9 @@ mod tests {
         assert_eq!(names(&view, cx), [["c.ts", "a.ts", "b.ts"]]);
         assert_eq!(active_text(&view, cx), "let c = 1;\n");
         // Split, then drag a.ts into the new group, with its text.
-        view.update_in(cx, |view, window, cx| view.split_editor(0, window, cx));
+        view.update_in(cx, |view, window, cx| {
+            view.split_editor(0, Side::Right, window, cx)
+        });
         assert_eq!(
             names(&view, cx),
             [vec!["c.ts", "a.ts", "b.ts"], vec!["c.ts"]]

@@ -1065,6 +1065,17 @@ pub struct Strings {
     pub command_run_all_tests: &'static str,
     pub command_rerun_tests: &'static str,
     pub command_run_file_tests: &'static str,
+    /// A tab's menu: the file again in a new group below.
+    pub tab_split_down: &'static str,
+    pub menu_split_editor_down: &'static str,
+    pub command_split_editor_orthogonal: &'static str,
+    pub command_split_editor_left: &'static str,
+    pub command_split_editor_up: &'static str,
+    pub command_split_editor_down: &'static str,
+    pub command_focus_left_group: &'static str,
+    pub command_focus_right_group: &'static str,
+    pub command_focus_above_group: &'static str,
+    pub command_focus_below_group: &'static str,
 }
 
 impl Strings {
@@ -1234,6 +1245,14 @@ impl Strings {
             "workbench.action.nextEditor" => self.command_next_editor,
             "workbench.action.previousEditor" => self.command_previous_editor,
             "workbench.action.splitEditor" => self.command_split_editor,
+            "workbench.action.splitEditorOrthogonal" => self.command_split_editor_orthogonal,
+            "workbench.action.splitEditorLeft" => self.command_split_editor_left,
+            "workbench.action.splitEditorUp" => self.command_split_editor_up,
+            "workbench.action.splitEditorDown" => self.command_split_editor_down,
+            "workbench.action.focusLeftGroup" => self.command_focus_left_group,
+            "workbench.action.focusRightGroup" => self.command_focus_right_group,
+            "workbench.action.focusAboveGroup" => self.command_focus_above_group,
+            "workbench.action.focusBelowGroup" => self.command_focus_below_group,
             "workbench.action.focusFirstEditorGroup" => self.command_focus_group_1,
             "workbench.action.focusSecondEditorGroup" => self.command_focus_group_2,
             "workbench.action.focusThirdEditorGroup" => self.command_focus_group_3,
@@ -2557,6 +2576,16 @@ pub const ITALIAN: Strings = Strings {
     command_run_all_tests: "Test: esegui tutti",
     command_rerun_tests: "Test: esegui di nuovo l'ultimo",
     command_run_file_tests: "Test: esegui quelli del file",
+    tab_split_down: "Dividi in basso",
+    menu_split_editor_down: "Dividi editor in basso",
+    command_split_editor_orthogonal: "Vista: Dividi l'editor nell'altra direzione",
+    command_split_editor_left: "Vista: Dividi l'editor a sinistra",
+    command_split_editor_up: "Vista: Dividi l'editor in alto",
+    command_split_editor_down: "Vista: Dividi l'editor in basso",
+    command_focus_left_group: "Vista: Vai al gruppo a sinistra",
+    command_focus_right_group: "Vista: Vai al gruppo a destra",
+    command_focus_above_group: "Vista: Vai al gruppo sopra",
+    command_focus_below_group: "Vista: Vai al gruppo sotto",
 };
 
 pub const ENGLISH: Strings = Strings {
@@ -3480,6 +3509,16 @@ pub const ENGLISH: Strings = Strings {
     command_run_all_tests: "Test: Run All Tests",
     command_rerun_tests: "Test: Rerun Last Run",
     command_run_file_tests: "Test: Run Tests in Current File",
+    tab_split_down: "Split Down",
+    menu_split_editor_down: "Split Editor Down",
+    command_split_editor_orthogonal: "View: Split Editor Orthogonal",
+    command_split_editor_left: "View: Split Editor Left",
+    command_split_editor_up: "View: Split Editor Up",
+    command_split_editor_down: "View: Split Editor Down",
+    command_focus_left_group: "View: Focus Left Editor Group",
+    command_focus_right_group: "View: Focus Right Editor Group",
+    command_focus_above_group: "View: Focus Editor Group Above",
+    command_focus_below_group: "View: Focus Editor Group Below",
 };
 
 #[cfg(test)]

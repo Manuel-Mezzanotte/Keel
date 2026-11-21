@@ -80,8 +80,10 @@ pub(crate) use navigation::{GoToLine, QuickOpen};
 
 pub(crate) use tabs::{
     CloseAllEditors, CloseEditor, CloseEditorsInGroup, CloseOtherEditors, CloseSavedEditors,
-    FocusGroup1, FocusGroup2, FocusGroup3, KeepEditor, NextEditor, OpenEditorAtIndex,
-    PreviousEditor, ReopenClosedEditor, SplitEditor, TogglePinEditor,
+    FocusAboveGroup, FocusBelowGroup, FocusGroup1, FocusGroup2, FocusGroup3, FocusLeftGroup,
+    FocusRightGroup, KeepEditor, NextEditor, OpenEditorAtIndex, PreviousEditor, ReopenClosedEditor,
+    SplitEditor, SplitEditorDown, SplitEditorLeft, SplitEditorOrthogonal, SplitEditorUp,
+    TogglePinEditor,
 };
 use tabs::{Group, OpenAs};
 

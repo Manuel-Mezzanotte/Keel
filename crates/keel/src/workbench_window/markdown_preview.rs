@@ -184,7 +184,11 @@ impl Workbench {
                 },
             );
         }
-        let column = if to_side { group + 1 } else { group };
+        let column = if to_side {
+            self.side_group(group)
+        } else {
+            group
+        };
         self.show_tab(&uri, column, OpenAs::Normal, true, window, cx);
     }
 

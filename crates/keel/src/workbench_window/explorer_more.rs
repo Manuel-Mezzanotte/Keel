@@ -821,7 +821,7 @@ impl Workbench {
         let Ok(uri) = self.load_document(path, window, cx) else {
             return;
         };
-        let column = (self.active + 1).min(self.groups.len());
+        let column = self.side_group(self.active);
         self.show_tab(&uri, column, tabs::OpenAs::Normal, true, window, cx);
         cx.notify();
     }

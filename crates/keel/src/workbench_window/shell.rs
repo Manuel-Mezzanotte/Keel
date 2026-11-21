@@ -1351,6 +1351,7 @@ impl Workbench {
             ),
             menu_entry(pin_label, TabCommand::TogglePin),
             menu_entry(strings.tab_split, TabCommand::Split),
+            menu_entry(strings.tab_split_down, TabCommand::SplitDown),
             menu_entry(strings.explorer_copy_path, TabCommand::CopyPath),
             menu_entry(strings.explorer_reveal, TabCommand::Reveal),
         ];
@@ -1602,16 +1603,18 @@ impl Workbench {
                 .enumerate()
                 .map(|(position, tab)| self.render_tab(index, position, tab, colors, window, cx))
                 .collect();
+            // Below another group of its column: a line between them.
+            let stacked = index > 0 && self.groups[index - 1].column == group.column;
             div()
                 .flex_1()
                 .min_w_0()
-                .h_full()
+                .min_h_0()
                 .relative()
                 .flex()
                 .flex_col()
                 .children(self.render_peek(index, colors, cx))
-                .when(index > 0, |pane| {
-                    pane.border_l_1().border_color(colors.border)
+                .when(stacked, |pane| {
+                    pane.border_t_1().border_color(colors.border)
                 })
                 .child(
                     div()
@@ -1770,6 +1773,31 @@ impl Workbench {
                 })
         });
 
+        let panes: Vec<AnyElement> = panes.map(IntoElement::into_any_element).collect();
+        // A row of columns, each a stack of groups.
+        let mut columns: Vec<Div> = Vec::new();
+        let mut last = None;
+        for (index, pane) in panes.into_iter().enumerate() {
+            let column = self.groups[index].column;
+            if last != Some(column) {
+                let first = columns.is_empty();
+                columns.push(
+                    div()
+                        .flex_1()
+                        .min_w_0()
+                        .h_full()
+                        .flex()
+                        .flex_col()
+                        .when(!first, |cells| {
+                            cells.border_l_1().border_color(colors.border)
+                        }),
+                );
+                last = Some(column);
+            }
+            if let Some(cells) = columns.pop() {
+                columns.push(cells.child(pane));
+            }
+        }
         let content = if self.panes.is_empty() {
             self.render_welcome(colors, window, cx)
         } else {
@@ -1778,7 +1806,7 @@ impl Workbench {
                 .min_h_0()
                 .flex()
                 .flex_row()
-                .children(panes)
+                .children(columns)
                 .into_any_element()
         };
         let panel_takes_all = self.layout.panel && self.panel_maximized;
@@ -1831,16 +1859,16 @@ impl Workbench {
         let overlay = zone.map(|zone| {
             let shade = div()
                 .absolute()
-                .top_0()
-                .bottom_0()
                 .rounded(px(6.))
                 .border_2()
                 .border_color(colors.accent.opacity(0.7))
                 .bg(colors.accent.opacity(0.12));
             match zone {
-                DropZone::Left => shade.left_0().w(relative(0.5)),
-                DropZone::Right => shade.right_0().w(relative(0.5)),
-                DropZone::Center => shade.left_0().right_0(),
+                DropZone::Left => shade.top_0().bottom_0().left_0().w(relative(0.5)),
+                DropZone::Right => shade.top_0().bottom_0().right_0().w(relative(0.5)),
+                DropZone::Top => shade.left_0().right_0().top_0().h(relative(0.5)),
+                DropZone::Bottom => shade.left_0().right_0().bottom_0().h(relative(0.5)),
+                DropZone::Center => shade.inset_0(),
             }
         });
         div()
