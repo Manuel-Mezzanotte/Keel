@@ -603,6 +603,23 @@ pub fn default_settings(spec: &ServerSpec) -> Value {
                 "autoSearchPaths": true,
             } },
         }),
+        // The lenses Keel shows: how many references and implementations.
+        // Run and Debug are the test margin's.
+        "rust-analyzer" => json!({
+            "rust-analyzer": {
+                "lens": {
+                    "references": {
+                        "adt": { "enable": true },
+                        "enumVariant": { "enable": true },
+                        "method": { "enable": true },
+                        "trait": { "enable": true },
+                    },
+                    "implementations": { "enable": true },
+                    "run": { "enable": false },
+                    "debug": { "enable": false },
+                },
+            },
+        }),
         "vtsls" => json!({
             "vtsls": {
                 // The project's own TypeScript, as Cursor offers.
@@ -612,8 +629,24 @@ pub fn default_settings(spec: &ServerSpec) -> Value {
                 // 15,000 of them, a second to send.
                 "experimental": { "completion": { "enableServerSideFuzzyMatch": true, "entriesLimit": 1000 } },
             },
-            "typescript": { "updateImportsOnFileMove": { "enabled": "always" } },
-            "javascript": { "updateImportsOnFileMove": { "enabled": "always" } },
+            "typescript": {
+                "updateImportsOnFileMove": { "enabled": "always" },
+                "referencesCodeLens": { "enabled": true },
+                "implementationsCodeLens": { "enabled": true },
+                "inlayHints": {
+                    "variableTypes": { "enabled": true },
+                    "functionLikeReturnTypes": { "enabled": true },
+                    "propertyDeclarationTypes": { "enabled": true },
+                },
+            },
+            "javascript": {
+                "updateImportsOnFileMove": { "enabled": "always" },
+                "referencesCodeLens": { "enabled": true },
+                "inlayHints": {
+                    "variableTypes": { "enabled": true },
+                    "functionLikeReturnTypes": { "enabled": true },
+                },
+            },
         }),
         "css" => json!({ "css": css, "scss": css, "less": css }),
         "html" => json!({

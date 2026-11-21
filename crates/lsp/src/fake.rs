@@ -22,6 +22,11 @@
 //! Each `TODO` has a quick fix, "Replace with DONE", whose edit comes with
 //! `codeAction/resolve`; "Organize" (`source.organizeImports`) adds a
 //! `// organized` line at the top, and formatting a `// formatted` one.
+//!
+//! Each `function` has a lens, resolved with `codeLens/resolve` into "N
+//! references": the calls `name(` in the open documents. Each `const` or
+//! `let` gets a type hint after its name, `number` or `string` from its
+//! value.
 
 use std::collections::HashMap;
 use std::io::{self, BufReader, Read, Write};
@@ -62,6 +67,8 @@ pub fn run(input: impl Read, output: impl Write + Send + 'static) -> i32 {
                         "codeActionProvider": { "resolveProvider": true },
                         "documentFormattingProvider": true,
                         "executeCommandProvider": { "commands": ["fake.command"] },
+                        "codeLensProvider": { "resolveProvider": true },
+                        "inlayHintProvider": true,
                     },
                     "serverInfo": { "name": "fake", "version": "1" },
                 },
@@ -179,6 +186,91 @@ pub fn run(input: impl Read, output: impl Write + Send + 'static) -> i32 {
                     }))
                 });
                 send(json!({ "jsonrpc": "2.0", "id": id, "result": found }));
+            }
+            "textDocument/codeLens" => {
+                let uri = params["textDocument"]["uri"].as_str().unwrap_or_default();
+                let text = documents.get(uri).cloned().unwrap_or_default();
+                let lenses: Vec<Value> = text
+                    .lines()
+                    .enumerate()
+                    .filter_map(|(line, content)| {
+                        let at = content.find("function ")? + "function ".len();
+                        let name: String = content[at..]
+                            .chars()
+                            .take_while(|char| char.is_alphanumeric() || *char == '_')
+                            .collect();
+                        let end = at + name.len();
+                        Some(json!({
+                            "range": {
+                                "start": { "line": line, "character": at },
+                                "end": { "line": line, "character": end },
+                            },
+                            "data": { "uri": uri, "name": name, "line": line, "character": at },
+                        }))
+                    })
+                    .collect();
+                send(json!({ "jsonrpc": "2.0", "id": id, "result": lenses }));
+            }
+            "codeLens/resolve" => {
+                let name = params["data"]["name"].as_str().unwrap_or_default();
+                let call = format!("{name}(");
+                let mut places = Vec::new();
+                for (uri, text) in &documents {
+                    for (line, content) in text.lines().enumerate() {
+                        if content.contains("function ") {
+                            continue;
+                        }
+                        for (at, _) in content.match_indices(&call) {
+                            places.push(json!({
+                                "uri": uri,
+                                "range": {
+                                    "start": { "line": line, "character": at },
+                                    "end": { "line": line, "character": at + name.len() },
+                                },
+                            }));
+                        }
+                    }
+                }
+                let mut lens = params.clone();
+                lens["command"] = json!({
+                    "title": format!("{} references", places.len()),
+                    "command": "editor.action.showReferences",
+                    "arguments": [
+                        params["data"]["uri"],
+                        { "line": params["data"]["line"], "character": params["data"]["character"] },
+                        places,
+                    ],
+                });
+                send(json!({ "jsonrpc": "2.0", "id": id, "result": lens }));
+            }
+            "textDocument/inlayHint" => {
+                let uri = params["textDocument"]["uri"].as_str().unwrap_or_default();
+                let text = documents.get(uri).cloned().unwrap_or_default();
+                let hints: Vec<Value> = text
+                    .lines()
+                    .enumerate()
+                    .filter_map(|(line, content)| {
+                        let start = ["const ", "let "]
+                            .iter()
+                            .find_map(|word| content.find(word).map(|at| at + word.len()))?;
+                        let name: String = content[start..]
+                            .chars()
+                            .take_while(|char| char.is_alphanumeric() || *char == '_')
+                            .collect();
+                        let value = content.split_once('=')?.1.trim();
+                        let kind = if value.starts_with(['"', '\'']) {
+                            "string"
+                        } else {
+                            "number"
+                        };
+                        Some(json!({
+                            "position": { "line": line, "character": start + name.len() },
+                            "label": format!(": {kind}"),
+                            "kind": 1,
+                        }))
+                    })
+                    .collect();
+                send(json!({ "jsonrpc": "2.0", "id": id, "result": hints }));
             }
             "textDocument/codeAction" => {
                 let uri = params["textDocument"]["uri"].as_str().unwrap_or_default();

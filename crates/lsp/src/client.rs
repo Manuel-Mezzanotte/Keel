@@ -524,6 +524,11 @@ fn client_capabilities() -> Value {
     let symbol_kinds: Vec<u32> = (1..=26).collect();
     let completion_kinds: Vec<u32> = (1..=25).collect();
     json!({
+        // rust-analyzer gives its lenses a command only when the editor
+        // says it runs it: Keel shows the places in its frame.
+        "experimental": {
+            "commands": { "commands": ["rust-analyzer.showReferences"] },
+        },
         "general": {
             "positionEncodings": ["utf-16"],
             "markdown": { "parser": "marked", "version": "1.1.0" },
@@ -548,6 +553,8 @@ fn client_capabilities() -> Value {
             "executeCommand": {},
             "fileOperations": { "willRename": true, "didRename": true },
             "diagnostics": { "refreshSupport": true },
+            "codeLens": { "refreshSupport": true },
+            "inlayHint": { "refreshSupport": true },
         },
         "textDocument": {
             "synchronization": { "didSave": true, "willSave": false, "willSaveWaitUntil": false },
@@ -582,6 +589,8 @@ fn client_capabilities() -> Value {
             "typeDefinition": { "linkSupport": true },
             "implementation": { "linkSupport": true },
             "references": {},
+            "codeLens": {},
+            "inlayHint": {},
             "documentHighlight": {},
             "documentSymbol": {
                 "hierarchicalDocumentSymbolSupport": true,

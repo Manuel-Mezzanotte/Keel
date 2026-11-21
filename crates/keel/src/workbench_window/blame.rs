@@ -9,6 +9,7 @@ use std::path::PathBuf;
 use std::rc::Rc;
 
 use git::BlameLine;
+use gpui::StatefulInteractiveElement as _;
 use gpui::{
     AnyElement, Bounds, MouseButton, MouseDownEvent, Pixels, SharedString, TextRun, canvas, point,
 };
@@ -56,7 +57,7 @@ impl Workbench {
     }
 
     /// Turns the authors' column on or off for the active file.
-    fn toggle_blame(&mut self, cx: &mut Context<Self>) {
+    pub(super) fn toggle_blame(&mut self, cx: &mut Context<Self>) {
         let Some((uri, _)) = self.active_git_path() else {
             self.status_message = Some(self.strings().blame_not_in_git.to_owned());
             cx.notify();
@@ -252,14 +253,36 @@ impl Workbench {
             },
         )
         .size_full();
+        let hovered = placed.clone();
         Some(
             div()
+                .id(("blame-column", index))
                 .w(px(BLAME_WIDTH))
                 .h_full()
                 .flex_none()
                 .border_r_1()
                 .border_color(border)
                 .cursor_pointer()
+                // Resting on a label opens its commit's card beside it.
+                .on_mouse_move(
+                    cx.listener(move |this, event: &gpui::MouseMoveEvent, _, cx| {
+                        let under = hovered
+                            .borrow()
+                            .iter()
+                            .rev()
+                            .find(|(bounds, _)| event.position.y >= bounds.origin.y)
+                            .map(|(bounds, hash)| (bounds.top_right(), hash.clone()));
+                        if let Some((corner, hash)) = under {
+                            let anchor = point(corner.x + px(6.), corner.y);
+                            this.hover_blame(Some(hash), anchor, gpui::Anchor::TopLeft, cx);
+                        }
+                    }),
+                )
+                .on_hover(cx.listener(|this, hovered: &bool, _, cx| {
+                    if !*hovered {
+                        this.hover_blame(None, point(px(0.), px(0.)), gpui::Anchor::TopLeft, cx);
+                    }
+                }))
                 // A click on a label shows its commit in Git Graph.
                 .on_mouse_down(
                     MouseButton::Left,
@@ -486,6 +509,91 @@ mod tests {
         view.update(cx, |view, cx| {
             assert!(view.blame.values().all(|state| !state.column));
             assert!(view.render_blame_column(view.active, cx).is_none());
+        });
+    }
+
+    #[gpui::test]
+    fn resting_on_a_blame_opens_its_whole_commit(cx: &mut TestAppContext) {
+        cx.executor().allow_parking();
+        cx.update(|cx| {
+            gpui_component::init(cx);
+            crate::workbench_window::init(cx);
+        });
+        let folder = tempfile::tempdir().unwrap();
+        let root = fs::canonicalize(folder.path()).unwrap();
+        git(&root, &["init", "-q", "-b", "main"]);
+        git(&root, &["config", "user.name", "Manuel"]);
+        git(&root, &["config", "user.email", "m@example.com"]);
+        git(&root, &["config", "commit.gpgsign", "false"]);
+        git(
+            &root,
+            &["remote", "add", "origin", "git@github.com:me/app.git"],
+        );
+        fs::write(root.join("a.txt"), "uno\ndue\n").unwrap();
+        git(&root, &["add", "."]);
+        git(
+            &root,
+            &[
+                "commit",
+                "-q",
+                "-m",
+                "fix: le prime righe",
+                "-m",
+                "Perché servivano due righe.",
+            ],
+        );
+        let config = tempfile::tempdir().unwrap();
+        let settings_file = config.path().join("settings.json");
+        fs::write(&settings_file, r#"{ "keel.language": "it" }"#).unwrap();
+        let settings = Settings::load(&settings_file, None);
+        let opening = Opening::new(Some(root.clone()), None);
+        let (view, cx) =
+            cx.add_window_view(|window, cx| Workbench::new(opening, settings, None, window, cx));
+        view.update_in(cx, |view, window, cx| {
+            view.open_file(&root.join("a.txt"), window, cx)
+        });
+        wait_until(cx, "the repository", |cx| {
+            view.read_with(cx, |view, _| view.scm.repo.is_some())
+        });
+        view.update(cx, |view, cx| view.toggle_blame(cx));
+        wait_until(cx, "the authors", |cx| {
+            view.read_with(cx, |view, _| {
+                view.blame
+                    .values()
+                    .next()
+                    .is_some_and(|state| state.lines.len() == 2)
+            })
+        });
+
+        view.update_in(cx, |view, window, cx| {
+            view.hover_status_blame(true, window, cx)
+        });
+        wait_until(cx, "the card", |cx| {
+            view.read_with(cx, |view, _| {
+                view.blame_hover
+                    .card
+                    .as_ref()
+                    .is_some_and(|card| card.details.is_some())
+            })
+        });
+        view.update(cx, |view, cx| {
+            let card = view.blame_hover.card.as_ref().unwrap();
+            let details = card.details.as_ref().unwrap();
+            assert_eq!(
+                details.message,
+                "fix: le prime righe\n\nPerché servivano due righe."
+            );
+            assert_eq!(details.email, "m@example.com");
+            assert_eq!(card.web.as_deref(), Some("https://github.com/me/app"));
+            let colors = super::super::shell::Colors::new(cx);
+            assert!(view.render_blame_card(colors, cx).is_some());
+        });
+        // The mouse goes away: the card goes a moment later.
+        view.update_in(cx, |view, window, cx| {
+            view.hover_status_blame(false, window, cx)
+        });
+        wait_until(cx, "the card to close", |cx| {
+            view.read_with(cx, |view, _| view.blame_hover.card.is_none())
         });
     }
 }

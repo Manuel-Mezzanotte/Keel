@@ -4,6 +4,7 @@
 mod agent_panel;
 mod agent_review;
 mod blame;
+mod blame_card;
 mod bookmarks;
 mod claude_code;
 mod claude_diff;
@@ -39,6 +40,7 @@ mod interface_page;
 mod keybindings_view;
 mod language_features;
 mod language_servers;
+mod line_hints;
 mod local_history;
 pub(crate) mod look;
 mod markdown_preview;
@@ -54,6 +56,7 @@ mod pdf_view;
 mod peek;
 mod problems;
 mod restore;
+mod rulers;
 mod scm_graph;
 mod search_view;
 mod settings_view;
@@ -615,6 +618,10 @@ pub struct Workbench {
     preview_tops: HashMap<String, usize>,
     /// The files whose authors' column is on.
     blame: blame::BlameMap,
+    /// The card of the blame the mouse rests on.
+    blame_hover: blame_card::BlameHover,
+    /// The types and lenses at the ends of lines.
+    line_hints: line_hints::LineHints,
     /// The commit chosen in Git Graph, shown under it.
     commit_view: Option<commit_view::CommitView>,
     /// The zoom of each image tab (fit when missing) and the images' sizes.
@@ -834,6 +841,8 @@ impl Workbench {
             image_zoom: HashMap::new(),
             commit_view: None,
             blame: HashMap::new(),
+            blame_hover: Default::default(),
+            line_hints: Default::default(),
             image_sizes: RefCell::new(HashMap::new()),
             _subscriptions: subscriptions,
         };

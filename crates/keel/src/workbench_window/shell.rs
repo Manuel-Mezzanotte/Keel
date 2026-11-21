@@ -1762,6 +1762,8 @@ impl Workbench {
                                             .bordered(false)
                                             .text_size(px(self.font_size)),
                                     )
+                                    .children(self.render_rulers(index, cx))
+                                    .children(self.render_line_hints(index, cx))
                                     .children(pane.sticky.clone()),
                             )
                             .children(pane.minimap.clone())
@@ -2346,6 +2348,7 @@ impl Workbench {
         let has_repo = self.scm.repo.is_some();
         let custom = self.custom_colors(cx);
         let look = self.look;
+        let blame = self.current_line_blame(cx);
         div()
             .h(px(look.status_height()))
             .flex_none()
@@ -2368,6 +2371,8 @@ impl Workbench {
                     .enumerate()
                     .map(|(index, text)| {
                         let is_branch = branch && index == 0;
+                        // The line's author: the whole commit on hover.
+                        let is_blame = blame.as_ref() == Some(&text);
                         div()
                             .id(("status-left", index))
                             .h(px(20.))
@@ -2387,6 +2392,12 @@ impl Workbench {
                                     .hover(|item| item.bg(colors.hover))
                                     .on_click(cx.listener(|this, _, window, cx| {
                                         this.choose_branch(window, cx)
+                                    }))
+                            })
+                            .when(is_blame, |item| {
+                                item.hover(|item| item.bg(colors.hover))
+                                    .on_hover(cx.listener(|this, hovered: &bool, window, cx| {
+                                        this.hover_status_blame(*hovered, window, cx)
                                     }))
                             })
                             .when_some(sync.clone().filter(|_| is_branch), |item, sync| {
@@ -2617,6 +2628,12 @@ impl Render for Workbench {
                     this.toggle_terminal(window, cx)
                 }),
             )
+            // Ctrl+Option held shows the types at the ends of lines.
+            .on_modifiers_changed(cx.listener(
+                |this, event: &gpui::ModifiersChangedEvent, _, cx| {
+                    this.line_hints_modifiers(event.modifiers, cx)
+                },
+            ))
             .on_action(cx.listener(|this, _: &NewFile, window, cx| this.new_file(window, cx)))
             .on_action(cx.listener(|this, _: &QuickOpen, window, cx| this.quick_open(window, cx)))
             .on_action(cx.listener(|this, _: &GoToLine, window, cx| this.ask_line(window, cx)))
@@ -2627,6 +2644,7 @@ impl Render for Workbench {
             .child(body)
             .child(status)
             .children(notice_center)
+            .children(self.render_blame_card(colors, cx))
     }
 }
 

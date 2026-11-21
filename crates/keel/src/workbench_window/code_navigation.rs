@@ -76,7 +76,7 @@ fn places_of(response: Option<GotoDefinitionResponse>) -> Vec<Place> {
     }
 }
 
-fn place(location: Location) -> Place {
+pub(super) fn place(location: Location) -> Place {
     Place {
         uri: super::language_servers::normalize_uri(location.uri.as_str()),
         range: location.range,

@@ -313,6 +313,52 @@ pub(super) const CATALOG: &[Entry] = &[
         ),
     },
     Entry {
+        key: "editor.rulers",
+        page: Page::Editor,
+        kind: Kind::Json,
+        default: "[]",
+        title: ("Righelli", "Rulers"),
+        description: (
+            "Linee verticali alle colonne indicate, come [80, 100], o con il loro colore: { \"column\": 100, \"color\": \"#ff000060\" }.",
+            "Vertical lines at the given columns, such as [80, 100], or with their color: { \"column\": 100, \"color\": \"#ff000060\" }.",
+        ),
+    },
+    Entry {
+        key: "editor.codeLens",
+        page: Page::Editor,
+        kind: Kind::Switch,
+        default: "true",
+        title: ("Riferimenti a fine riga", "References at Line Ends"),
+        description: (
+            "«3 riferimenti» in fondo alle dichiarazioni, dal server del linguaggio; un clic li apre.",
+            "«3 references» at the end of declarations, from the language server; a click opens them.",
+        ),
+    },
+    Entry {
+        key: "editor.inlayHints.enabled",
+        page: Page::Editor,
+        kind: Kind::Choice(&[
+            (
+                "offUnlessPressed",
+                "Tenendo premuti Ctrl+Opzione",
+                "While Ctrl+Option Is Held",
+            ),
+            ("on", "Sempre", "Always"),
+            (
+                "onUnlessPressed",
+                "Nascosti tenendo premuti Ctrl+Opzione",
+                "Hidden While Ctrl+Option Is Held",
+            ),
+            ("off", "Mai", "Never"),
+        ]),
+        default: "\"offUnlessPressed\"",
+        title: ("Tipi suggeriti", "Inlay Hints"),
+        description: (
+            "I tipi che il server del linguaggio deduce, attenuati in fondo alla riga.",
+            "The types the language server infers, dimmed at the end of the line.",
+        ),
+    },
+    Entry {
         key: "editor.minimap.enabled",
         page: Page::Editor,
         kind: Kind::Switch,

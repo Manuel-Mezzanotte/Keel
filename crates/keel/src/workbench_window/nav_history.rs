@@ -168,6 +168,7 @@ impl Workbench {
         cx: &mut Context<Self>,
     ) {
         self.refresh_outline(true, cx);
+        self.refresh_line_hints(uri, true, cx);
         let position = editor.read(cx).cursor_position();
         self.nav.edited(Place {
             uri: uri.to_owned(),
@@ -183,6 +184,7 @@ impl Workbench {
             if uri != self.outline_uri() {
                 self.refresh_outline(false, cx);
             }
+            self.refresh_line_hints(&uri, false, cx);
         }
     }
 

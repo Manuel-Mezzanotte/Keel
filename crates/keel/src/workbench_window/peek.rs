@@ -25,7 +25,7 @@ type Code = Rc<(Vec<String>, Side)>;
 
 pub(super) struct Peek {
     title: String,
-    places: Vec<Place>,
+    pub(super) places: Vec<Place>,
     selected: usize,
     /// The pane it opened in.
     pane: usize,

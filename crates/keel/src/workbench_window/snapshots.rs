@@ -221,8 +221,59 @@ fn shots() -> Vec<Shot> {
             }));
         }
         if style == "floating" {
+            // The blame's card: the whole commit of the line.
+            shots.push(shot(name("blame-card"), |workbench, window, cx| {
+                let folder = std::env::current_dir().unwrap_or_default();
+                workbench.open_file(&folder.join("crates/editor/src/encoding.rs"), window, cx);
+                workbench.go_to(30, 1, window, cx);
+                workbench.toggle_blame(cx);
+                cx.spawn_in(window, async move |this, cx| {
+                    cx.background_executor()
+                        .timer(Duration::from_millis(300))
+                        .await;
+                    this.update_in(cx, |this, window, cx| {
+                        let Some(hash) = this.current_line_hash(cx) else {
+                            return;
+                        };
+                        let anchor = gpui::point(
+                            px(420.),
+                            window.viewport_size().height - px(this.look.status_height()),
+                        );
+                        this.open_blame_card(hash, anchor, gpui::Anchor::BottomLeft, cx);
+                    })
+                    .ok();
+                })
+                .detach();
+            }));
+            // The real server's lenses and types, on the file given:
+            // with KEEL_SNAPSHOTS_WAIT and the servers on.
+            shots.push(shot(name("line-hints-live"), |workbench, window, cx| {
+                workbench.close_blame_card(cx);
+                workbench.change_setting(
+                    "editor.inlayHints.enabled",
+                    Some(serde_json::json!("on")),
+                    window,
+                    cx,
+                );
+                workbench.focus_group(0, window, cx);
+                workbench.activate_tab(0, 0, true, window, cx);
+            }));
+            // Rulers at 80 and 100 columns, the second in its own color.
+            shots.push(shot(name("rulers"), |workbench, window, cx| {
+                workbench.close_blame_card(cx);
+                let value = serde_json::json!([80, { "column": 100, "color": "#e0707060" }]);
+                workbench.change_setting("editor.rulers", Some(value), window, cx);
+                let folder = std::env::current_dir().unwrap_or_default();
+                workbench.open_file(
+                    &folder.join("crates/keel/src/workbench_window/tabs.rs"),
+                    window,
+                    cx,
+                );
+                workbench.go_to(800, 1, window, cx);
+            }));
             // Groups side by side and stacked.
             shots.push(shot(name("groups-grid"), |workbench, window, cx| {
+                workbench.change_setting("editor.rulers", None, window, cx);
                 let folder = std::env::current_dir().unwrap_or_default();
                 workbench.open_file(&folder.join("crates/editor/src/encoding.rs"), window, cx);
                 let group = workbench.active;
@@ -477,6 +528,16 @@ pub(crate) fn run(out: PathBuf, project: Option<PathBuf>, file: Option<PathBuf>)
                 if !only.is_empty() && !only.iter().any(|word| shot.name.contains(word.as_str())) {
                     draw(handle, cx);
                     continue;
+                }
+                // KEEL_SNAPSHOTS_WAIT: milliseconds more, for a language
+                // server to read a small project.
+                if let Some(wait) = std::env::var("KEEL_SNAPSHOTS_WAIT")
+                    .ok()
+                    .and_then(|wait| wait.parse::<u64>().ok())
+                {
+                    cx.background_executor()
+                        .timer(Duration::from_millis(wait))
+                        .await;
                 }
                 // Animations start on the first frame drawn: let them end.
                 for _ in 0..6 {

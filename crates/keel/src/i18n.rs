@@ -1076,6 +1076,16 @@ pub struct Strings {
     pub command_focus_right_group: &'static str,
     pub command_focus_above_group: &'static str,
     pub command_focus_below_group: &'static str,
+    /// The blame's card: the commit in Git Graph.
+    pub blame_open_commit: &'static str,
+    /// Followed by the site's name: GitHub, GitLab.
+    pub blame_open_on: &'static str,
+    pub blame_copy_hash: &'static str,
+    /// At the end of a declaration: «1 riferimento».
+    pub lens_reference: &'static str,
+    pub lens_references: &'static str,
+    pub lens_implementation: &'static str,
+    pub lens_implementations: &'static str,
 }
 
 impl Strings {
@@ -2586,6 +2596,13 @@ pub const ITALIAN: Strings = Strings {
     command_focus_right_group: "Vista: Vai al gruppo a destra",
     command_focus_above_group: "Vista: Vai al gruppo sopra",
     command_focus_below_group: "Vista: Vai al gruppo sotto",
+    blame_open_commit: "Apri il commit",
+    blame_open_on: "Apri su",
+    blame_copy_hash: "Copia l'hash",
+    lens_reference: "riferimento",
+    lens_references: "riferimenti",
+    lens_implementation: "implementazione",
+    lens_implementations: "implementazioni",
 };
 
 pub const ENGLISH: Strings = Strings {
@@ -3519,6 +3536,13 @@ pub const ENGLISH: Strings = Strings {
     command_focus_right_group: "View: Focus Right Editor Group",
     command_focus_above_group: "View: Focus Editor Group Above",
     command_focus_below_group: "View: Focus Editor Group Below",
+    blame_open_commit: "Open Commit",
+    blame_open_on: "Open on",
+    blame_copy_hash: "Copy Hash",
+    lens_reference: "reference",
+    lens_references: "references",
+    lens_implementation: "implementation",
+    lens_implementations: "implementations",
 };
 
 #[cfg(test)]

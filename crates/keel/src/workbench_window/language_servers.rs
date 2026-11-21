@@ -960,6 +960,7 @@ impl Workbench {
         for uri in uris {
             self.languages.open_in_server(&running, &uri);
         }
+        self.refresh_visible_line_hints(cx);
         if matches!(spec.id, "jdtls" | "spring-boot") {
             self.enable_spring_boot_classpath(cx);
         }
@@ -1045,6 +1046,12 @@ impl Workbench {
                 };
                 let uri = normalize_uri(params.uri.as_str());
                 self.set_diagnostics(spec, &uri, params.diagnostics, cx);
+            }
+            // The server's lenses or hints changed, as rust-analyzer says
+            // once it has read the project: ask again for those in view.
+            // The client has answered the request already.
+            "workspace/codeLens/refresh" | "workspace/inlayHint/refresh" => {
+                self.refresh_visible_line_hints(cx);
             }
             // A pull server says its answers are stale: ask again.
             "workspace/diagnostic/refresh" => {
