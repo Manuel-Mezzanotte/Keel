@@ -268,6 +268,20 @@ impl Tracker {
         }
     }
 
+    /// Whether the shell drew its prompt and waits for a command line.
+    pub(crate) fn at_prompt<L: EventListener>(&mut self, term: &mut Term<L>) -> bool {
+        if term.mode().contains(TermMode::ALT_SCREEN) {
+            return false;
+        }
+        self.catch_up(term);
+        let cursor = self.spot_at(term.grid().cursor.point);
+        self.commands.back().is_some_and(|last| {
+            last.output.is_none()
+                && !last.finished
+                && last.prompt.is_some_and(|prompt| cursor > prompt)
+        })
+    }
+
     /// Takes a mark the shell printed, with the cursor where it was then.
     pub(crate) fn mark<L: EventListener>(
         &mut self,

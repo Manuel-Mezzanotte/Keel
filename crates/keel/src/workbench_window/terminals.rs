@@ -216,6 +216,7 @@ impl Workbench {
                 }
             }
             TerminalViewEvent::CommandFinished(command) => {
+                self.test_command_finished(view, command, cx);
                 self.terminal_command_finished(view, command, window, cx)
             }
             TerminalViewEvent::AskClaude(prompt) => self.ask_claude(prompt.clone(), window, cx),

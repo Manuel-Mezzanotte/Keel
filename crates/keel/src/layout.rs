@@ -40,6 +40,7 @@ pub enum PanelView {
     Output,
     Terminal,
     Ports,
+    Tests,
 }
 
 impl PanelView {
@@ -50,6 +51,7 @@ impl PanelView {
             PanelView::Output => "output",
             PanelView::Terminal => "terminal",
             PanelView::Ports => "ports",
+            PanelView::Tests => "tests",
         }
     }
 
@@ -57,11 +59,12 @@ impl PanelView {
         Self::ALL.into_iter().find(|view| view.id() == id)
     }
 
-    pub const ALL: [PanelView; 4] = [
+    pub const ALL: [PanelView; 5] = [
         PanelView::Problems,
         PanelView::Output,
         PanelView::Terminal,
         PanelView::Ports,
+        PanelView::Tests,
     ];
 }
 

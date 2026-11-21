@@ -22,7 +22,7 @@ use crate::workbench_window::{
 };
 use crate::workbench_window::{
     ClearBookmarks, InlineEditWithClaude, ListBookmarks, NextBookmark, PasteFromHistory,
-    PreviousBookmark, ToggleBookmark,
+    PreviousBookmark, RerunLastTests, RunAllTests, RunTestAtCursor, RunTestsInFile, ToggleBookmark,
 };
 use crate::workbench_window::{
     ClearNotifications, CloseFolder, RevertFile, SaveAll, SaveAs, ToggleAutoSave,
@@ -246,6 +246,30 @@ pub const COMMANDS: &[KeelCommand] = &[
         action: || Box::new(FocusPreviousTerminal),
         default_key: Some("cmd+shift+["),
         context: Some(TERMINAL_CONTEXT),
+    },
+    KeelCommand {
+        id: "testing.runAtCursor",
+        action: || Box::new(RunTestAtCursor),
+        default_key: Some("cmd+; c"),
+        context: None,
+    },
+    KeelCommand {
+        id: "testing.runCurrentFile",
+        action: || Box::new(RunTestsInFile),
+        default_key: Some("cmd+; f"),
+        context: None,
+    },
+    KeelCommand {
+        id: "testing.runAll",
+        action: || Box::new(RunAllTests),
+        default_key: Some("cmd+; a"),
+        context: None,
+    },
+    KeelCommand {
+        id: "testing.reRunLastRun",
+        action: || Box::new(RerunLastTests),
+        default_key: Some("cmd+; l"),
+        context: None,
     },
     KeelCommand {
         id: "inlineChat.start",
@@ -1450,7 +1474,7 @@ mod tests {
         let (bindings, warnings) =
             read_user_bindings(Path::new("/nonexistent/keel/keybindings.json"));
         assert!(bindings.is_empty() && warnings.is_empty());
-        assert_eq!(keel_bindings(&[]).len(), 111);
+        assert_eq!(keel_bindings(&[]).len(), 115);
     }
 
     #[test]

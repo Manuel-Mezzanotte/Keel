@@ -38,6 +38,8 @@ const RESTORED_LINES: usize = 1000;
 
 /// How long the prompt Cmd+↑ went to stays lit.
 const FLASH: Duration = Duration::from_millis(1200);
+/// How long a command waits for a prompt the shell never marks.
+const PROMPT_PATIENCE: Duration = Duration::from_secs(4);
 
 /// The key context of a terminal, for its own shortcuts.
 pub(crate) const TERMINAL_CONTEXT: &str = "Terminal";
@@ -192,6 +194,8 @@ pub(crate) struct TerminalView {
     dot_menu: Option<DotMenu>,
     /// The prompts drawn last, for clicks on their dots.
     prompts: Rc<RefCell<Vec<PromptMark>>>,
+    /// A command to type once the shell draws its prompt.
+    waiting_run: Option<String>,
     strings: &'static Strings,
     _events: Task<()>,
     _subscriptions: Vec<gpui::Subscription>,
@@ -349,6 +353,7 @@ impl TerminalView {
             failure: None,
             dot_menu: None,
             prompts: Rc::new(RefCell::new(Vec::new())),
+            waiting_run: None,
             strings: look.strings,
             _events: pump,
             _subscriptions: subscriptions,
@@ -379,6 +384,28 @@ impl TerminalView {
     /// Types a command and runs it, as if typed at the prompt.
     pub(crate) fn run(&self, command: &str) {
         self.terminal.write(format!("{command}\r").into_bytes());
+    }
+
+    /// Types a command once the shell's prompt is drawn, as a person does:
+    /// typed earlier, the terminal itself echoes it above the prompt.
+    pub(crate) fn run_at_prompt(&mut self, command: &str, cx: &mut Context<Self>) {
+        if self.terminal.at_prompt() {
+            self.run(command);
+            return;
+        }
+        self.waiting_run = Some(command.to_owned());
+        // A shell that never marks its prompt gets the command anyway.
+        cx.spawn(async move |this, cx| {
+            cx.background_executor().timer(PROMPT_PATIENCE).await;
+            this.update(cx, |this, _| this.run_waiting()).ok();
+        })
+        .detach();
+    }
+
+    fn run_waiting(&mut self) {
+        if let Some(command) = self.waiting_run.take() {
+            self.run(&command);
+        }
     }
 
     /// The folder of the program in front, which follows `cd`.
@@ -432,6 +459,9 @@ impl TerminalView {
                     cx.emit(TerminalViewEvent::TitleChanged);
                 }
             }
+        }
+        if self.waiting_run.is_some() && self.terminal.at_prompt() {
+            self.run_waiting();
         }
         cx.notify();
     }
@@ -487,6 +517,12 @@ impl TerminalView {
     pub(crate) fn scroll_for_snapshot(&mut self, lines: i32, cx: &mut Context<Self>) {
         self.terminal.scroll(lines);
         cx.notify();
+    }
+
+    /// Shows a command at the top of the screen, lit for a moment.
+    pub(crate) fn show_command(&mut self, id: u64, cx: &mut Context<Self>) {
+        self.terminal.scroll_to(id);
+        self.flash(Some(id), cx);
     }
 
     pub(crate) fn last_command(&self) -> Option<ShellCommand> {
@@ -2143,7 +2179,7 @@ mod tests {
 
 /// A path as a shell reads it: as it is when it holds only safe
 /// characters, else in single quotes.
-fn shell_quote(path: &str) -> String {
+pub(super) fn shell_quote(path: &str) -> String {
     let safe = path
         .chars()
         .all(|c| c.is_alphanumeric() || "/._-+@%:,=".contains(c));

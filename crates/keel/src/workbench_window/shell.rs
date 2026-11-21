@@ -348,6 +348,7 @@ fn panel_view_title(view: PanelView, strings: &Strings) -> &'static str {
         PanelView::Output => strings.panel_output,
         PanelView::Terminal => strings.panel_terminal,
         PanelView::Ports => strings.panel_ports,
+        PanelView::Tests => strings.panel_tests,
     }
 }
 
@@ -1739,6 +1740,7 @@ impl Workbench {
                                     }
                                 },
                             ))
+                            .children(self.render_test_margin(index, cx))
                             .children(self.render_blame_column(index, cx))
                             .child(
                                 div()
@@ -1939,6 +1941,7 @@ impl Workbench {
                 None => note(strings.no_terminal.to_owned(), colors).into_any_element(),
             },
             PanelView::Ports => self.render_ports(colors, cx),
+            PanelView::Tests => self.render_tests(colors, cx),
         };
         let fills = self.layout.panel_view == PanelView::Terminal;
         let maximized = self.panel_maximized;
@@ -2496,6 +2499,7 @@ impl Render for Workbench {
         let root = self.bookmark_actions(root, cx);
         let root = self.clipboard_actions(root, cx);
         let root = self.claude_inline_actions(root, cx);
+        let root = self.testing_actions(root, cx);
         let root = self.npm_actions(root, cx);
         let root = self.source_control_actions(root, cx);
         let root = self.git_gutter_actions(root, cx);

@@ -68,6 +68,7 @@ mod terminal_commands;
 mod terminal_fixes;
 mod terminal_view;
 mod terminals;
+mod testing;
 mod writing;
 
 pub(crate) use editing::{
@@ -141,6 +142,7 @@ pub(crate) use terminals::{
     FocusNextTerminal, FocusPreviousTerminal, KillTerminal, NewTerminal, RenameTerminal,
     SplitTerminal, ToggleMaximizedPanel,
 };
+pub(crate) use testing::{RerunLastTests, RunAllTests, RunTestAtCursor, RunTestsInFile};
 pub(crate) use writing::{
     DeleteDuplicateLines, ExpandSelection, JoinLines, JumpToBracket, ShrinkSelection,
     SortLinesAscending, SortLinesDescending, TransformToCamelcase, TransformToKebabcase,
@@ -511,6 +513,8 @@ pub struct Workbench {
     tab_drop: Option<(usize, tabs::DropZone)>,
     /// Cmd+I under way: Claude rewriting lines in an editor.
     inline_edit: Option<claude_inline::InlineEdit>,
+    /// The tests found in the files, and how their runs went.
+    testing: testing::Testing,
     discard_changes: bool,
     gutter_refresh: Task<()>,
     /// Whether the first frame was already drawn, for `KEEL_STARTUP_TIMING`.
@@ -770,6 +774,7 @@ impl Workbench {
             bookmarks: Vec::new(),
             tab_drop: None,
             inline_edit: None,
+            testing: testing::Testing::default(),
             discard_changes: false,
             gutter_refresh: Task::ready(()),
             known_selections: HashMap::new(),

@@ -220,6 +220,17 @@ fn shots() -> Vec<Shot> {
                 }
             }));
         }
+        if style == "floating" {
+            // A file with tests: the ▶ in its margin.
+            shots.push(shot(name("tests-margin"), |workbench, window, cx| {
+                workbench.close_inline_edit(false, window, cx);
+                let file = std::env::current_dir()
+                    .unwrap_or_default()
+                    .join("crates/editor/src/text_edits.rs");
+                workbench.open_file(&file, window, cx);
+                workbench.go_to(660, 1, window, cx);
+            }));
+        }
         shots.push(shot(name("graph"), |workbench, window, cx| {
             workbench.layout.panel = false;
             workbench.open_git_graph(window, cx);

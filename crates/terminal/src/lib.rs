@@ -544,6 +544,16 @@ impl Terminal {
         *self.search.lock().expect("search") = None;
     }
 
+    /// Whether the shell's prompt is drawn and waits for a command line.
+    /// Typed earlier, a command is echoed by the terminal above the prompt
+    /// and then again on it. Always true without the shell integration,
+    /// which alone can tell.
+    pub fn at_prompt(&self) -> bool {
+        let mut term = self.term.lock();
+        let mut tracker = self.shared.tracker();
+        tracker.nonce.is_none() || tracker.at_prompt(&mut term)
+    }
+
     /// What the screen shows now, with colors resolved from the palette.
     pub fn snapshot(&self) -> Snapshot {
         let palette = *self.shared.palette.lock().expect("palette");
@@ -1134,7 +1144,25 @@ mod tests {
                 .cursor
                 .is_some_and(|cursor| snapshot.line_text(cursor.line) == "$")
         });
+        assert!(terminal.at_prompt());
         terminal.write(command.to_vec());
+    }
+
+    #[test]
+    fn knows_when_the_prompt_waits() {
+        let home = tempfile::tempdir().unwrap();
+        let (terminal, events) = zsh(home.path());
+        type_at_prompt(&terminal, b"sleep 1\r");
+        loop {
+            match events.recv_timeout(Duration::from_secs(10)) {
+                Ok(TerminalEvent::CommandStarted(_)) => break,
+                Ok(_) => {}
+                Err(error) => panic!("no command started: {error}"),
+            }
+        }
+        assert!(!terminal.at_prompt());
+        finished(&events);
+        wait_for(&terminal, |_| terminal.at_prompt());
     }
 
     #[test]
