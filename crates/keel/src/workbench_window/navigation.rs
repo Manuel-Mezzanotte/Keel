@@ -182,11 +182,22 @@ impl Workbench {
         cx.spawn_in(window, async move |this, cx| {
             let Ok(Some(choice)) = chosen.await else {
                 // Closed: the file in view before comes back, and a file
-                // only looked at goes away.
-                let looked = previewed.borrow_mut().take();
+                // only looked at goes away. Only while that file is still
+                // the one shown: the list may close long after something
+                // else came in front, and nothing looked at changes nothing.
+                let Some(looked) = previewed.borrow_mut().take() else {
+                    return;
+                };
                 this.update_in(cx, |this, window, cx| {
-                    if let Some(uri) = looked.filter(|uri| !open_before.contains(uri))
-                        && let Some((group, tab)) = this.find_tab(&uri, this.active)
+                    let still_shown = this
+                        .panes
+                        .get(this.active)
+                        .is_some_and(|pane| pane.uri == looked);
+                    if !still_shown {
+                        return;
+                    }
+                    if !open_before.contains(&looked)
+                        && let Some((group, tab)) = this.find_tab(&looked, this.active)
                     {
                         this.close_tab_now(group, tab, window, cx);
                     }

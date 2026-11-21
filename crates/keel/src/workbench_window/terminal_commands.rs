@@ -250,15 +250,13 @@ impl Workbench {
             return;
         }
         crate::mac::needs_attention();
-        let strings = self.strings();
-        let name = view.read(cx).name();
-        let title = match text {
-            Some(text) => text.clone(),
-            None => fill(
-                strings.terminal_bell_title,
-                &[("name", &format!("«{name}»"))],
-            ),
+        // A bell only counts on the Dock: programs ring it for many small
+        // things. A notification, which a program asks for on purpose, is
+        // a notice too.
+        let Some(title) = text.cloned() else {
+            return;
         };
+        let strings = self.strings();
         let view = view.downgrade();
         let notice = Notice::info(title).action(strings.terminal_show, move |this, window, cx| {
             if let Some(view) = view.upgrade() {
