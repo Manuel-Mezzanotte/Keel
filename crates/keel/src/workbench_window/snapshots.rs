@@ -198,6 +198,28 @@ fn shots() -> Vec<Shot> {
                 .detach();
             }));
         }
+        if style == "floating" {
+            // Cmd+I over some lines of the code, a request typed.
+            shots.push(shot(name("inline-edit"), |workbench, window, cx| {
+                workbench.layout.panel = false;
+                let code = workbench
+                    .groups
+                    .first()
+                    .and_then(|group| group.tabs.iter().position(|tab| tab.uri.ends_with(".rs")));
+                if let Some(index) = code {
+                    workbench.activate_tab(0, index, true, window, cx);
+                }
+                if let Some(editor) = workbench.active_editor() {
+                    editor.update(cx, |editor, cx| editor.set_selected_range(380..560, cx));
+                }
+                workbench.start_inline_edit(window, cx);
+                if let Some(edit) = &workbench.inline_edit {
+                    edit.input.update(cx, |input, cx| {
+                        input.set_value("Aggiungi un commento a ogni variante", window, cx)
+                    });
+                }
+            }));
+        }
         shots.push(shot(name("graph"), |workbench, window, cx| {
             workbench.layout.panel = false;
             workbench.open_git_graph(window, cx);

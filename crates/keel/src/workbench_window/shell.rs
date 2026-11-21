@@ -1867,6 +1867,8 @@ impl Workbench {
                 this.drop_paths(dragged.all(), index, zone, window, cx);
             }))
             .child(body)
+            // Outside the editor's keys, so Cmd+Enter is the card's own.
+            .children(self.render_inline_edit(index, colors, cx))
             .children(overlay)
             .into_any_element()
     }
@@ -2493,6 +2495,7 @@ impl Render for Workbench {
         let root = self.terminal_command_actions(root, cx);
         let root = self.bookmark_actions(root, cx);
         let root = self.clipboard_actions(root, cx);
+        let root = self.claude_inline_actions(root, cx);
         let root = self.npm_actions(root, cx);
         let root = self.source_control_actions(root, cx);
         let root = self.git_gutter_actions(root, cx);

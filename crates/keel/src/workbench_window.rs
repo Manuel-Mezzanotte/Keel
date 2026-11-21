@@ -8,6 +8,7 @@ mod bookmarks;
 mod claude_code;
 mod claude_diff;
 mod claude_ide;
+mod claude_inline;
 mod clipboard_history;
 mod code_actions;
 mod code_navigation;
@@ -91,6 +92,7 @@ pub(crate) use bookmarks::{
 pub(crate) use claude_code::{OpenClaudeCode, OpenClaudeCodeInPanel};
 pub(crate) use claude_diff::{AcceptProposedDiff, RejectProposedDiff};
 pub(crate) use claude_ide::InsertAtMention;
+pub(crate) use claude_inline::{InlineEditWithClaude, bindings as inline_edit_bindings};
 pub(crate) use clipboard_history::PasteFromHistory;
 pub(crate) use code_actions::{FormatDocument, OrganizeImports};
 pub(crate) use code_navigation::{
@@ -507,6 +509,8 @@ pub struct Workbench {
     bookmarks: Vec<crate::session::BookmarkState>,
     /// The editor and the part of it a dragged tab or file is over.
     tab_drop: Option<(usize, tabs::DropZone)>,
+    /// Cmd+I under way: Claude rewriting lines in an editor.
+    inline_edit: Option<claude_inline::InlineEdit>,
     discard_changes: bool,
     gutter_refresh: Task<()>,
     /// Whether the first frame was already drawn, for `KEEL_STARTUP_TIMING`.
@@ -765,6 +769,7 @@ impl Workbench {
             claude_touched: HashSet::new(),
             bookmarks: Vec::new(),
             tab_drop: None,
+            inline_edit: None,
             discard_changes: false,
             gutter_refresh: Task::ready(()),
             known_selections: HashMap::new(),

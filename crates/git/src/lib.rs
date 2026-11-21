@@ -405,6 +405,23 @@ impl Repo {
         web_url(self.run(&["remote", "get-url", remote]).ok()?.trim())
     }
 
+    /// The changes as one patch: the staged ones, or those not staged
+    /// yet; for Claude to describe in a commit message.
+    pub fn changes_patch(&self, staged: bool) -> String {
+        let mut args = vec!["diff", "--no-ext-diff", "--no-color"];
+        if staged {
+            args.push("--cached");
+        }
+        self.run(&args).unwrap_or_default()
+    }
+
+    /// The files git does not know yet, from the repository's top folder.
+    pub fn untracked_files(&self) -> Vec<String> {
+        self.run(&["ls-files", "--others", "--exclude-standard"])
+            .map(|output| output.lines().map(str::to_owned).collect())
+            .unwrap_or_default()
+    }
+
     /// The messages of the last `most` commits, the latest first, for
     /// going back through them in the commit field.
     pub fn recent_messages(&self, most: usize) -> Vec<String> {

@@ -1003,7 +1003,6 @@ pub struct Strings {
     /// A notice when Claude ends its turn with Keel in the background.
     pub agent_done_title: &'static str,
     pub agent_waiting_permission: &'static str,
-    pub terminal_bell_title: &'static str,
     /// A button on each problem.
     pub problem_fix_with_claude: &'static str,
     /// What Keel asks Claude about a problem.
@@ -1036,6 +1035,21 @@ pub struct Strings {
     pub agent_file_of: &'static str,
     pub agent_previous_file: &'static str,
     pub agent_next_file: &'static str,
+    /// The field of Cmd+I in the editor.
+    pub inline_edit_placeholder: &'static str,
+    pub inline_edit_placeholder_empty: &'static str,
+    pub inline_edit_followup: &'static str,
+    pub inline_edit_lines: &'static str,
+    pub inline_edit_working: &'static str,
+    pub inline_edit_keep: &'static str,
+    pub inline_edit_undo: &'static str,
+    pub inline_edit_stop: &'static str,
+    pub inline_edit_close: &'static str,
+    pub inline_edit_changed_meanwhile: &'static str,
+    pub claude_not_found: &'static str,
+    pub command_inline_edit: &'static str,
+    pub commit_with_claude: &'static str,
+    pub commit_nothing_to_describe: &'static str,
 }
 
 impl Strings {
@@ -1079,6 +1093,7 @@ impl Strings {
             "workbench.action.terminal.runRecentCommand" => self.command_run_recent,
             "keel.terminal.askClaude" => self.command_ask_claude_terminal,
             "keel.pasteFromHistory" => self.command_paste_from_history,
+            "inlineChat.start" => self.command_inline_edit,
             "bookmarks.toggle" => self.command_toggle_bookmark,
             "bookmarks.jumpToNext" => self.command_next_bookmark,
             "bookmarks.jumpToPrevious" => self.command_previous_bookmark,
@@ -2470,7 +2485,6 @@ pub const ITALIAN: Strings = Strings {
     status_pick_language: "Scegli il linguaggio",
     agent_done_title: "Claude ha finito",
     agent_waiting_permission: "Claude aspetta il tuo permesso",
-    terminal_bell_title: "Il terminale {name} ti chiama",
     problem_fix_with_claude: "Correggi con Claude",
     claude_fix_problem: "In `{path}`, alla riga {line}, c'è questo problema ({source}):\n\n{message}\n\nCorreggilo.",
     explorer_touched_by_claude: "Cambiato da Claude",
@@ -2496,6 +2510,20 @@ pub const ITALIAN: Strings = Strings {
     agent_file_of: "File {index} di {count}",
     agent_previous_file: "File prima",
     agent_next_file: "File dopo",
+    inline_edit_placeholder: "Cosa deve fare Claude con queste righe? (Invio)",
+    inline_edit_placeholder_empty: "Cosa deve scrivere Claude qui? (Invio)",
+    inline_edit_followup: "Chiedi un'altra modifica (Invio)",
+    inline_edit_lines: "Righe {from}–{to}",
+    inline_edit_working: "Claude sta scrivendo…",
+    inline_edit_keep: "Tieni",
+    inline_edit_undo: "Annulla",
+    inline_edit_stop: "Ferma",
+    inline_edit_close: "Chiudi",
+    inline_edit_changed_meanwhile: "Il testo è cambiato nel frattempo: Cmd+Z per tornare indietro",
+    claude_not_found: "Claude Code non è installato: installalo da claude.com/claude-code",
+    command_inline_edit: "Claude: modifica nell'editor",
+    commit_with_claude: "Scrivi il messaggio con Claude",
+    commit_nothing_to_describe: "Non ci sono modifiche da descrivere",
 };
 
 pub const ENGLISH: Strings = Strings {
@@ -3366,7 +3394,6 @@ pub const ENGLISH: Strings = Strings {
     status_pick_language: "Select Language Mode",
     agent_done_title: "Claude finished",
     agent_waiting_permission: "Claude is waiting for your permission",
-    terminal_bell_title: "Terminal {name} needs you",
     problem_fix_with_claude: "Fix with Claude",
     claude_fix_problem: "In `{path}`, at line {line}, there is this problem ({source}):\n\n{message}\n\nFix it.",
     explorer_touched_by_claude: "Changed by Claude",
@@ -3392,6 +3419,20 @@ pub const ENGLISH: Strings = Strings {
     agent_file_of: "File {index} of {count}",
     agent_previous_file: "Previous File",
     agent_next_file: "Next File",
+    inline_edit_placeholder: "What should Claude do with these lines? (Enter)",
+    inline_edit_placeholder_empty: "What should Claude write here? (Enter)",
+    inline_edit_followup: "Ask for another change (Enter)",
+    inline_edit_lines: "Lines {from}–{to}",
+    inline_edit_working: "Claude is writing…",
+    inline_edit_keep: "Keep",
+    inline_edit_undo: "Undo",
+    inline_edit_stop: "Stop",
+    inline_edit_close: "Close",
+    inline_edit_changed_meanwhile: "The text changed meanwhile: Cmd+Z goes back",
+    claude_not_found: "Claude Code is not installed: get it from claude.com/claude-code",
+    command_inline_edit: "Claude: Edit in Editor",
+    commit_with_claude: "Write the Message with Claude",
+    commit_nothing_to_describe: "No changes to describe",
 };
 
 #[cfg(test)]

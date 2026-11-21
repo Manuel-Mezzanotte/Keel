@@ -86,6 +86,8 @@ pub(super) struct SourceControl {
     /// a count that makes each move its own.
     pub(super) arrived: Vec<String>,
     pub(super) arrival: usize,
+    /// Claude is writing the commit message.
+    pub(super) writing_message: bool,
     /// What to run after the next commit: Commit & Push, Commit & Sync.
     pub(super) then: Option<RemoteAction>,
     /// The commit on a protected branch was confirmed.
@@ -142,6 +144,7 @@ impl SourceControl {
             busy: None,
             arrived: Vec::new(),
             arrival: 0,
+            writing_message: false,
             then: None,
             protection_ok: false,
             committed_at: None,
@@ -1090,6 +1093,19 @@ impl Workbench {
                     .border_color(colors.border.opacity(0.6))
                     .child(branch_chip)
                     .children(sync)
+                    // ✦: Claude writes the message from the changes.
+                    .child(
+                        Button::new("scm-message-claude")
+                            .ghost()
+                            .xsmall()
+                            .icon(Icon::new(IconName::Sparkles))
+                            .tooltip(strings.commit_with_claude)
+                            .loading(self.scm.writing_message)
+                            .disabled(self.scm.writing_message || nothing)
+                            .on_click(cx.listener(|this, _, window, cx| {
+                                this.write_commit_message(window, cx)
+                            })),
+                    )
                     .child(match self.commit_message_hint(cx) {
                         // Past what reads well: the count, in yellow.
                         Some((hint, over)) => div()

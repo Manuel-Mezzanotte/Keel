@@ -21,7 +21,8 @@ use crate::workbench_window::{
     GitRefresh, GitStash, GitStashPop, GitSync, StageAll, UnstageAll,
 };
 use crate::workbench_window::{
-    ClearBookmarks, ListBookmarks, NextBookmark, PasteFromHistory, PreviousBookmark, ToggleBookmark,
+    ClearBookmarks, InlineEditWithClaude, ListBookmarks, NextBookmark, PasteFromHistory,
+    PreviousBookmark, ToggleBookmark,
 };
 use crate::workbench_window::{
     ClearNotifications, CloseFolder, RevertFile, SaveAll, SaveAs, ToggleAutoSave,
@@ -245,6 +246,12 @@ pub const COMMANDS: &[KeelCommand] = &[
         action: || Box::new(FocusPreviousTerminal),
         default_key: Some("cmd+shift+["),
         context: Some(TERMINAL_CONTEXT),
+    },
+    KeelCommand {
+        id: "inlineChat.start",
+        action: || Box::new(InlineEditWithClaude),
+        default_key: Some("cmd+i"),
+        context: Some(EDITOR_CONTEXT),
     },
     KeelCommand {
         id: "keel.pasteFromHistory",
@@ -1340,6 +1347,7 @@ pub fn bind(user: &[UserBinding], cx: &mut App) -> Vec<String> {
     key_bindings.extend(crate::workbench_window::pdf_bindings());
     key_bindings.extend(crate::workbench_window::find_bindings());
     key_bindings.extend(crate::workbench_window::nav_bindings());
+    key_bindings.extend(crate::workbench_window::inline_edit_bindings());
     key_bindings.extend(crate::workbench_window::terminal_bindings(
         &window_keys_for_shell(user),
         cx,
@@ -1442,7 +1450,7 @@ mod tests {
         let (bindings, warnings) =
             read_user_bindings(Path::new("/nonexistent/keel/keybindings.json"));
         assert!(bindings.is_empty() && warnings.is_empty());
-        assert_eq!(keel_bindings(&[]).len(), 110);
+        assert_eq!(keel_bindings(&[]).len(), 111);
     }
 
     #[test]

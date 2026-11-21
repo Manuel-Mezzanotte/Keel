@@ -1281,7 +1281,10 @@ mod tests {
 
     #[test]
     fn the_thirds_of_an_editor_are_its_drop_zones() {
-        let bounds = gpui::Bounds::new(gpui::point(px(100.), px(0.)), gpui::size(px(300.), px(200.)));
+        let bounds = gpui::Bounds::new(
+            gpui::point(px(100.), px(0.)),
+            gpui::size(px(300.), px(200.)),
+        );
         let at = |x: f32| DropZone::at(bounds, gpui::point(px(x), px(50.)));
         assert_eq!(at(120.), Some(DropZone::Left));
         assert_eq!(at(250.), Some(DropZone::Center));
