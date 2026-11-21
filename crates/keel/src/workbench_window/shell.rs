@@ -2645,6 +2645,7 @@ impl Render for Workbench {
             .child(status)
             .children(notice_center)
             .children(self.render_blame_card(colors, cx))
+            .children(self.render_diff_edit(colors, cx))
     }
 }
 

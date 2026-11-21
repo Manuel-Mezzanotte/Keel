@@ -245,6 +245,32 @@ fn shots() -> Vec<Shot> {
                 })
                 .detach();
             }));
+            // The right column of the changes, edited: on the file given,
+            // in a repository where it has changed.
+            shots.push(shot(name("diff-edit-live"), |workbench, window, cx| {
+                workbench.close_blame_card(cx);
+                let Some(path) = workbench
+                    .groups
+                    .first()
+                    .and_then(|group| group.tabs.first())
+                    .and_then(|tab| workbench.documents.get(&tab.uri))
+                    .and_then(|document| document.disk_path().map(Path::to_path_buf))
+                else {
+                    return;
+                };
+                let Some(relative) = workbench
+                    .scm
+                    .repo
+                    .as_ref()
+                    .and_then(|repo| repo.relative(&path))
+                else {
+                    return;
+                };
+                workbench.open_diff(&relative, super::diff_view::DiffSource::Changes, window, cx);
+                let uri =
+                    super::diff_view::diff_uri(&relative, &super::diff_view::DiffSource::Changes);
+                workbench.edit_diff_lines(&uri, 0, None, Some(0), window, cx);
+            }));
             // The real server's lenses and types, on the file given:
             // with KEEL_SNAPSHOTS_WAIT and the servers on.
             shots.push(shot(name("line-hints-live"), |workbench, window, cx| {

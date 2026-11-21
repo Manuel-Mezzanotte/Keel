@@ -1424,6 +1424,7 @@ pub fn bind(user: &[UserBinding], cx: &mut App) -> Vec<String> {
     key_bindings.extend(crate::workbench_window::find_bindings());
     key_bindings.extend(crate::workbench_window::nav_bindings());
     key_bindings.extend(crate::workbench_window::inline_edit_bindings());
+    key_bindings.extend(crate::workbench_window::diff_edit_bindings());
     key_bindings.extend(crate::workbench_window::terminal_bindings(
         &window_keys_for_shell(user),
         cx,

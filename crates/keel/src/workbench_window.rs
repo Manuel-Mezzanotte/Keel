@@ -17,6 +17,7 @@ mod commit_view;
 mod contributions;
 mod cursor_import;
 mod cursor_settings;
+mod diff_edit;
 mod diff_model;
 mod diff_pane;
 mod diff_view;
@@ -108,6 +109,7 @@ pub(crate) use code_navigation::{
 };
 pub(crate) use contributions::SelectIconTheme;
 pub(crate) use cursor_import::ImportFromCursor;
+pub(crate) use diff_edit::bindings as diff_edit_bindings;
 pub(crate) use diff_view::{NextDiffChange, OpenAllChanges, PreviousDiffChange};
 pub(crate) use extensions_view::{
     CheckExtensionUpdates, InstallFromVsix, RestartExtensions, UpdateAllExtensions,
@@ -622,6 +624,8 @@ pub struct Workbench {
     blame_hover: blame_card::BlameHover,
     /// The types and lenses at the ends of lines.
     line_hints: line_hints::LineHints,
+    /// Lines of a differences tab open to edit.
+    diff_edit: Option<diff_edit::DiffEdit>,
     /// The commit chosen in Git Graph, shown under it.
     commit_view: Option<commit_view::CommitView>,
     /// The zoom of each image tab (fit when missing) and the images' sizes.
@@ -843,6 +847,7 @@ impl Workbench {
             blame: HashMap::new(),
             blame_hover: Default::default(),
             line_hints: Default::default(),
+            diff_edit: None,
             image_sizes: RefCell::new(HashMap::new()),
             _subscriptions: subscriptions,
         };

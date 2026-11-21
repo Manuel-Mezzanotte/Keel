@@ -331,6 +331,23 @@ impl DiffDoc {
     }
 
     /// The texts and block, to stage or undo it.
+    /// A file's path, its lines in the newer version and its blocks.
+    pub(super) fn file_lines(&self, file: usize) -> Option<(String, Vec<String>, Vec<git::Hunk>)> {
+        let state = self.state.borrow();
+        let diff = state.files.get(file)?;
+        Some((diff.path.clone(), diff.new.clone(), diff.hunks.clone()))
+    }
+
+    /// The newer version of a file, by its path.
+    pub(super) fn file_text(&self, path: &str) -> Option<String> {
+        let state = self.state.borrow();
+        state
+            .files
+            .iter()
+            .find(|diff| diff.path == path)
+            .map(|diff| diff.new_text.clone())
+    }
+
     pub(super) fn block(
         &self,
         file: usize,
@@ -759,6 +776,7 @@ struct CellSpec<'a> {
     text: &'a str,
     words: &'a [Range<usize>],
     side: &'a Side,
+    file: usize,
     line: usize,
     new_side: bool,
     /// Said at the right, as where a moved stretch went.
@@ -786,6 +804,7 @@ fn render_code(
                 text: &diff.old[line],
                 words: if moved { &[] } else { words },
                 side: &sides[0],
+                file: row.file(),
                 line,
                 new_side: false,
                 note: diff.moved_to_at(line).map(|to| {
@@ -806,6 +825,7 @@ fn render_code(
                 text: &diff.new[line],
                 words: if moved { &[] } else { words },
                 side: &sides[1],
+                file: row.file(),
                 line,
                 new_side: true,
                 note: diff.moved_from_at(line).map(|from| {
@@ -839,6 +859,7 @@ fn render_code(
                 text: &diff.new[new],
                 words: &[],
                 side: &sides[1],
+                file: row.file(),
                 line: new,
                 new_side: true,
                 note: None,
@@ -921,8 +942,26 @@ fn block_buttons(file: usize, hunk: usize, index: usize, look: &Look) -> AnyElem
                 }
             })
     };
+    let edit = {
+        let workbench = look.workbench.clone();
+        let uri = look.uri.clone();
+        Button::new(("diff-block-edit", index))
+            .ghost()
+            .xsmall()
+            .icon(Icon::new(IconName::Pencil))
+            .tooltip(strings.diff_edit_block)
+            .on_click(move |_, window, cx| {
+                cx.stop_propagation();
+                if let Some(workbench) = workbench.upgrade() {
+                    workbench.update(cx, |this, cx| {
+                        this.edit_diff_lines(&uri, file, None, Some(hunk), window, cx)
+                    });
+                }
+            })
+    };
     let buttons = match look.actions {
         BlockActions::StageOrRevert => vec![
+            edit,
             action(
                 "diff-block-stage",
                 IconName::Plus,
@@ -971,6 +1010,7 @@ fn cell(spec: CellSpec, look: &Look, cx: &App) -> AnyElement {
         text,
         words,
         side,
+        file,
         line,
         new_side,
         note,
@@ -1041,7 +1081,9 @@ fn cell(spec: CellSpec, look: &Look, cx: &App) -> AnyElement {
                     return;
                 }
                 if let Some(workbench) = workbench.upgrade() {
-                    workbench.update(cx, |this, cx| this.open_diff_line(&uri, line, window, cx));
+                    workbench.update(cx, |this, cx| {
+                        this.diff_line_double_click(&uri, file, line, window, cx)
+                    });
                 }
             }
         }

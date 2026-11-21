@@ -1086,6 +1086,13 @@ pub struct Strings {
     pub lens_references: &'static str,
     pub lens_implementation: &'static str,
     pub lens_implementations: &'static str,
+    /// A block of a differences tab: its lines in an editor.
+    pub diff_edit_block: &'static str,
+    pub diff_edit_lines: &'static str,
+    pub diff_edit_new_lines: &'static str,
+    pub diff_edit_hint: &'static str,
+    pub diff_edit_cancel: &'static str,
+    pub diff_edit_apply: &'static str,
 }
 
 impl Strings {
@@ -2603,6 +2610,12 @@ pub const ITALIAN: Strings = Strings {
     lens_references: "riferimenti",
     lens_implementation: "implementazione",
     lens_implementations: "implementazioni",
+    diff_edit_block: "Modifica il blocco",
+    diff_edit_lines: "Righe {from}–{to} di {file}",
+    diff_edit_new_lines: "Righe nuove alla riga {line} di {file}",
+    diff_edit_hint: "⌘↩ scrive nel file e salva · Esc lascia com'era",
+    diff_edit_cancel: "Annulla",
+    diff_edit_apply: "Applica e salva",
 };
 
 pub const ENGLISH: Strings = Strings {
@@ -3543,6 +3556,12 @@ pub const ENGLISH: Strings = Strings {
     lens_references: "references",
     lens_implementation: "implementation",
     lens_implementations: "implementations",
+    diff_edit_block: "Edit Block",
+    diff_edit_lines: "Lines {from}–{to} of {file}",
+    diff_edit_new_lines: "New lines at line {line} of {file}",
+    diff_edit_hint: "⌘↩ writes into the file and saves · Esc leaves it as it was",
+    diff_edit_cancel: "Cancel",
+    diff_edit_apply: "Apply and Save",
 };
 
 #[cfg(test)]

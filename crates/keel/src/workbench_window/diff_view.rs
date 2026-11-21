@@ -1061,6 +1061,88 @@ mod tests {
     /// undone in the file; F7 goes from block to block, and the page with
     /// every change lists the changed files.
     #[gpui::test]
+    fn the_right_column_is_edited_where_it_is_read(cx: &mut TestAppContext) {
+        cx.executor().allow_parking();
+        cx.update(|cx| {
+            gpui_component::init(cx);
+            language::register_grammars();
+            crate::workbench_window::init(cx);
+        });
+        let folder = tempfile::tempdir().unwrap();
+        let root = fs::canonicalize(folder.path()).unwrap();
+        git(&root, &["init", "-q", "-b", "main"]);
+        git(&root, &["config", "user.name", "Test"]);
+        git(&root, &["config", "user.email", "test@example.com"]);
+        git(&root, &["config", "commit.gpgsign", "false"]);
+        let lines: String = (1..=12).map(|line| format!("riga {line}\n")).collect();
+        fs::write(root.join("a.txt"), &lines).unwrap();
+        git(&root, &["add", "."]);
+        git(&root, &["commit", "-q", "-m", "first"]);
+        fs::write(
+            root.join("a.txt"),
+            lines.replace("riga 3\n", "riga TRE\nriga 3 e mezzo\n"),
+        )
+        .unwrap();
+
+        let settings = Settings::load(root.join(".git/keel-test-settings.json"), None);
+        let opening = Opening::new(Some(root.clone()), None);
+        let (view, cx) =
+            cx.add_window_view(|window, cx| Workbench::new(opening, settings, None, window, cx));
+        view.update(cx, |view, _| {
+            view.scm.status = view.scm.repo.as_ref().unwrap().status().unwrap();
+        });
+        view.update_in(cx, |view, window, cx| {
+            view.open_diff("a.txt", DiffSource::Changes, window, cx)
+        });
+        let uri = diff_uri("a.txt", &DiffSource::Changes);
+        assert!(view.read_with(cx, |view, _| view.diff_editable(&uri)));
+
+        // A double click on the changed line: its block, both new lines.
+        view.update_in(cx, |view, window, cx| {
+            view.diff_line_double_click(&uri, 0, 3, window, cx)
+        });
+        view.read_with(cx, |view, cx| {
+            let edit = view.diff_edit.as_ref().unwrap();
+            assert_eq!(edit.lines, 2..4);
+            assert_eq!(
+                edit.editor.read(cx).value().to_string(),
+                "riga TRE\nriga 3 e mezzo"
+            );
+        });
+        // Esc leaves the file as it was.
+        cx.simulate_keystrokes("escape");
+        assert!(view.read_with(cx, |view, _| view.diff_edit.is_none()));
+
+        // Edited and applied with Cmd+Enter: written and saved.
+        view.update_in(cx, |view, window, cx| {
+            view.diff_line_double_click(&uri, 0, 2, window, cx);
+            let editor = view.diff_edit.as_ref().unwrap().editor.clone();
+            editor.update(cx, |editor, cx| {
+                editor.set_value("riga tre, scritta qui", window, cx)
+            });
+        });
+        cx.simulate_keystrokes("cmd-enter");
+        cx.run_until_parked();
+        assert!(view.read_with(cx, |view, _| view.diff_edit.is_none()));
+        let file = fs::read_to_string(root.join("a.txt")).unwrap();
+        assert_eq!(file, lines.replace("riga 3\n", "riga tre, scritta qui\n"));
+
+        // An unchanged line alone; in the staged changes, no editing.
+        view.update_in(cx, |view, window, cx| {
+            view.diff_line_double_click(&uri, 0, 8, window, cx)
+        });
+        assert_eq!(
+            view.read_with(cx, |view, _| view
+                .diff_edit
+                .as_ref()
+                .map(|edit| edit.lines.clone())),
+            Some(8..9)
+        );
+        let staged = diff_uri("a.txt", &DiffSource::Staged);
+        assert!(!view.read_with(cx, |view, _| view.diff_editable(&staged)));
+    }
+
+    #[gpui::test]
     fn blocks_are_staged_and_undone_one_at_a_time(cx: &mut TestAppContext) {
         cx.executor().allow_parking();
         cx.update(|cx| {
