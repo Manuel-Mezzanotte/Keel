@@ -1,6 +1,6 @@
 # Keel — passaggio di consegne
 
-*Scritto il 18 novembre 2026, all'ultimo commit di `develop`.*
+*Scritto il 18 novembre 2026, aggiornato il 22 novembre all'ultimo commit di `develop`.*
 
 Questo documento serve a chi riprende il lavoro su Keel, persona o assistente, senza aver seguito la storia. Spiega:
 - che cos'è il progetto e perché esiste;
@@ -42,13 +42,14 @@ Nasce dalla curiosità per le app native in Rust e dal desiderio di un editor tu
 
 | Percorso | Contenuto |
 |---|---|
-| `crates/keel` | l'app: finestre, interfaccia, tutte le viste (~43.000 righe) |
+| `crates/keel` | l'app: finestre, interfaccia, tutte le viste (~81.000 righe) |
 | `crates/editor` | aggiunte all'editor: decorazioni, testo fantasma, comandi sulle righe |
 | `crates/extensions` | lettore VSIX, Open VSX, host V8 con il ponte `vscode` (in `src/js`), impostazioni delle estensioni |
 | `crates/lsp` | client dei language server, installazione dei server, linguaggi |
 | `crates/language` | grammatiche tree-sitter e registro dei linguaggi |
 | `crates/files` | albero dei file, ricerca nei file, fuzzy matching, cestino |
 | `crates/git` | stato, differenze, commit, grafico |
+| `crates/dap` | client dei debugger (protocollo DAP di VS Code), e dove si trovano lldb-dap, debugpy e js-debug |
 | `crates/terminal` | terminali su `alacritty_terminal`, porte aperte |
 | `crates/settings` | impostazioni utente e di progetto (JSONC, commenti conservati) |
 | `crates/workbench` | logica senza interfaccia condivisa col ponte: scorciatoie, clausole «when», posizioni, URI |
@@ -133,12 +134,23 @@ Dopo le prime prove dell'app vera (18 novembre) sono arrivati altri giri di rito
   - etichette «Funziona in parte» e «Non funziona in Keel»;
 - correzione dei controlli della pagina Impostazioni, che non salvavano (`8fbd01c`);
 - **nuovo aspetto** (sera del 18 novembre): due stili della finestra, «Pannelli sospesi» e «Piatto», scelti dalla nuova pagina Impostazioni → Interfaccia (`keel.interfaceStyle`); animazioni di pannelli, selettore e sezioni (`keel.animations`); Controllo versione con messaggio più grande, pulsante Commit largo e grafico ridimensionabile; Cerca, Estensioni e benvenuto senza spazi vuoti; pulsanti più grandi; Cmd+P e tavolozza su una superficie sola. Il dettaglio è in `PIANO.md`, «Nuovo aspetto». Poi l'icona nel formato di Icon Composer, senza il riquadro nero di macOS, e il pannello di Claude che si apre sulla chat con le chat di Claude Code del progetto («Icona nuova e pannello di Claude»).
-- **i dettagli** (19–20 novembre): 143 piccoli dettagli raccolti da VS Code, Cursor, Zed, JetBrains, Xcode e dal Mac, fatti in nove giri, dal commit `db6bbbe` al `66e6bfb`. Tra gli altri: avvisi e finestre d'errore di git, differenze rifatte, salvataggio automatico, cronologia locale, segnalibri, cronologia degli appunti, terminale con l'integrazione della shell (pallini, salti fra i comandi, correzioni rapide, testo che torna dopo il riavvio), menu Finestra e Aiuto, barra di stato cliccabile con codifiche e fine riga, Quick Look, file trascinati fuori da Keel. Voce per voce, con cosa resta e come provarlo, in [`DETTAGLI.md`](DETTAGLI.md). Questi commit sono su `develop` ma non ancora su GitHub: il push si fa dopo le tue prove.
+- **i dettagli** (19–20 novembre): 143 piccoli dettagli raccolti da VS Code, Cursor, Zed, JetBrains, Xcode e dal Mac, fatti in nove giri, dal commit `db6bbbe` al `66e6bfb`. Tra gli altri: avvisi e finestre d'errore di git, differenze rifatte, salvataggio automatico, cronologia locale, segnalibri, cronologia degli appunti, terminale con l'integrazione della shell (pallini, salti fra i comandi, correzioni rapide, testo che torna dopo il riavvio), menu Finestra e Aiuto, barra di stato cliccabile con codifiche e fine riga, Quick Look, file trascinati fuori da Keel. Voce per voce, con cosa resta e come provarlo, in [`DETTAGLI.md`](DETTAGLI.md).
+- **le funzioni nuove** (21–22 novembre), dal commit `50e24d1` al `2e4b0a5`, su `develop` ma non ancora su GitHub:
+  - una scheda trascinata su un bordo divide l'editor, anche sopra e sotto;
+  - Claude nell'editor (Cmd+I) e il messaggio del commit scritto da Claude;
+  - i test dal margine, con la vista Test;
+  - la scheda del commit sull'autore della riga, i righelli, i riferimenti e i tipi in fondo alla riga;
+  - la colonna di destra delle differenze e i risultati della ricerca modificabili;
+  - le attività di `tasks.json`, con gli errori nei Problemi;
+  - il debugger, con la Debug Console;
+  - le pull request di GitHub, con i controlli e i commenti.
+
+  Come provarle, cosa è stato provato davvero e i limiti di ognuna sono in [`DETTAGLI.md`](DETTAGLI.md), «Le funzioni nuove».
 
 Stato dei controlli all'ultimo commit:
-- tutti i test passano, 478 in tutto, 243 solo nell'app e 12 nel crate `ai`;
+- tutti i test passano, 542 in tutto, 300 solo nell'app;
 - clippy non segnala niente;
-- con un progetto web aperto Keel occupa circa 130–150 MB e mostra la prima schermata in circa 400 ms.
+- con un progetto web aperto Keel occupa circa 130–150 MB e mostra la prima schermata in circa 400 ms (misure del 18 novembre, non rifatte dopo le funzioni nuove; appena aperta su un progetto piccolo, la versione del 22 novembre occupa 139 MB).
 
 ---
 
@@ -147,6 +159,10 @@ Stato dei controlli all'ultimo commit:
 ### Subito: le prove a mano
 
 Le fasi sono fatte, ma l'autore deve ancora provarle a mano. L'elenco di ogni fase è in `PIANO.md`, nei punti «Le tue prove a mano». I difetti trovati diventano ritocchi, come quelli del 18 novembre.
+
+Delle funzioni nuove restano da provare davvero due cose, che qui non si potevano provare:
+- **il debug di Node e TypeScript:** vuole `js-debug` di Microsoft, che su questo Mac non c'è. Keel lo scarica da GitHub (1,2 MB) solo quando glielo si chiede, e controlla che il file abbia l'impronta pubblicata;
+- **le azioni che scrivono su GitHub:** commenti, approvazioni, unione e creazione di una pull request sono provate solo con un `gh` finto.
 
 ### Prossimo lavoro proposto: lo stile personale
 
@@ -195,7 +211,6 @@ L'idea è permettere a chi usa Keel di cambiarne l'aspetto con un suo file, come
 
 ### Fasi opzionali, solo se serviranno
 
-- debugger con Debug Console (protocollo DAP);
 - pannelli web delle estensioni con il WebKit di macOS;
 - estensioni che vogliono Node completo;
 - Swift e Flutter;

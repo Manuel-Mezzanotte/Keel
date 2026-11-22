@@ -2,7 +2,7 @@
 
 I piccoli dettagli che rendono comodo un IDE: quelli a cui non pensi finché mancano. Raccoglie cosa fanno VS Code, Cursor, Zed, JetBrains, Xcode, Sublime Text, i programmi per git e il Mac stesso, confrontato con quello che Keel fa oggi. Alla fine c'è l'ordine in cui farli, deciso da me.
 
-*Scritto il 19 novembre 2026, sul commit `12db1b4` di `develop`. Aggiornato il 20 novembre 2026: i nove giri sono fatti, dal commit `db6bbbe` al `66e6bfb`, su `develop` e non ancora su GitHub. La colonna «Keel oggi» dice ora com'è Keel dopo i giri.*
+*Scritto il 19 novembre 2026, sul commit `12db1b4` di `develop`. Aggiornato il 20 novembre 2026: i nove giri sono fatti, dal commit `db6bbbe` al `66e6bfb`, su `develop` e non ancora su GitHub. La colonna «Keel oggi» dice ora com'è Keel dopo i giri. Aggiornato di nuovo il 22 novembre 2026 con i lavori dal commit `50e24d1` al `2e4b0a5`, su `develop` e non ancora su GitHub: quasi tutto quello che era rimasto, più le funzioni grandi raccontate in «Le funzioni nuove».*
 
 ---
 
@@ -14,9 +14,9 @@ I piccoli dettagli che rendono comodo un IDE: quelli a cui non pensi finché man
   - **a metà** vuol dire che ne manca un pezzo;
   - **manca** vuol dire che non c'è.
 
-  Le cose che Keel fa già bene non sono elencate. In tutto erano 143 punti: 6 rotti, 13 a metà, 124 che mancavano. Dopo i giri: 125 fatti, 9 a metà, 9 non ancora (vedi «Cosa non c'è ancora»).
+  Le cose che Keel fa già bene non sono elencate. In tutto erano 143 punti: 6 rotti, 13 a metà, 124 che mancavano. Oggi: 131 fatti, 9 a metà, 3 non ancora (vedi «Cosa non c'è ancora»).
 - **Giro.** Il numero dice in quale giro di lavoro lo farei. I giri sono descritti alla fine, in «L'ordine dei lavori».
-- **Fuori da qui.** Le funzioni grandi di cui abbiamo già parlato (commit scritto da Claude, chat in parallelo, pull request, Linear, cronologia locale, Docker) hanno il loro spazio. Qui ci sono solo quelle che servono a quelle grandi, come la cronologia locale per non perdere niente.
+- **Fuori da qui.** Le funzioni grandi di cui abbiamo parlato (chat in parallelo, Linear, Docker) hanno il loro spazio. Il commit scritto da Claude e le pull request ora ci sono: sono in «Le funzioni nuove».
 
 ---
 
@@ -47,17 +47,50 @@ Keel nuovo è installato in /Applications: chiudi quello aperto e riaprilo. Ecco
   - I file cambiati da Claude hanno una scintilla nell'albero finché non li apri. Nei Problemi, «Correggi con Claude» compare passando sopra.
   - Il cursore scivola mentre scrivi; in Impostazioni → Aspetto ci sono il raggio e lo spazio dei pannelli e le schede su più righe.
 
+### Le funzioni nuove (21–22 novembre)
+
+**Schede trascinate.** Prendi una scheda e portala su un bordo dell'editor: destra, sinistra, sopra o sotto, e l'editor si divide lì; al centro la scheda passa in quel gruppo. Il punto in cui finirà si colora mentre trascini. Da tastiera: Cmd+\ divide a destra, Cmd+K Cmd+\ divide in basso, Cmd+K e poi Cmd con una freccia passa al gruppo da quella parte.
+- *Limiti:* i gruppi uno sopra l'altro hanno tutti la stessa altezza, e i livelli sono due (colonne, e gruppi dentro una colonna).
+
+**Claude nell'editor.** Cmd+I con qualche riga selezionata: scrivi cosa cambiare, Keel mostra le differenze e tu accetti o rifiuti. In Controllo versione la scintilla nel campo del messaggio lo fa scrivere a Claude.
+
+**Test.** Accanto a ogni test c'è un triangolo: un clic lo esegue, il tasto destro propone anche il debug, il doppio triangolo esegue il gruppo. La vista Test li elenca tutti con l'esito. Cmd+; e poi C esegue il test sotto il cursore.
+- *Limiti:* l'esito arriva dal terminale, quindi serve zsh con l'integrazione della shell, che è accesa di serie.
+
+**Git, dentro l'editor.** Fermati sull'autore in fondo alla riga: compaiono il messaggio intero, «Apri il commit» e «Apri su GitHub». In una differenza non in stage, doppio clic su una riga a destra per modificarla: Cmd+Invio la scrive nel file, Esc lascia tutto com'era. Se il file nel frattempo è cambiato in quel punto, Keel lo dice e non scrive.
+
+**Cerca.** Il pulsante in cima ai risultati (o «Cerca: Apri i risultati in una scheda») apre i risultati con il loro codice: si modificano lì, e Cmd+S li scrive nei file. F12 va alla riga nel suo file. Un pezzo che nel file è cambiato nel frattempo non viene scritto, e resta segnato come non salvato.
+
+**Righelli, riferimenti e tipi.** In `settings.json`, `"editor.rulers": [80, 100]`. Accanto alle funzioni c'è «3 riferimenti», cliccabile. Tieni premuto Ctrl+Opzione per vedere i tipi; `editor.inlayHints.enabled` li tiene sempre accesi.
+
+**Attività.** Cmd+Maiusc+B compila; «Attività: Esegui» nella palette elenca quelle di `.vscode/tasks.json` e quelle trovate da Keel (cargo, npm, TypeScript). Gli errori finiscono nei Problemi, alla loro riga.
+- *Limiti:* un'attività non parte mai da sola all'apertura di una cartella, per sicurezza; le attività definite dalle estensioni e le espressioni regolari con lookahead non ci sono.
+
+**Debugger.** Cmd+Maiusc+D apre la vista. Un clic a sinistra dei numeri di riga (o F9) mette un punto d'interruzione, il tasto destro ci mette una condizione o un messaggio. F5 avvia e continua, F10 passa oltre, F11 entra, Maiusc+F11 esce, Maiusc+F5 ferma. Le variabili, lo stack e le espressioni osservate sono nella vista; i valori compaiono anche in fondo alle righe; la Debug Console (Cmd+Maiusc+Y) valuta espressioni. Le configurazioni sono quelle di `.vscode/launch.json`; senza, Keel ne propone di sue.
+- *Provato davvero:* un programma Rust con lldb-dap (quello di Xcode) e uno Python con debugpy (quello dell'estensione Python di VS Code).
+- *Non ancora provato:* Node e TypeScript. Vogliono `js-debug` di Microsoft, che su questo Mac non c'è: Keel lo scarica da GitHub (1,2 MB) solo se glielo chiedi, e ne controlla l'impronta.
+- *Limiti:* niente valore passando sopra una variabile nel codice; niente punti d'interruzione su funzioni o su dati; un sorgente che non sta sul disco non si apre; LLDB non sa chiamare i metodi di Rust nelle espressioni.
+
+**Pull request.** Clic su «PR #12» nella barra di stato, o «GitHub: Pull request» nella palette. La pagina le elenca (aperte, tue, da rivedere, chiuse); dentro ci sono la descrizione, la conversazione, i controlli e i file. Nelle differenze, doppio clic su una riga per commentarla. Da lì si approva, si chiedono modifiche, si unisce, si passa al ramo. Vuole `gh`, già entrato nel tuo account.
+- *Provato davvero:* la lettura, su un repository pubblico. *Non ancora provate su GitHub:* le azioni che scrivono (commenti, approvazioni, unione, creazione), provate solo con un `gh` finto.
+- *Limiti:* i commenti sulle righe tolte si leggono solo nella conversazione; una discussione non si può segnare come risolta; le immagini nei testi sono link.
+
 ## Cosa non c'è ancora, e perché
 
-- **Ancora da fare, più lavoro di un dettaglio:**
-  - la colonna di destra delle differenze modificabile;
-  - i risultati della ricerca in una scheda modificabile;
-  - i righelli, i suggerimenti in riga (inlay hints) e «N riferimenti» (CodeLens): l'editor di gpui-component non li disegna ancora;
+- **Ancora da fare:**
   - il commit in una scheda grande (Maiusc+Esc);
-  - il messaggio intero del commit passando sulla riga;
   - Cmd+P con freccia a destra che apre il file in secondo piano;
-  - una scheda trascinata fuori che apre una finestra nuova: le finestre di Keel sono una per progetto, e due finestre sullo stesso progetto vorrebbero documenti in comune. Per ora la scheda trascinata fuori porta il suo file nel Finder.
-- **A metà:** lo scorrimento morbido resta quello di macOS (il cursore invece scivola); i simboli nel percorso sopra l'editor; il numero dei cursori nella barra di stato; «Non mostrare più» negli avvisi; i risultati della ricerca nella barra di scorrimento.
+  - una scheda trascinata fuori che apre una finestra nuova: le finestre di Keel sono una per progetto, e due finestre sullo stesso progetto vorrebbero documenti in comune. Per ora la scheda trascinata fuori porta il suo file nel Finder. Dentro la finestra invece si trascina su un bordo e divide l'editor.
+- **A metà:**
+  - i suggerimenti in riga: ci sono i tipi, in fondo alla riga perché l'editor di gpui-component non sa disegnare in mezzo al testo; i nomi dei parametri in fondo alla riga non direbbero a quale argomento si riferiscono, quindi non ci sono;
+  - l'albero che segue Git Graph, la ricerca, i Problemi e i link del terminale;
+  - «Commit e push» come scelta predefinita del pulsante;
+  - i simboli nel percorso sopra l'editor;
+  - gli spazi visibili solo ai bordi o nella selezione;
+  - i risultati della ricerca nella barra di scorrimento;
+  - lo scorrimento morbido, che resta quello di macOS (il cursore invece scivola);
+  - «Non mostrare più» negli avvisi;
+  - il numero dei cursori nella barra di stato.
 
 ## Le sei cose che hai chiesto tu
 
@@ -219,7 +252,7 @@ Ho riguardato un'immagine della vista delle differenze, disegnata ieri da `scrip
 | Cosa | Da dove | Keel oggi | Giro |
 |---|---|---|---|
 | Chi ha cambiato la riga del cursore, in grigio a fine riga: «Manuel, 3 giorni fa · fix: …» | VS Code, Zed | fatto | 3 |
-| Passando sopra: il messaggio intero, l'autore, «Apri il commit» e «Apri su GitHub» | VS Code, JetBrains | non ancora: l'autore della riga c'è nella barra di stato | 3 |
+| Passando sopra: il messaggio intero, l'autore, «Apri il commit» e «Apri su GitHub» | VS Code, JetBrains | fatto: la scheda compare fermandosi sull'autore in fondo alla riga | 3 |
 | Clic sulla barra colorata a sinistra: la differenza dentro l'editor, con Stage, Annulla, Successiva, Precedente | VS Code | fatto | 2 |
 | «Copia il link su GitHub» della riga o della selezione | Zed | fatto | 3 |
 | Storia delle righe selezionate (`git log -L`) | JetBrains | fatto | 3 |
@@ -232,13 +265,13 @@ Ho riguardato un'immagine della vista delle differenze, disegnata ieri da `scrip
 | Intestazioni dei blocchi leggibili, con la funzione in cui si trovano | GitHub | fatto | 2 |
 | Righe nascoste da aprire: 20 in su, 20 in giù o tutte | VS Code, GitHub | fatto | 2 |
 | Parole cambiate evidenziate dentro la riga | Zed, VS Code | fatto | 2 |
-| Colonna di destra modificabile, con il salvataggio | VS Code, Zed | non ancora | 2 |
+| Colonna di destra modificabile, con il salvataggio | VS Code, Zed | fatto: doppio clic su una riga, o la matita del blocco, apre le righe in un riquadro; Cmd+Invio le scrive nel file | 2 |
 | Stage e Annulla per ogni blocco, accanto ai numeri di riga | VS Code | fatto | 2 |
 | F7 e Maiusc+F7 per passare da una modifica all'altra; i segni nella barra di scorrimento | VS Code | fatto | 2 |
 | In linea da sola quando la finestra è stretta (sotto i 900 pixel) | VS Code | fatto | 2 |
 | «Ignora gli spazi», per vedere solo i cambiamenti veri | VS Code, GitHub Desktop | fatto | 2 |
 | In cima: nome del file, «+12 −3» e «Apri il file» alla stessa riga | VS Code, GitHub | fatto | 2 |
-| Tutte le modifiche in una sola pagina che scorre, file dopo file, modificabile | Zed, VS Code | a metà: una pagina sola, file dopo file, ma non modificabile | 2 |
+| Tutte le modifiche in una sola pagina che scorre, file dopo file, modificabile | Zed, VS Code | fatto: modificabile allo stesso modo | 2 |
 | Immagini cambiate: prima e dopo affiancate, o una sopra l'altra con un cursore | GitHub Desktop | fatto | 9 |
 | Codice spostato riconosciuto come spostato, non come tolto e aggiunto | VS Code | fatto | 9 |
 
@@ -268,10 +301,10 @@ Ho riguardato un'immagine della vista delle differenze, disegnata ieri da `scrip
 | Parentesi colorate per livello, con la guida della coppia attiva | VS Code, Zed | fatto | 6 |
 | Selezioni del testo e scrivi `"` o `(`: il testo finisce dentro | VS Code, Sublime | fatto | 6 |
 | Spazi visibili nella selezione o ai bordi (`editor.renderWhitespace`) | VS Code, Zed | a metà: `editor.renderWhitespace` con «all» | 6 |
-| Righelli verticali a 80 o 100 colonne (`editor.rulers`) | VS Code | non ancora | 6 |
-| Suggerimenti in riga: tipi e nomi dei parametri, attenuati, tenendo premuto un tasto (`editor.inlayHints`) | VS Code, Zed | non ancora | 6 |
+| Righelli verticali a 80 o 100 colonne (`editor.rulers`) | VS Code | fatto | 6 |
+| Suggerimenti in riga: tipi e nomi dei parametri, attenuati, tenendo premuto un tasto (`editor.inlayHints`) | VS Code, Zed | a metà: i tipi, in fondo alla riga e non in mezzo, tenendo premuto Ctrl+Opzione; i nomi dei parametri no | 6 |
 | Quadratino del colore accanto a `#2F74F5` o `rgb(…)`, con il selettore | VS Code | fatto | 6 |
-| «3 riferimenti» sopra le funzioni, cliccabile (CodeLens) | VS Code | non ancora | 6 |
+| «3 riferimenti» sopra le funzioni, cliccabile (CodeLens) | VS Code | fatto: in fondo alla riga, non sopra | 6 |
 | Le altre occorrenze del simbolo evidenziate, e segnate nella barra di scorrimento | VS Code, Zed | fatto | 6 |
 | Errori, risultati della ricerca e modifiche segnati nella barra di scorrimento | VS Code, Zed | a metà: errori, avvisi, modifiche, occorrenze e segnalibri; non i risultati della ricerca | 6 |
 | Cmd+C senza selezione copia la riga intera; Cmd+X la taglia | VS Code, Sublime | fatto | 6 |
@@ -286,7 +319,7 @@ Ho riguardato un'immagine della vista delle differenze, disegnata ieri da `scrip
 
 | Cosa | Da dove | Keel oggi | Giro |
 |---|---|---|---|
-| I risultati si aprono in una scheda che puoi tenere e modificare, come in Zed | Zed, VS Code | non ancora | 4 |
+| I risultati si aprono in una scheda che puoi tenere e modificare, come in Zed | Zed, VS Code | fatto | 4 |
 | «Cerca nella cartella…» dall'albero riempie «file da includere» | VS Code | fatto | 5 |
 | Cerca solo nei file aperti | VS Code | fatto | 4 |
 | Togli un risultato o un file dall'elenco con la ×, prima di sostituire | VS Code | fatto | 4 |

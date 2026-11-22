@@ -2115,7 +2115,7 @@ La prima volta che apri un file di un linguaggio, Keel scarica il suo server: ne
 
 Da fare dopo, solo se servono:
 
-- **Debugger** con breakpoint e **Debug Console**, con il protocollo DAP di VS Code (js-debug, CodeLLDB, debugpy).
+- ~~**Debugger** con breakpoint e **Debug Console**, con il protocollo DAP di VS Code~~ fatto il 22 novembre 2026, con lldb-dap, debugpy e js-debug (Node e TypeScript ancora da provare davvero): vedi `DETTAGLI.md`, «Le funzioni nuove».
 - **Pannelli web delle estensioni**, con il WebKit di macOS (`wry`): Postman, diagrammi Mermaid nell'anteprima Markdown.
 - **Estensioni che richiedono Node completo**, con un processo Node separato come fa VS Code.
 - **Swift** (`sourcekit-lsp`) e **Flutter/Dart**.
@@ -2159,7 +2159,7 @@ Firma e notarizzazione di Apple, aggiornamenti automatici, un eventuale sito: ci
 
 ## Punti aperti
 
-- **Debug Console:** l'hai citata nel pannello in basso, ma senza debugger resta vuota. Proposta: arriva con il debugger opzionale.
+- ~~**Debug Console**~~ fatta insieme al debugger.
 - ~~**Bozze della fase 1**~~ fatte in HTML statico; hai scelto la bozza D, che unisce B e C.
 - ~~**Libreria per le lingue**~~ deciso nella 1.3: una tabella di testi per lingua scritta in Rust, così il compilatore controlla che nessun testo manchi. Con più lingue si potrà passare a Fluent.
 - **Font del codice:** SF Mono di serie, oppure un altro (JetBrains Mono, Geist Mono…).
