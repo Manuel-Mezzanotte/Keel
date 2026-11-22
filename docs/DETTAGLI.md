@@ -2,7 +2,7 @@
 
 I piccoli dettagli che rendono comodo un IDE: quelli a cui non pensi finché mancano. Raccoglie cosa fanno VS Code, Cursor, Zed, JetBrains, Xcode, Sublime Text, i programmi per git e il Mac stesso, confrontato con quello che Keel fa oggi. Alla fine c'è l'ordine in cui farli, deciso da me.
 
-*Scritto il 19 novembre 2026, sul commit `12db1b4` di `develop`. Aggiornato il 20 novembre 2026: i nove giri sono fatti, dal commit `db6bbbe` al `66e6bfb`, su `develop` e non ancora su GitHub. La colonna «Keel oggi» dice ora com'è Keel dopo i giri. Aggiornato di nuovo il 22 novembre 2026 con i lavori dal commit `50e24d1` al `2e4b0a5`, su `develop` e non ancora su GitHub: quasi tutto quello che era rimasto, più le funzioni grandi raccontate in «Le funzioni nuove».*
+*Scritto il 19 novembre 2026, sul commit `12db1b4` di `develop`. Aggiornato il 20 novembre 2026: i nove giri sono fatti, dal commit `db6bbbe` al `66e6bfb`, su `develop`. La colonna «Keel oggi» dice ora com'è Keel dopo i giri. Aggiornato di nuovo il 22 novembre 2026 con i lavori dal commit `50e24d1` al `2e4b0a5`, su `develop` e su GitHub: quasi tutto quello che era rimasto, più le funzioni grandi raccontate in «Le funzioni nuove».*
 
 ---
 

@@ -58,6 +58,8 @@ Nasce dalla curiosità per le app native in Rust e dal desiderio di un editor tu
 | `vendor/gpui-base` | copia dell'editor di gpui-component, con le correzioni che servivano (pieghe, più cursori) |
 | `fixtures/` | file e pacchetti di estensioni per i test |
 | `scripts/` | `bundle-macos.sh` (crea `Keel.app`), `make-dmg.sh` (crea il DMG), `measure-memory.sh` |
+| `assets/` | il marchio e le immagini del README (`readme/`: testata e confronto sono SVG animati, il resto sono finestre vere disegnate da Keel) |
+| `README.md` | la presentazione per chi arriva sulla repo, in inglese; in italiano è `docs/README.it.md`. Vanno aggiornati insieme |
 | `docs/` | questo documento, il piano, i dettagli da aggiungere (`DETTAGLI.md`) e le bozze grafiche, in italiano |
 
 L'interfaccia sta quasi tutta in `crates/keel/src/workbench_window/`, un file per vista:
@@ -143,7 +145,7 @@ Dopo le prime prove dell'app vera (18 novembre) sono arrivati altri giri di rito
 - correzione dei controlli della pagina Impostazioni, che non salvavano (`8fbd01c`);
 - **nuovo aspetto** (sera del 18 novembre): due stili della finestra, «Pannelli sospesi» e «Piatto», scelti dalla nuova pagina Impostazioni → Interfaccia (`keel.interfaceStyle`); animazioni di pannelli, selettore e sezioni (`keel.animations`); Controllo versione con messaggio più grande, pulsante Commit largo e grafico ridimensionabile; Cerca, Estensioni e benvenuto senza spazi vuoti; pulsanti più grandi; Cmd+P e tavolozza su una superficie sola. Il dettaglio è in `PIANO.md`, «Nuovo aspetto». Poi l'icona nel formato di Icon Composer, senza il riquadro nero di macOS, e il pannello di Claude che si apre sulla chat con le chat di Claude Code del progetto («Icona nuova e pannello di Claude»).
 - **i dettagli** (19–20 novembre): 143 piccoli dettagli raccolti da VS Code, Cursor, Zed, JetBrains, Xcode e dal Mac, fatti in nove giri, dal commit `db6bbbe` al `66e6bfb`. Tra gli altri: avvisi e finestre d'errore di git, differenze rifatte, salvataggio automatico, cronologia locale, segnalibri, cronologia degli appunti, terminale con l'integrazione della shell (pallini, salti fra i comandi, correzioni rapide, testo che torna dopo il riavvio), menu Finestra e Aiuto, barra di stato cliccabile con codifiche e fine riga, Quick Look, file trascinati fuori da Keel. Voce per voce, con cosa resta e come provarlo, in [`DETTAGLI.md`](DETTAGLI.md).
-- **le funzioni nuove** (21–22 novembre), dal commit `50e24d1` al `2e4b0a5`, più i documenti (`1c4cd02`): 12 commit su `develop`, non ancora su GitHub. La versione con tutte queste è installata in /Applications dal 22 novembre:
+- **le funzioni nuove** (21–22 novembre), dal commit `50e24d1` al `2e4b0a5`, più i documenti. Sono su GitHub, su `develop`. La versione con tutte queste è installata in /Applications dal 22 novembre:
   - una scheda trascinata su un bordo divide l'editor, anche sopra e sotto;
   - Claude nell'editor (Cmd+I) e il messaggio del commit scritto da Claude;
   - i test dal margine, con la vista Test;
@@ -253,7 +255,7 @@ L'idea è permettere a chi usa Keel di cambiarne l'aspetto con un suo file, come
 - Il font del codice di serie: SF Mono oppure un altro.
 - La minimappa: accesa o spenta di serie.
 - La pubblicazione: account sviluppatore Apple, firma, notarizzazione, aggiornamenti automatici; per la pagina anche il dominio, dove metterla, il prezzo o la licenza e quale lingua tenere come principale (ora l'italiano).
-- I 12 commit di `develop` da mandare su GitHub, dopo le prove dell'autore.
+- Il ramo `main` non esiste ancora su GitHub: il predefinito è `develop`.
 - La cartella `KeelSite/` dentro Keel è un sito vecchio del 21 novembre, in Next.js, messo lì dall'autore: non è in git e non va committata. Quello buono è la repo `KeelSite` accanto a Keel.
 - Il merge di `develop` su `main`: solo quando lo chiede l'autore.
 
