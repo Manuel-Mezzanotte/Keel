@@ -60,6 +60,15 @@ impl NpmScripts {
     }
 }
 
+/// The package manager of the project in `folder`.
+pub(super) fn package_manager_of(folder: &Path) -> &'static str {
+    let json = std::fs::read_to_string(folder.join("package.json"))
+        .ok()
+        .and_then(|text| serde_json::from_str(&text).ok())
+        .unwrap_or(Value::Null);
+    package_manager(folder, &json)
+}
+
 /// The package manager a project uses: the `packageManager` field, then
 /// the lock file, as VS Code's `npm.packageManager: auto` does.
 fn package_manager(folder: &Path, json: &Value) -> &'static str {

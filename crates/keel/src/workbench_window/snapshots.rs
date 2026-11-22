@@ -261,6 +261,16 @@ fn shots() -> Vec<Shot> {
                 })
                 .detach();
             }));
+            // The project's build, for real, with its problems: needs
+            // KEEL_SNAPSHOTS_WAIT.
+            shots.push(shot(name("build-live"), |workbench, window, cx| {
+                workbench.close_blame_card(cx);
+                workbench.run_task("cargo build", window, cx);
+            }));
+            shots.push(shot(name("build-problems-live"), |workbench, _, cx| {
+                workbench.layout.show_panel_view(PanelView::Problems);
+                cx.notify();
+            }));
             // The right column of the changes, edited: on the file given,
             // in a repository where it has changed.
             shots.push(shot(name("diff-edit-live"), |workbench, window, cx| {

@@ -544,6 +544,12 @@ impl Terminal {
         *self.search.lock().expect("search") = None;
     }
 
+    /// Whether the shell says when its commands start and end: it has
+    /// Keel's integration.
+    pub fn reports_commands(&self) -> bool {
+        self.shared.tracker().nonce.is_some()
+    }
+
     /// Whether the shell's prompt is drawn and waits for a command line.
     /// Typed earlier, a command is echoed by the terminal above the prompt
     /// and then again on it. Always true without the shell integration,

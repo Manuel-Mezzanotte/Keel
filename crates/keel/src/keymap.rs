@@ -258,6 +258,42 @@ pub const COMMANDS: &[KeelCommand] = &[
         context: None,
     },
     KeelCommand {
+        id: "workbench.action.tasks.runTask",
+        action: || Box::new(crate::workbench_window::RunTask),
+        default_key: None,
+        context: None,
+    },
+    KeelCommand {
+        id: "workbench.action.tasks.build",
+        action: || Box::new(crate::workbench_window::RunBuildTask),
+        default_key: Some("cmd+shift+b"),
+        context: None,
+    },
+    KeelCommand {
+        id: "workbench.action.tasks.test",
+        action: || Box::new(crate::workbench_window::RunTestTask),
+        default_key: None,
+        context: None,
+    },
+    KeelCommand {
+        id: "workbench.action.tasks.reRunTask",
+        action: || Box::new(crate::workbench_window::RerunLastTask),
+        default_key: None,
+        context: None,
+    },
+    KeelCommand {
+        id: "workbench.action.tasks.terminate",
+        action: || Box::new(crate::workbench_window::TerminateTask),
+        default_key: None,
+        context: None,
+    },
+    KeelCommand {
+        id: "workbench.action.tasks.configureTaskRunner",
+        action: || Box::new(crate::workbench_window::ConfigureTasks),
+        default_key: None,
+        context: None,
+    },
+    KeelCommand {
         id: "testing.runAtCursor",
         action: || Box::new(RunTestAtCursor),
         default_key: Some("cmd+; c"),
@@ -1533,7 +1569,7 @@ mod tests {
         let (bindings, warnings) =
             read_user_bindings(Path::new("/nonexistent/keel/keybindings.json"));
         assert!(bindings.is_empty() && warnings.is_empty());
-        assert_eq!(keel_bindings(&[]).len(), 120);
+        assert_eq!(keel_bindings(&[]).len(), 121);
     }
 
     #[test]

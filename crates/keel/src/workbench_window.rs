@@ -56,6 +56,7 @@ mod outline;
 mod panel_views;
 mod pdf_view;
 mod peek;
+mod problem_matchers;
 mod problems;
 mod restore;
 mod rulers;
@@ -70,6 +71,8 @@ pub(crate) mod snapshots;
 mod source_control;
 mod status_items;
 mod tabs;
+mod task_config;
+mod tasks;
 mod terminal_commands;
 mod terminal_fixes;
 mod terminal_view;
@@ -142,6 +145,9 @@ pub(crate) use source_control::{
     CheckoutBranch, Commit, CommitAmend, CreateBranch, DiscardAll, GitFetch, GitPull, GitPush,
     GitRefresh, GitStash, GitStashPop, GitSync, StageAll, UnstageAll,
     bindings as source_control_bindings,
+};
+pub(crate) use tasks::{
+    ConfigureTasks, RerunLastTask, RunBuildTask, RunTask, RunTestTask, TerminateTask,
 };
 pub(crate) use terminal_commands::{
     AskClaudeAboutTerminal, CopyLastCommand, CopyLastCommandOutput, RunRecentCommand,
@@ -529,6 +535,8 @@ pub struct Workbench {
     inline_edit: Option<claude_inline::InlineEdit>,
     /// The tests found in the files, and how their runs went.
     testing: testing::Testing,
+    /// The tasks run, and their terminals.
+    tasks: tasks::Tasks,
     discard_changes: bool,
     gutter_refresh: Task<()>,
     /// Whether the first frame was already drawn, for `KEEL_STARTUP_TIMING`.
@@ -795,6 +803,7 @@ impl Workbench {
             tab_drop: None,
             inline_edit: None,
             testing: testing::Testing::default(),
+            tasks: tasks::Tasks::default(),
             discard_changes: false,
             gutter_refresh: Task::ready(()),
             known_selections: HashMap::new(),

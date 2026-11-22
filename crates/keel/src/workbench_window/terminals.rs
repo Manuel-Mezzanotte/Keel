@@ -217,6 +217,7 @@ impl Workbench {
             }
             TerminalViewEvent::CommandFinished(command) => {
                 self.test_command_finished(view, command, cx);
+                self.task_command_finished(view, command, cx);
                 self.terminal_command_finished(view, command, window, cx)
             }
             TerminalViewEvent::AskClaude(prompt) => self.ask_claude(prompt.clone(), window, cx),
@@ -238,7 +239,7 @@ impl Workbench {
         }
     }
 
-    fn terminal_index(&self, view: &Entity<TerminalView>) -> Option<usize> {
+    pub(super) fn terminal_index(&self, view: &Entity<TerminalView>) -> Option<usize> {
         self.terminals
             .iter()
             .position(|terminal| &terminal.view == view)
@@ -307,7 +308,8 @@ impl Workbench {
             .focus_handle(cx)
             .contains_focused(window, cx);
         let group = self.terminals[index].group;
-        self.terminals.remove(index);
+        let removed = self.terminals.remove(index);
+        self.task_terminal_closed(&removed.view);
         // The neighbour in the same group comes forward, then the tab before.
         let same_group = self
             .terminals

@@ -2298,6 +2298,10 @@ impl Workbench {
         if let Some(blame) = self.current_line_blame(cx) {
             left.push(blame);
         }
+        // The tasks at work.
+        if let Some(tasks) = self.tasks_status() {
+            left.push(tasks);
+        }
         // A server at work, such as rust-analyzer indexing.
         if let Some(progress) = self.languages.progress_text() {
             left.push(progress.to_owned());
@@ -2541,6 +2545,7 @@ impl Render for Workbench {
         let root = self.claude_inline_actions(root, cx);
         let root = self.testing_actions(root, cx);
         let root = self.search_results_actions(root, cx);
+        let root = self.task_actions(root, cx);
         let root = self.npm_actions(root, cx);
         let root = self.source_control_actions(root, cx);
         let root = self.git_gutter_actions(root, cx);

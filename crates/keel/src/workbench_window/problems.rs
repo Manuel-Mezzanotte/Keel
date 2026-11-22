@@ -221,12 +221,23 @@ impl Workbench {
             .diagnostics
             .iter()
             .map(|(uri, by_server)| {
+                // What a task found and a server says too is listed once.
+                let of_servers: Vec<&Diagnostic> = by_server
+                    .iter()
+                    .filter(|(server, _)| **server != super::tasks::TASKS)
+                    .flat_map(|(_, diagnostics)| diagnostics)
+                    .collect();
                 let mut problems: Vec<Problem> = by_server
                     .iter()
                     .flat_map(|(server, diagnostics)| {
+                        let of_servers = &of_servers;
                         diagnostics
                             .iter()
                             .filter(|diagnostic| is_shown(diagnostic))
+                            .filter(move |diagnostic| {
+                                *server != super::tasks::TASKS
+                                    || !super::tasks::said_already(diagnostic, of_servers)
+                            })
                             .map(|diagnostic| Problem {
                                 diagnostic: diagnostic.clone(),
                                 server,

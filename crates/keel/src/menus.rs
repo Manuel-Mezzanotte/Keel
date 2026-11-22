@@ -15,6 +15,9 @@ use crate::workbench_window::{
     ToggleTerminal,
 };
 use crate::workbench_window::{
+    ConfigureTasks, RerunLastTask, RunBuildTask, RunTask, TerminateTask,
+};
+use crate::workbench_window::{
     CopyLinesDown, CopyLinesUp, MoveLinesDown, MoveLinesUp, ToggleBlockComment, ToggleLineComment,
     ToggleWordWrap, ZoomIn, ZoomOut, ZoomReset,
 };
@@ -252,6 +255,12 @@ pub fn set(language: UiLanguage, cx: &mut App) {
                 MenuItem::action(strings.terminal_split, SplitTerminal),
                 MenuItem::action(strings.menu_rename_terminal, RenameTerminal),
                 MenuItem::action(strings.terminal_kill, KillTerminal),
+                MenuItem::separator(),
+                MenuItem::action(strings.menu_run_task, RunTask),
+                MenuItem::action(strings.menu_run_build_task, RunBuildTask),
+                MenuItem::action(strings.menu_rerun_task, RerunLastTask),
+                MenuItem::action(strings.menu_terminate_task, TerminateTask),
+                MenuItem::action(strings.menu_configure_tasks, ConfigureTasks),
                 MenuItem::separator(),
                 MenuItem::action(strings.maximize_panel, ToggleMaximizedPanel),
                 MenuItem::separator(),

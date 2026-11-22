@@ -278,7 +278,26 @@ pub(crate) fn shell_spawn(cwd: PathBuf, cx: &App) -> Spawn {
         cell_width: 8,
         cell_height: 16,
     };
-    Spawn::shell(cwd, size, palette(cx), &language)
+    #[allow(unused_mut)]
+    let mut spawn = Spawn::shell(cwd, size, palette(cx), &language);
+    #[cfg(test)]
+    TEST_HOME.with(|home| {
+        if let Some(home) = home.borrow().as_ref() {
+            spawn.command = Some(("/bin/zsh".into(), vec!["-i".into()]));
+            spawn
+                .env
+                .insert("HOME".into(), home.to_string_lossy().into_owned());
+            spawn.integrate_zsh(home).unwrap();
+        }
+    });
+    spawn
+}
+
+#[cfg(test)]
+thread_local! {
+    /// A test's own home: its shells are a zsh that reads nothing of the
+    /// user's.
+    pub(crate) static TEST_HOME: RefCell<Option<PathBuf>> = const { RefCell::new(None) };
 }
 
 /// Starts a terminal; tests run a script instead of the login shell.
@@ -360,7 +379,6 @@ impl TerminalView {
         }
     }
 
-    #[cfg(test)]
     pub(crate) fn terminal(&self) -> &Arc<Terminal> {
         &self.terminal
     }
