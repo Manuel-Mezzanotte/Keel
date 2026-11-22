@@ -294,6 +294,7 @@ impl Workbench {
                     this.mirror_tag(&watched_uri, &watched_id, editor, window, cx);
                     this.redecorate(&watched_id, editor, true, cx);
                     this.sync_document_from(&watched_uri, Some(&watched_id), window, cx);
+                    this.color_search_results(&watched_uri, cx);
                 }
             },
         );
@@ -507,7 +508,11 @@ impl Workbench {
             return;
         };
         let unsaved = self.documents.get(&uri).is_some_and(|document| {
-            document.modified && matches!(document.backing, Backing::File(_) | Backing::Untitled)
+            document.modified
+                && matches!(
+                    document.backing,
+                    Backing::File(_) | Backing::Untitled | Backing::Results(_)
+                )
         });
         if !unsaved || self.views_of(&uri) > 1 {
             self.close_tab_now(group, tab, window, cx);

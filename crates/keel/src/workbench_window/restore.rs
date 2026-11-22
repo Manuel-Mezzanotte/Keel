@@ -237,6 +237,7 @@ impl Workbench {
                 | Backing::Pdf(_)
                 | Backing::Graph(_)
                 | Backing::ExtensionDetails(_)
+                | Backing::Results(_)
                 | Backing::Library
                 | Backing::Page(_) => {
                     continue;
@@ -439,6 +440,7 @@ impl Workbench {
         document.modified = match &document.backing {
             Backing::File(file) => file.is_modified(text),
             Backing::Untitled => !text.is_empty(),
+            Backing::Results(tab) => text != tab.saved,
             Backing::Extension
             | Backing::Image(_)
             | Backing::Diff(_)

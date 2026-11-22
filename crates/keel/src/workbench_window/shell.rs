@@ -1202,6 +1202,7 @@ impl Workbench {
             }
             Backing::ExtensionDetails(_) => symbol(IconName::Blocks),
             Backing::Graph(_) => symbol(IconName::GitGraph),
+            Backing::Results(_) => symbol(IconName::Search),
             Backing::Diff(tab) if tab.source == super::diff_view::DiffSource::AllChanges => {
                 symbol(IconName::Layers)
             }
@@ -2539,6 +2540,7 @@ impl Render for Workbench {
         let root = self.clipboard_actions(root, cx);
         let root = self.claude_inline_actions(root, cx);
         let root = self.testing_actions(root, cx);
+        let root = self.search_results_actions(root, cx);
         let root = self.npm_actions(root, cx);
         let root = self.source_control_actions(root, cx);
         let root = self.git_gutter_actions(root, cx);

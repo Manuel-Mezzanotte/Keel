@@ -191,6 +191,10 @@ impl Workbench {
     }
 
     fn go_to_target(&mut self, target: Target, window: &mut Window, cx: &mut Context<Self>) {
+        // In the search's results, F12 opens the file at that line.
+        if target == Target::Definition && self.open_result_under_cursor(window, cx) {
+            return;
+        }
         self.find_target(target, false, window, cx)
     }
 

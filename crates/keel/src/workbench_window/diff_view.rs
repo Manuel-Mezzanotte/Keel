@@ -1127,6 +1127,23 @@ mod tests {
         let file = fs::read_to_string(root.join("a.txt")).unwrap();
         assert_eq!(file, lines.replace("riga 3\n", "riga tre, scritta qui\n"));
 
+        // The file changes while its block is open: it is not written
+        // over, and what was typed stays in the card.
+        view.update_in(cx, |view, window, cx| {
+            view.diff_line_double_click(&uri, 0, 2, window, cx);
+            let editor = view.diff_edit.as_ref().unwrap().editor.clone();
+            editor.update(cx, |editor, cx| editor.set_value("la mia", window, cx));
+        });
+        let outside = lines.replace("riga 3\n", "di un altro\n");
+        fs::write(root.join("a.txt"), &outside).unwrap();
+        cx.simulate_keystrokes("cmd-enter");
+        assert_eq!(fs::read_to_string(root.join("a.txt")).unwrap(), outside);
+        view.read_with(cx, |view, cx| {
+            let edit = view.diff_edit.as_ref().unwrap();
+            assert_eq!(edit.editor.read(cx).value().to_string(), "la mia");
+        });
+        cx.simulate_keystrokes("escape");
+
         // An unchanged line alone; in the staged changes, no editing.
         view.update_in(cx, |view, window, cx| {
             view.diff_line_double_click(&uri, 0, 8, window, cx)

@@ -338,16 +338,6 @@ impl DiffDoc {
         Some((diff.path.clone(), diff.new.clone(), diff.hunks.clone()))
     }
 
-    /// The newer version of a file, by its path.
-    pub(super) fn file_text(&self, path: &str) -> Option<String> {
-        let state = self.state.borrow();
-        state
-            .files
-            .iter()
-            .find(|diff| diff.path == path)
-            .map(|diff| diff.new_text.clone())
-    }
-
     pub(super) fn block(
         &self,
         file: usize,

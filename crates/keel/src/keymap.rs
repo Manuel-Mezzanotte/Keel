@@ -252,6 +252,12 @@ pub const COMMANDS: &[KeelCommand] = &[
         context: Some(TERMINAL_CONTEXT),
     },
     KeelCommand {
+        id: "search.action.openInEditor",
+        action: || Box::new(crate::workbench_window::OpenSearchResults),
+        default_key: None,
+        context: None,
+    },
+    KeelCommand {
         id: "testing.runAtCursor",
         action: || Box::new(RunTestAtCursor),
         default_key: Some("cmd+; c"),

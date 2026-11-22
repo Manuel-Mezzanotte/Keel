@@ -34,7 +34,7 @@ enum ResultRow {
 }
 
 pub(super) struct SearchView {
-    query: Entity<InputState>,
+    pub(super) query: Entity<InputState>,
     replace: Entity<InputState>,
     show_replace: bool,
     include: Entity<InputState>,
@@ -238,6 +238,15 @@ impl Workbench {
 
     /// Searches the project in the background; a newer search stops the
     /// one still running.
+    /// What the Search view looks for, as its fields say.
+    pub(super) fn search_query(&self, cx: &App) -> Query {
+        self.search.query(cx)
+    }
+
+    pub(super) fn search_results(&self) -> &Results {
+        &self.search.results
+    }
+
     pub(super) fn run_search(&mut self, cx: &mut Context<Self>) {
         let Some(root) = self.project.root.clone() else {
             return;
@@ -579,6 +588,17 @@ impl Workbench {
         };
 
         let header = view_header(strings.view_search, colors)
+            .child(
+                Button::new("search-open-results")
+                    .ghost()
+                    .small()
+                    .icon(Icon::new(IconName::FileText))
+                    .tooltip(strings.search_open_results)
+                    .disabled(!typed)
+                    .on_click(
+                        cx.listener(|this, _, window, cx| this.open_search_results(window, cx)),
+                    ),
+            )
             .child(
                 Button::new("search-again")
                     .ghost()

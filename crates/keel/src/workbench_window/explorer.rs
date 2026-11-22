@@ -831,6 +831,7 @@ impl Workbench {
                 | Backing::Pdf(_)
                 | Backing::Graph(_)
                 | Backing::ExtensionDetails(_)
+                | Backing::Results(_)
                 | Backing::Library
                 | Backing::Page(_) => {}
             }

@@ -1093,6 +1093,13 @@ pub struct Strings {
     pub diff_edit_hint: &'static str,
     pub diff_edit_cancel: &'static str,
     pub diff_edit_apply: &'static str,
+    /// The Search view: the results in a tab of their own, as Zed.
+    pub search_open_results: &'static str,
+    pub search_results_title: &'static str,
+    pub search_results_saved: &'static str,
+    pub search_results_skipped: &'static str,
+    pub command_open_search_results: &'static str,
+    pub diff_edit_refused: &'static str,
 }
 
 impl Strings {
@@ -1137,6 +1144,7 @@ impl Strings {
             "keel.terminal.askClaude" => self.command_ask_claude_terminal,
             "keel.pasteFromHistory" => self.command_paste_from_history,
             "inlineChat.start" => self.command_inline_edit,
+            "search.action.openInEditor" => self.command_open_search_results,
             "testing.runAtCursor" => self.command_run_test_at_cursor,
             "testing.runCurrentFile" => self.command_run_file_tests,
             "testing.runAll" => self.command_run_all_tests,
@@ -2616,6 +2624,12 @@ pub const ITALIAN: Strings = Strings {
     diff_edit_hint: "⌘↩ scrive nel file e salva · Esc lascia com'era",
     diff_edit_cancel: "Annulla",
     diff_edit_apply: "Applica e salva",
+    search_open_results: "Apri i risultati in una scheda, da modificare",
+    search_results_title: "Risultati: {query}",
+    search_results_saved: "Modifiche scritte in {files} file",
+    search_results_skipped: "Modifiche scritte in {files} file; {pieces} pezzi no: il file era cambiato o la loro intestazione è stata toccata",
+    command_open_search_results: "Cerca: Apri i risultati in una scheda",
+    diff_edit_refused: "Il file è cambiato nel frattempo: copia il testo e riapri il blocco",
 };
 
 pub const ENGLISH: Strings = Strings {
@@ -3562,6 +3576,12 @@ pub const ENGLISH: Strings = Strings {
     diff_edit_hint: "⌘↩ writes into the file and saves · Esc leaves it as it was",
     diff_edit_cancel: "Cancel",
     diff_edit_apply: "Apply and Save",
+    search_open_results: "Open the Results in a Tab, to Edit",
+    search_results_title: "Results: {query}",
+    search_results_saved: "Changes written into {files} files",
+    search_results_skipped: "Changes written into {files} files; {pieces} pieces not: the file had changed or their header was touched",
+    command_open_search_results: "Search: Open Results in Editor",
+    diff_edit_refused: "The file changed meanwhile: copy the text and open the block again",
 };
 
 #[cfg(test)]

@@ -221,6 +221,22 @@ fn shots() -> Vec<Shot> {
             }));
         }
         if style == "floating" {
+            // The search's results in a tab, to edit.
+            shots.push(shot(name("results-tab"), |workbench, window, cx| {
+                let query = workbench.search.query.clone();
+                query.update(cx, |query, cx| {
+                    query.set_value("fn excerpts_of", window, cx)
+                });
+                workbench.run_search(cx);
+                cx.spawn_in(window, async move |this, cx| {
+                    cx.background_executor()
+                        .timer(Duration::from_millis(450))
+                        .await;
+                    this.update_in(cx, |this, window, cx| this.open_search_results(window, cx))
+                        .ok();
+                })
+                .detach();
+            }));
             // The blame's card: the whole commit of the line.
             shots.push(shot(name("blame-card"), |workbench, window, cx| {
                 let folder = std::env::current_dir().unwrap_or_default();

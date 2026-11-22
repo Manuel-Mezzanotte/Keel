@@ -29,6 +29,7 @@ mod explorer_more;
 mod extension_features;
 mod extensions_view;
 mod file_commands;
+mod file_pieces;
 mod find_bar;
 mod git_daily;
 mod git_feedback;
@@ -59,6 +60,7 @@ mod problems;
 mod restore;
 mod rulers;
 mod scm_graph;
+mod search_results;
 mod search_view;
 mod settings_view;
 mod shell;
@@ -133,6 +135,7 @@ pub(crate) use notices::{ClearNotifications, ToggleDoNotDisturb, ToggleNotificat
 pub(crate) use npm_scripts::RunNpmScript;
 pub(crate) use pdf_view::bindings as pdf_bindings;
 pub(crate) use problems::{NextProblem, PreviousProblem};
+pub(crate) use search_results::OpenSearchResults;
 pub(crate) use shell::window_options;
 pub(crate) use signature_help::TriggerParameterHints;
 pub(crate) use source_control::{
@@ -329,6 +332,8 @@ enum Backing {
     Graph(Box<git_graph::GraphTab>),
     /// An extension's details and README.
     ExtensionDetails(Box<extensions_view::ExtensionDetailsTab>),
+    /// The search's results, editable, as Zed shows them.
+    Results(Box<search_results::ResultsTab>),
 }
 
 impl OpenDocument {
@@ -342,6 +347,7 @@ impl OpenDocument {
             | Backing::Pdf(_)
             | Backing::Graph(_)
             | Backing::ExtensionDetails(_)
+            | Backing::Results(_)
             | Backing::Library
             | Backing::Page(_) => None,
             Backing::Untitled | Backing::Extension => None,
@@ -375,6 +381,7 @@ impl OpenDocument {
             Backing::Preview(tab) => return tab.title.clone(),
             Backing::Graph(_) => return "Git Graph".to_owned(),
             Backing::ExtensionDetails(tab) => return tab.title.clone(),
+            Backing::Results(tab) => return tab.title.clone(),
             _ => {}
         }
         Uri::parse(&self.uri)
@@ -1175,6 +1182,7 @@ impl Workbench {
         document.modified = match &document.backing {
             Backing::File(file) => file.is_modified(&text),
             Backing::Untitled => !text.is_empty(),
+            Backing::Results(tab) => text != tab.saved,
             Backing::Extension
             | Backing::Image(_)
             | Backing::Diff(_)
@@ -1356,7 +1364,11 @@ impl Workbench {
 
     fn has_unsaved_changes(&self) -> bool {
         self.documents.values().any(|document| {
-            document.modified && matches!(document.backing, Backing::File(_) | Backing::Untitled)
+            document.modified
+                && matches!(
+                    document.backing,
+                    Backing::File(_) | Backing::Untitled | Backing::Results(_)
+                )
         })
     }
 
@@ -1385,6 +1397,7 @@ impl Workbench {
         match &document.backing {
             Backing::File(_) => self.save_with_participants(uri, after, window, cx),
             Backing::Untitled => self.save_as(uri.to_owned(), text, after, window, cx),
+            Backing::Results(_) => self.save_search_results(uri, after, window, cx),
             Backing::Image(_)
             | Backing::Diff(_)
             | Backing::Preview(_)
@@ -1522,7 +1535,10 @@ impl Workbench {
             .values()
             .find(|document| {
                 document.modified
-                    && matches!(document.backing, Backing::File(_) | Backing::Untitled)
+                    && matches!(
+                        document.backing,
+                        Backing::File(_) | Backing::Untitled | Backing::Results(_)
+                    )
             })
             .map(|document| document.uri.clone())
         else {
