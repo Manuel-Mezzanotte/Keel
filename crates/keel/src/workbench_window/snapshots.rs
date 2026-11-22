@@ -261,6 +261,12 @@ fn shots() -> Vec<Shot> {
                 })
                 .detach();
             }));
+            // The pull requests of the project's remote, for real: needs
+            // KEEL_SNAPSHOTS_WAIT.
+            shots.push(shot(name("pulls-live"), |workbench, window, cx| {
+                workbench.close_blame_card(cx);
+                workbench.open_pull_requests(window, cx);
+            }));
             // The file given stopped at a line, for real: KEEL_DEBUG_LINE
             // (from 1) and KEEL_DEBUG_NAME, the configuration.
             shots.push(shot(name("debug-live"), |workbench, window, cx| {

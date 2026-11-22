@@ -818,11 +818,13 @@ fn render_code(
                 file: row.file(),
                 line,
                 new_side: true,
-                note: diff.moved_from_at(line).map(|from| {
-                    super::notices::fill(
-                        strings.diff_moved_from,
-                        &[("line", &(from + 1).to_string())],
-                    )
+                note: diff.notes.get(&line).cloned().or_else(|| {
+                    diff.moved_from_at(line).map(|from| {
+                        super::notices::fill(
+                            strings.diff_moved_from,
+                            &[("line", &(from + 1).to_string())],
+                        )
+                    })
                 }),
             },
             look,
@@ -852,7 +854,7 @@ fn render_code(
                 file: row.file(),
                 line: new,
                 new_side: true,
-                note: None,
+                note: diff.notes.get(&new).cloned(),
             },
             look,
             cx,

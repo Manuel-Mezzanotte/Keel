@@ -1201,6 +1201,9 @@ impl Workbench {
         };
         match &document.backing {
             Backing::Page(super::settings_view::PageKind::Settings) => symbol(IconName::Settings),
+            Backing::Page(super::settings_view::PageKind::Pulls) => {
+                symbol(IconName::GitPullRequest)
+            }
             Backing::Page(super::settings_view::PageKind::Keybindings) => {
                 symbol(IconName::Keyboard)
             }
@@ -1727,6 +1730,9 @@ impl Workbench {
                             }
                             super::settings_view::PageKind::Keybindings => {
                                 self.render_keybindings_page(colors, cx)
+                            }
+                            super::settings_view::PageKind::Pulls => {
+                                self.render_pulls_page(colors, cx)
                             }
                         }),
                         Some(Backing::Preview(tab)) => div()
@@ -2308,6 +2314,10 @@ impl Workbench {
         if let Some(blame) = self.current_line_blame(cx) {
             left.push(blame);
         }
+        // The branch's pull request, and how its checks go.
+        if let Some(pull) = self.pull_status() {
+            right.push((pull, Some(super::status_items::StatusClick::PullRequest)));
+        }
         // What is debugged.
         if let Some(debug) = self.debug_status() {
             left.push(debug);
@@ -2564,6 +2574,7 @@ impl Render for Workbench {
         let root = self.search_results_actions(root, cx);
         let root = self.task_actions(root, cx);
         let root = self.debug_actions(root, cx);
+        let root = self.pull_actions(root, cx);
         let root = self.breakpoint_actions(root, cx);
         let root = self.npm_actions(root, cx);
         let root = self.source_control_actions(root, cx);
@@ -2672,6 +2683,7 @@ impl Render for Workbench {
             .children(notice_center)
             .children(self.render_blame_card(colors, cx))
             .children(self.render_diff_edit(colors, cx))
+            .children(self.render_thread_card(colors, cx))
     }
 }
 

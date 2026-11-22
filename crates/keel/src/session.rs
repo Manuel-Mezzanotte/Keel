@@ -78,6 +78,9 @@ pub struct WindowState {
     pub watches: Vec<String>,
     #[serde(default)]
     pub debug_configuration: Option<String>,
+    /// The pull requests page has been opened in the project.
+    #[serde(default)]
+    pub pulls: bool,
 }
 
 /// A bookmark on a line, with the line's text to find it again after edits.

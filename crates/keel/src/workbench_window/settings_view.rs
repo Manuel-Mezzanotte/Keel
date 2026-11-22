@@ -20,6 +20,7 @@ use super::*;
 pub(super) enum PageKind {
     Settings,
     Keybindings,
+    Pulls,
 }
 
 impl PageKind {
@@ -27,6 +28,7 @@ impl PageKind {
         match self {
             PageKind::Settings => "keel-settings:",
             PageKind::Keybindings => "keel-keybindings:",
+            PageKind::Pulls => "keel-pulls:",
         }
     }
 }

@@ -28,6 +28,9 @@ pub(super) struct FileDiff {
     /// For each unchanged stretch, by its first line in the new version:
     /// how many hidden lines were opened from its top and from its bottom.
     pub(super) revealed: HashMap<usize, (usize, usize)>,
+    /// What is said of lines of the newer version, as a pull request's
+    /// comments.
+    pub(super) notes: HashMap<usize, String>,
     /// Closed to its header, in the page with every change.
     pub(super) collapsed: bool,
     /// Lines taken away that were written elsewhere: old line to new line,
@@ -75,6 +78,7 @@ impl FileDiff {
             new,
             hunks,
             revealed: HashMap::new(),
+            notes: HashMap::new(),
             collapsed: false,
             moved_old,
             moved_new,

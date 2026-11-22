@@ -41,6 +41,13 @@ pub(super) enum DiffSource {
     /// A change the agent made to a file, by its path: what Keel kept
     /// before against the file now.
     Agent(String),
+    /// What a pull request changes, from where it parted to its last
+    /// commit: a file, or all of them with an empty path.
+    Pull {
+        number: u64,
+        from: String,
+        to: String,
+    },
 }
 
 /// A tab with differences.
@@ -70,6 +77,9 @@ pub(super) fn diff_uri(path: &str, source: &DiffSource) -> String {
         DiffSource::Clipboard => return format!("keel-clipboard:{path}"),
         DiffSource::Files(other) => return format!("keel-compare:{path}|{other}"),
         DiffSource::Agent(path) => return format!("keel-agent-diff:{path}"),
+        DiffSource::Pull { number, to, .. } => {
+            return format!("keel-pull:{number}/{to}/{path}");
+        }
     };
     format!("keel-diff:{kind}/{path}")
 }
@@ -100,6 +110,7 @@ impl Workbench {
             | DiffSource::AllChanges
             | DiffSource::LocalHistory(_)
             | DiffSource::Clipboard
+            | DiffSource::Pull { .. }
             | DiffSource::Files(_) => {
                 return Err("not a git difference".to_owned());
             }
@@ -173,7 +184,8 @@ impl Workbench {
                     return;
                 }
             };
-            let headers = source == DiffSource::AllChanges;
+            let headers = source == DiffSource::AllChanges
+                || (path.is_empty() && matches!(source, DiffSource::Pull { .. }));
             let doc = super::diff_pane::DiffDoc::new(files, self.diff_split, headers);
             let strings = self.strings();
             let name = path.rsplit('/').next().unwrap_or(path);
@@ -182,6 +194,8 @@ impl Workbench {
                 DiffSource::Staged => format!("{name} ({})", strings.diff_index),
                 DiffSource::Commit(hash, _) => format!("{name} ({})", &hash[..hash.len().min(8)]),
                 DiffSource::AllChanges => strings.diff_all_changes.to_owned(),
+                DiffSource::Pull { number, .. } if path.is_empty() => format!("PR #{number}"),
+                DiffSource::Pull { number, .. } => format!("{name} (PR #{number})"),
                 DiffSource::LocalHistory(_) => format!("{name} ({})", strings.history_version),
                 DiffSource::Clipboard => format!("{name} ↔ {}", strings.diff_clipboard),
                 DiffSource::Files(other) => {
@@ -238,6 +252,7 @@ impl Workbench {
                 DiffSource::AllChanges
                 | DiffSource::LocalHistory(_)
                 | DiffSource::Clipboard
+                | DiffSource::Pull { .. }
                 | DiffSource::Files(_) => strings.diff_all_changes.to_owned(),
             };
             self.documents.insert(
@@ -265,7 +280,7 @@ impl Workbench {
 
     /// The two versions of a file, or of every changed file, for Keel's
     /// own view.
-    fn diff_docs(
+    pub(super) fn diff_docs(
         &self,
         path: &str,
         source: &DiffSource,
@@ -348,6 +363,23 @@ impl Workbench {
                     })
                     .unwrap_or_default(),
             ),
+            DiffSource::Pull { number, from, to } => repo
+                .files_between(from, to)
+                .map_err(|error| error.to_string())?
+                .into_iter()
+                .filter(|file| path.is_empty() || file.path == path)
+                .map(|file| {
+                    let before = file.original.as_deref().unwrap_or(&file.path);
+                    let mut diff = super::diff_model::FileDiff::new(
+                        &file.path,
+                        &repo.text_at(from, before).unwrap_or_default(),
+                        &repo.text_at(to, &file.path).unwrap_or_default(),
+                        ignore,
+                    );
+                    diff.notes = self.pulls.notes_of(*number, &file.path);
+                    diff
+                })
+                .collect(),
             DiffSource::AllChanges => self
                 .scm
                 .status
@@ -385,7 +417,8 @@ impl Workbench {
             DiffSource::Staged => BlockActions::Unstage,
             _ => BlockActions::None,
         };
-        let all = source == DiffSource::AllChanges;
+        let all = source == DiffSource::AllChanges
+            || (tab.path.is_empty() && matches!(source, DiffSource::Pull { .. }));
         let keys = |action: &dyn gpui::Action| {
             window
                 .highest_precedence_binding_for_action(action)
@@ -732,6 +765,7 @@ impl Workbench {
                                 | DiffSource::Commit(..)
                                 | DiffSource::Proposed(_)
                                 | DiffSource::Agent(_)
+                                | DiffSource::Pull { .. }
                                 | DiffSource::AllChanges
                         ) =>
                 {
@@ -882,7 +916,8 @@ impl Workbench {
                 );
             let stage_path = path.clone();
             // A commit's differences have nothing to stage.
-            toolbar = toolbar.when(!matches!(source, DiffSource::Commit(..)), |toolbar| {
+            let written = matches!(source, DiffSource::Commit(..) | DiffSource::Pull { .. });
+            toolbar = toolbar.when(!written, |toolbar| {
                 toolbar.child(match source {
                     DiffSource::Staged => Button::new("diff-unstage")
                         .ghost()

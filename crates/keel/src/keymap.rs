@@ -408,6 +408,24 @@ pub const COMMANDS: &[KeelCommand] = &[
         context: None,
     },
     KeelCommand {
+        id: "pr.openPullRequests",
+        action: || Box::new(crate::workbench_window::OpenPullRequests),
+        default_key: None,
+        context: None,
+    },
+    KeelCommand {
+        id: "pr.create",
+        action: || Box::new(crate::workbench_window::CreatePullRequest),
+        default_key: None,
+        context: None,
+    },
+    KeelCommand {
+        id: "pr.openBranch",
+        action: || Box::new(crate::workbench_window::OpenBranchPullRequest),
+        default_key: None,
+        context: None,
+    },
+    KeelCommand {
         id: "testing.debugAtCursor",
         action: || Box::new(crate::workbench_window::DebugTestAtCursor),
         default_key: Some("cmd+; cmd+c"),

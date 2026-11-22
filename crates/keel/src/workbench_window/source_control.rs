@@ -256,6 +256,7 @@ impl Workbench {
                     self.project.branch = status.branch.clone().or_else(|| status.head.clone());
                 }
                 self.scm.status = status;
+                self.pulls_branch_changed(cx);
                 self.git_marks = match (&self.project.root, &self.scm.repo) {
                     (Some(root), Some(repo)) => {
                         let real = root.canonicalize().unwrap_or_else(|_| root.clone());
@@ -944,6 +945,16 @@ impl Workbench {
         let focus = self.focus_handle.clone();
         let by_folder = self.scm.by_folder;
         let header = view_header(strings.view_source_control, colors)
+            .child(
+                Button::new("scm-pulls")
+                    .ghost()
+                    .small()
+                    .icon(Icon::new(IconName::GitPullRequest))
+                    .tooltip(strings.pulls_title_page)
+                    .on_click(
+                        cx.listener(|this, _, window, cx| this.open_pull_requests(window, cx)),
+                    ),
+            )
             .child(
                 Button::new("scm-all-changes")
                     .ghost()

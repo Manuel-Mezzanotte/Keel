@@ -40,6 +40,7 @@ mod git_feedback;
 mod git_graph;
 mod git_gutter;
 mod git_marks;
+mod github;
 mod host_watchdog;
 mod image_diff;
 mod interface_page;
@@ -62,6 +63,7 @@ mod pdf_view;
 mod peek;
 mod problem_matchers;
 mod problems;
+mod pull_requests;
 mod restore;
 mod rulers;
 mod scm_graph;
@@ -151,6 +153,7 @@ pub(crate) use notices::{ClearNotifications, ToggleDoNotDisturb, ToggleNotificat
 pub(crate) use npm_scripts::RunNpmScript;
 pub(crate) use pdf_view::bindings as pdf_bindings;
 pub(crate) use problems::{NextProblem, PreviousProblem};
+pub(crate) use pull_requests::{CreatePullRequest, OpenBranchPullRequest, OpenPullRequests};
 pub(crate) use search_results::OpenSearchResults;
 pub(crate) use shell::window_options;
 pub(crate) use signature_help::TriggerParameterHints;
@@ -553,6 +556,8 @@ pub struct Workbench {
     tasks: tasks::Tasks,
     /// The debugger: its sessions, breakpoints and console.
     debug: debug::Debugging,
+    /// GitHub's pull requests.
+    pulls: pull_requests::Pulls,
     discard_changes: bool,
     gutter_refresh: Task<()>,
     /// Whether the first frame was already drawn, for `KEEL_STARTUP_TIMING`.
@@ -821,6 +826,7 @@ impl Workbench {
             testing: testing::Testing::default(),
             tasks: tasks::Tasks::default(),
             debug: debug::Debugging::default(),
+            pulls: pull_requests::Pulls::default(),
             discard_changes: false,
             gutter_refresh: Task::ready(()),
             known_selections: HashMap::new(),
@@ -1044,6 +1050,9 @@ impl Workbench {
         match document.backing {
             Backing::Page(settings_view::PageKind::Settings) => {
                 return self.strings().settings_tab_title.to_owned();
+            }
+            Backing::Page(settings_view::PageKind::Pulls) => {
+                return self.strings().pulls_title_page.to_owned();
             }
             Backing::Page(settings_view::PageKind::Keybindings) => {
                 return self.strings().keybindings_tab_title.to_owned();

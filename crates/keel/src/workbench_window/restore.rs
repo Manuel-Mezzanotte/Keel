@@ -109,6 +109,7 @@ impl Workbench {
                 .map(|watch| watch.expression.clone())
                 .collect(),
             debug_configuration: self.debug.chosen.clone(),
+            pulls: self.pulls.watched,
         }
     }
 
@@ -356,6 +357,8 @@ impl Workbench {
             })
             .collect();
         self.debug.chosen = state.debug_configuration.clone();
+        self.pulls.watched = state.pulls;
+        self.load_branch_pull(cx);
         self.graph_collapsed = state.collapsed.iter().any(|section| section == "git-graph");
         self.outline.collapsed = state.collapsed.iter().any(|section| section == "outline");
         if let Some(tree) = &mut self.tree {

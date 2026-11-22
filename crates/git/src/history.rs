@@ -295,6 +295,26 @@ impl Repo {
         Ok(parse_name_status(&output))
     }
 
+    /// What changed from a revision to another.
+    pub fn files_between(&self, from: &str, to: &str) -> Result<Vec<ChangedFile>> {
+        let output = self.run(&["diff", "--name-status", "-z", "-M", from, to])?;
+        Ok(parse_name_status(&output))
+    }
+
+    /// Where two revisions parted.
+    pub fn merge_base(&self, one: &str, other: &str) -> Result<String> {
+        Ok(self.run(&["merge-base", one, other])?.trim().to_owned())
+    }
+
+    /// Gets a pull request's commits from GitHub, and its base's, without
+    /// touching any branch.
+    pub fn fetch_pull(&self, remote: &str, number: u64, base: &str) -> Result<()> {
+        let head = format!("refs/pull/{number}/head");
+        let base = format!("refs/heads/{base}");
+        self.run(&["fetch", "--quiet", "--no-tags", remote, &head, &base])?;
+        Ok(())
+    }
+
     /// The patch of one file in a commit.
     pub fn commit_file_diff(
         &self,

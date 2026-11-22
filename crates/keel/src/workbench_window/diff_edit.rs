@@ -55,6 +55,14 @@ impl Workbench {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
+        // In a pull request's changes, the line's comments.
+        if let Some(Backing::Diff(tab)) = self.documents.get(uri).map(|document| &document.backing)
+            && let super::diff_view::DiffSource::Pull { number, .. } = &tab.source
+            && let Some((path, ..)) = tab.doc.as_ref().and_then(|doc| doc.file_lines(file))
+        {
+            let number = *number;
+            return self.open_line_comments(number, path, line as u32 + 1, window, cx);
+        }
         if self.diff_editable(uri) {
             self.edit_diff_lines(uri, file, Some(line), None, window, cx);
         } else {

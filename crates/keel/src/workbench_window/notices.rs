@@ -138,7 +138,7 @@ pub(super) struct Notices {
     pub(super) open: bool,
 }
 
-fn now() -> i64 {
+pub(super) fn now() -> i64 {
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .map(|time| time.as_secs() as i64)

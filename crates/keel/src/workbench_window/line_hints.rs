@@ -35,6 +35,14 @@ pub(super) struct Lens {
     pub(super) places: Vec<Place>,
 }
 
+/// What a click at the end of a line opens.
+#[derive(Clone, Debug)]
+enum Click {
+    Lens(Lens),
+    /// The comments of a pull request on the line.
+    Comments(usize),
+}
+
 /// What a line shows at its end: types, then the lenses.
 #[derive(Clone, Debug, Default)]
 pub(super) struct LineEnd {
@@ -389,8 +397,11 @@ impl Workbench {
             .filter(|(uri, _)| *uri == pane.uri)
             .map(|(_, values)| values.clone())
             .unwrap_or_default();
+        // What is said of the lines in the branch's pull request.
+        let comments = self.pull_comments_of(&pane.uri);
         let (hints, lenses) = (self.hints_shown(), self.lenses_shown());
-        if values.is_empty() && (lines.is_empty() || (!hints && !lenses)) {
+        let nothing_known = lines.is_empty() || (!hints && !lenses);
+        if values.is_empty() && comments.is_empty() && nothing_known {
             return None;
         }
         let editor = pane.editor.clone();
@@ -404,7 +415,7 @@ impl Workbench {
         let font_size = px(self.font_size * 0.85);
         let workbench = cx.entity().downgrade();
         // What each line shows: its pieces, a lens with its places.
-        type Piece = (String, Option<Lens>);
+        type Piece = (String, Option<Click>);
         let nothing = LineEnd::default();
         let pieces_of = move |row: usize| -> Vec<Piece> {
             let mut pieces: Vec<Piece> = Vec::new();
@@ -429,8 +440,11 @@ impl Workbench {
                         (LensKind::Implementations, 1) => strings.lens_implementation,
                         (LensKind::Implementations, _) => strings.lens_implementations,
                     };
-                    pieces.push((format!("{count} {word}"), Some(lens.clone())));
+                    pieces.push((format!("{count} {word}"), Some(Click::Lens(lens.clone()))));
                 }
+            }
+            if let Some(said) = comments.get(&row) {
+                pieces.push((said.clone(), Some(Click::Comments(row))));
             }
             pieces
         };
@@ -438,7 +452,7 @@ impl Workbench {
             Bounds<Pixels>,
             gpui::ShapedLine,
             bool,
-            Option<(Hitbox, Lens)>,
+            Option<(Hitbox, Click)>,
         )>;
         Some(
             canvas(
@@ -532,7 +546,7 @@ impl Workbench {
                             }
                         }
                     });
-                    let lenses: Vec<(Hitbox, Lens)> = placed
+                    let lenses: Vec<(Hitbox, Click)> = placed
                         .into_iter()
                         .filter_map(|(_, _, _, hitbox)| hitbox)
                         .collect();
@@ -549,7 +563,15 @@ impl Workbench {
                         let lens = lens.clone();
                         cx.stop_propagation();
                         workbench
-                            .update(cx, |this, cx| this.open_lens(index, lens, window, cx))
+                            .update(cx, |this, cx| match lens {
+                                Click::Lens(lens) => this.open_lens(index, lens, window, cx),
+                                Click::Comments(line) => {
+                                    let uri = this.panes.get(index).map(|pane| pane.uri.clone());
+                                    if let Some(uri) = uri {
+                                        this.open_branch_comments(&uri, line, window, cx);
+                                    }
+                                }
+                            })
                             .ok();
                     });
                 },

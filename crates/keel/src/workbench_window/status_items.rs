@@ -20,6 +20,7 @@ pub(super) enum StatusClick {
     Encoding,
     LineEnding,
     Language,
+    PullRequest,
 }
 
 impl StatusClick {
@@ -30,6 +31,7 @@ impl StatusClick {
             StatusClick::Encoding => strings.status_pick_encoding,
             StatusClick::LineEnding => strings.status_pick_line_ending,
             StatusClick::Language => strings.status_pick_language,
+            StatusClick::PullRequest => strings.pulls_title_page,
         }
     }
 }
@@ -200,6 +202,7 @@ impl Workbench {
             StatusClick::Encoding => self.pick_encoding(window, cx),
             StatusClick::LineEnding => self.pick_line_ending(window, cx),
             StatusClick::Language => self.pick_language(window, cx),
+            StatusClick::PullRequest => self.open_branch_pull(window, cx),
         }
     }
 
