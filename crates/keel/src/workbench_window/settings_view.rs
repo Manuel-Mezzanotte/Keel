@@ -313,6 +313,31 @@ pub(super) const CATALOG: &[Entry] = &[
         ),
     },
     Entry {
+        key: "editor.glyphMargin",
+        page: Page::Editor,
+        kind: Kind::Switch,
+        default: "true",
+        title: ("Margine dei punti di interruzione", "Breakpoint Margin"),
+        description: (
+            "Accanto ai numeri di riga, nei file che si possono eseguire con il debug. Senza, i punti si mettono con F9.",
+            "Beside the line numbers, in files that can be debugged. Without it, F9 sets breakpoints.",
+        ),
+    },
+    Entry {
+        key: "debug.inlineValues",
+        page: Page::Editor,
+        kind: Kind::Choice(&[
+            ("auto", "Accanto alle righe", "Beside the Lines"),
+            ("off", "Mai", "Never"),
+        ]),
+        default: "\"auto\"",
+        title: ("Valori durante il debug", "Values While Debugging"),
+        description: (
+            "Quando il programma è fermo, il valore delle variabili in fondo alle righe che le nominano.",
+            "When the program is stopped, the values of the variables at the end of the lines that name them.",
+        ),
+    },
+    Entry {
         key: "editor.rulers",
         page: Page::Editor,
         kind: Kind::Json,

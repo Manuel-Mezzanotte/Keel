@@ -329,6 +329,7 @@ fn side_view_icon(view: SideView) -> IconName {
         SideView::Explorer => IconName::Files,
         SideView::Search => IconName::Search,
         SideView::SourceControl => IconName::GitBranch,
+        SideView::Debug => IconName::Bug,
         SideView::Extensions => IconName::Blocks,
     }
 }
@@ -338,6 +339,7 @@ fn side_view_title(view: SideView, strings: &Strings) -> &'static str {
         SideView::Explorer => strings.view_explorer,
         SideView::Search => strings.view_search,
         SideView::SourceControl => strings.view_source_control,
+        SideView::Debug => strings.view_debug,
         SideView::Extensions => strings.view_extensions,
     }
 }
@@ -349,6 +351,7 @@ fn panel_view_title(view: PanelView, strings: &Strings) -> &'static str {
         PanelView::Terminal => strings.panel_terminal,
         PanelView::Ports => strings.panel_ports,
         PanelView::Tests => strings.panel_tests,
+        PanelView::DebugConsole => strings.panel_debug_console,
     }
 }
 
@@ -794,6 +797,7 @@ impl Workbench {
             SideView::Explorer => self.render_open_editors(colors, cx).into_any_element(),
             SideView::Search => self.render_search(colors, window, cx),
             SideView::SourceControl => self.render_source_control(colors, window, cx),
+            SideView::Debug => self.render_debug(colors, cx),
             SideView::Extensions => self.render_extensions(colors, window, cx),
         };
         let view_index = SideView::ALL
@@ -1744,6 +1748,7 @@ impl Workbench {
                                     }
                                 },
                             ))
+                            .children(self.render_breakpoint_margin(index, cx))
                             .children(self.render_test_margin(index, cx))
                             .children(self.render_blame_column(index, cx))
                             .child(
@@ -1816,7 +1821,11 @@ impl Workbench {
         panel(look, colors.editor, colors, colors.dark)
             .flex_1()
             .min_w_0()
-            .when(!panel_takes_all, |main| main.child(content))
+            .when(!panel_takes_all, |main| {
+                main.relative()
+                    .child(content)
+                    .children(self.render_debug_bar(colors, cx))
+            })
             .when(panel_open > 0., |main| {
                 main.child(self.render_bottom_panel(colors, panel_open, cx))
             })
@@ -1973,6 +1982,7 @@ impl Workbench {
             },
             PanelView::Ports => self.render_ports(colors, cx),
             PanelView::Tests => self.render_tests(colors, cx),
+            PanelView::DebugConsole => self.render_debug_console(colors, cx),
         };
         let fills = self.layout.panel_view == PanelView::Terminal;
         let maximized = self.panel_maximized;
@@ -2298,6 +2308,10 @@ impl Workbench {
         if let Some(blame) = self.current_line_blame(cx) {
             left.push(blame);
         }
+        // What is debugged.
+        if let Some(debug) = self.debug_status() {
+            left.push(debug);
+        }
         // The tasks at work.
         if let Some(tasks) = self.tasks_status() {
             left.push(tasks);
@@ -2483,6 +2497,9 @@ impl Workbench {
 
 impl Render for Workbench {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        if self.layout.panel && self.layout.panel_view == PanelView::DebugConsole {
+            self.console_input(window, cx);
+        }
         if !self.first_frame_drawn {
             self.first_frame_drawn = true;
             // Only the first window counts: later ones open long after start.
@@ -2546,6 +2563,8 @@ impl Render for Workbench {
         let root = self.testing_actions(root, cx);
         let root = self.search_results_actions(root, cx);
         let root = self.task_actions(root, cx);
+        let root = self.debug_actions(root, cx);
+        let root = self.breakpoint_actions(root, cx);
         let root = self.npm_actions(root, cx);
         let root = self.source_control_actions(root, cx);
         let root = self.git_gutter_actions(root, cx);

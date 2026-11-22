@@ -294,6 +294,126 @@ pub const COMMANDS: &[KeelCommand] = &[
         context: None,
     },
     KeelCommand {
+        id: "workbench.action.debug.start",
+        action: || Box::new(crate::workbench_window::DebugStart),
+        default_key: Some("f5"),
+        context: None,
+    },
+    KeelCommand {
+        id: "workbench.action.debug.run",
+        action: || Box::new(crate::workbench_window::DebugRun),
+        default_key: Some("ctrl+f5"),
+        context: None,
+    },
+    KeelCommand {
+        id: "workbench.action.debug.selectandstart",
+        action: || Box::new(crate::workbench_window::DebugSelectAndStart),
+        default_key: None,
+        context: None,
+    },
+    KeelCommand {
+        id: "workbench.action.debug.stop",
+        action: || Box::new(crate::workbench_window::DebugStop),
+        default_key: Some("shift+f5"),
+        context: None,
+    },
+    KeelCommand {
+        id: "workbench.action.debug.restart",
+        action: || Box::new(crate::workbench_window::DebugRestart),
+        default_key: Some("cmd+shift+f5"),
+        context: None,
+    },
+    KeelCommand {
+        id: "workbench.action.debug.pause",
+        action: || Box::new(crate::workbench_window::DebugPause),
+        default_key: Some("f6"),
+        context: None,
+    },
+    KeelCommand {
+        id: "workbench.action.debug.stepOver",
+        action: || Box::new(crate::workbench_window::DebugStepOver),
+        default_key: Some("f10"),
+        context: None,
+    },
+    KeelCommand {
+        id: "workbench.action.debug.stepInto",
+        action: || Box::new(crate::workbench_window::DebugStepInto),
+        default_key: Some("f11"),
+        context: None,
+    },
+    KeelCommand {
+        id: "workbench.action.debug.stepOut",
+        action: || Box::new(crate::workbench_window::DebugStepOut),
+        default_key: Some("shift+f11"),
+        context: None,
+    },
+    KeelCommand {
+        id: "editor.debug.action.runToCursor",
+        action: || Box::new(crate::workbench_window::DebugRunToCursor),
+        default_key: None,
+        context: None,
+    },
+    KeelCommand {
+        id: "workbench.action.debug.configure",
+        action: || Box::new(crate::workbench_window::DebugConfigure),
+        default_key: None,
+        context: None,
+    },
+    KeelCommand {
+        id: "editor.debug.action.toggleBreakpoint",
+        action: || Box::new(crate::workbench_window::ToggleBreakpoint),
+        default_key: Some("f9"),
+        context: None,
+    },
+    KeelCommand {
+        id: "editor.debug.action.conditionalBreakpoint",
+        action: || Box::new(crate::workbench_window::EditBreakpointCondition),
+        default_key: None,
+        context: None,
+    },
+    KeelCommand {
+        id: "editor.debug.action.addLogPoint",
+        action: || Box::new(crate::workbench_window::EditLogpoint),
+        default_key: None,
+        context: None,
+    },
+    KeelCommand {
+        id: "workbench.debug.viewlet.action.removeAllBreakpoints",
+        action: || Box::new(crate::workbench_window::RemoveAllBreakpoints),
+        default_key: None,
+        context: None,
+    },
+    KeelCommand {
+        id: "workbench.view.debug",
+        action: || Box::new(crate::workbench_window::ShowDebug),
+        default_key: Some("cmd+shift+d"),
+        context: None,
+    },
+    KeelCommand {
+        id: "workbench.debug.action.toggleRepl",
+        action: || Box::new(crate::workbench_window::ToggleDebugConsole),
+        default_key: Some("cmd+shift+y"),
+        context: None,
+    },
+    KeelCommand {
+        id: "editor.debug.action.selectionToRepl",
+        action: || Box::new(crate::workbench_window::DebugEvaluateSelection),
+        default_key: None,
+        context: None,
+    },
+    KeelCommand {
+        id: "editor.debug.action.selectionToWatch",
+        action: || Box::new(crate::workbench_window::DebugWatchSelection),
+        default_key: None,
+        context: None,
+    },
+    KeelCommand {
+        id: "testing.debugAtCursor",
+        action: || Box::new(crate::workbench_window::DebugTestAtCursor),
+        default_key: Some("cmd+; cmd+c"),
+        context: None,
+    },
+    KeelCommand {
         id: "testing.runAtCursor",
         action: || Box::new(RunTestAtCursor),
         default_key: Some("cmd+; c"),
@@ -1569,7 +1689,7 @@ mod tests {
         let (bindings, warnings) =
             read_user_bindings(Path::new("/nonexistent/keel/keybindings.json"));
         assert!(bindings.is_empty() && warnings.is_empty());
-        assert_eq!(keel_bindings(&[]).len(), 121);
+        assert_eq!(keel_bindings(&[]).len(), 133);
     }
 
     #[test]

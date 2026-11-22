@@ -375,12 +375,22 @@ impl Workbench {
         cx: &mut Context<Self>,
     ) -> Option<AnyElement> {
         let pane = self.panes.get(index)?;
-        let lines = self.line_hints.documents.get(&pane.uri)?.lines.clone();
-        if lines.is_empty() {
-            return None;
-        }
+        let lines = self
+            .line_hints
+            .documents
+            .get(&pane.uri)
+            .map(|document| document.lines.clone())
+            .unwrap_or_default();
+        // The values of the program stopped in this file.
+        let values: HashMap<usize, Vec<String>> = self
+            .debug
+            .inline
+            .as_ref()
+            .filter(|(uri, _)| *uri == pane.uri)
+            .map(|(_, values)| values.clone())
+            .unwrap_or_default();
         let (hints, lenses) = (self.hints_shown(), self.lenses_shown());
-        if !hints && !lenses {
+        if values.is_empty() && (lines.is_empty() || (!hints && !lenses)) {
             return None;
         }
         let editor = pane.editor.clone();
@@ -395,9 +405,18 @@ impl Workbench {
         let workbench = cx.entity().downgrade();
         // What each line shows: its pieces, a lens with its places.
         type Piece = (String, Option<Lens>);
-        let pieces_of = move |end: &LineEnd| -> Vec<Piece> {
+        let nothing = LineEnd::default();
+        let pieces_of = move |row: usize| -> Vec<Piece> {
             let mut pieces: Vec<Piece> = Vec::new();
-            if hints {
+            // While it is stopped, the values take the types' place.
+            let here = values.get(&row);
+            pieces.extend(
+                here.into_iter()
+                    .flatten()
+                    .map(|value| (value.clone(), None)),
+            );
+            let end = lines.get(&row).unwrap_or(&nothing);
+            if hints && here.is_none() {
                 pieces.extend(end.hints.iter().map(|hint| (hint.clone(), None)));
             }
             if lenses {
@@ -434,15 +453,16 @@ impl Workbench {
                         let font = window.text_style().font();
                         let mut placed = Vec::new();
                         for row in rows {
-                            let Some(end) = lines.get(&row) else {
+                            let pieces = pieces_of(row);
+                            if pieces.is_empty() {
                                 continue;
-                            };
+                            }
                             let offset = text.line_end_offset(row);
                             let Some(at) = state.range_to_bounds(&(offset..offset)) else {
                                 continue;
                             };
                             let mut x = at.origin.x + font_size * 1.6;
-                            for (label, lens) in pieces_of(end) {
+                            for (label, lens) in pieces {
                                 let run = TextRun {
                                     len: label.len(),
                                     font: font.clone(),

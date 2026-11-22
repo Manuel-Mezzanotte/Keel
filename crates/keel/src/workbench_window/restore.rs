@@ -101,6 +101,14 @@ impl Workbench {
                 .collect(),
             active_terminal: self.active_terminal,
             bookmarks: self.bookmarks.clone(),
+            breakpoints: self.debug.breakpoints.all.clone(),
+            watches: self
+                .debug
+                .watches
+                .iter()
+                .map(|watch| watch.expression.clone())
+                .collect(),
+            debug_configuration: self.debug.chosen.clone(),
         }
     }
 
@@ -338,6 +346,16 @@ impl Workbench {
             .any(|section| section == "npm-scripts");
         self.search.recent = state.recent_searches.clone();
         self.bookmarks = state.bookmarks.clone();
+        self.debug.breakpoints.all = state.breakpoints.clone();
+        self.debug.watches = state
+            .watches
+            .iter()
+            .map(|expression| debug::Watch {
+                expression: expression.clone(),
+                value: None,
+            })
+            .collect();
+        self.debug.chosen = state.debug_configuration.clone();
         self.graph_collapsed = state.collapsed.iter().any(|section| section == "git-graph");
         self.outline.collapsed = state.collapsed.iter().any(|section| section == "outline");
         if let Some(tree) = &mut self.tree {

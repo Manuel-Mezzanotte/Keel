@@ -22,6 +22,11 @@ use crate::workbench_window::{
     ToggleWordWrap, ZoomIn, ZoomOut, ZoomReset,
 };
 use crate::workbench_window::{
+    DebugConfigure, DebugPause, DebugRestart, DebugRun, DebugSelectAndStart, DebugStart,
+    DebugStepInto, DebugStepOut, DebugStepOver, DebugStop, EditBreakpointCondition, EditLogpoint,
+    RemoveAllBreakpoints, ToggleBreakpoint,
+};
+use crate::workbench_window::{
     GoBack, GoForward, GoToImplementation, GoToLastEdit, GoToReferences, GoToSymbolInFile,
     GoToSymbolInWorkspace, GoToTypeDefinition, NextChange, NextProblem, PreviousChange,
     PreviousProblem, RevealDefinition,
@@ -249,6 +254,31 @@ pub fn set(language: UiLanguage, cx: &mut App) {
             ],
         ),
         menu(
+            strings.menu_run,
+            vec![
+                MenuItem::action(strings.command_debug_start, DebugStart),
+                MenuItem::action(strings.command_debug_run, DebugRun),
+                MenuItem::action(strings.command_debug_stop, DebugStop),
+                MenuItem::action(strings.command_debug_restart, DebugRestart),
+                MenuItem::separator(),
+                MenuItem::action(strings.command_debug_select, DebugSelectAndStart),
+                MenuItem::action(strings.command_debug_configure, DebugConfigure),
+                MenuItem::separator(),
+                MenuItem::action(strings.command_debug_step_over, DebugStepOver),
+                MenuItem::action(strings.command_debug_step_into, DebugStepInto),
+                MenuItem::action(strings.command_debug_step_out, DebugStepOut),
+                MenuItem::action(strings.command_debug_pause, DebugPause),
+                MenuItem::separator(),
+                MenuItem::action(strings.command_toggle_breakpoint, ToggleBreakpoint),
+                MenuItem::action(
+                    strings.command_conditional_breakpoint,
+                    EditBreakpointCondition,
+                ),
+                MenuItem::action(strings.command_logpoint, EditLogpoint),
+                MenuItem::action(strings.command_remove_breakpoints, RemoveAllBreakpoints),
+            ],
+        ),
+        menu(
             strings.panel_terminal,
             vec![
                 MenuItem::action(strings.terminal_new, NewTerminal),
@@ -395,6 +425,7 @@ mod tests {
                 "Selezione",
                 "Vista",
                 "Vai",
+                "Esegui",
                 "Terminale",
                 "Finestra",
                 "Aiuto"
@@ -411,6 +442,7 @@ mod tests {
                 "Selection",
                 "View",
                 "Go",
+                "Run",
                 "Terminal",
                 "Window",
                 "Help"

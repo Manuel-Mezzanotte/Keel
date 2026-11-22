@@ -6,6 +6,7 @@ mod agent_review;
 mod blame;
 mod blame_card;
 mod bookmarks;
+mod breakpoints;
 mod claude_code;
 mod claude_diff;
 mod claude_ide;
@@ -17,6 +18,9 @@ mod commit_view;
 mod contributions;
 mod cursor_import;
 mod cursor_settings;
+mod debug;
+mod debug_config;
+mod debug_view;
 mod diff_edit;
 mod diff_model;
 mod diff_pane;
@@ -101,6 +105,10 @@ pub(crate) use blame::{ShowFileHistory, ToggleBlame};
 pub(crate) use bookmarks::{
     ClearBookmarks, ListBookmarks, NextBookmark, PreviousBookmark, ToggleBookmark,
 };
+pub use breakpoints::Breakpoint;
+pub(crate) use breakpoints::{
+    EditBreakpointCondition, EditLogpoint, RemoveAllBreakpoints, ToggleBreakpoint,
+};
 pub(crate) use claude_code::{OpenClaudeCode, OpenClaudeCodeInPanel};
 pub(crate) use claude_diff::{AcceptProposedDiff, RejectProposedDiff};
 pub(crate) use claude_ide::InsertAtMention;
@@ -114,6 +122,11 @@ pub(crate) use code_navigation::{
 };
 pub(crate) use contributions::SelectIconTheme;
 pub(crate) use cursor_import::ImportFromCursor;
+pub(crate) use debug::{
+    DebugConfigure, DebugEvaluateSelection, DebugPause, DebugRestart, DebugRun, DebugRunToCursor,
+    DebugSelectAndStart, DebugStart, DebugStepInto, DebugStepOut, DebugStepOver, DebugStop,
+    DebugWatchSelection, ShowDebug, ToggleDebugConsole,
+};
 pub(crate) use diff_edit::bindings as diff_edit_bindings;
 pub(crate) use diff_view::{NextDiffChange, OpenAllChanges, PreviousDiffChange};
 pub(crate) use extensions_view::{
@@ -158,6 +171,7 @@ pub(crate) use terminals::{
     FocusNextTerminal, FocusPreviousTerminal, KillTerminal, NewTerminal, RenameTerminal,
     SplitTerminal, ToggleMaximizedPanel,
 };
+pub(crate) use testing::DebugTestAtCursor;
 pub(crate) use testing::{RerunLastTests, RunAllTests, RunTestAtCursor, RunTestsInFile};
 pub(crate) use writing::{
     DeleteDuplicateLines, ExpandSelection, JoinLines, JumpToBracket, ShrinkSelection,
@@ -537,6 +551,8 @@ pub struct Workbench {
     testing: testing::Testing,
     /// The tasks run, and their terminals.
     tasks: tasks::Tasks,
+    /// The debugger: its sessions, breakpoints and console.
+    debug: debug::Debugging,
     discard_changes: bool,
     gutter_refresh: Task<()>,
     /// Whether the first frame was already drawn, for `KEEL_STARTUP_TIMING`.
@@ -804,6 +820,7 @@ impl Workbench {
             inline_edit: None,
             testing: testing::Testing::default(),
             tasks: tasks::Tasks::default(),
+            debug: debug::Debugging::default(),
             discard_changes: false,
             gutter_refresh: Task::ready(()),
             known_selections: HashMap::new(),
@@ -1210,6 +1227,7 @@ impl Workbench {
         });
         let old = std::mem::replace(&mut document.synced_text, text.clone());
         let modified = document.modified;
+        self.shift_breakpoints(uri, &old, &text);
         self.notify_host("documents/changed", params);
         self.update_previews(uri, &text, cx);
         self.refresh_blame(uri, true, cx);

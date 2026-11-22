@@ -102,6 +102,7 @@ language = { path = "crates/language" }
 terminal = { path = "crates/terminal" }
 git = { path = "crates/git" }
 lsp = { path = "crates/lsp" }
+dap = { path = "crates/dap" }
 pdf = { path = "crates/pdf" }
 
 # Grammars gpui-component does not ship.

@@ -261,6 +261,33 @@ fn shots() -> Vec<Shot> {
                 })
                 .detach();
             }));
+            // The file given stopped at a line, for real: KEEL_DEBUG_LINE
+            // (from 1) and KEEL_DEBUG_NAME, the configuration.
+            shots.push(shot(name("debug-live"), |workbench, window, cx| {
+                workbench.close_blame_card(cx);
+                let Some(path) = workbench
+                    .groups
+                    .first()
+                    .and_then(|group| group.tabs.first())
+                    .and_then(|tab| workbench.documents.get(&tab.uri))
+                    .and_then(|document| document.disk_path().map(Path::to_path_buf))
+                else {
+                    return;
+                };
+                let Some(line) = std::env::var("KEEL_DEBUG_LINE")
+                    .ok()
+                    .and_then(|line| line.parse::<u32>().ok())
+                else {
+                    return;
+                };
+                workbench.activate_tab(0, 0, true, window, cx);
+                workbench.toggle_breakpoint(&path, line - 1, cx);
+                workbench.add_watch("valori.len()".to_owned(), cx);
+                workbench.layout.show_side_view(SideView::Debug);
+                workbench.layout.show_panel_view(PanelView::DebugConsole);
+                let name = std::env::var("KEEL_DEBUG_NAME").unwrap_or_default();
+                workbench.start_named(&name, false, window, cx);
+            }));
             // The project's build, for real, with its problems: needs
             // KEEL_SNAPSHOTS_WAIT.
             shots.push(shot(name("build-live"), |workbench, window, cx| {

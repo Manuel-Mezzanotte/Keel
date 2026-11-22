@@ -114,7 +114,7 @@ fn cleaned(path: &Path) -> PathBuf {
 
 /// A command as one line to type: with a line break or another control
 /// character in it, the shell would take it as several commands.
-fn one_line(command: &str) -> String {
+pub(super) fn one_line(command: &str) -> String {
     let command = command.trim();
     if !command.chars().any(char::is_control) {
         return command.to_owned();
@@ -381,13 +381,34 @@ impl Workbench {
 
     /// Runs a task and those it depends on, after asking what they ask.
     pub(super) fn run_task(&mut self, label: &str, window: &mut Window, cx: &mut Context<Self>) {
+        self.task_outcome(label, window, cx).detach();
+    }
+
+    /// Runs a task; `true` when it and those it depends on went well.
+    pub(super) fn task_outcome(
+        &mut self,
+        label: &str,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> Task<bool> {
         let file = self.project_tasks(cx);
+        // The group's default, by its variable.
+        let default = file
+            .tasks
+            .iter()
+            .find(|task| task.group == Group::Build && task.default)
+            .map(|task| task.label.clone());
+        let label = match (label, &default) {
+            ("${defaultBuildTask}", Some(default)) => default.as_str(),
+            (label, _) => label,
+        };
         let strings = self.strings();
         let plan = match with_dependencies(label, &file.tasks) {
             Ok(plan) => plan,
             Err(PlanError::Cycle(label)) => {
                 let text = notices::fill(strings.tasks_cycle, &[("task", &label)]);
-                return self.task_problem(text, cx);
+                self.task_problem(text, cx);
+                return Task::ready(false);
             }
             Err(PlanError::Missing { wanted, by }) => {
                 let text = if by.is_empty() {
@@ -398,7 +419,8 @@ impl Workbench {
                         &[("task", &by), ("wanted", &wanted)],
                     )
                 };
-                return self.task_problem(text, cx);
+                self.task_problem(text, cx);
+                return Task::ready(false);
             }
         };
         self.tasks.last = Some(label.to_owned());
@@ -426,27 +448,26 @@ impl Workbench {
                 let Ok(answer) = this.update_in(cx, |this, window, cx| {
                     this.ask_task_input(&input, window, cx)
                 }) else {
-                    return;
+                    return false;
                 };
                 // Esc: nothing runs.
                 let Some(answer) = answer.await.ok().flatten() else {
-                    return;
+                    return false;
                 };
                 inputs.insert(id, answer);
             }
             let Ok(Some(prepared)) = this.update_in(cx, |this, window, cx| {
                 this.prepare_tasks(plan, &file, inputs, window, cx)
             }) else {
-                return;
+                return false;
             };
             let runs = Rc::default();
-            execute(label, Rc::new(prepared), runs, this.clone(), cx.clone()).await;
+            execute(label, Rc::new(prepared), runs, this.clone(), cx.clone()).await
         })
-        .detach();
     }
 
     /// Asks what an input wants: one of its values, or a text.
-    fn ask_task_input(
+    pub(super) fn ask_task_input(
         &mut self,
         input: &TaskInput,
         window: &mut Window,
@@ -506,7 +527,7 @@ impl Workbench {
     }
 
     /// What a task's variables stand for now.
-    fn task_variables(
+    pub(super) fn task_variables(
         &self,
         file: &TaskFile,
         inputs: HashMap<String, String>,
@@ -892,6 +913,22 @@ impl Workbench {
         let count = problems.len();
         self.set_task_problems(&label, problems, cx);
         count
+    }
+
+    /// The errors of a build Keel made itself, for the debugger.
+    pub(super) fn build_problems(&mut self, output: &str, cx: &mut Context<Self>) {
+        const BUILD: &str = "cargo (debug)";
+        let (matchers, _) = super::problem_matchers::matchers(Some(&json!("$rustc")));
+        let bases = vec![self.terminal_folder()];
+        let mut problems = Vec::new();
+        for matcher in &matchers {
+            for found in matcher.find(output) {
+                if let Some(uri) = self.problem_uri(&found, &bases) {
+                    problems.push((uri, diagnostic(&found, matcher, BUILD)));
+                }
+            }
+        }
+        self.set_task_problems(BUILD, problems, cx);
     }
 
     /// The file a problem names, from the folders it may start from.

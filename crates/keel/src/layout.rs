@@ -7,6 +7,7 @@ pub enum SideView {
     Explorer,
     Search,
     SourceControl,
+    Debug,
     Extensions,
 }
 
@@ -17,6 +18,7 @@ impl SideView {
             SideView::Explorer => "explorer",
             SideView::Search => "search",
             SideView::SourceControl => "scm",
+            SideView::Debug => "debug",
             SideView::Extensions => "extensions",
         }
     }
@@ -25,10 +27,11 @@ impl SideView {
         Self::ALL.into_iter().find(|view| view.id() == id)
     }
 
-    pub const ALL: [SideView; 4] = [
+    pub const ALL: [SideView; 5] = [
         SideView::Explorer,
         SideView::Search,
         SideView::SourceControl,
+        SideView::Debug,
         SideView::Extensions,
     ];
 }
@@ -41,6 +44,7 @@ pub enum PanelView {
     Terminal,
     Ports,
     Tests,
+    DebugConsole,
 }
 
 impl PanelView {
@@ -52,6 +56,7 @@ impl PanelView {
             PanelView::Terminal => "terminal",
             PanelView::Ports => "ports",
             PanelView::Tests => "tests",
+            PanelView::DebugConsole => "debug-console",
         }
     }
 
@@ -59,12 +64,13 @@ impl PanelView {
         Self::ALL.into_iter().find(|view| view.id() == id)
     }
 
-    pub const ALL: [PanelView; 5] = [
+    pub const ALL: [PanelView; 6] = [
         PanelView::Problems,
         PanelView::Output,
         PanelView::Terminal,
         PanelView::Ports,
         PanelView::Tests,
+        PanelView::DebugConsole,
     ];
 }
 

@@ -70,6 +70,14 @@ pub struct WindowState {
     /// The bookmarks of the project's files.
     #[serde(default)]
     pub bookmarks: Vec<BookmarkState>,
+    /// The breakpoints, the watched expressions and the configuration F5
+    /// starts.
+    #[serde(default)]
+    pub breakpoints: Vec<crate::workbench_window::Breakpoint>,
+    #[serde(default)]
+    pub watches: Vec<String>,
+    #[serde(default)]
+    pub debug_configuration: Option<String>,
 }
 
 /// A bookmark on a line, with the line's text to find it again after edits.

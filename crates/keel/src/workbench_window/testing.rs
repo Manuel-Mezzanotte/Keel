@@ -19,11 +19,13 @@ use gpui::{
 };
 use gpui_component::RopeExt as _;
 use gpui_component::button::{Button, ButtonVariants as _};
+use gpui_component::menu::ContextMenuExt as _;
 use gpui_component::{Icon, Sizable as _};
 use gpui_kit_assets::IconName;
 use regex::Regex;
 use terminal::ShellCommand;
 
+use super::debug_config::{self, DebugConfig};
 use super::notices::fill;
 use super::shell::Colors;
 use super::terminal_view::{TerminalView, shell_quote};
@@ -31,7 +33,15 @@ use super::*;
 
 actions!(
     keel,
-    [RunTestAtCursor, RunAllTests, RerunLastTests, RunTestsInFile]
+    [
+        RunTestAtCursor,
+        DebugTestAtCursor,
+        RunTestHere,
+        DebugTestHere,
+        RunAllTests,
+        RerunLastTests,
+        RunTestsInFile
+    ]
 );
 
 /// How many runs the Tests view keeps.
@@ -97,6 +107,8 @@ pub(super) struct Testing {
     pub(super) runs: Vec<TestRun>,
     next_id: u64,
     last: Option<RunPlan>,
+    /// The test the margin's menu was opened on.
+    menu: Option<(PathBuf, FoundTest)>,
 }
 
 static RUST_TEST: LazyLock<Regex> = LazyLock::new(|| {
@@ -409,6 +421,73 @@ pub(super) fn test_command(root: &Path, path: &Path, test: Option<&FoundTest>) -
     }
 }
 
+/// The debugging of a test, of a group or of a file's: what its command
+/// runs, with a debugger.
+fn test_debug_config(root: &Path, path: &Path, test: Option<&FoundTest>) -> Option<DebugConfig> {
+    let name = test.map_or_else(
+        || {
+            path.file_name()
+                .map(|name| name.to_string_lossy().into_owned())
+        },
+        |test| Some(test.name.clone()),
+    )?;
+    let command = test_command(root, path, test)?;
+    match path.extension()?.to_str()? {
+        "rs" => {
+            let words = debug_config::words(&json!(command));
+            let split = words
+                .iter()
+                .position(|word| word == "--")
+                .unwrap_or(words.len());
+            // `cargo test --no-run …` makes the program; its own arguments
+            // go to it.
+            let mut build = vec!["test".to_owned(), "--no-run".to_owned()];
+            build.extend(words[2..split].iter().cloned());
+            let mut program: Vec<String> = words.iter().skip(split + 1).cloned().collect();
+            program.push("--nocapture".to_owned());
+            program.push("--test-threads=1".to_owned());
+            Some(debug_config::rust_test(&name, build, program, path))
+        }
+        "py" => {
+            let relative = path.strip_prefix(root).unwrap_or(path).to_string_lossy();
+            let node = match test {
+                Some(test) => format!("{relative}::{}", test.filter),
+                None => relative.into_owned(),
+            };
+            Some(debug_config::test_of(
+                &name,
+                "debugpy",
+                json!({ "module": "pytest", "args": [node, "-s"], "console": "internalConsole", "justMyCode": true }),
+            ))
+        }
+        _ => {
+            let folder = nearest(path, "package.json")?;
+            let file = path.strip_prefix(&folder).unwrap_or(path);
+            let mut args = vec![json!(file)];
+            if let Some(test) = test {
+                args.extend([json!("-t"), json!(test.filter)]);
+            }
+            let vitest = command.contains(" vitest ");
+            let program = folder.join(if vitest {
+                "node_modules/vitest/vitest.mjs"
+            } else {
+                "node_modules/jest/bin/jest.js"
+            });
+            if vitest {
+                args.insert(0, json!("run"));
+                args.push(json!("--no-file-parallelism"));
+            } else {
+                args.push(json!("--runInBand"));
+            }
+            Some(debug_config::test_of(
+                &name,
+                "pwa-node",
+                json!({ "program": program, "args": args, "cwd": folder, "skipFiles": ["<node_internals>/**"] }),
+            ))
+        }
+    }
+}
+
 /// Every test of the project: `cargo test`, the package's test script, or
 /// pytest.
 fn all_tests_command(root: &Path) -> Option<String> {
@@ -466,6 +545,22 @@ impl Workbench {
         .on_action(
             cx.listener(|this, _: &RunTestsInFile, window, cx| this.run_file_tests(window, cx)),
         )
+        .on_action(cx.listener(|this, _: &DebugTestAtCursor, window, cx| {
+            if let Some((path, test)) = this.test_at_cursor(cx) {
+                this.debug_found_test(&path, test.as_ref(), window, cx);
+            }
+        }))
+        // The margin's menu, at the test it was opened on.
+        .on_action(cx.listener(|this, _: &RunTestHere, window, cx| {
+            if let Some((path, test)) = this.testing.menu.take() {
+                this.run_found_test(&path, Some(&test), window, cx);
+            }
+        }))
+        .on_action(cx.listener(|this, _: &DebugTestHere, window, cx| {
+            if let Some((path, test)) = this.testing.menu.take() {
+                this.debug_found_test(&path, Some(&test), window, cx);
+            }
+        }))
     }
 
     /// The tests of a document, found again only when its text changed.
@@ -564,12 +659,26 @@ impl Workbench {
             },
         )
         .size_full();
+        let (menu_placed, menu_path) = (placed.clone(), path.clone());
+        let strings = self.strings();
         Some(
             div()
+                .id(("test-margin", index))
                 .w(px(MARGIN))
                 .h_full()
                 .flex_none()
                 .cursor_pointer()
+                .on_mouse_down(
+                    MouseButton::Right,
+                    cx.listener(move |this, event: &MouseDownEvent, _, cx| {
+                        this.testing.menu = menu_placed
+                            .borrow()
+                            .iter()
+                            .find(|(bounds, _)| bounds.contains(&event.position))
+                            .map(|(_, test)| (menu_path.clone(), test.clone()));
+                        cx.notify();
+                    }),
+                )
                 .on_mouse_down(
                     MouseButton::Left,
                     cx.listener(move |this, event: &MouseDownEvent, window, cx| {
@@ -583,9 +692,33 @@ impl Workbench {
                         }
                     }),
                 )
+                .context_menu(move |menu, _, _| {
+                    menu.menu(strings.tests_run_here, Box::new(RunTestHere))
+                        .menu(strings.tests_debug_here, Box::new(DebugTestHere))
+                })
                 .child(margin)
                 .into_any_element(),
         )
+    }
+
+    /// Debugs a test, a group, or with `None` every test of the file.
+    fn debug_found_test(
+        &mut self,
+        path: &Path,
+        test: Option<&FoundTest>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let Some(root) = self.project.root.clone() else {
+            return;
+        };
+        match test_debug_config(&root, path, test) {
+            Some(config) => self.start_debugging(config, false, window, cx),
+            None => {
+                self.status_message = Some(self.strings().tests_none_found.to_owned());
+                cx.notify();
+            }
+        }
     }
 
     /// Runs a test, a group, or with `None` every test of the file.
@@ -648,20 +781,23 @@ impl Workbench {
     }
 
     /// Cmd+; C: the test the cursor is in, or the file's.
-    fn run_test_at_cursor(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        let Some(pane) = self.panes.get(self.active) else {
-            return;
-        };
+    /// The test at the cursor, or the one before it.
+    fn test_at_cursor(&self, cx: &App) -> Option<(PathBuf, Option<FoundTest>)> {
+        let pane = self.panes.get(self.active)?;
         let line = pane.editor.read(cx).cursor_position().line as usize;
-        let Some((path, tests)) = self.tests_of(&pane.uri) else {
-            return;
-        };
+        let (path, tests) = self.tests_of(&pane.uri)?;
         let test = tests
             .iter()
             .rfind(|test| test.line <= line && !test.group)
             .or_else(|| tests.iter().rfind(|test| test.line <= line))
             .cloned();
-        self.run_found_test(&path, test.as_ref(), window, cx);
+        Some((path, test))
+    }
+
+    fn run_test_at_cursor(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if let Some((path, test)) = self.test_at_cursor(cx) {
+            self.run_found_test(&path, test.as_ref(), window, cx);
+        }
     }
 
     fn run_file_tests(&mut self, window: &mut Window, cx: &mut Context<Self>) {
