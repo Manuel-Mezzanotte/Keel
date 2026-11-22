@@ -15,12 +15,12 @@ Il dettaglio di ogni fase, con le decisioni e le prove, è in [`PIANO.md`](PIANO
 ## 1. Cos'è Keel e perché esiste
 
 Keel è un **IDE personale per macOS scritto in Rust**. L'idea è avere un editor:
-- **veloce e leggero:** Cursor occupa circa 1,6 GB di RAM, Keel ne occupa circa 130–150 MB con un progetto aperto;
+- **veloce e leggero:** con lo stesso progetto e lo stesso file Keel occupa 265 MB, VS Code 1.014 e Cursor 1.320 (la colonna Memoria di Monitoraggio Attività; il confronto è al punto 3);
 - **bello:** stile Apple, disposizione come Cursor, tema predefinito blu mezzanotte;
 - **familiare:** stesse scorciatoie e stessi nomi dei comandi di VS Code, `settings.json` e `keybindings.json` compatibili;
 - **estendibile:** le estensioni di VS Code funzionano dove possibile, e quelle dell'autore sempre. La prova del nove è **VSAuto Ghost**, la sua estensione di «fake coding».
 
-Nasce dalla curiosità per le app native in Rust e dal desiderio di un editor tutto suo. Cursor resta installato come riserva. La pubblicazione (firma Apple, aggiornamenti automatici, sito) non è ancora decisa: se ne parla dopo le prove a mano.
+Nasce dalla curiosità per le app native in Rust e dal desiderio di un editor tutto suo. Cursor resta installato come riserva. La pubblicazione (firma Apple, aggiornamenti automatici) non è ancora decisa: se ne parla dopo le prove a mano. La pagina di presentazione invece c'è, in una repo sua (`KeelSite`).
 
 ### Perché è fatto così
 
@@ -67,6 +67,14 @@ L'interfaccia sta quasi tutta in `crates/keel/src/workbench_window/`, un file pe
 - `source_control.rs` e `scm_graph.rs`: Controllo versione e grafico;
 - `search_view.rs`: ricerca;
 - `terminal_view.rs`: terminale;
+- `tabs.rs`: gruppi di editor, schede trascinate, divisioni in ogni direzione;
+- `claude_inline.rs`: Claude nell'editor (Cmd+I) e il messaggio del commit;
+- `testing.rs`: test dal margine e vista Test;
+- `debug.rs`, `debug_config.rs`, `debug_view.rs`, `breakpoints.rs`: debugger, sopra `crates/dap`;
+- `tasks.rs`, `task_config.rs`, `problem_matchers.rs`: attività di `tasks.json`, con gli errori nei Problemi;
+- `github.rs` e `pull_requests.rs`: pull request, attraverso il programma `gh`;
+- `diff_edit.rs`, `search_results.rs` e `file_pieces.rs`: differenze e risultati della ricerca modificabili, con la scrittura nei file che non sovrascrive niente di cambiato;
+- `blame_card.rs`, `line_hints.rs`, `rulers.rs`: scheda del commit, riferimenti e tipi in fondo alla riga, righelli;
 - e così via.
 
 I testi dell'interfaccia sono in `crates/keel/src/i18n.rs`, in italiano e in inglese. I temi Mezzanotte, Chiaro e Nero sono in `crates/keel/themes/keel.json`.
@@ -135,7 +143,7 @@ Dopo le prime prove dell'app vera (18 novembre) sono arrivati altri giri di rito
 - correzione dei controlli della pagina Impostazioni, che non salvavano (`8fbd01c`);
 - **nuovo aspetto** (sera del 18 novembre): due stili della finestra, «Pannelli sospesi» e «Piatto», scelti dalla nuova pagina Impostazioni → Interfaccia (`keel.interfaceStyle`); animazioni di pannelli, selettore e sezioni (`keel.animations`); Controllo versione con messaggio più grande, pulsante Commit largo e grafico ridimensionabile; Cerca, Estensioni e benvenuto senza spazi vuoti; pulsanti più grandi; Cmd+P e tavolozza su una superficie sola. Il dettaglio è in `PIANO.md`, «Nuovo aspetto». Poi l'icona nel formato di Icon Composer, senza il riquadro nero di macOS, e il pannello di Claude che si apre sulla chat con le chat di Claude Code del progetto («Icona nuova e pannello di Claude»).
 - **i dettagli** (19–20 novembre): 143 piccoli dettagli raccolti da VS Code, Cursor, Zed, JetBrains, Xcode e dal Mac, fatti in nove giri, dal commit `db6bbbe` al `66e6bfb`. Tra gli altri: avvisi e finestre d'errore di git, differenze rifatte, salvataggio automatico, cronologia locale, segnalibri, cronologia degli appunti, terminale con l'integrazione della shell (pallini, salti fra i comandi, correzioni rapide, testo che torna dopo il riavvio), menu Finestra e Aiuto, barra di stato cliccabile con codifiche e fine riga, Quick Look, file trascinati fuori da Keel. Voce per voce, con cosa resta e come provarlo, in [`DETTAGLI.md`](DETTAGLI.md).
-- **le funzioni nuove** (21–22 novembre), dal commit `50e24d1` al `2e4b0a5`, su `develop` ma non ancora su GitHub:
+- **le funzioni nuove** (21–22 novembre), dal commit `50e24d1` al `2e4b0a5`, più i documenti (`1c4cd02`): 12 commit su `develop`, non ancora su GitHub. La versione con tutte queste è installata in /Applications dal 22 novembre:
   - una scheda trascinata su un bordo divide l'editor, anche sopra e sotto;
   - Claude nell'editor (Cmd+I) e il messaggio del commit scritto da Claude;
   - i test dal margine, con la vista Test;
@@ -145,12 +153,26 @@ Dopo le prime prove dell'app vera (18 novembre) sono arrivati altri giri di rito
   - il debugger, con la Debug Console;
   - le pull request di GitHub, con i controlli e i commenti.
 
+  Con queste i dettagli di `DETTAGLI.md` sono 131 fatti, 9 a metà e 3 non ancora.
+
   Come provarle, cosa è stato provato davvero e i limiti di ognuna sono in [`DETTAGLI.md`](DETTAGLI.md), «Le funzioni nuove».
+- **la pagina di presentazione** (22 novembre), in una repo sua, `KeelSite` (privata su GitHub, sul Mac accanto a Keel): React, Vite, Tailwind e shadcn/ui, in italiano e in inglese. Dal cielo si scende nel mare, che copre una copia di Keel in HTML, navigabile e nei tre temi; poi il confronto misurato con VS Code e Cursor, le funzioni, i linguaggi, le estensioni e le domande. I numeri e come sono stati misurati stanno nel suo `src/site.ts`. Per pubblicarla servono un dominio, dove metterla e l'app firmata da Apple: finché `downloadUrl` è `null` la pagina dice «In arrivo».
 
 Stato dei controlli all'ultimo commit:
 - tutti i test passano, 542 in tutto, 300 solo nell'app;
 - clippy non segnala niente;
-- con un progetto web aperto Keel occupa circa 130–150 MB e mostra la prima schermata in circa 400 ms (misure del 18 novembre, non rifatte dopo le funzioni nuove; appena aperta su un progetto piccolo, la versione del 22 novembre occupa 139 MB).
+- la prima schermata di Keel arriva in 330 ms, media di sei avvii;
+- **memoria di Keel** (22 novembre, versione installata, M4 Pro, language server spenti), come la dà Monitoraggio Attività: 132 MB con una finestra vuota, 271 MB con un progetto e un file, 299 MB con 450 file e 20 schede, 326 MB con due progetti. I 130–150 MB scritti in `PIANO.md` sono la memoria residente (RSS), che non conta quella grafica: non vanno usati per i confronti;
+- **confronto** (22 novembre, stesso Mac, stesso progetto e stesso file Rust, profilo vuoto, nessuna estensione, media di tre avvii):
+
+  | | Keel | VS Code 1.125 | Cursor 3.30 |
+  |---|---|---|---|
+  | Memoria di tutti i processi, dopo 40 s | 265 MB | 1.014 MB | 1.320 MB |
+  | Avvio | 425 ms | 653 ms | 970 ms |
+  | App su disco | 137 MB | 1.096 MB | 1.446 MB |
+  | Processi | 1 | 8 | 14 |
+
+  Per Keel l'avvio è fino alla finestra sullo schermo; per VS Code e Cursor è il tempo che dichiarano loro (`--prof-append-timers`), e la loro finestra vuota compare più o meno quando quella di Keel. Su disco VS Code e Cursor sono universali, Keel è solo per Apple Silicon.
 
 ---
 
@@ -163,6 +185,13 @@ Le fasi sono fatte, ma l'autore deve ancora provarle a mano. L'elenco di ogni fa
 Delle funzioni nuove restano da provare davvero due cose, che qui non si potevano provare:
 - **il debug di Node e TypeScript:** vuole `js-debug` di Microsoft, che su questo Mac non c'è. Keel lo scarica da GitHub (1,2 MB) solo quando glielo si chiede, e controlla che il file abbia l'impronta pubblicata;
 - **le azioni che scrivono su GitHub:** commenti, approvazioni, unione e creazione di una pull request sono provate solo con un `gh` finto.
+
+### Difetti trovati, da correggere
+
+Trovati il 22 novembre misurando e fotografando Keel per la pagina di presentazione:
+- **memoria grafica:** aprendo un file la parte grafica cresce di circa 125 MB. La causa non è ancora accertata; il sospetto è il disegno dei tracciati (`paint_path`), che fa riservare a GPUI delle immagini grandi quanto la finestra;
+- **CPU da fermo:** con un file aperto e la finestra in primo piano Keel usa circa il 5% di un core anche senza fare niente (senza file lo 0%); dal campionamento sembra che ridisegni di continuo;
+- **test di un crate in una sottocartella senza workspace:** non partono, perché `cargo test -p` viene lanciato dalla cartella del progetto.
 
 ### Prossimo lavoro proposto: lo stile personale
 
@@ -223,7 +252,9 @@ L'idea è permettere a chi usa Keel di cambiarne l'aspetto con un suo file, come
 
 - Il font del codice di serie: SF Mono oppure un altro.
 - La minimappa: accesa o spenta di serie.
-- La pubblicazione: account sviluppatore Apple, firma, notarizzazione, aggiornamenti automatici.
+- La pubblicazione: account sviluppatore Apple, firma, notarizzazione, aggiornamenti automatici; per la pagina anche il dominio, dove metterla, il prezzo o la licenza e quale lingua tenere come principale (ora l'italiano).
+- I 12 commit di `develop` da mandare su GitHub, dopo le prove dell'autore.
+- La cartella `KeelSite/` dentro Keel è un sito vecchio del 21 novembre, in Next.js, messo lì dall'autore: non è in git e non va committata. Quello buono è la repo `KeelSite` accanto a Keel.
 - Il merge di `develop` su `main`: solo quando lo chiede l'autore.
 
 ---
@@ -236,11 +267,12 @@ L'idea è permettere a chi usa Keel di cambiarne l'aspetto con un suo file, come
 - **Commit:**
   - sul branch `develop`, con l'account dell'autore e senza attribuzioni ad assistenti;
   - in inglese, nello stile Conventional Commits;
-  - push dopo ogni commit;
+  - il push si fa solo quando lo chiede l'autore;
   - `main` si aggiorna solo su richiesta.
 - **Lingue:** codice, commenti, README e commit in inglese; i documenti in `docs/` e le risposte all'autore in italiano.
 - **Prudenza:**
   - niente cancellazioni ricorsive senza chiedere;
   - si fermano solo i propri processi, per PID: sul Mac girano altri progetti;
   - le prove usano una `KEEL_DATA_DIR` a parte.
-- **`PIANO.md`** si aggiorna alla fine di ogni fase o giro di ritocchi.
+- **`PIANO.md`** si aggiorna alla fine di ogni fase o giro di ritocchi; questo documento e `DETTAGLI.md` quando cambia quello che raccontano.
+- **Repo `KeelSite`:** commit su `develop`, push e poi `main`, ma solo quando lo chiede l'autore.
