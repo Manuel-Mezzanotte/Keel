@@ -1,6 +1,6 @@
 # Keel — piano della messa online
 
-*Scritto il 23 novembre 2026, con le decisioni dell'autore dello stesso giorno. Stato: **fasi A, B e C fatte** il 23 novembre (il clic della fase B provato dall'autore: «Keel 0.1.2 (3)»); resta D, col via dell'autore.*
+*Scritto il 23 novembre 2026, con le decisioni dell'autore dello stesso giorno. Stato: **fasi A, B e C fatte** il 23 novembre (il clic della fase B provato dall'autore: «Keel 0.1.2 (3)»); **fase D preparata** (KeelSite `d15db7b`): restano i passi sul mini PC e in Cloudflare, che fa l'autore.*
 
 Lo scopo è rendere Keel scaricabile da chiunque da **keel.mezzalab.eu** e fare in modo che si aggiorni dall'app stessa. Per ora **senza pagare l'account sviluppatore di Apple**. La firma di Apple si potrà aggiungere dopo senza rifare niente.
 
@@ -201,6 +201,18 @@ Perché è sicuro e non invadente:
    - nel README di Keel, l'installazione e la sezione «Privacy», che deve dire che Keel controlla gli aggiornamenti su keel.mezzalab.eu all'avvio, se l'interruttore è acceso;
    - `HANDOFF.md`;
    - il README di KeelSite.
+
+**Com'è fatta (23 novembre, KeelSite `d15db7b`):**
+- **Il container:** nginx senza root (`nginxinc/nginx-unprivileged:1.29-alpine`), file system di sola lettura, `cap_drop: ALL`, su `127.0.0.1:3006`. La cartella `/srv/keel-site/downloads` è montata in sola lettura; la scrive `release.sh` di Keel come utente `server`.
+- **Le regole di nginx:** pagine sempre richieste di nuovo, file di build tenuti un anno, `updates.json` mai tenuto, `install.sh` come testo da leggere, i DMG e gli `.zip` di `releases/` tenuti un giorno.
+- **Il deploy** ricalca quello della dashboard e di Silo, senza database né backup. Workflow su `main` con il runner `keel-site-production`; `keel-site-deploy` costruisce l'immagine, controlla le quattro pagine in un container senza rete, prova un candidato, scambia e verifica `https://keel.mezzalab.eu/` e `/download/`, altrimenti rimette la versione di prima. Comando di gestione: `sudo keel-site stato|log|riavvia`.
+- **Provato sul Mac** con Docker: configurazione di nginx valida, controllo delle pagine come lo fa il deploy, intestazioni e cache giuste, DMG della prova scaricato identico, container che gira come utente `nginx`. I 12 test del deploy passano.
+
+**Passi che restano all'autore** (il mini PC risponde solo con la VPN, e servono `sudo` e Cloudflare):
+1. Cloudflare → Networking → Tunnels → `miniPC` → Public hostname → Add: `keel` · `mezzalab.eu` · `HTTP` · `localhost:3006`.
+2. Con la VPN accesa, dalla cartella KeelSite: `scp -r deploy compose.production.yaml minipc:keel-site-setup/` e `ssh -t minipc sudo bash keel-site-setup/deploy/install.sh`, col token del runner da GitHub.
+3. Push di `develop` e `main` di KeelSite: il workflow pubblica il sito.
+4. Primo rilascio di Keel: `scripts/release.sh VERSIONE novita.md` dalla cartella di Keel, con la VPN accesa.
 
 Ordine: **A → B → C → D**. Il sito va online solo dopo che tutto è stato confermato dall'autore.
 
