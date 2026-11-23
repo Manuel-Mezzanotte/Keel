@@ -501,6 +501,10 @@ mod tests {
         })
     }
 
+    /// The build of a version newer than this one: written from this one's,
+    /// so that the tests stay true after each release.
+    const NEWER: u64 = crate::version::BUILD + 1;
+
     /// An installed Keel in `dir`, fed by a list with `build`.
     fn installed(dir: &std::path::Path, build: u64) -> Source {
         let applications = dir.join("Applications");
@@ -530,7 +534,7 @@ mod tests {
     #[gpui::test]
     fn a_new_version_is_offered_downloaded_and_made_ready(cx: &mut TestAppContext) {
         let (folder, view, cx) = window(cx, r#"{ "keel.language": "it" }"#);
-        let source = installed(folder.path(), 2);
+        let source = installed(folder.path(), NEWER);
         let app = source.app.clone();
         cx.update(|_, cx| set_source(Some(source), cx));
 
@@ -542,7 +546,7 @@ mod tests {
         assert!(cx.update(|window, cx| window.has_active_dialog(cx)));
         view.read_with(cx, |view, _| {
             let offer = view.update_offer.as_ref().unwrap();
-            assert_eq!(offer.release.build, 2);
+            assert_eq!(offer.release.build, NEWER);
             assert_eq!(offer.release.notes.it, "Novità di prova.");
         });
 
@@ -571,7 +575,7 @@ mod tests {
     #[gpui::test]
     fn a_release_signed_by_someone_else_is_refused(cx: &mut TestAppContext) {
         let (folder, view, cx) = window(cx, r#"{ "keel.language": "it" }"#);
-        let mut source = installed(folder.path(), 2);
+        let mut source = installed(folder.path(), NEWER);
         // Another key: the release no longer matches.
         source.key = Some("11".repeat(32));
         cx.update(|_, cx| set_source(Some(source.clone()), cx));
@@ -592,7 +596,7 @@ mod tests {
     #[gpui::test]
     fn at_start_it_looks_only_if_the_settings_allow_it(cx: &mut TestAppContext) {
         let (folder, view, cx) = window(cx, r#"{ "update.automatic": false }"#);
-        let source = installed(folder.path(), 2);
+        let source = installed(folder.path(), NEWER);
         cx.update(|_, cx| {
             set_source(Some(source), cx);
             cx.default_global::<Updates>().started = false;
