@@ -254,7 +254,7 @@ L'idea è permettere a chi usa Keel di cambiarne l'aspetto con un suo file, come
 
 - Il font del codice di serie: SF Mono oppure un altro.
 - La minimappa: accesa o spenta di serie.
-- La pubblicazione: il piano è in [`PUBBLICAZIONE.md`](PUBBLICAZIONE.md) (script di installazione e DMG, aggiornamenti con Sparkle, pagina di download, firma di Apple rimandata); restano da decidere il dominio, dove metterla, il prezzo o la licenza e quale lingua tenere come principale (ora l'italiano).
+- La pubblicazione: il piano è in [`PUBBLICAZIONE.md`](PUBBLICAZIONE.md), in quattro fasi da fare in ordine, ognuna col via dell'autore: aggiornamenti dentro Keel con Sparkle, controllati solo all'avvio; script di rilascio e di installazione; pagina di download; sito su keel.mezzalab.eu dal mini PC, con il deploy da `main` e solo due versioni dei pacchetti. La firma di Apple è rimandata. Restano da decidere la licenza, il numero della prima versione ufficiale e la lingua principale del sito (ora l'italiano).
 - Il ramo `main` non esiste ancora su GitHub: il predefinito è `develop`.
 - La cartella `KeelSite/` dentro Keel è un sito vecchio del 21 novembre, in Next.js, messo lì dall'autore: non è in git e non va committata. Quello buono è la repo `KeelSite` accanto a Keel.
 - Il merge di `develop` su `main`: solo quando lo chiede l'autore.
