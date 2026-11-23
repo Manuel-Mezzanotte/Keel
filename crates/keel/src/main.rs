@@ -127,9 +127,14 @@ fn finish_update(pid: i32, staged: &std::path::Path, app: &std::path::Path) {
         .err()
         .map(|error| format!("{error:#}"));
     let _ = update::write_outcome(&paths::data_dir(), &update::Outcome { version, error });
-    let _ = std::process::Command::new("/usr/bin/open")
-        .arg(app)
-        .status();
+    let mut open = std::process::Command::new("/usr/bin/open");
+    // A Keel tried on a data folder of its own opens again on the same one.
+    if let Some(data) = std::env::var_os("KEEL_DATA_DIR") {
+        let mut variable = std::ffi::OsString::from("KEEL_DATA_DIR=");
+        variable.push(data);
+        open.arg("--env").arg(variable);
+    }
+    let _ = open.arg(app).status();
 }
 
 fn run(path: Option<PathBuf>, more: Vec<PathBuf>, socket: PathBuf) {

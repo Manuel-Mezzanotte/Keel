@@ -29,7 +29,7 @@ pub const BUNDLE_ID: &str = "com.manuelmezzanotte.keel";
 /// The private half stays on the author's Mac; `scripts/release.sh` makes
 /// the pair the first time and writes this value. Empty means no release
 /// can be installed yet.
-pub const PUBLIC_KEY: &str = "";
+pub const PUBLIC_KEY: &str = "7c3efb97ed19f6c5cf020c8a5eaab6dd1b6c4f90af924885b38b353a4aef6a8b";
 
 /// The list read from [`FEED`].
 #[derive(Clone, Debug, Default, Deserialize, Serialize, PartialEq, Eq)]
