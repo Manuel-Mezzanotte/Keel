@@ -1,6 +1,6 @@
 # Keel — piano della messa online
 
-*Scritto il 23 novembre 2026, con le decisioni dell'autore dello stesso giorno. Stato: **fasi A, B e C fatte** il 23 novembre (il clic della fase B provato dall'autore: «Keel 0.1.2 (3)»); **fase D preparata** (KeelSite `d15db7b`): restano i passi sul mini PC e in Cloudflare, che fa l'autore.*
+*Scritto il 23 novembre 2026, con le decisioni dell'autore dello stesso giorno. Stato: **tutto fatto il 23 novembre.** keel.mezzalab.eu è online dal mini PC (KeelSite `d15db7b`) e **Keel 0.1.0 (build 2)** si scarica dal sito, con lo script e con il DMG (commit `596c6d0`, tag `v0.1.0`).*
 
 Lo scopo è rendere Keel scaricabile da chiunque da **keel.mezzalab.eu** e fare in modo che si aggiorni dall'app stessa. Per ora **senza pagare l'account sviluppatore di Apple**. La firma di Apple si potrà aggiungere dopo senza rifare niente.
 
@@ -213,6 +213,14 @@ Perché è sicuro e non invadente:
 2. Con la VPN accesa, dalla cartella KeelSite: `scp -r deploy compose.production.yaml minipc:keel-site-setup/` e `ssh -t minipc sudo bash keel-site-setup/deploy/install.sh`, col token del runner da GitHub.
 3. Push di `develop` e `main` di KeelSite: il workflow pubblica il sito.
 4. Primo rilascio di Keel: `scripts/release.sh VERSIONE novita.md` dalla cartella di Keel, con la VPN accesa.
+
+**Online (23 novembre):**
+- **Cloudflare:** rotta `keel.mezzalab.eu` → `http://localhost:3006` nel tunnel `miniPC`, con il record DNS creato da Cloudflare. L'interfaccia è cambiata rispetto ai README degli altri progetti: ora è Tunnels → `miniPC` → **Routes** → Add route → **Published application**.
+- **Mini PC:** `install.sh` lanciato dall'autore (runner `server-keel-site` attivo); primo deploy da `main` riuscito in 24 secondi.
+- **Primo rilascio:** `scripts/release.sh 0.1.0 …`. Il mini PC chiede un codice di verifica a ogni connessione SSH, quindi `release.sh` apre una connessione sola e la riusa (`5eb0a2f`).
+- **Controllato da fuori:** pagine 200; `curl -fsSL https://keel.mezzalab.eu/install.sh | sh` installa Keel 0.1.0 (2) con firma del codice valida e senza quarantena; `keel-release check` riscarica e verifica l'aggiornamento come fa Keel; il DMG arriva con il tipo giusto.
+
+**Per ogni versione nuova:** con la VPN accesa, dalla cartella di Keel, `scripts/release.sh VERSIONE novita.md`, poi il push di `develop` e del tag quando vuoi. Il sito non va toccato.
 
 Ordine: **A → B → C → D**. Il sito va online solo dopo che tutto è stato confermato dall'autore.
 
