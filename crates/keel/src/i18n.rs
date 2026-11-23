@@ -521,6 +521,32 @@ pub struct Strings {
     pub extension_not_working: &'static str,
     pub extension_partly_working: &'static str,
     extension_not_working_detail_text: &'static str,
+    pub update_page: &'static str,
+    pub update_version: &'static str,
+    update_version_detail_text: &'static str,
+    pub update_check: &'static str,
+    pub update_checking: &'static str,
+    update_available_text: &'static str,
+    update_current_text: &'static str,
+    pub update_whats_new: &'static str,
+    pub update_later: &'static str,
+    pub update_install: &'static str,
+    update_downloading_text: &'static str,
+    pub update_restarting: &'static str,
+    pub update_failed: &'static str,
+    pub update_retry: &'static str,
+    pub update_close: &'static str,
+    pub update_latest: &'static str,
+    update_latest_detail_text: &'static str,
+    pub update_check_failed: &'static str,
+    pub update_not_installed: &'static str,
+    pub update_not_installed_detail: &'static str,
+    update_cannot_write_text: &'static str,
+    update_done_text: &'static str,
+    update_undone_text: &'static str,
+    pub update_undone_detail: &'static str,
+    pub menu_check_updates: &'static str,
+    pub command_check_updates: &'static str,
     pub command_insert_at_mention: &'static str,
     pub claude_not_connected: &'static str,
     pub command_accept_proposed: &'static str,
@@ -1480,6 +1506,7 @@ impl Strings {
             "workbench.action.gotoLine" => self.command_go_to_line,
             "editor.action.commentLine" => self.command_comment_line,
             "workbench.action.openSettings" => self.command_open_settings,
+            "update.checkForUpdates" => self.command_check_updates,
             "workbench.action.showCommands" => self.command_show_commands,
             "workbench.action.openSettingsJson" => self.command_open_settings_json,
             "workbench.action.openGlobalKeybindings" => self.command_open_keybindings,
@@ -1668,6 +1695,43 @@ impl Strings {
     pub fn extension_not_working_detail(&self, reasons: &str) -> String {
         self.extension_not_working_detail_text
             .replace("{reasons}", reasons)
+    }
+
+    pub fn update_version_detail(&self, version: &str, build: u64) -> String {
+        self.update_version_detail_text
+            .replace("{version}", version)
+            .replace("{build}", &build.to_string())
+    }
+
+    pub fn update_available(&self, version: &str) -> String {
+        self.update_available_text.replace("{version}", version)
+    }
+
+    pub fn update_current(&self, version: &str) -> String {
+        self.update_current_text.replace("{version}", version)
+    }
+
+    pub fn update_downloading(&self, done_bytes: u64, total_bytes: u64) -> String {
+        let megabytes = |bytes: u64| format!("{:.1}", bytes as f64 / 1_000_000.);
+        self.update_downloading_text
+            .replace("{done}", &megabytes(done_bytes))
+            .replace("{total}", &megabytes(total_bytes))
+    }
+
+    pub fn update_latest_detail(&self, version: &str) -> String {
+        self.update_latest_detail_text.replace("{version}", version)
+    }
+
+    pub fn update_cannot_write(&self, folder: &str) -> String {
+        self.update_cannot_write_text.replace("{folder}", folder)
+    }
+
+    pub fn update_done(&self, version: &str) -> String {
+        self.update_done_text.replace("{version}", version)
+    }
+
+    pub fn update_undone(&self, version: &str) -> String {
+        self.update_undone_text.replace("{version}", version)
     }
 
     pub fn cursor_partial(&self, reasons: &str) -> String {
@@ -2351,6 +2415,32 @@ pub const ITALIAN: Strings = Strings {
     extension_not_working: "Non funziona in Keel",
     extension_partly_working: "Funziona in parte",
     extension_not_working_detail_text: "Non funziona in Keel: {reasons}.",
+    update_page: "Aggiornamenti",
+    update_version: "Versione",
+    update_version_detail_text: "Keel {version}, build {build}.",
+    update_check: "Verifica aggiornamenti",
+    update_checking: "Ricerca in corso…",
+    update_available_text: "È disponibile Keel {version}",
+    update_current_text: "Ora hai la {version}.",
+    update_whats_new: "Novità",
+    update_later: "Più tardi",
+    update_install: "Aggiorna e riavvia",
+    update_downloading_text: "Scaricamento: {done} di {total} MB",
+    update_restarting: "Installazione e riavvio di Keel…",
+    update_failed: "L'aggiornamento non è riuscito",
+    update_retry: "Riprova",
+    update_close: "Chiudi",
+    update_latest: "Keel è aggiornato",
+    update_latest_detail_text: "Hai l'ultima versione, la {version}.",
+    update_check_failed: "Non è stato possibile cercare aggiornamenti",
+    update_not_installed: "Gli aggiornamenti arrivano solo a Keel.app",
+    update_not_installed_detail: "Questo Keel non è partito da un'app installata, per esempio da cargo run.",
+    update_cannot_write_text: "Keel non può aggiornarsi da solo perché la cartella {folder} non si può scrivere. Scarica la versione nuova da keel.mezzalab.eu.",
+    update_done_text: "Keel è aggiornato alla {version}",
+    update_undone_text: "L'aggiornamento alla {version} non è riuscito",
+    update_undone_detail: "Keel è rimasto alla versione di prima.",
+    menu_check_updates: "Cerca aggiornamenti…",
+    command_check_updates: "Keel: Cerca aggiornamenti",
     command_insert_at_mention: "Claude Code: Inserisci il riferimento al file",
     claude_not_connected: "Claude Code non è collegato a questa finestra: avvialo in un terminale di Keel.",
     command_accept_proposed: "Claude Code: Accetta la modifica proposta",
@@ -3463,6 +3553,32 @@ pub const ENGLISH: Strings = Strings {
     extension_not_working: "Does not work in Keel",
     extension_partly_working: "Works in part",
     extension_not_working_detail_text: "Does not work in Keel: {reasons}.",
+    update_page: "Updates",
+    update_version: "Version",
+    update_version_detail_text: "Keel {version}, build {build}.",
+    update_check: "Check for Updates",
+    update_checking: "Checking…",
+    update_available_text: "Keel {version} is available",
+    update_current_text: "You have {version}.",
+    update_whats_new: "What's new",
+    update_later: "Later",
+    update_install: "Update and Restart",
+    update_downloading_text: "Downloading: {done} of {total} MB",
+    update_restarting: "Installing and restarting Keel…",
+    update_failed: "The update did not work",
+    update_retry: "Try Again",
+    update_close: "Close",
+    update_latest: "Keel is up to date",
+    update_latest_detail_text: "You have the latest version, {version}.",
+    update_check_failed: "Could not check for updates",
+    update_not_installed: "Only Keel.app is updated",
+    update_not_installed_detail: "This Keel did not start from an installed app, for example from cargo run.",
+    update_cannot_write_text: "Keel cannot update itself because the folder {folder} cannot be written. Download the new version from keel.mezzalab.eu.",
+    update_done_text: "Keel is now {version}",
+    update_undone_text: "The update to {version} did not work",
+    update_undone_detail: "Keel stayed at the version it had.",
+    menu_check_updates: "Check for Updates…",
+    command_check_updates: "Keel: Check for Updates",
     command_insert_at_mention: "Claude Code: Insert At-Mention",
     claude_not_connected: "Claude Code is not connected to this window: start it in a Keel terminal.",
     command_accept_proposed: "Claude Code: Accept Proposed Changes",

@@ -57,6 +57,7 @@ pub(super) enum Page {
     Git,
     Languages,
     Extensions,
+    Updates,
 }
 
 pub(super) struct Entry {
@@ -671,6 +672,17 @@ pub(super) const CATALOG: &[Entry] = &[
         ),
     },
     Entry {
+        key: super::updates::AUTOMATIC_SETTING,
+        page: Page::Updates,
+        kind: Kind::Switch,
+        default: "true",
+        title: ("Aggiornamento automatico", "Automatic Updates"),
+        description: (
+            "All'avvio Keel controlla se c'è una versione nuova e te la propone. Mentre è aperto non controlla mai.",
+            "At start Keel looks for a new version and offers it. It never looks while it is open.",
+        ),
+    },
+    Entry {
         key: "extensions.autoCheckUpdates",
         page: Page::Extensions,
         kind: Kind::Switch,
@@ -914,6 +926,7 @@ impl Workbench {
             (Page::Git, ("Git", "Git")),
             (Page::Languages, ("Linguaggi", "Languages")),
             (Page::Extensions, ("Estensioni", "Extensions")),
+            (Page::Updates, ("Aggiornamenti", "Updates")),
         ];
         let mut all: Vec<SettingPage> = pages
             .into_iter()
@@ -921,6 +934,9 @@ impl Workbench {
                 let page_of = SettingPage::new(pick(title)).resettable(true);
                 if page == Page::Appearance {
                     return page_of.groups(self.interface_groups(italian, &workbench, handle));
+                }
+                if page == Page::Updates {
+                    return page_of.groups(self.update_groups(italian, &workbench, handle));
                 }
                 let items: Vec<SettingItem> = CATALOG
                     .iter()
@@ -990,6 +1006,64 @@ impl Workbench {
     /// The Interface page in groups: the window's style drawn small, the
     /// themes as pictures with the settings that pick them, the movements,
     /// and the rest.
+    /// The Updates page: the version Keel is at with the button that looks
+    /// for a new one, and the check at start.
+    fn update_groups(
+        &self,
+        italian: bool,
+        workbench: &WeakEntity<Workbench>,
+        handle: AnyWindowHandle,
+    ) -> Vec<SettingGroup> {
+        let strings = self.strings();
+        let check = {
+            let workbench = workbench.clone();
+            SettingField::<SharedString>::render(move |_, _, cx| {
+                let checking = workbench
+                    .upgrade()
+                    .is_some_and(|workbench| workbench.read(cx).checking_updates);
+                let workbench = workbench.clone();
+                Button::new("check-for-updates")
+                    .outline()
+                    .small()
+                    .loading(checking)
+                    .label(if checking {
+                        strings.update_checking
+                    } else {
+                        strings.update_check
+                    })
+                    .on_click(move |_, window, cx| {
+                        workbench
+                            .update(cx, |workbench, cx| {
+                                workbench.check_for_updates(true, window, cx)
+                            })
+                            .ok();
+                    })
+            })
+        };
+        let version = SettingItem::new(strings.update_version, check)
+            .description(
+                strings.update_version_detail(crate::version::VERSION, crate::version::BUILD),
+            )
+            .keywords([SharedString::from("version"), SharedString::from("update")]);
+        let automatic = CATALOG
+            .iter()
+            .filter(|entry| entry.page == Page::Updates)
+            .map(|entry| {
+                self.setting_item(
+                    Field::from_entry(entry, italian),
+                    italian,
+                    workbench,
+                    handle,
+                )
+            });
+        vec![
+            SettingGroup::new()
+                .title(strings.update_page)
+                .item(version)
+                .items(automatic),
+        ]
+    }
+
     fn interface_groups(
         &self,
         italian: bool,
@@ -1078,6 +1152,7 @@ impl Workbench {
             Page::Git,
             Page::Languages,
             Page::Extensions,
+            Page::Updates,
         ]
         .len();
         self.extension_setting_pages()
@@ -1598,8 +1673,8 @@ mod tests {
             assert!(view.documents.contains_key(PageKind::Settings.uri()));
             assert_eq!(
                 view.settings_jump_page(),
-                Some(7),
-                "after Keel's seven pages"
+                Some(8),
+                "after Keel's eight pages"
             );
         });
 

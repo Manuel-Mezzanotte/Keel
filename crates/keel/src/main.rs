@@ -19,6 +19,7 @@ mod quick_pick;
 mod recent;
 mod session;
 mod theme;
+mod version;
 mod windows;
 mod workbench_window;
 
@@ -51,7 +52,11 @@ fn main() -> ExitCode {
             ExitCode::SUCCESS
         }
         Command::Version => {
-            println!("Keel {}", env!("CARGO_PKG_VERSION"));
+            println!("Keel {}", version::full());
+            ExitCode::SUCCESS
+        }
+        Command::FinishUpdate { pid, staged, app } => {
+            finish_update(pid, &staged, &app);
             ExitCode::SUCCESS
         }
         Command::InstallExtension(package) => {
@@ -101,6 +106,32 @@ fn main() -> ExitCode {
     }
 }
 
+/// Run by the Keel that asked for an update, as it quits: waits for it to
+/// be gone, puts the new app in place, leaves a word on how it went for the
+/// next Keel, and opens it. On failure the old Keel opens again.
+fn finish_update(pid: i32, staged: &std::path::Path, app: &std::path::Path) {
+    let version = staged
+        .join("Contents/Info.plist")
+        .exists()
+        .then(|| {
+            std::process::Command::new("/usr/bin/plutil")
+                .args(["-extract", "CFBundleShortVersionString", "raw", "-o", "-"])
+                .arg(staged.join("Contents/Info.plist"))
+                .output()
+                .ok()
+                .map(|output| String::from_utf8_lossy(&output.stdout).trim().to_owned())
+        })
+        .flatten()
+        .unwrap_or_default();
+    let error = update::finish(pid, staged, app, std::time::Duration::from_secs(120))
+        .err()
+        .map(|error| format!("{error:#}"));
+    let _ = update::write_outcome(&paths::data_dir(), &update::Outcome { version, error });
+    let _ = std::process::Command::new("/usr/bin/open")
+        .arg(app)
+        .status();
+}
+
 fn run(path: Option<PathBuf>, more: Vec<PathBuf>, socket: PathBuf) {
     // Before anything else, so a crash at the start is kept too.
     if let Some(unclean) = crash::start(&paths::data_dir()) {
@@ -144,8 +175,10 @@ fn run(path: Option<PathBuf>, more: Vec<PathBuf>, socket: PathBuf) {
         for warning in &warnings {
             eprintln!("keel: {warning}");
         }
-        cx.on_app_quit(|_| {
+        cx.on_app_quit(|cx| {
             crash::finish();
+            // An update the user asked for is put in place once Keel is gone.
+            workbench_window::start_pending_update(cx);
             async {}
         })
         .detach();

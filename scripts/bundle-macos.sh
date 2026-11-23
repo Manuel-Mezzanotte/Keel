@@ -18,6 +18,8 @@ if [[ "${1:-}" != "--skip-build" ]]; then
 fi
 
 version="$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml | head -1)"
+# The build number only grows: updates compare it (crates/keel/src/version.rs).
+build="$(sed -n 's/^pub const BUILD: u64 = \([0-9]*\);/\1/p' crates/keel/src/version.rs)"
 app="target/release/Keel.app"
 mkdir -p "$app/Contents/MacOS" "$app/Contents/Resources"
 # A new file renamed over the old one: a Keel already running from this
@@ -51,7 +53,7 @@ cat > "$app/Contents/Info.plist" <<PLIST
   <key>CFBundleShortVersionString</key>
   <string>${version}</string>
   <key>CFBundleVersion</key>
-  <string>${version}</string>
+  <string>${build}</string>
   <key>CFBundleDevelopmentRegion</key>
   <string>it</string>
   <key>CFBundleLocalizations</key>

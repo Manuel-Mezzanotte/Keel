@@ -28,6 +28,7 @@ gpui-component.workspace = true
 gpui-kit-assets.workspace = true
 gpui_platform.workspace = true
 git.workspace = true
+update.workspace = true
 lsp.workspace = true
 dap.workspace = true
 pdf.workspace = true
@@ -54,6 +55,7 @@ objc2-app-kit.workspace = true
 gpui = { workspace = true, features = ["test-support"] }
 tempfile.workspace = true
 tungstenite = "0.30.0"
+update = { workspace = true, features = ["test-support"] }
 zip.workspace = true
 
 [lints]

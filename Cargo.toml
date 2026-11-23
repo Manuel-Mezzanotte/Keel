@@ -104,6 +104,7 @@ git = { path = "crates/git" }
 lsp = { path = "crates/lsp" }
 dap = { path = "crates/dap" }
 pdf = { path = "crates/pdf" }
+update = { path = "crates/update" }
 
 # Grammars gpui-component does not ship.
 tree-sitter-xml = "0.7.0"

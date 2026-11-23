@@ -2512,6 +2512,9 @@ impl Render for Workbench {
         }
         if !self.first_frame_drawn {
             self.first_frame_drawn = true;
+            // Once the window is on screen: how the last update went, and
+            // the check at start.
+            cx.defer_in(window, |this, window, cx| this.updates_at_start(window, cx));
             // Only the first window counts: later ones open long after start.
             static TIMED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
             if std::env::var_os("KEEL_STARTUP_TIMING").is_some()
@@ -2623,6 +2626,9 @@ impl Render for Workbench {
             )
             .on_action(cx.listener(|this, _: &OpenSettings, window, cx| {
                 this.open_page(super::settings_view::PageKind::Settings, window, cx)
+            }))
+            .on_action(cx.listener(|this, _: &CheckForUpdates, window, cx| {
+                this.check_for_updates(true, window, cx)
             }))
             .on_action(cx.listener(|this, _: &ImportCursorSettings, window, cx| {
                 this.import_cursor_settings(window, cx)

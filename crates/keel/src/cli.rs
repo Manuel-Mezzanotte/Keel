@@ -13,6 +13,13 @@ pub enum Command {
     Help,
     /// Install a VSIX package and exit.
     InstallExtension(PathBuf),
+    /// Not for people: run by Keel as it quits to install an update,
+    /// `--finish-update PID STAGED APP`.
+    FinishUpdate {
+        pid: i32,
+        staged: PathBuf,
+        app: PathBuf,
+    },
 }
 
 /// Usage text printed by `keel --help` and after a wrong invocation.
@@ -43,6 +50,20 @@ pub fn parse(arguments: impl IntoIterator<Item = String>) -> Result<Command, Str
                     return match arguments.next() {
                         Some(package) => Ok(Command::InstallExtension(PathBuf::from(package))),
                         None => Err("--install-extension needs a .vsix file".to_owned()),
+                    };
+                }
+                "--finish-update" => {
+                    let mut next = || arguments.next();
+                    return match (next(), next(), next()) {
+                        (Some(pid), Some(staged), Some(app)) => pid
+                            .parse()
+                            .map(|pid| Command::FinishUpdate {
+                                pid,
+                                staged: PathBuf::from(staged),
+                                app: PathBuf::from(app),
+                            })
+                            .map_err(|_| "--finish-update needs a process id".to_owned()),
+                        _ => Err("--finish-update needs PID STAGED APP".to_owned()),
                     };
                 }
                 "--" => only_files = true,
@@ -124,5 +145,24 @@ mod tests {
                 PathBuf::from("-c.ts"),
             ]))
         );
+    }
+
+    #[test]
+    fn finish_update_takes_the_process_and_both_apps() {
+        assert_eq!(
+            parse_args(&[
+                "--finish-update",
+                "42",
+                "/A/.keel-update/Keel-2/Keel.app",
+                "/A/Keel.app"
+            ]),
+            Ok(Command::FinishUpdate {
+                pid: 42,
+                staged: PathBuf::from("/A/.keel-update/Keel-2/Keel.app"),
+                app: PathBuf::from("/A/Keel.app"),
+            })
+        );
+        assert!(parse_args(&["--finish-update", "x", "a", "b"]).is_err());
+        assert!(parse_args(&["--finish-update", "42"]).is_err());
     }
 }

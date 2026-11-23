@@ -70,6 +70,7 @@ mod scm_graph;
 mod search_results;
 mod search_view;
 mod settings_view;
+pub use updates::start_pending_update;
 mod shell;
 mod signature_help;
 #[cfg(feature = "snapshots")]
@@ -84,6 +85,7 @@ mod terminal_fixes;
 mod terminal_view;
 mod terminals;
 mod testing;
+mod updates;
 mod writing;
 
 pub(crate) use editing::{
@@ -244,6 +246,7 @@ actions!(
         Open,
         OpenRecent,
         OpenSettings,
+        CheckForUpdates,
         OpenSettingsJson,
         OpenKeybindings,
         ImportCursorSettings
@@ -620,6 +623,10 @@ pub struct Workbench {
     /// The page the Settings tab opens on: a counter that changes at each
     /// jump, and the extension whose settings to show, if any.
     settings_jump: (usize, Option<String>),
+    /// A new version of Keel offered in its window, and how far it got.
+    update_offer: Option<updates::Offer>,
+    /// Whether a check for updates asked from the Settings is running.
+    checking_updates: bool,
     agent_terminal: Option<claude_code::AgentTerminal>,
     /// The staged text of files, for the margin, by path in the repository.
     git_baselines: HashMap<String, Option<String>>,
@@ -860,6 +867,8 @@ impl Workbench {
             agent_width: claude_code::AGENT_WIDTH,
             sidebar_width: shell::SIDEBAR_WIDTH,
             settings_jump: (0, None),
+            update_offer: None,
+            checking_updates: false,
             agent_terminal: None,
             npm_scripts: None,
             npm_collapsed: false,

@@ -5,15 +5,15 @@ use gpui_component::input::{Copy, Cut, Paste, Redo, Replace, Search, SelectAll, 
 
 use crate::i18n::UiLanguage;
 use crate::workbench_window::{
+    CheckForUpdates, CloseWindow, NewFile, NewWindow, Open, OpenKeybindings, OpenProject,
+    OpenSettings, Quit, Save, SelectLanguage, SelectTheme, ShowCommands, ShowExplorer,
+    ShowExtensions, ShowSearch, ShowSourceControl, ToggleAgent, ToggleOutput, TogglePanel,
+    ToggleProblems, ToggleSidebar, ToggleTerminal,
+};
+use crate::workbench_window::{
     CloseEditor, GoToLine, QuickOpen, ReopenClosedEditor, SplitEditor, SplitEditorDown,
 };
 use crate::workbench_window::{CloseFolder, RevertFile, SaveAll, SaveAs, ToggleAutoSave};
-use crate::workbench_window::{
-    CloseWindow, NewFile, NewWindow, Open, OpenKeybindings, OpenProject, OpenSettings, Quit, Save,
-    SelectLanguage, SelectTheme, ShowCommands, ShowExplorer, ShowExtensions, ShowSearch,
-    ShowSourceControl, ToggleAgent, ToggleOutput, TogglePanel, ToggleProblems, ToggleSidebar,
-    ToggleTerminal,
-};
 use crate::workbench_window::{
     ConfigureTasks, RerunLastTask, RunBuildTask, RunTask, TerminateTask,
 };
@@ -133,6 +133,7 @@ pub fn set(language: UiLanguage, cx: &mut App) {
             "Keel",
             vec![
                 MenuItem::action(strings.menu_settings, OpenSettings),
+                MenuItem::action(strings.menu_check_updates, CheckForUpdates),
                 MenuItem::action(strings.menu_keybindings, OpenKeybindings),
                 MenuItem::action(strings.menu_theme, SelectTheme),
                 MenuItem::action(strings.menu_language, SelectLanguage),
@@ -380,6 +381,7 @@ mod tests {
             items,
             [
                 "Impostazioni…",
+                "Cerca aggiornamenti…",
                 "Scorciatoie da tastiera",
                 "Tema colori…",
                 "Lingua…",

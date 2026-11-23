@@ -17,6 +17,9 @@ use crate::workbench_window::{
     ScrollToNextCommand, ScrollToPreviousCommand,
 };
 use crate::workbench_window::{
+    CheckForUpdates, ImportCursorSettings, OpenKeybindings, OpenSettings, OpenSettingsJson,
+};
+use crate::workbench_window::{
     CheckoutBranch, Commit, CommitAmend, CreateBranch, DiscardAll, GitFetch, GitPull, GitPush,
     GitRefresh, GitStash, GitStashPop, GitSync, StageAll, UnstageAll,
 };
@@ -70,9 +73,6 @@ use crate::workbench_window::{
     GoToTypeDefinition, RenameSymbol, RevealDefinition,
 };
 use crate::workbench_window::{GoToLine, QuickOpen};
-use crate::workbench_window::{
-    ImportCursorSettings, OpenKeybindings, OpenSettings, OpenSettingsJson,
-};
 use crate::workbench_window::{NextChange, PreviousChange, RevertChange, StageChange};
 use crate::workbench_window::{NextDiffChange, OpenAllChanges, PreviousDiffChange};
 use crate::workbench_window::{
@@ -123,6 +123,12 @@ pub const COMMANDS: &[KeelCommand] = &[
         id: "workbench.action.openSettings",
         action: || Box::new(OpenSettings),
         default_key: Some("cmd+,"),
+        context: None,
+    },
+    KeelCommand {
+        id: "update.checkForUpdates",
+        action: || Box::new(CheckForUpdates),
+        default_key: None,
         context: None,
     },
     KeelCommand {
