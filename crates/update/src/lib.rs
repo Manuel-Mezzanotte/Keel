@@ -61,6 +61,18 @@ pub struct Release {
     pub sha256: String,
     /// The Ed25519 signature of its bytes, as hex.
     pub signature: String,
+    /// The disk image of the same version, for the site's download page.
+    /// Keel itself does not read it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub disk_image: Option<DiskImage>,
+}
+
+/// A disk image to install Keel by hand.
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
+pub struct DiskImage {
+    pub url: String,
+    pub size: u64,
+    pub sha256: String,
 }
 
 /// What is new, in the interface's languages.
@@ -477,6 +489,7 @@ pub mod test_support {
             size: bytes.len() as u64,
             sha256: encode_hex(&Sha256::digest(bytes)),
             signature: encode_hex(&key.sign(bytes).to_bytes()),
+            disk_image: None,
         }
     }
 
@@ -513,6 +526,7 @@ mod tests {
             size: 0,
             sha256: String::new(),
             signature: String::new(),
+            disk_image: None,
         }
     }
 

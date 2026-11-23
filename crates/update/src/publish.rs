@@ -9,7 +9,7 @@ use anyhow::{Context as _, Result, ensure};
 use ed25519_dalek::{Signer as _, SigningKey};
 use sha2::{Digest as _, Sha256};
 
-use crate::{Feed, Notes, Release, decode_hex, encode_hex};
+use crate::{DiskImage, Feed, Notes, Release, decode_hex, encode_hex};
 
 /// What a release is made of.
 pub struct Stage<'a> {
@@ -42,6 +42,7 @@ pub fn stage(stage: &Stage) -> Result<Vec<String>> {
     std::fs::copy(stage.dmg, releases.join(&dmg_name)).context("the disk image is missing")?;
 
     let bytes = std::fs::read(stage.zip)?;
+    let image = std::fs::read(stage.dmg)?;
     let base = stage.base.trim_end_matches('/');
     let release = Release {
         version: stage.version.to_owned(),
@@ -53,6 +54,11 @@ pub fn stage(stage: &Stage) -> Result<Vec<String>> {
         size: bytes.len() as u64,
         sha256: encode_hex(&Sha256::digest(&bytes)),
         signature: encode_hex(&stage.key.sign(&bytes).to_bytes()),
+        disk_image: Some(DiskImage {
+            url: format!("{base}/releases/{dmg_name}"),
+            size: image.len() as u64,
+            sha256: encode_hex(&Sha256::digest(&image)),
+        }),
     };
     // The previous version stays, for whoever needs to go back to it.
     let previous = stage
@@ -85,7 +91,6 @@ pub fn stage(stage: &Stage) -> Result<Vec<String>> {
         serde_json::to_string_pretty(&feed)? + "\n",
     )?;
 
-    let image = std::fs::read(stage.dmg)?;
     let installer = stage
         .installer
         .replace("@VERSION@", stage.version)
@@ -216,6 +221,14 @@ mod tests {
         let feed = fetch(&format!("file://{}/updates.json", site.display())).unwrap();
         let found = newest(&feed, 1, "27.0").unwrap().clone();
         assert_eq!((found.version.as_str(), found.build), ("0.2.0", 2));
+        let image = found.disk_image.clone().unwrap();
+        assert!(image.url.ends_with("/releases/Keel-0.2.0.dmg"));
+        assert_eq!(
+            image.size,
+            std::fs::metadata(site.join("releases/Keel-0.2.0.dmg"))
+                .unwrap()
+                .len()
+        );
         let staging = dir.path().join("Applications/.keel-update");
         let zip = download(&found, &staging, &test_key().verifying_key()).unwrap();
         let app = unpack(&zip, &staging, &found).unwrap();
