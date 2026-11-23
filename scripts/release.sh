@@ -50,6 +50,14 @@ if [[ "$dest" == *:* ]]; then
   remote=1
   host="${dest%%:*}"
   path="${dest#*:}"
+  # One connection for the whole release: the mini PC asks its verification
+  # code once, and every ssh and rsync below goes through it.
+  control="$(mktemp -u "${TMPDIR:-/tmp}/keel-release-ssh.XXXXXX")"
+  echo "== Connecting to $host (its verification code is asked once)"
+  ssh -o ControlMaster=yes -o ControlPath="$control" -o ControlPersist=900 -fN "$host" || die "cannot reach $host: is the VPN on?"
+  trap 'ssh -o ControlPath="$control" -O exit "$host" >/dev/null 2>&1 || true' EXIT
+  ssh() { command ssh -o ControlPath="$control" "$@"; }
+  rsync() { command rsync -e "ssh -o ControlPath=$control" "$@"; }
 else
   remote=0
   mkdir -p "$dest"
