@@ -1,6 +1,6 @@
 # Keel — piano della messa online
 
-*Scritto il 23 novembre 2026, con le decisioni dell'autore dello stesso giorno. Stato: **fasi A e B fatte** il 23 novembre (resta la tua prova del clic, sotto); C e D da fare, ognuna col via dell'autore.*
+*Scritto il 23 novembre 2026, con le decisioni dell'autore dello stesso giorno. Stato: **fasi A, B e C fatte** il 23 novembre (il clic della fase B provato dall'autore: «Keel 0.1.2 (3)»); resta D, col via dell'autore.*
 
 Lo scopo è rendere Keel scaricabile da chiunque da **keel.mezzalab.eu** e fare in modo che si aggiorni dall'app stessa. Per ora **senza pagare l'account sviluppatore di Apple**. La firma di Apple si potrà aggiungere dopo senza rifare niente.
 
@@ -176,6 +176,14 @@ Perché è sicuro e non invadente:
    - Versione attuale, data, peso, requisiti (macOS 13 o successivo, Apple Silicon) e impronta SHA-256, letti dall'elenco delle versioni al momento del build del sito.
 2. **I pulsanti della pagina principale** portano qui: `downloadUrl` in `src/site.ts` diventa l'indirizzo della pagina.
 3. **Le domande del sito:** come si aggiorna Keel e cosa fa lo script.
+
+**Com'è fatta (23 novembre, KeelSite `ae6d32e`):**
+- `/download/` e `/en/download/`: titolo, requisiti, poi due schede. «Dal Terminale» (consigliato) ha la riga dello script con «Copia» e «Leggi lo script»; «Con l'immagine disco» ha il pulsante del DMG col peso e i tre passaggi della prima apertura. Sotto, versione, data e SHA-256 del DMG, e una riga su come si aggiorna Keel.
+- **I dati non sono nel sito:** la pagina li legge al momento da `/updates.json`, a cui `release.sh` ora aggiunge per ogni versione indirizzo, peso e SHA-256 del DMG (`diskImage`; Keel lo ignora). Così un rilascio non chiede un nuovo build del sito. Senza elenco, come in sviluppo, la pagina dice che la prima versione è in arrivo.
+- I pulsanti «Scarica per Mac» della home portano alla pagina (`site.downloads` in `src/site.ts`).
+- Due domande nuove: come si aggiorna Keel e cosa fa lo script; quella sulla rete dice anche del controllo all'avvio.
+- La pagina carica solo il suo codice: circa 6,5 kB più React, senza il mockup della home.
+- **Controllato:** il build (TypeScript, Vite e le quattro pagine disegnate in HTML) e il testo delle due pagine. L'aspetto non l'ho guardato: va visto da te con `pnpm dev` su `/download/`.
 
 ### Fase D — Online su keel.mezzalab.eu
 1. **Sul mini PC:**
