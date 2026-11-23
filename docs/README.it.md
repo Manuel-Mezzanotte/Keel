@@ -333,9 +333,10 @@ flowchart LR
 ## Sviluppo
 
 ```bash
-cargo test --workspace                     # 542 test, senza finestre sullo schermo
+cargo test --workspace                     # 566 test, senza finestre sullo schermo
 cargo clippy --workspace --all-targets     # nessun avviso
 scripts/snapshots.sh <cartella>            # la finestra disegnata fuori dallo schermo, in PNG
+scripts/third-party-licenses.py            # gli avvisi delle licenze, dopo aver cambiato le dipendenze
 ```
 
 - Per le prove imposta `KEEL_DATA_DIR` su una cartella a parte, così le tue impostazioni vere non si toccano.
@@ -392,6 +393,8 @@ Keel non è legato a Microsoft, Anysphere, Anthropic, GitHub o Apple. Visual Stu
 ## Licenza
 
 Una licenza non è ancora stata scelta, quindi per ora tutti i diritti sono riservati. I file in `vendor/gpui-base` tengono la loro [licenza Apache 2.0](../vendor/gpui-base/LICENSE-APACHE).
+
+Keel è costruito su software open source, le cui licenze chiedono che i loro avvisi accompagnino l'app. Sono tutti in [`crates/keel/THIRD-PARTY-LICENSES.txt`](../crates/keel/THIRD-PARTY-LICENSES.txt), che Keel mostra in Impostazioni › Aggiornamenti e porta con sé in `Keel.app/Contents/Resources`. Lo scrive `scripts/third-party-licenses.py` a partire da `Cargo.lock`: dopo aver cambiato le dipendenze va rilanciato, e fino ad allora un test fallisce e un rilascio non parte.
 
 <br>
 

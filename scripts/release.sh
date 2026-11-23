@@ -46,6 +46,9 @@ while [[ $# -gt 0 ]]; do
     *) die "unknown option: $1" ;;
   esac
 done
+# The app carries the licences of what is built into it: they must be current.
+python3 scripts/third-party-licenses.py --check >/dev/null ||
+  die "the third-party licences are out of date: run scripts/third-party-licenses.py and commit"
 if [[ "$dest" == *:* ]]; then
   remote=1
   host="${dest%%:*}"

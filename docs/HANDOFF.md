@@ -58,7 +58,7 @@ Nasce dalla curiosità per le app native in Rust e dal desiderio di un editor tu
 | `crates/update` | aggiornamenti di Keel: elenco delle versioni, download controllato (peso, SHA-256, firma Ed25519), sostituzione dell'app dopo la chiusura |
 | `vendor/gpui-base` | copia dell'editor di gpui-component, con le correzioni che servivano (pieghe, più cursori) |
 | `fixtures/` | file e pacchetti di estensioni per i test |
-| `scripts/` | `bundle-macos.sh` (crea `Keel.app`), `make-dmg.sh` (crea il DMG), `measure-memory.sh` |
+| `scripts/` | `bundle-macos.sh` (crea `Keel.app`), `make-dmg.sh` (crea il DMG), `measure-memory.sh`, `release.sh` e `install.sh` (pubblicazione), `third-party-licenses.py` (gli avvisi delle licenze, con i testi mancanti in `licenses/`) |
 | `assets/` | il marchio e le immagini del README (`readme/`: testata e confronto sono SVG animati, il resto sono finestre vere disegnate da Keel) |
 | `README.md` | la presentazione per chi arriva sulla repo, in inglese; in italiano è `docs/README.it.md`. Vanno aggiornati insieme |
 | `docs/` | questo documento, il piano, i dettagli da aggiungere (`DETTAGLI.md`) e le bozze grafiche, in italiano |
@@ -108,6 +108,7 @@ cargo test --workspace                         # tutti i test
 cargo clippy --workspace --all-targets         # controlli
 scripts/make-dmg.sh                            # Keel.app + target/release/Keel-0.1.0.dmg
 scripts/snapshots.sh <cartella>                # la finestra disegnata fuori dallo schermo, in PNG
+scripts/third-party-licenses.py                # gli avvisi delle licenze, dopo aver cambiato le dipendenze
 ```
 
 ---
@@ -162,7 +163,7 @@ Dopo le prime prove dell'app vera (18 novembre) sono arrivati altri giri di rito
 - **la pagina di presentazione** (22 novembre), in una repo sua, `KeelSite` (privata su GitHub, sul Mac accanto a Keel): React, Vite, Tailwind e shadcn/ui, in italiano e in inglese. Dal cielo si scende nel mare, che copre una copia di Keel in HTML, navigabile e nei tre temi; poi il confronto misurato con VS Code e Cursor, le funzioni, i linguaggi, le estensioni e le domande. I numeri e come sono stati misurati stanno nel suo `src/site.ts`. Per pubblicarla servono un dominio, dove metterla e l'app firmata da Apple: finché `downloadUrl` è `null` la pagina dice «In arrivo».
 
 Stato dei controlli all'ultimo commit:
-- tutti i test passano, 542 in tutto, 300 solo nell'app;
+- tutti i test passano, 566 in tutto, 316 solo nell'app;
 - clippy non segnala niente;
 - la prima schermata di Keel arriva in 330 ms, media di sei avvii;
 - **memoria di Keel** (22 novembre, versione installata, M4 Pro, language server spenti), come la dà Monitoraggio Attività: 132 MB con una finestra vuota, 271 MB con un progetto e un file, 299 MB con 450 file e 20 schede, 326 MB con due progetti. I 130–150 MB scritti in `PIANO.md` sono la memoria residente (RSS), che non conta quella grafica: non vanno usati per i confronti;
@@ -255,7 +256,7 @@ L'idea è permettere a chi usa Keel di cambiarne l'aspetto con un suo file, come
 
 - Il font del codice di serie: SF Mono oppure un altro.
 - La minimappa: accesa o spenta di serie.
-- La pubblicazione: **Keel 0.1.0 è scaricabile da https://keel.mezzalab.eu dal 23 novembre**, e si aggiorna da solo. Il piano e com'è andata sono in [`PUBBLICAZIONE.md`](PUBBLICAZIONE.md), in quattro fasi da fare in ordine, ognuna col via dell'autore: aggiornamenti dentro Keel con un motore suo (crate `update`), controllati solo all'avvio (fase A fatta il 23 novembre); script di rilascio e di installazione (fase B fatta il 23 novembre: la chiave di firma è nel Portachiavi login come «Keel release signing key», e ne va tenuta una copia fuori dal Mac); pagina di download su KeelSite (fase C fatta il 23 novembre, legge `/updates.json`); sito su keel.mezzalab.eu dal mini PC, con il deploy da `main` e solo due versioni dei pacchetti. La firma di Apple è rimandata. Restano da decidere la licenza, il numero della prima versione ufficiale e la lingua principale del sito (ora l'italiano).
+- La pubblicazione: **Keel 0.1.0 è scaricabile da https://keel.mezzalab.eu dal 23 novembre**, e si aggiorna da solo. Il piano e com'è andata sono in [`PUBBLICAZIONE.md`](PUBBLICAZIONE.md), in quattro fasi da fare in ordine, ognuna col via dell'autore: aggiornamenti dentro Keel con un motore suo (crate `update`), controllati solo all'avvio (fase A fatta il 23 novembre); script di rilascio e di installazione (fase B fatta il 23 novembre: la chiave di firma è nel Portachiavi login come «Keel release signing key», e ne va tenuta una copia fuori dal Mac); pagina di download su KeelSite (fase C fatta il 23 novembre, legge `/updates.json`); sito su keel.mezzalab.eu dal mini PC, con il deploy da `main` e solo due versioni dei pacchetti. La firma di Apple è rimandata. Dal 23 novembre l'app porta con sé gli avvisi delle licenze di terze parti (`crates/keel/THIRD-PARTY-LICENSES.txt`, scritto da `scripts/third-party-licenses.py`, visibile in Impostazioni › Aggiornamenti): vanno rigenerati quando cambiano le dipendenze, e un test e `release.sh` lo ricordano. Restano da decidere la licenza di Keel e le condizioni d'uso per chi lo scarica, e la lingua principale del sito (ora l'italiano).
 - Il ramo `main` non esiste ancora su GitHub: il predefinito è `develop`.
 - La cartella `KeelSite/` dentro Keel è un sito vecchio del 21 novembre, in Next.js, messo lì dall'autore: non è in git e non va committata. Quello buono è la repo `KeelSite` accanto a Keel.
 - Il merge di `develop` su `main`: solo quando lo chiede l'autore.

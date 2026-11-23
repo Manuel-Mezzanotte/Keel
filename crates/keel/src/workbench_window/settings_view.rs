@@ -721,6 +721,21 @@ impl Workbench {
         self.show_tab(&uri, column, OpenAs::Normal, true, window, cx);
     }
 
+    /// Opens the notices of the software inside Keel, in a read-only tab.
+    pub(super) fn open_licenses(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let uri = crate::licenses::URI.to_owned();
+        if !self.documents.contains_key(&uri) {
+            self.add_document(
+                uri.clone(),
+                Backing::Library,
+                "plaintext".to_owned(),
+                crate::licenses::NOTICES.to_owned(),
+            );
+        }
+        let column = self.active.min(self.panes.len().saturating_sub(1));
+        self.show_tab(&uri, column, OpenAs::Normal, true, window, cx);
+    }
+
     /// Opens the user's `settings.json`, creating it empty if needed.
     pub(super) fn open_settings_json(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let Some(data) = self.data_dir.clone() else {
@@ -1045,6 +1060,29 @@ impl Workbench {
                 strings.update_version_detail(crate::version::VERSION, crate::version::BUILD),
             )
             .keywords([SharedString::from("version"), SharedString::from("update")]);
+        let show = {
+            let workbench = workbench.clone();
+            SettingField::<SharedString>::render(move |_, _, _| {
+                let workbench = workbench.clone();
+                Button::new("third-party-licenses")
+                    .outline()
+                    .small()
+                    .label(strings.update_licenses_show)
+                    .on_click(move |_, window, cx| {
+                        workbench
+                            .update(cx, |workbench, cx| workbench.open_licenses(window, cx))
+                            .ok();
+                    })
+            })
+        };
+        let licenses = SettingItem::new(strings.update_licenses, show)
+            .description(strings.update_licenses_detail)
+            .keywords([
+                SharedString::from("license"),
+                SharedString::from("licence"),
+                SharedString::from("licenza"),
+                SharedString::from("open source"),
+            ]);
         let automatic = CATALOG
             .iter()
             .filter(|entry| entry.page == Page::Updates)
@@ -1060,7 +1098,8 @@ impl Workbench {
             SettingGroup::new()
                 .title(strings.update_page)
                 .item(version)
-                .items(automatic),
+                .items(automatic)
+                .item(licenses),
         ]
     }
 
@@ -1520,6 +1559,30 @@ mod tests {
             text,
             "{\n    // mio\n    \"keel.language\": \"it\",\n    \"editor.fontSize\": 18\n}\n"
         );
+    }
+
+    #[gpui::test]
+    fn the_third_party_licences_open_once_in_a_read_only_tab(cx: &mut TestAppContext) {
+        let (_folder, _data, view, cx) = window(cx);
+        for _ in 0..2 {
+            view.update_in(cx, |view, window, cx| view.open_licenses(window, cx));
+            cx.run_until_parked();
+        }
+        view.read_with(cx, |view, cx| {
+            let document = &view.documents[crate::licenses::URI];
+            assert!(matches!(document.backing, Backing::Library), "it can only be read");
+            assert_eq!(view.display_name(document), "Licenze di terze parti");
+            let tabs = view
+                .groups
+                .iter()
+                .flat_map(|group| &group.tabs)
+                .filter(|tab| tab.uri == crate::licenses::URI)
+                .count();
+            assert_eq!(tabs, 1, "opening it again shows the same tab");
+            let pane = view.pane_index(crate::licenses::URI).expect("in view");
+            let text = view.panes[pane].editor.read(cx).value().to_string();
+            assert!(text.starts_with("Third-party software in Keel"));
+        });
     }
 
     #[gpui::test]

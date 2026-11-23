@@ -30,6 +30,8 @@ mv -f "$app/Contents/MacOS/keel.new" "$app/Contents/MacOS/keel"
 # Glass as their own; Keel.icns for the earlier versions.
 cp assets/brand/Assets.car "$app/Contents/Resources/Assets.car"
 cp assets/brand/Keel.icns "$app/Contents/Resources/Keel.icns"
+# The notices of the software built in, also shown in Settings > Updates.
+cp crates/keel/THIRD-PARTY-LICENSES.txt "$app/Contents/Resources/THIRD-PARTY-LICENSES.txt"
 
 cat > "$app/Contents/Info.plist" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>

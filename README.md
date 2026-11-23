@@ -333,9 +333,10 @@ flowchart LR
 ## Development
 
 ```bash
-cargo test --workspace                     # 542 tests, with no window on screen
+cargo test --workspace                     # 566 tests, with no window on screen
 cargo clippy --workspace --all-targets     # no warnings
 scripts/snapshots.sh <folder>              # the window drawn off screen, as PNG
+scripts/third-party-licenses.py            # the licence notices, after changing dependencies
 ```
 
 - Set `KEEL_DATA_DIR` to a folder of its own when trying things, so your real settings stay untouched.
@@ -392,6 +393,8 @@ Keel is not affiliated with Microsoft, Anysphere, Anthropic, GitHub or Apple. Vi
 ## License
 
 No licence has been chosen yet, so all rights are reserved for now. The files in `vendor/gpui-base` keep their own [Apache 2.0 licence](vendor/gpui-base/LICENSE-APACHE).
+
+Keel is built on open source software, whose licences ask for their notices to go with the app. They are all in [`crates/keel/THIRD-PARTY-LICENSES.txt`](crates/keel/THIRD-PARTY-LICENSES.txt), which Keel shows in Settings › Updates and carries in `Keel.app/Contents/Resources`. It is written from `Cargo.lock` by `scripts/third-party-licenses.py`: after changing dependencies, run it again; until then a test fails and a release does not start.
 
 <br>
 

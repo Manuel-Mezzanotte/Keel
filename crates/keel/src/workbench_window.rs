@@ -1068,6 +1068,9 @@ impl Workbench {
             }
             _ => {}
         }
+        if document.uri == crate::licenses::URI {
+            return self.strings().update_licenses.to_owned();
+        }
         match document.uri.strip_prefix("untitled:Untitled-") {
             Some(number) => format!("{} {number}", self.strings().untitled),
             None => document.name(),
