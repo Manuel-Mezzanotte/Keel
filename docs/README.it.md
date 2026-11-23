@@ -325,6 +325,7 @@ flowchart LR
 | `crates/workbench` | Logica condivisa col ponte: scorciatoie, clausole `when`, URI |
 | `crates/ai` | Claude Code: protocollo IDE e pannello agente ACP |
 | `crates/pdf` | Anteprima PDF con PDFKit |
+| `crates/update` | gli aggiornamenti di Keel: l'elenco delle versioni, il download controllato, la sostituzione dell'app |
 | `vendor/gpui-base` | L'editor di gpui-component, con le modifiche che servivano ([elenco](../vendor/gpui-base/KEEL.md)) |
 
 </details>
@@ -350,6 +351,7 @@ scripts/snapshots.sh <cartella>            # la finestra disegnata fuori dallo s
 
 Keel non raccoglie niente. Si collega solo a:
 
+- **keel.mezzalab.eu**, una volta all'avvio, per vedere se c'è una versione nuova di Keel (si spegne da Impostazioni → Aggiornamenti), e quando ne scarichi una;
 - **Open VSX**, quando cerchi, installi o aggiorni estensioni;
 - **i siti dei language server e dei debugger** che installa, controllati con l'impronta pubblicata dove c'è;
 - **gli schemi JSON** che quei server chiedono, come quello di `package.json`, da SchemaStore e dai siti degli strumenti;

@@ -325,6 +325,7 @@ flowchart LR
 | `crates/workbench` | Logic shared with the bridge: shortcuts, `when` clauses, URIs |
 | `crates/ai` | Claude Code: the IDE protocol and the ACP agent panel |
 | `crates/pdf` | PDF preview with PDFKit |
+| `crates/update` | Keel's own updates: the list of releases, the checked download, the swap of the app |
 | `vendor/gpui-base` | gpui-component's editor, with the changes Keel needs ([list](vendor/gpui-base/KEEL.md)) |
 
 </details>
@@ -350,6 +351,7 @@ scripts/snapshots.sh <folder>              # the window drawn off screen, as PNG
 
 Keel collects nothing. It connects only to:
 
+- **keel.mezzalab.eu**, once at start, to see if there is a new version of Keel (Settings → Updates turns it off), and when you download one;
 - **Open VSX**, when you search, install or update extensions;
 - **the sites of the language servers and debug adapters** it installs, each checked against a published checksum where there is one;
 - **the JSON schemas** those servers ask for, such as the one of `package.json`, from SchemaStore and the sites of their tools;

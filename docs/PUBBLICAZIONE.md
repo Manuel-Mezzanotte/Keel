@@ -1,6 +1,6 @@
 # Keel — piano della messa online
 
-*Scritto il 23 novembre 2026, con le decisioni dell'autore dello stesso giorno. Stato: piano, niente è ancora fatto. Ogni fase parte solo col via dell'autore.*
+*Scritto il 23 novembre 2026, con le decisioni dell'autore dello stesso giorno. Stato: **fase A fatta** il 23 novembre; B, C e D da fare, ognuna col via dell'autore.*
 
 Lo scopo è rendere Keel scaricabile da chiunque da **keel.mezzalab.eu** e fare in modo che si aggiorni dall'app stessa. Per ora **senza pagare l'account sviluppatore di Apple**. La firma di Apple si potrà aggiungere dopo senza rifare niente.
 
@@ -24,8 +24,8 @@ Lo scopo è rendere Keel scaricabile da chiunque da **keel.mezzalab.eu** e fare 
 - **Senza rete:**
   - all'avvio il controllo fallisce in silenzio;
   - col pulsante, un messaggio dice che non è stato possibile controllare.
-- **Il motore è Sparkle,** il sistema delle app per Mac distribuite fuori dall'App Store. Scarica, controlla la firma e sostituisce l'app in modo sicuro. Quello che si vede è disegnato da Keel tramite il suo «user driver», quindi Sparkle non compare mai.
-- **La firma degli aggiornamenti** è una chiave EdDSA dell'autore: gratis e diversa da quella di Apple.
+- **Il motore è di Keel,** nel crate `update`, e non Sparkle come pensato all'inizio (decisione dell'autore del 23 novembre). Keel scarica già tutto con il `curl` del Mac. Un motore suo costa poche centinaia di righe di Rust e si prova con i test automatici. Sparkle avrebbe voluto un framework compilato dentro la repo, e da Rust la finestrella di Keel richiede un'interfaccia Objective-C fragile, che i test non raggiungono. Si rinuncia solo agli aggiornamenti «della sola parte cambiata»: si scarica sempre lo `.zip` intero.
+- **La firma degli aggiornamenti** è una chiave Ed25519 dell'autore: gratis e diversa da quella di Apple. La sua metà pubblica è `update::PUBLIC_KEY`, vuota finché la fase B non crea la coppia; con la chiave vuota Keel non installa niente.
   - Un pacchetto con una firma sbagliata non si installa.
   - La chiave sta nel portachiavi del Mac dell'autore, con una copia di riserva fuori dal Mac, e mai nella repo.
 
@@ -43,9 +43,9 @@ Lo scopo è rendere Keel scaricabile da chiunque da **keel.mezzalab.eu** e fare 
   - il sottodominio passa dal tunnel Cloudflare `miniPC` che c'è già;
   - ha il **deploy automatico a ogni push su `main`** di KeelSite, con un runner GitHub sul mini PC come negli altri progetti.
 - **I pacchetti di Keel non stanno nella repo del sito,** che a ogni versione si appesantirebbe per sempre. Stanno in una cartella sul mini PC fuori dalla repo, per esempio `/srv/keel-site/releases`, servita insieme alle pagine:
-  - `https://keel.mezzalab.eu/appcast.xml`, l'elenco delle versioni letto da Keel;
+  - `https://keel.mezzalab.eu/updates.json`, l'elenco delle versioni letto da Keel;
   - `https://keel.mezzalab.eu/install.sh`;
-  - `https://keel.mezzalab.eu/releases/Keel-<versione>.dmg` e `.zip`, il pacchetto per Sparkle.
+  - `https://keel.mezzalab.eu/releases/Keel-<versione>.dmg` e `.zip`: il DMG per chi installa a mano, lo `.zip` (fatto con `ditto`) per gli aggiornamenti.
 - **Solo due versioni sul mini PC:** l'attuale e la precedente, circa 80 MB in tutto. A ogni rilascio la precedente si cancella, l'attuale diventa precedente e la nuova diventa attuale. La precedente serve:
   - a chi ha la penultima, per scaricare solo la parte cambiata;
   - per tornare indietro in un attimo se la nuova ha un problema.
@@ -68,17 +68,17 @@ Lo scopo è rendere Keel scaricabile da chiunque da **keel.mezzalab.eu** e fare 
    - `CFBundleVersion`, un numero di build che cresce sempre: 1, 2, 3…
 
    Oggi `scripts/bundle-macos.sh` mette in tutti e due la versione di `Cargo.toml` (0.1.0): il numero di build va separato.
-2. **L'appcast** elenca le versioni presenti. Per ognuna:
+2. **L'elenco `updates.json`** elenca le versioni presenti. Per ognuna:
    - il numero e la build;
    - la data e la versione minima di macOS;
    - le novità in italiano e in inglese;
    - l'indirizzo del pacchetto, il suo peso e la sua firma EdDSA.
-3. **All'avvio**, quando la finestra è già sullo schermo e fuori dal thread dell'interfaccia, Keel legge l'appcast. Se la build più alta è maggiore della sua, mostra la finestrella. L'avvio non rallenta: è una richiesta sola di pochi KB.
+3. **All'avvio**, quando la finestra è già sullo schermo e fuori dal thread dell'interfaccia, Keel legge l'elenco delle versioni. Se la build più alta è maggiore della sua, mostra la finestrella. L'avvio non rallenta: è una richiesta sola di pochi KB.
 
 ### Il rilascio, ordine dei passi
 Lo script di rilascio fa il cambio in quest'ordine, così chi scarica in quel momento non trova mai un file a metà:
 1. carica la versione nuova completa;
-2. aggiorna l'appcast e `install.sh`, con il nuovo indirizzo e la nuova impronta;
+2. aggiorna l'elenco delle versioni e `install.sh`, con il nuovo indirizzo e la nuova impronta;
 3. per ultimo cancella la versione più vecchia, la terza.
 
 ### `install.sh`
@@ -104,11 +104,14 @@ Perché è sicuro e non invadente:
    - il numero di build in `CFBundleVersion`, separato dalla versione;
    - Keel le legge da sé;
    - «Informazioni su Keel» le mostra.
-2. **Sparkle dentro Keel:**
-   - `Sparkle.framework` va in `Keel.app/Contents/Frameworks`, aggiunto da `bundle-macos.sh`;
-   - è chiamato da Rust con `objc2`;
-   - ha un user driver di Keel che non mostra nessuna finestra di Sparkle;
-   - controlla l'appcast solo quando lo chiede Keel, mai a intervalli.
+2. **Il motore, crate `update`:**
+   - legge l'elenco con `curl`;
+   - sceglie la versione più nuova che gira su quel macOS;
+   - scarica lo `.zip` vicino all'app, in `.keel-update`;
+   - controlla peso, SHA-256 e firma Ed25519;
+   - lo scompatta con `ditto` e controlla che dentro ci sia Keel (`com.manuelmezzanotte.keel`), della build promessa e con la firma del codice valida;
+   - dopo la chiusura di Keel, un processo a parte (`keel --finish-update`) aspetta che Keel sia uscito, sposta la versione vecchia, mette al suo posto la nuova e, se qualcosa va storto, rimette la vecchia;
+   - infine riapre Keel e lascia un biglietto (`update-outcome.json` nella cartella dei dati) che il Keel nuovo legge per dire com'è andata.
 3. **Impostazioni:**
    - la versione attuale;
    - l'interruttore `update.automatic`, acceso di serie;
@@ -120,51 +123,59 @@ Perché è sicuro e non invadente:
    - durante il download un avanzamento nella finestrella stessa;
    - in caso di errore un messaggio chiaro, e Keel resta com'è.
 5. **Riavvio:** prima di sostituire l'app Keel salva la sessione, come con Cmd+Q, poi si riapre aggiornato.
-6. **Prove automatiche** con un appcast e pacchetti finti in locale:
+6. **Prove automatiche** con un elenco e pacchetti finti in locale (indirizzi `file://`):
    - versione più nuova, uguale o più vecchia;
    - firma sbagliata;
    - nessuna rete;
    - interruttore spento, che non deve fare nessuna richiesta all'avvio;
    - pulsante.
-7. **Misure:** memoria e tempo di avvio prima e dopo Sparkle, con lo stesso metodo del confronto con VS Code e Cursor (memoria dopo 40 secondi, media di tre avvii).
+7. **Misure:** memoria e tempo di avvio prima e dopo gli aggiornamenti, con lo stesso metodo del confronto con VS Code e Cursor (memoria dopo 40 secondi, media di tre avvii).
+
+   **Risultato (23 novembre, versione installata del 22 contro quella nuova, stesso README aperto, cartella dei dati vuota, sette avvii ciascuna, alternati nell'ultimo giro):**
+   - **prima schermata:** in media 352 ms prima (tolto un primo avvio a freddo da 609 ms) e 353 ms dopo. Nessuna differenza;
+   - **memoria dopo 40 secondi:** varia allo stesso modo nelle due versioni, da 59 a 236 MB, a seconda di quanto la finestra viene davvero disegnata. È il difetto della memoria grafica già noto in `HANDOFF.md`, non gli aggiornamenti: un avvio con la versione vecchia ha dato 137 MB e uno con la nuova 59;
+   - **il controllo all'avvio:** con `keel.mezzalab.eu` non ancora online fallisce in silenzio, come deve, senza ritardare la finestra.
 
 ### Fase B — Script di rilascio e di installazione
 1. **`scripts/release.sh`**, un comando solo:
-   1. alza versione e build;
+   0. la prima volta crea la coppia di chiavi Ed25519: la privata nel portachiavi del Mac, con una copia di riserva fuori dal Mac; la pubblica in `update::PUBLIC_KEY` (`crates/update/src/lib.rs`);
+   1. alza versione e build: `version` nel `Cargo.toml` della radice e `BUILD` in `crates/keel/src/version.rs`;
    2. scrive le novità, chiedendole all'autore;
    3. costruisce Keel;
    4. crea DMG e `.zip`;
    5. firma l'aggiornamento;
    6. calcola le impronte;
-   7. prepara appcast e `install.sh`;
+   7. prepara elenco delle versioni e `install.sh`;
    8. carica tutto sul mini PC nell'ordine giusto e lascia solo due versioni.
 2. **`install.sh`**, come descritto sopra.
 3. **Prova vera su un Mac pulito**, o con un utente macOS nuovo:
    - installazione con lo script e con il DMG;
    - aggiornamento da una versione alla successiva con la finestrella;
-   - controllo che Sparkle non faccia ricomparire l'avviso di macOS.
+   - controllo che l'avviso di macOS non ricompaia dopo un aggiornamento: Keel scarica con `curl`, che non mette l'etichetta di quarantena, quindi non dovrebbe;
 
-   Se ricompare, Keel toglie da solo l'etichetta di quarantena al pacchetto già scaricato e verificato.
+   - la prima prova vera del processo che sostituisce l'app, che i test fanno solo su cartelle finte.
+
+   Se l'avviso ricompare, Keel toglie da solo l'etichetta di quarantena al pacchetto già scaricato e verificato.
 
 ### Fase C — Pagina di download su KeelSite
 1. **Pagina `/download`, e `/en/download` in inglese,** con poche righe di spiegazione: chi scarica Keel se ne intende un po'.
    - In evidenza la riga dello script, con «Copia» e il collegamento per leggerlo.
    - Sotto, «Oppure scarica il DMG», con i passaggi brevi per «Apri comunque». Il testo è onesto e non spaventa: «Keel non è ancora firmato da Apple. Non vuol dire che sia pericoloso, solo che Apple non l'ha controllato.»
-   - Versione attuale, data, peso, requisiti (macOS 13 o successivo, Apple Silicon) e impronta SHA-256, letti dall'appcast al momento del build del sito.
+   - Versione attuale, data, peso, requisiti (macOS 13 o successivo, Apple Silicon) e impronta SHA-256, letti dall'elenco delle versioni al momento del build del sito.
 2. **I pulsanti della pagina principale** portano qui: `downloadUrl` in `src/site.ts` diventa l'indirizzo della pagina.
 3. **Le domande del sito:** come si aggiorna Keel e cosa fa lo script.
 
 ### Fase D — Online su keel.mezzalab.eu
 1. **Sul mini PC:**
    - la cartella del sito e quella dei pacchetti, `/srv/keel-site`;
-   - un piccolo server statico in Docker su una porta locale, con le intestazioni giuste (`appcast.xml` mai in cache, i pacchetti sì).
+   - un piccolo server statico in Docker su una porta locale, con le intestazioni giuste (`updates.json` mai in cache, i pacchetti sì).
 2. **Cloudflare:** il sottodominio `keel.mezzalab.eu` sul tunnel `miniPC` verso quella porta.
 3. **Deploy automatico:**
    - un runner GitHub sul mini PC, solo per KeelSite;
    - a ogni push su `main`: build, controlli, sostituzione delle pagine in un colpo solo, prova che il sito risponda;
    - la cartella dei pacchetti non viene mai toccata.
    - Come per Silo e la dashboard: cartella `deploy/` con `install.sh` per il mini PC, lanciato una volta dall'autore, che ha la password di `sudo`.
-4. **Primo rilascio:** `release.sh` carica la prima versione ufficiale, poi la pagina di download, appcast e script rispondono.
+4. **Primo rilascio:** `release.sh` carica la prima versione ufficiale, poi la pagina di download, elenco delle versioni e script rispondono.
 5. **Dashboard del mini PC:** la card del sito, come per le altre app.
 6. **Documenti:**
    - nel README di Keel, l'installazione e la sezione «Privacy», che deve dire che Keel controlla gli aggiornamenti su keel.mezzalab.eu all'avvio, se l'interruttore è acceso;
@@ -188,6 +199,6 @@ Ordine: **A → B → C → D**. Il sito va online solo dopo che tutto è stato 
 | Qualcuno teme lo script `curl … \| sh` | È corto, leggibile al suo indirizzo, senza `sudo`, e controlla l'impronta; il DMG resta come alternativa |
 | Senza notarizzazione l'avviso di macOS ricompare dopo un aggiornamento | Si prova nella fase B prima di andare online; se succede, Keel toglie l'etichetta di quarantena al pacchetto verificato |
 | Si perde la chiave di firma degli aggiornamenti | Copia nel portachiavi e una di riserva fuori dal Mac: senza, gli utenti non riceverebbero più aggiornamenti |
-| Un aggiornamento rotto arriva a tutti | La versione si prova sul Mac dell'autore prima del rilascio; la precedente resta sul mini PC e l'appcast si può riportare a lei in un attimo |
+| Un aggiornamento rotto arriva a tutti | La versione si prova sul Mac dell'autore prima del rilascio; la precedente resta sul mini PC e l'elenco delle versioni si può riportare a lei in un attimo |
 | Il mini PC è spento o senza rete | Il controllo all'avvio fallisce in silenzio; installazioni e aggiornamenti riprendono quando torna |
 | macOS cambia le regole per le app non firmate | È il motivo per passare poi alla firma di Apple; tutto il resto non cambia |
