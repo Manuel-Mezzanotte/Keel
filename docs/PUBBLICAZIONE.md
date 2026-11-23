@@ -1,6 +1,6 @@
 # Keel — piano della messa online
 
-*Scritto il 23 novembre 2026, con le decisioni dell'autore dello stesso giorno. Stato: **fase A fatta** il 23 novembre; B, C e D da fare, ognuna col via dell'autore.*
+*Scritto il 23 novembre 2026, con le decisioni dell'autore dello stesso giorno. Stato: **fasi A e B fatte** il 23 novembre (resta la tua prova del clic, sotto); C e D da fare, ognuna col via dell'autore.*
 
 Lo scopo è rendere Keel scaricabile da chiunque da **keel.mezzalab.eu** e fare in modo che si aggiorni dall'app stessa. Per ora **senza pagare l'account sviluppatore di Apple**. La firma di Apple si potrà aggiungere dopo senza rifare niente.
 
@@ -140,7 +140,7 @@ Perché è sicuro e non invadente:
 1. **`scripts/release.sh`**, un comando solo:
    0. la prima volta crea la coppia di chiavi Ed25519: la privata nel portachiavi del Mac, con una copia di riserva fuori dal Mac; la pubblica in `update::PUBLIC_KEY` (`crates/update/src/lib.rs`);
    1. alza versione e build: `version` nel `Cargo.toml` della radice e `BUILD` in `crates/keel/src/version.rs`;
-   2. scrive le novità, chiedendole all'autore;
+   2. prende le novità da un file con una sezione `## it` e una `## en`;
    3. costruisce Keel;
    4. crea DMG e `.zip`;
    5. firma l'aggiornamento;
@@ -156,6 +156,18 @@ Perché è sicuro e non invadente:
    - la prima prova vera del processo che sostituisce l'app, che i test fanno solo su cartelle finte.
 
    Se l'avviso ricompare, Keel toglie da solo l'etichetta di quarantena al pacchetto già scaricato e verificato.
+
+**Com'è fatta (23 novembre):**
+- `scripts/release.sh VERSIONE NOTE [--to DEST]` fa tutto. Senza `--to` pubblica sul mini PC (`minipc:/srv/keel-site/downloads`, la cartella arriva con la fase D), poi fa il commit `chore(release): …` e il tag `vVERSIONE`, senza push. Con `--to CARTELLA` pubblica in una cartella, per provare, e non fa commit.
+- Lo strumento `keel-release` (crate `update`) tiene la chiave privata nel **Portachiavi login**, alla voce «Keel release signing key». Firma, scrive `updates.json` e `install.sh`, e alla fine riscarica la versione pubblicata e la controlla come farebbe Keel.
+- **La chiave vera esiste dal 23 novembre.** La pubblica è in `update::PUBLIC_KEY`. **Va fatta una copia della privata fuori dal Mac**, per esempio nel gestore delle password: da Accesso Portachiavi → «Keel release signing key» → Mostra password. Senza quella copia, perso il Mac, nessun Keel installato potrebbe più aggiornarsi.
+- `scripts/install.sh` è il modello di `install.sh`: il rilascio ci scrive versione, indirizzo e impronta del DMG.
+
+**Provato:**
+- test automatici: pubblicazione in una cartella, download e controllo come fa Keel; due versioni tenute e la terza tolta; build non più nuova rifiutata; `install.sh` lanciato davvero su un'immagine disco, che installa, sostituisce e con un'impronta sbagliata non installa niente;
+- prova vera con l'app vera: due rilasci (0.1.1 build 2 e 0.1.2 build 3) in una cartella, ognuno riscaricato e controllato; installazione della 0.1.1 con `install.sh` (`keel --version` dà «Keel 0.1.1 (2)», firma del codice valida, nessuna etichetta di quarantena); nella cartella restano solo le due versioni. Dopo la prova i numeri di versione sono tornati a 0.1.0 (1).
+
+**Da provare a mano** (il clic non si può fare da qui): l'aggiornamento dalla finestrella e il processo che sostituisce l'app. I comandi sono nel messaggio della fase B; la prova usa una cartella dei dati sua, quindi i dati veri non vengono toccati.
 
 ### Fase C — Pagina di download su KeelSite
 1. **Pagina `/download`, e `/en/download` in inglese,** con poche righe di spiegazione: chi scarica Keel se ne intende un po'.
