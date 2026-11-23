@@ -17,6 +17,8 @@ use ed25519_dalek::{Signature, Verifier as _, VerifyingKey};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest as _, Sha256};
 
+pub mod publish;
+
 /// Where Keel reads the list of releases.
 pub const FEED: &str = "https://keel.mezzalab.eu/updates.json";
 
