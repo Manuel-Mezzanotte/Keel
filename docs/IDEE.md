@@ -30,7 +30,7 @@ Le fonti sono in fondo. Niente qui è deciso: ogni voce parte solo col via dell'
 
 | # | Cosa | Perché adesso | Peso |
 |---|---|---|---|
-| 1 | **Correggere la memoria grafica e la CPU da fermo** | Sono i due difetti noti: +125 MB quando si apre un file, 5% di un core senza fare niente. La leggerezza è il motivo per cui si sceglie Keel | medio |
+| 1 | ~~**Correggere la memoria grafica e la CPU da fermo**~~ **fatto il 24 novembre** | Da fermo, con un file aperto: CPU dal 7% allo 0%, memoria da 272 a 157 MB. Il racconto è in `HANDOFF.md` | — |
 | 2 | **Rivedere le modifiche di Claude come in Warp e Xcode 27** | Oggi si accetta o si rifiuta. Serve l'elenco dei file toccati dalla sessione, le differenze blocco per blocco e i commenti sulle righe mandati a Claude tutti insieme | grande |
 | 3 | **Importare da VS Code** | Oggi si importa solo da Cursor. Impostazioni, scorciatoie, temi ed estensioni di VS Code in un clic, per il 70% di chi arriva | medio |
 | 4 | **Go e Swift** | Keel non ha né server né colori per Go, Swift, PHP, Ruby, Kotlin, Vue e Svelte. Go è fra i linguaggi più usati; Swift è il linguaggio del Mac, e `sourcekit-lsp` c'è già con Xcode | medio |
@@ -135,7 +135,7 @@ Le fonti sono in fondo. Niente qui è deciso: ogni voce parte solo col via dell'
 
 ## Prestazioni, da misurare prima di promettere
 
-- **Memoria grafica** all'apertura di un file (+125 MB) e **CPU da fermo** (5%): sono i primi della lista.
+- **Memoria grafica e CPU da fermo**: corrette il 24 novembre (vedi `HANDOFF.md`). Da rimisurare il confronto con VS Code e Cursor del README e del sito, dove Keel ora pesa meno.
 - **File grandi**: Keel chiede prima di aprirli, ma va misurato come si muove con un file di 50–100 MB e con un progetto di 100.000 file.
 - **Tempo di avvio** con 20 schede e due progetti (oggi la prima schermata arriva in 330 ms con una finestra vuota).
 - **Il benvenuto**: misurato al 22% di un core mentre si muove; si può abbassare disegnando le onde con colonne più larghe.

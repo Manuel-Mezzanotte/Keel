@@ -171,7 +171,7 @@ Dopo le prime prove dell'app vera (18 novembre) sono arrivati altri giri di rito
   - `scripts/snapshots.sh` fotografa anche le pagine nuove (`settings-editor`, `settings-updates`, `settings-search`, `keybindings`) e il benvenuto fermo in sette momenti (`intro-mezzanotte-0`…`out-3`, lo stesso di giorno); con `KEEL_SNAPSHOTS_FILM=1` anche tutto il benvenuto, quindici fotogrammi al secondo, per farne un video con ffmpeg.
 
 Stato dei controlli all'ultimo commit:
-- tutti i test passano, 571 in tutto, 321 solo nell'app;
+- tutti i test passano, 573 in tutto, 323 solo nell'app;
 - clippy non segnala niente;
 - la prima schermata di Keel arriva in 330 ms, media di sei avvii;
 - **memoria di Keel** (22 novembre, versione installata, M4 Pro, language server spenti), come la dà Monitoraggio Attività: 132 MB con una finestra vuota, 271 MB con un progetto e un file, 299 MB con 450 file e 20 schede, 326 MB con due progetti. I 130–150 MB scritti in `PIANO.md` sono la memoria residente (RSS), che non conta quella grafica: non vanno usati per i confronti;
@@ -201,8 +201,10 @@ Delle funzioni nuove restano da provare davvero due cose, che qui non si potevan
 ### Difetti trovati, da correggere
 
 Trovati il 22 novembre misurando e fotografando Keel per la pagina di presentazione:
-- **memoria grafica:** aprendo un file la parte grafica cresce di circa 125 MB. La causa non è ancora accertata; il sospetto è il disegno dei tracciati (`paint_path`), che fa riservare a GPUI delle immagini grandi quanto la finestra;
-- **CPU da fermo:** con un file aperto e la finestra in primo piano Keel usa circa il 5% di un core anche senza fare niente (senza file lo 0%); dal campionamento sembra che ridisegni di continuo;
+- **CPU da fermo e memoria grafica: corrette il 24 novembre** (non ancora in una versione pubblicata).
+  - *La CPU* (7% di un core con un file aperto e la finestra davanti) veniva da un giro senza fine: le decorazioni dell'editor (parentesi colorate, la parola sotto il cursore, i segni nella barra di scorrimento) avvisano l'editor quando cambiano; l'editor avvisava Keel come se il cursore si fosse mosso, e dopo 160 ms Keel le ricalcolava e le rimetteva. Erano sei ridisegni al secondo senza fare niente. Ora si ricalcolano solo se cambiano testo, cursore o tema (`writing.rs`, `cursor_moved`), e decorazioni uguali non si rimettono. Un test lo controlla.
+  - *La memoria grafica* (+125 MB) non era di Keel né dei tracciati: GPUI riserva le stesse cose con o senza file (misurato con una copia di GPUI che annotava ogni allocazione). È la memoria che macOS tiene per una finestra che si ridisegna spesso, e il cursore che lampeggia la ridisegna due volte al secondo. Ora il cursore smette di lampeggiare dopo 10 secondi senza tasti né clic e resta visibile, come in GNOME (`theme::caret_blink`); `"editor.cursorBlinking": "solid"` lo tiene sempre fermo. Dopo qualche secondo fermo macOS si riprende la memoria.
+  - *Misure* (versione release, M4 Pro, progetto Keel con `layout.rs` aperto, finestra davanti): CPU da fermo dal 7,1% allo 0%; memoria da 272 a 157 MB, 15 secondi dopo l'ultimo tasto. Mentre si scrive i 120 MB tornano, perché la finestra si aggiorna: succede a ogni app che si ridisegna.
 - **test di un crate in una sottocartella senza workspace:** non partono, perché `cargo test -p` viene lanciato dalla cartella del progetto.
 
 ### Prossimo lavoro proposto: lo stile personale
