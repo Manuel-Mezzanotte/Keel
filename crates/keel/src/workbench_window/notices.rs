@@ -204,6 +204,22 @@ impl Workbench {
             self.notices.unread += 1;
         }
         cx.notify();
+        // The welcome of the first start shows it when it ends.
+        if let Some(intro) = &mut self.intro {
+            intro.waiting.push(notice);
+            return;
+        }
+        self.show_notice(notice, window, cx);
+    }
+
+    /// The notice as a card in the window's corner, unless the bell's list
+    /// is open or Do Not Disturb keeps it quiet.
+    pub(super) fn show_notice(
+        &mut self,
+        notice: Notice,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
         let in_background = !window.is_window_active();
         // With the bell's list open, the notice is in it already.
         if self.notices.open {

@@ -7,8 +7,8 @@ use crate::i18n::UiLanguage;
 use crate::workbench_window::{
     CheckForUpdates, CloseWindow, NewFile, NewWindow, Open, OpenKeybindings, OpenProject,
     OpenSettings, Quit, Save, SelectLanguage, SelectTheme, ShowCommands, ShowExplorer,
-    ShowExtensions, ShowSearch, ShowSourceControl, ToggleAgent, ToggleOutput, TogglePanel,
-    ToggleProblems, ToggleSidebar, ToggleTerminal,
+    ShowExtensions, ShowSearch, ShowSourceControl, ShowWelcome, ToggleAgent, ToggleOutput,
+    TogglePanel, ToggleProblems, ToggleSidebar, ToggleTerminal,
 };
 use crate::workbench_window::{
     CloseEditor, GoToLine, QuickOpen, ReopenClosedEditor, SplitEditor, SplitEditorDown,
@@ -315,6 +315,7 @@ pub fn set(language: UiLanguage, cx: &mut App) {
             vec![
                 MenuItem::action(strings.menu_show_all_commands, ShowCommands),
                 MenuItem::action(strings.menu_keybindings, OpenKeybindings),
+                MenuItem::action(strings.menu_show_welcome, ShowWelcome),
                 MenuItem::separator(),
                 MenuItem::action(strings.menu_show_log, ToggleOutput),
             ],

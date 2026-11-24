@@ -266,6 +266,16 @@ fn open_window(root: Option<PathBuf>, file: Option<PathBuf>, cx: &mut App) {
         }
     };
     if let Some(workbench) = created.take() {
+        // The first window of the very first start shows the welcome.
+        if cx.has_global::<crate::workbench_window::WelcomePending>() {
+            cx.remove_global::<crate::workbench_window::WelcomePending>();
+            let shown = workbench.clone();
+            let _ = handle.update(cx, |_, window, cx| {
+                shown
+                    .update(cx, |workbench, cx| workbench.start_intro(window, cx))
+                    .ok();
+            });
+        }
         cx.global_mut::<Windows>().0.push(OpenWindow {
             handle,
             workbench,

@@ -139,6 +139,8 @@ fn finish_update(pid: i32, staged: &std::path::Path, app: &std::path::Path) {
 }
 
 fn run(path: Option<PathBuf>, more: Vec<PathBuf>, socket: PathBuf) {
+    // Asked before Keel writes anything in its folder.
+    let welcome = workbench_window::first_start(&paths::data_dir());
     // Before anything else, so a crash at the start is kept too.
     if let Some(unclean) = crash::start(&paths::data_dir()) {
         eprintln!(
@@ -214,6 +216,10 @@ fn run(path: Option<PathBuf>, more: Vec<PathBuf>, socket: PathBuf) {
         })
         .detach();
 
+        // The very first start opens with the welcome.
+        if welcome {
+            cx.set_global(workbench_window::WelcomePending);
+        }
         windows::open_startup(path, cx);
         // The other paths of `keel a.ts b.ts`, each in its project's window.
         for path in more {

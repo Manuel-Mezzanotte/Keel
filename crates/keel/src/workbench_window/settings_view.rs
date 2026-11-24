@@ -5,13 +5,7 @@
 //! "Open Settings (JSON)" opens the file itself.
 
 use extensions::configuration::{self, SettingKind};
-use gpui::{AnyElement, AnyWindowHandle, SharedString, WeakEntity};
-use gpui_component::Sizable as _;
-use gpui_component::button::{Button, ButtonVariants as _};
-use gpui_component::setting::{
-    NumberFieldOptions, SelectIndex, SettingField, SettingGroup, SettingItem, SettingPage,
-    Settings as SettingsPage,
-};
+use gpui::{AnyWindowHandle, SharedString, WeakEntity};
 
 use super::*;
 
@@ -826,6 +820,12 @@ impl Workbench {
         cx: &mut Context<Self>,
     ) {
         self.settings_jump = (self.settings_jump.0 + 1, Some(id.to_owned()));
+        if let Some(page) = self.settings_jump_page() {
+            self.settings_ui.page = page;
+            self.settings_ui
+                .scroll
+                .set_offset(gpui::point(px(0.), px(0.)));
+        }
         self.open_page(PageKind::Settings, window, cx);
         cx.notify();
     }
@@ -922,239 +922,6 @@ impl Workbench {
         }
     }
 
-    pub(super) fn render_settings_page(
-        &self,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) -> AnyElement {
-        let italian = self.language == UiLanguage::Italian;
-        let strings = self.strings();
-        let pick = |pair: (&'static str, &'static str)| if italian { pair.0 } else { pair.1 };
-        let workbench = cx.entity().downgrade();
-        let handle = window.window_handle();
-        let item = |field: Field| self.setting_item(field, italian, &workbench, handle);
-        let pages = [
-            (Page::Appearance, ("Interfaccia", "Interface")),
-            (Page::Editor, ("Editor", "Editor")),
-            (Page::Files, ("File e finestre", "Files and Windows")),
-            (Page::Terminal, ("Terminale", "Terminal")),
-            (Page::Git, ("Git", "Git")),
-            (Page::Languages, ("Linguaggi", "Languages")),
-            (Page::Extensions, ("Estensioni", "Extensions")),
-            (Page::Updates, ("Aggiornamenti", "Updates")),
-        ];
-        let mut all: Vec<SettingPage> = pages
-            .into_iter()
-            .map(|(page, title)| {
-                let page_of = SettingPage::new(pick(title)).resettable(true);
-                if page == Page::Appearance {
-                    return page_of.groups(self.interface_groups(italian, &workbench, handle));
-                }
-                if page == Page::Updates {
-                    return page_of.groups(self.update_groups(italian, &workbench, handle));
-                }
-                let items: Vec<SettingItem> = CATALOG
-                    .iter()
-                    .filter(|entry| entry.page == page)
-                    .map(|entry| item(Field::from_entry(entry, italian)))
-                    .collect();
-                page_of.group(SettingGroup::new().items(items))
-            })
-            .collect();
-        // Then a page for each running extension with settings of its own,
-        // as VS Code lists them under Extensions.
-        for (id, name, sections) in self.extension_setting_pages() {
-            let groups: Vec<SettingGroup> = sections
-                .into_iter()
-                .map(|section| {
-                    let items: Vec<SettingItem> = section
-                        .settings
-                        .iter()
-                        .map(|setting| {
-                            item(Field::from_extension(
-                                setting,
-                                self.settings.get(&setting.key),
-                            ))
-                        })
-                        .collect();
-                    let group = SettingGroup::new().items(items);
-                    match section.title {
-                        Some(title) => group.title(title),
-                        None => group,
-                    }
-                })
-                .collect();
-            all.push(
-                SettingPage::new(name)
-                    .description(strings.extension_settings_from(&id))
-                    .resettable(true)
-                    .groups(groups),
-            );
-        }
-        // A jump to an extension's page starts the tab afresh on it.
-        let settings = SettingsPage::new(("keel-settings", self.settings_jump.0))
-            .sidebar_width(px(200.))
-            .default_selected_index(SelectIndex {
-                page_ix: self.settings_jump_page().unwrap_or(0),
-                group_ix: None,
-            })
-            .pages(all);
-        div()
-            .size_full()
-            .flex()
-            .flex_col()
-            .child(
-                div().flex().justify_end().px_3().pt_2().child(
-                    Button::new("open-settings-json")
-                        .ghost()
-                        .small()
-                        .label(strings.open_settings_json)
-                        .on_click(
-                            cx.listener(|this, _, window, cx| this.open_settings_json(window, cx)),
-                        ),
-                ),
-            )
-            .child(div().flex_1().min_h_0().child(settings))
-            .into_any_element()
-    }
-
-    /// The Interface page in groups: the window's style drawn small, the
-    /// themes as pictures with the settings that pick them, the movements,
-    /// and the rest.
-    /// The Updates page: the version Keel is at with the button that looks
-    /// for a new one, and the check at start.
-    fn update_groups(
-        &self,
-        italian: bool,
-        workbench: &WeakEntity<Workbench>,
-        handle: AnyWindowHandle,
-    ) -> Vec<SettingGroup> {
-        let strings = self.strings();
-        let check = {
-            let workbench = workbench.clone();
-            SettingField::<SharedString>::render(move |_, _, cx| {
-                let checking = workbench
-                    .upgrade()
-                    .is_some_and(|workbench| workbench.read(cx).checking_updates);
-                let workbench = workbench.clone();
-                Button::new("check-for-updates")
-                    .outline()
-                    .small()
-                    .loading(checking)
-                    .label(if checking {
-                        strings.update_checking
-                    } else {
-                        strings.update_check
-                    })
-                    .on_click(move |_, window, cx| {
-                        workbench
-                            .update(cx, |workbench, cx| {
-                                workbench.check_for_updates(true, window, cx)
-                            })
-                            .ok();
-                    })
-            })
-        };
-        let version = SettingItem::new(strings.update_version, check)
-            .description(
-                strings.update_version_detail(crate::version::VERSION, crate::version::BUILD),
-            )
-            .keywords([SharedString::from("version"), SharedString::from("update")]);
-        let show = {
-            let workbench = workbench.clone();
-            SettingField::<SharedString>::render(move |_, _, _| {
-                let workbench = workbench.clone();
-                Button::new("third-party-licenses")
-                    .outline()
-                    .small()
-                    .label(strings.update_licenses_show)
-                    .on_click(move |_, window, cx| {
-                        workbench
-                            .update(cx, |workbench, cx| workbench.open_licenses(window, cx))
-                            .ok();
-                    })
-            })
-        };
-        let licenses = SettingItem::new(strings.update_licenses, show)
-            .description(strings.update_licenses_detail)
-            .keywords([
-                SharedString::from("license"),
-                SharedString::from("licence"),
-                SharedString::from("licenza"),
-                SharedString::from("open source"),
-            ]);
-        let automatic = CATALOG
-            .iter()
-            .filter(|entry| entry.page == Page::Updates)
-            .map(|entry| {
-                self.setting_item(
-                    Field::from_entry(entry, italian),
-                    italian,
-                    workbench,
-                    handle,
-                )
-            });
-        vec![
-            SettingGroup::new()
-                .title(strings.update_page)
-                .item(version)
-                .items(automatic)
-                .item(licenses),
-        ]
-    }
-
-    fn interface_groups(
-        &self,
-        italian: bool,
-        workbench: &WeakEntity<Workbench>,
-        handle: AnyWindowHandle,
-    ) -> Vec<SettingGroup> {
-        let pick = |pair: (&'static str, &'static str)| if italian { pair.0 } else { pair.1 };
-        let entry_item = |key: &str| {
-            CATALOG.iter().find(|entry| entry.key == key).map(|entry| {
-                self.setting_item(
-                    Field::from_entry(entry, italian),
-                    italian,
-                    workbench,
-                    handle,
-                )
-            })
-        };
-        let style = super::interface_page::style_picker(workbench, handle, italian);
-        let themes = super::interface_page::theme_picker(workbench, handle);
-        vec![
-            SettingGroup::new()
-                .title(pick(("Stile della finestra", "Window Style")))
-                .description(pick((
-                    "Lo stesso Keel, disegnato in due modi. Cambia al volo, in ogni finestra.",
-                    "The same Keel, drawn two ways. It changes at once, in every window.",
-                )))
-                .item(style),
-            SettingGroup::new()
-                .title(pick(("Tema", "Theme")))
-                .item(themes)
-                .items(
-                    [
-                        "window.autoDetectColorScheme",
-                        "workbench.preferredDarkColorTheme",
-                        "workbench.preferredLightColorTheme",
-                    ]
-                    .into_iter()
-                    .filter_map(entry_item),
-                ),
-            SettingGroup::new()
-                .title(pick(("Movimento", "Motion")))
-                .items(entry_item(super::look::MOTION_SETTING)),
-            SettingGroup::new()
-                .title(pick(("Generale", "General")))
-                .items(
-                    ["keel.language", "breadcrumbs.enabled"]
-                        .into_iter()
-                        .filter_map(entry_item),
-                ),
-        ]
-    }
-
     /// The running extensions that declare settings, by name: their id,
     /// their name and their settings.
     pub(super) fn extension_setting_pages(
@@ -1183,17 +950,7 @@ impl Workbench {
     /// after Keel's own pages, in the order of [`Self::extension_setting_pages`].
     pub(super) fn settings_jump_page(&self) -> Option<usize> {
         let id = self.settings_jump.1.as_deref()?;
-        let own = [
-            Page::Appearance,
-            Page::Editor,
-            Page::Files,
-            Page::Terminal,
-            Page::Git,
-            Page::Languages,
-            Page::Extensions,
-            Page::Updates,
-        ]
-        .len();
+        let own = super::settings_page::KEEL_PAGES.len();
         self.extension_setting_pages()
             .iter()
             .position(|(page, _, _)| page.eq_ignore_ascii_case(id))
@@ -1209,44 +966,19 @@ impl Workbench {
                 .find(|extension| extension.id().eq_ignore_ascii_case(id))
                 .is_some_and(|extension| !configuration::settings(extension).is_empty())
     }
-
-    /// The item of one setting, reading and writing it through the window.
-    fn setting_item(
-        &self,
-        field: Field,
-        italian: bool,
-        workbench: &WeakEntity<Workbench>,
-        handle: AnyWindowHandle,
-    ) -> SettingItem {
-        let mut description = field.description.clone();
-        let source = self.settings.source_of(&field.key);
-        if source == Some(settings::Source::Project)
-            || source == Some(settings::Source::VsCodeProject)
-        {
-            description.push_str(if italian {
-                " Il progetto la cambia nelle sue impostazioni."
-            } else {
-                " The project changes it in its settings."
-            });
-        }
-        let key = field.key.clone();
-        item(field, italian, workbench, handle)
-            .keywords([SharedString::from(key)])
-            .description(description)
-    }
 }
 
 /// One setting as the page draws it: Keel's own, or one an extension
 /// declares in its `package.json`.
 pub(super) struct Field {
-    key: String,
-    title: String,
-    description: String,
-    kind: FieldKind,
-    default: Value,
+    pub(super) key: String,
+    pub(super) title: String,
+    pub(super) description: String,
+    pub(super) kind: FieldKind,
+    pub(super) default: Value,
 }
 
-enum FieldKind {
+pub(super) enum FieldKind {
     Switch,
     Number {
         min: f64,
@@ -1260,7 +992,7 @@ enum FieldKind {
 }
 
 impl Field {
-    fn from_entry(entry: &Entry, italian: bool) -> Self {
+    pub(super) fn from_entry(entry: &Entry, italian: bool) -> Self {
         let pick = |pair: (&'static str, &'static str)| if italian { pair.0 } else { pair.1 };
         Field {
             key: entry.key.to_owned(),
@@ -1286,7 +1018,10 @@ impl Field {
 
     /// A setting an extension declares. With a list of choices, the
     /// description of the one chosen now follows the setting's own.
-    fn from_extension(setting: &configuration::Setting, current: Option<&Value>) -> Self {
+    pub(super) fn from_extension(
+        setting: &configuration::Setting,
+        current: Option<&Value>,
+    ) -> Self {
         let mut description = setting.description.clone();
         let kind = match &setting.kind {
             SettingKind::Boolean => FieldKind::Switch,
@@ -1365,145 +1100,6 @@ pub(super) fn writer(
     })
 }
 
-/// The item of one setting. Resetting it takes it out of the user's file,
-/// so the default counts again, as VS Code's "Reset Setting".
-fn item(
-    field: Field,
-    italian: bool,
-    workbench: &WeakEntity<Workbench>,
-    handle: AnyWindowHandle,
-) -> SettingItem {
-    let Field {
-        key,
-        title,
-        kind,
-        default,
-        ..
-    } = field;
-    let key: SharedString = key.into();
-    let read = {
-        let workbench = workbench.clone();
-        let default = default.clone();
-        let key = key.clone();
-        std::rc::Rc::new(move |cx: &App| -> Value {
-            workbench
-                .upgrade()
-                .and_then(|workbench| workbench.read(cx).settings.get(&key).cloned())
-                .unwrap_or_else(|| default.clone())
-        })
-    };
-    let change = {
-        let workbench = workbench.clone();
-        let key = key.clone();
-        std::rc::Rc::new(
-            move |value: Option<Value>, window: &mut Window, cx: &mut App| {
-                workbench
-                    .update(cx, |workbench, cx| {
-                        workbench.change_setting(&key, value, window, cx)
-                    })
-                    .ok();
-            },
-        )
-    };
-    let write = writer(workbench, handle, key.clone());
-    let is_set = {
-        let workbench = workbench.clone();
-        let key = key.clone();
-        move |cx: &App| {
-            workbench.upgrade().is_some_and(|workbench| {
-                workbench.read(cx).settings.source_of(&key) == Some(settings::Source::User)
-            })
-        }
-    };
-    let reset = move |window: &mut Window, cx: &mut App| change(None, window, cx);
-    let as_text = |value: &Value| match value {
-        Value::String(text) => text.clone(),
-        Value::Null => String::new(),
-        other => other.to_string(),
-    };
-    match kind {
-        FieldKind::Switch => SettingItem::new(
-            title,
-            SettingField::switch(
-                {
-                    let read = read.clone();
-                    move |cx| read(cx).as_bool().unwrap_or(false)
-                },
-                move |on, cx| write(Value::Bool(on), cx),
-            )
-            .on_reset(is_set, reset),
-        ),
-        FieldKind::Number { min, max, step } => SettingItem::new(
-            title,
-            SettingField::number_input(
-                NumberFieldOptions { min, max, step },
-                {
-                    let read = read.clone();
-                    move |cx| read(cx).as_f64().unwrap_or(0.)
-                },
-                move |value, cx| {
-                    // Whole numbers stay whole in the file.
-                    let value = if value.fract() == 0. {
-                        serde_json::json!(value as i64)
-                    } else {
-                        serde_json::json!(value)
-                    };
-                    write(value, cx)
-                },
-            )
-            .on_reset(is_set, reset),
-        ),
-        FieldKind::Choice(options) => SettingItem::new(
-            title,
-            SettingField::dropdown(
-                options,
-                {
-                    let read = read.clone();
-                    move |cx| as_text(&read(cx)).into()
-                },
-                move |value: SharedString, cx| write(Value::String(value.to_string()), cx),
-            )
-            .on_reset(is_set, reset),
-        ),
-        FieldKind::Text => SettingItem::new(
-            title,
-            SettingField::input(
-                {
-                    let read = read.clone();
-                    move |cx| as_text(&read(cx)).into()
-                },
-                move |value: SharedString, cx| write(Value::String(value.to_string()), cx),
-            )
-            .on_reset(is_set, reset),
-        ),
-        FieldKind::Json => {
-            let workbench = workbench.clone();
-            SettingItem::new(
-                title,
-                SettingField::<SharedString>::render(move |_, _, _| {
-                    let workbench = workbench.clone();
-                    let label = if italian {
-                        "Modifica in settings.json"
-                    } else {
-                        "Edit in settings.json"
-                    };
-                    Button::new(SharedString::from(format!("setting-json-{key}")))
-                        .outline()
-                        .small()
-                        .label(label)
-                        .on_click(move |_, window, cx| {
-                            workbench
-                                .update(cx, |workbench, cx| {
-                                    workbench.open_settings_json(window, cx)
-                                })
-                                .ok();
-                        })
-                }),
-            )
-        }
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use gpui::{TestAppContext, VisualTestContext};
@@ -1570,7 +1166,10 @@ mod tests {
         }
         view.read_with(cx, |view, cx| {
             let document = &view.documents[crate::licenses::URI];
-            assert!(matches!(document.backing, Backing::Library), "it can only be read");
+            assert!(
+                matches!(document.backing, Backing::Library),
+                "it can only be read"
+            );
             assert_eq!(view.display_name(document), "Licenze di terze parti");
             let tabs = view
                 .groups

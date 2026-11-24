@@ -4,9 +4,9 @@
 use std::rc::Rc;
 
 use gpui::{
-    AnyWindowHandle, Div, SharedString, StatefulInteractiveElement as _, WeakEntity, relative,
+    AnyElement, AnyWindowHandle, Div, SharedString, StatefulInteractiveElement as _, WeakEntity,
+    relative,
 };
-use gpui_component::setting::SettingItem;
 use gpui_component::{Icon, Sizable as _, theme::ThemeRegistry};
 use gpui_kit_assets::IconName;
 
@@ -187,110 +187,78 @@ fn style_preview(style: InterfaceStyle, colors: Colors) -> Div {
 
 /// The two styles side by side, each drawn small; a click chooses one.
 pub(super) fn style_picker(
+    workbench_now: &Workbench,
     workbench: &WeakEntity<Workbench>,
     handle: AnyWindowHandle,
     italian: bool,
-) -> SettingItem {
+    colors: Colors,
+) -> AnyElement {
     let write = writer(workbench, handle, STYLE_SETTING.into());
-    let chosen = {
-        let workbench = workbench.clone();
-        move |cx: &App| {
-            workbench
-                .upgrade()
-                .map_or(InterfaceStyle::Floating, |workbench| {
-                    workbench.read(cx).look.style
-                })
-        }
-    };
-    let is_set = {
-        let workbench = workbench.clone();
-        move |cx: &App| {
-            workbench.upgrade().is_some_and(|workbench| {
-                workbench.read(cx).settings.source_of(STYLE_SETTING) == Some(settings::Source::User)
-            })
-        }
-    };
-    let reset = later(workbench, handle, |workbench, window, cx| {
-        workbench.change_setting(STYLE_SETTING, None, window, cx)
-    });
-    SettingItem::render(move |_, _, cx| {
-        let colors = Colors::new(cx);
-        let now = chosen(cx);
-        div()
-            .w_full()
-            .flex()
-            .gap_3()
-            .children(
-                InterfaceStyle::ALL
-                    .into_iter()
-                    .enumerate()
-                    .map(|(index, style)| {
-                        let on = style == now;
-                        let write = write.clone();
-                        let (title, words) = style_words(style, italian);
-                        div()
-                            .id(("interface-style", index))
-                            .flex_1()
-                            .min_w_0()
-                            .p_2()
-                            .flex()
-                            .flex_col()
-                            .gap_2()
-                            .rounded(px(12.))
-                            .border_2()
-                            .border_color(if on {
-                                colors.accent
-                            } else {
-                                colors.border.opacity(0.)
-                            })
-                            .bg(if on {
-                                colors.accent.opacity(0.06)
-                            } else {
-                                gpui::transparent_black()
-                            })
-                            .cursor_pointer()
-                            .when(!on, |card| {
-                                card.hover(|card| card.bg(colors.hover.opacity(0.6)))
-                            })
-                            .on_click(move |_, _, cx| {
-                                write(Value::String(style.id().to_owned()), cx)
-                            })
-                            .child(style_preview(style, colors))
-                            .child(
-                                div()
-                                    .px_1()
-                                    .flex()
-                                    .items_center()
-                                    .gap_2()
-                                    .child(radio(on, colors))
-                                    .child(
-                                        div()
-                                            .text_sm()
-                                            .font_weight(FontWeight::SEMIBOLD)
-                                            .text_color(colors.text)
-                                            .child(title),
-                                    ),
-                            )
-                            .child(
-                                div()
-                                    .px_1()
-                                    .pb_1()
-                                    .text_xs()
-                                    .text_color(colors.muted)
-                                    .child(words),
-                            )
-                    }),
-            )
-    })
-    .keywords([
-        SharedString::from(STYLE_SETTING),
-        "card".into(),
-        "flat".into(),
-        "piatto".into(),
-        "stile".into(),
-        "style".into(),
-    ])
-    .on_reset(is_set, move |_, cx| reset(cx))
+    let now = workbench_now.look.style;
+    div()
+        .w_full()
+        .flex()
+        .gap_3()
+        .children(
+            InterfaceStyle::ALL
+                .into_iter()
+                .enumerate()
+                .map(|(index, style)| {
+                    let on = style == now;
+                    let write = write.clone();
+                    let (title, words) = style_words(style, italian);
+                    div()
+                        .id(("interface-style", index))
+                        .flex_1()
+                        .min_w_0()
+                        .p_2()
+                        .flex()
+                        .flex_col()
+                        .gap_2()
+                        .rounded(px(12.))
+                        .border_2()
+                        .border_color(if on {
+                            colors.accent
+                        } else {
+                            colors.border.opacity(0.)
+                        })
+                        .bg(if on {
+                            colors.accent.opacity(0.06)
+                        } else {
+                            gpui::transparent_black()
+                        })
+                        .cursor_pointer()
+                        .when(!on, |card| {
+                            card.hover(|card| card.bg(colors.hover.opacity(0.6)))
+                        })
+                        .on_click(move |_, _, cx| write(Value::String(style.id().to_owned()), cx))
+                        .child(style_preview(style, colors))
+                        .child(
+                            div()
+                                .px_1()
+                                .flex()
+                                .items_center()
+                                .gap_2()
+                                .child(radio(on, colors))
+                                .child(
+                                    div()
+                                        .text_sm()
+                                        .font_weight(FontWeight::SEMIBOLD)
+                                        .text_color(colors.text)
+                                        .child(title),
+                                ),
+                        )
+                        .child(
+                            div()
+                                .px_1()
+                                .pb_1()
+                                .text_xs()
+                                .text_color(colors.muted)
+                                .child(words),
+                        )
+                }),
+        )
+        .into_any_element()
 }
 
 /// A round mark, filled when chosen, as macOS's radio buttons.
@@ -365,9 +333,12 @@ fn swatches(names: &[String], colors: Colors, cx: &App) -> Vec<Swatch> {
 
 /// The themes as small pictures; a click shows one at once.
 pub(super) fn theme_picker(
+    workbench_now: &Workbench,
     workbench: &WeakEntity<Workbench>,
     handle: AnyWindowHandle,
-) -> SettingItem {
+    colors: Colors,
+    cx: &App,
+) -> AnyElement {
     // The theme on screen, which is the preferred one for macOS's mode
     // when Keel follows it.
     let shown = |cx: &App| -> String {
@@ -379,22 +350,21 @@ pub(super) fn theme_picker(
         };
         current.to_string()
     };
-    let workbench = workbench.clone();
-    SettingItem::render(move |_, _, cx| {
-        let colors = Colors::new(cx);
-        let current = shown(cx);
-        let names = workbench
-            .upgrade()
-            .map(|workbench| workbench.read(cx).theme_names())
-            .unwrap_or_default();
-        div().w_full().flex().flex_wrap().gap_2().children(
+    let current = shown(cx);
+    let names = workbench_now.theme_names();
+    div()
+        .w_full()
+        .flex()
+        .flex_wrap()
+        .gap_2()
+        .children(
             swatches(&names, colors, cx)
                 .into_iter()
                 .enumerate()
                 .map(|(index, swatch)| {
                     let on = swatch.name.as_ref() == current;
                     let name = swatch.name.to_string();
-                    let choose = later(&workbench, handle, move |workbench, window, cx| {
+                    let choose = later(workbench, handle, move |workbench, window, cx| {
                         workbench.set_theme(&name, window, cx)
                     });
                     div()
@@ -481,10 +451,5 @@ pub(super) fn theme_picker(
                         )
                 }),
         )
-    })
-    .keywords([
-        SharedString::from("workbench.colorTheme"),
-        "theme".into(),
-        "tema".into(),
-    ])
+        .into_any_element()
 }

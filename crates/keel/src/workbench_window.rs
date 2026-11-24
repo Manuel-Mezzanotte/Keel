@@ -44,6 +44,7 @@ mod github;
 mod host_watchdog;
 mod image_diff;
 mod interface_page;
+mod intro;
 mod keybindings_view;
 mod language_features;
 mod language_servers;
@@ -69,7 +70,9 @@ mod rulers;
 mod scm_graph;
 mod search_results;
 mod search_view;
+mod settings_page;
 mod settings_view;
+pub(crate) use intro::{WelcomePending, first_start};
 pub use updates::start_pending_update;
 mod shell;
 mod signature_help;
@@ -249,7 +252,8 @@ actions!(
         CheckForUpdates,
         OpenSettingsJson,
         OpenKeybindings,
-        ImportCursorSettings
+        ImportCursorSettings,
+        ShowWelcome
     ]
 );
 
@@ -623,6 +627,10 @@ pub struct Workbench {
     /// The page the Settings tab opens on: a counter that changes at each
     /// jump, and the extension whose settings to show, if any.
     settings_jump: (usize, Option<String>),
+    /// The Settings tab: the page in view and where it was scrolled.
+    settings_ui: settings_page::SettingsUi,
+    /// The welcome of the first start, while it shows.
+    intro: Option<intro::Intro>,
     /// A new version of Keel offered in its window, and how far it got.
     update_offer: Option<updates::Offer>,
     /// Whether a check for updates asked from the Settings is running.
@@ -867,6 +875,8 @@ impl Workbench {
             agent_width: claude_code::AGENT_WIDTH,
             sidebar_width: shell::SIDEBAR_WIDTH,
             settings_jump: (0, None),
+            settings_ui: Default::default(),
+            intro: None,
             update_offer: None,
             checking_updates: false,
             agent_terminal: None,

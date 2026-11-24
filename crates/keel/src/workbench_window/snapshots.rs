@@ -484,6 +484,55 @@ fn shots() -> Vec<Shot> {
             workbench.send_to_agent(window, cx);
         }));
     }
+    // The Settings tab's other pages, and a search.
+    for (style, theme) in [("flat", "Chiaro"), ("floating", "Mezzanotte")] {
+        let name = |what: &str| -> &'static str {
+            Box::leak(
+                format!("{style}-{theme}-{what}")
+                    .to_lowercase()
+                    .into_boxed_str(),
+            )
+        };
+        shots.push(shot(
+            name("settings-editor"),
+            move |workbench, window, cx| {
+                window.close_all_dialogs(cx);
+                set_theme(theme, window, cx);
+                set_style(workbench, style, window, cx);
+                workbench.layout.panel = false;
+                workbench.layout.agent = false;
+                // One group only, so the tab has the window's width.
+                for _ in 0..64 {
+                    let Some(group) = workbench
+                        .groups
+                        .iter()
+                        .rposition(|group| !group.tabs.is_empty())
+                    else {
+                        break;
+                    };
+                    let last = workbench.groups[group].tabs.len() - 1;
+                    workbench.close_tab(group, last, window, cx);
+                }
+                workbench.open_page(settings_view::PageKind::Settings, window, cx);
+                workbench.show_settings_page(1, cx);
+            },
+        ));
+        shots.push(shot(name("settings-updates"), |workbench, _, cx| {
+            workbench.show_settings_page(7, cx);
+        }));
+        shots.push(shot(name("settings-search"), |workbench, window, cx| {
+            workbench.search_settings("tema", window, cx);
+        }));
+        shots.push(shot(name("settings-nothing"), |workbench, window, cx| {
+            workbench.search_settings("zzzz", window, cx);
+        }));
+        shots.push(shot(name("settings-cleared"), |workbench, window, cx| {
+            workbench.search_settings("", window, cx);
+        }));
+        shots.push(shot(name("keybindings"), |workbench, window, cx| {
+            workbench.open_page(settings_view::PageKind::Keybindings, window, cx);
+        }));
+    }
     // Last, with every tab closed: the welcome page.
     for (style, theme) in [("floating", "Mezzanotte"), ("flat", "Chiaro")] {
         let name: &'static str = Box::leak(
@@ -507,6 +556,55 @@ fn shots() -> Vec<Shot> {
                 workbench.close_tab(group, last, window, cx);
             }
         }));
+    }
+    // KEEL_SNAPSHOTS_FILM: the whole welcome, fifteen pictures a second,
+    // to make a film of it.
+    if std::env::var_os("KEEL_SNAPSHOTS_FILM").is_some() {
+        for theme in ["Mezzanotte", "Chiaro"] {
+            let frames = (0..=60)
+                .map(|frame| (frame as f32 / 15., None))
+                .chain((1..=22).map(|frame| (4., Some(frame as f32 / 15.))));
+            for (index, (seconds, out)) in frames.enumerate() {
+                let name: &'static str = Box::leak(
+                    format!("film-{theme}-{index:03}")
+                        .to_lowercase()
+                        .into_boxed_str(),
+                );
+                shots.push(shot(name, move |workbench, window, cx| {
+                    set_theme(theme, window, cx);
+                    if !workbench.intro_shown() {
+                        workbench.start_intro(window, cx);
+                    }
+                    workbench.hold_intro(seconds, out, cx);
+                }));
+            }
+        }
+    }
+    // The welcome of the first start, held at its moments, by night and
+    // by day, over the empty window the last pictures left.
+    for theme in ["Mezzanotte", "Chiaro"] {
+        for (moment, seconds, out) in [
+            ("0", 0.55, None),
+            ("1", 1.3, None),
+            ("2", 2.1, None),
+            ("3", 3.6, None),
+            ("out-1", 3.6, Some(0.45)),
+            ("out-2", 3.6, Some(0.9)),
+            ("out-3", 3.6, Some(1.3)),
+        ] {
+            let name: &'static str = Box::leak(
+                format!("intro-{theme}-{moment}")
+                    .to_lowercase()
+                    .into_boxed_str(),
+            );
+            shots.push(shot(name, move |workbench, window, cx| {
+                set_theme(theme, window, cx);
+                if !workbench.intro_shown() {
+                    workbench.start_intro(window, cx);
+                }
+                workbench.hold_intro(seconds, out, cx);
+            }));
+        }
     }
     shots
 }

@@ -75,7 +75,12 @@ gpui_kit_assets::icon_assets!(
         CloudDownload,
         ExternalLink,
         Undo2,
-        Wrench
+        Wrench,
+        SquareCode,
+        FolderCog,
+        Languages,
+        CircleArrowDown,
+        Puzzle
     ]
 );
 
@@ -83,12 +88,60 @@ gpui_kit_assets::icon_assets!(
 pub const LOGO: &str = "brand/keel-mark.svg";
 const LOGO_SVG: &[u8] = include_bytes!("../../../assets/brand/keel-mark.svg");
 
+/// The drawings of the first start's welcome: the boat in layers, one
+/// color each, and a gull.
+const INTRO: &[(&str, &[u8])] = &[
+    (
+        "intro/boat-sail.svg",
+        include_bytes!("../../../assets/intro/boat-sail.svg"),
+    ),
+    (
+        "intro/boat-sail-shade.svg",
+        include_bytes!("../../../assets/intro/boat-sail-shade.svg"),
+    ),
+    (
+        "intro/boat-hull.svg",
+        include_bytes!("../../../assets/intro/boat-hull.svg"),
+    ),
+    (
+        "intro/boat-hull-shade.svg",
+        include_bytes!("../../../assets/intro/boat-hull-shade.svg"),
+    ),
+    (
+        "intro/boat-ink-0.svg",
+        include_bytes!("../../../assets/intro/boat-ink-0.svg"),
+    ),
+    (
+        "intro/boat-ink-1.svg",
+        include_bytes!("../../../assets/intro/boat-ink-1.svg"),
+    ),
+    (
+        "intro/boat-ink-2.svg",
+        include_bytes!("../../../assets/intro/boat-ink-2.svg"),
+    ),
+    (
+        "intro/boat-ink-3.svg",
+        include_bytes!("../../../assets/intro/boat-ink-3.svg"),
+    ),
+    (
+        "intro/boat-ink-4.svg",
+        include_bytes!("../../../assets/intro/boat-ink-4.svg"),
+    ),
+    (
+        "intro/gull.svg",
+        include_bytes!("../../../assets/intro/gull.svg"),
+    ),
+];
+
 pub struct KeelAssets;
 
 impl AssetSource for KeelAssets {
     fn load(&self, path: &str) -> Result<Option<Cow<'static, [u8]>>> {
         if path == LOGO {
             return Ok(Some(Cow::Borrowed(LOGO_SVG)));
+        }
+        if let Some((_, bytes)) = INTRO.iter().find(|(name, _)| *name == path) {
+            return Ok(Some(Cow::Borrowed(bytes)));
         }
         if let Some(bytes) = ExtraIcons.load(path)? {
             return Ok(Some(bytes));
@@ -102,6 +155,12 @@ impl AssetSource for KeelAssets {
         if LOGO.starts_with(path) {
             paths.push(LOGO.into());
         }
+        paths.extend(
+            INTRO
+                .iter()
+                .filter(|(name, _)| name.starts_with(path))
+                .map(|(name, _)| SharedString::from(*name)),
+        );
         paths.sort();
         paths.dedup();
         Ok(paths)

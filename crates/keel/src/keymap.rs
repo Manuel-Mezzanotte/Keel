@@ -18,6 +18,7 @@ use crate::workbench_window::{
 };
 use crate::workbench_window::{
     CheckForUpdates, ImportCursorSettings, OpenKeybindings, OpenSettings, OpenSettingsJson,
+    ShowWelcome,
 };
 use crate::workbench_window::{
     CheckoutBranch, Commit, CommitAmend, CreateBranch, DiscardAll, GitFetch, GitPull, GitPush,
@@ -123,6 +124,12 @@ pub const COMMANDS: &[KeelCommand] = &[
         id: "workbench.action.openSettings",
         action: || Box::new(OpenSettings),
         default_key: Some("cmd+,"),
+        context: None,
+    },
+    KeelCommand {
+        id: "keel.showWelcome",
+        action: || Box::new(ShowWelcome),
+        default_key: None,
         context: None,
     },
     KeelCommand {

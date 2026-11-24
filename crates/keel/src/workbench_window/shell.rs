@@ -7,7 +7,7 @@
 use gpui::{
     Animation, AnimationExt as _, AnyElement, Bounds, Div, FontWeight, OperatingSystem, Pixels,
     Render, SharedString, StatefulInteractiveElement as _, TitlebarOptions, WindowBounds,
-    WindowOptions, relative, size, svg,
+    WindowOptions, canvas, relative, size, svg,
 };
 use gpui_component::button::{Button, ButtonVariants as _};
 use gpui_component::menu::ContextMenuExt as _;
@@ -981,8 +981,9 @@ impl Workbench {
             )
     }
 
-    /// What the editors' panel shows with no file open: how to start, with
-    /// the keys of each way, and the recent projects.
+    /// What the editors' panel shows with no file open: Keel's mark and
+    /// name, how to start with the keys of each way, the recent projects,
+    /// and a calm sea at the foot, the one of the first start's welcome.
     fn render_welcome(
         &self,
         colors: Colors,
@@ -996,11 +997,26 @@ impl Workbench {
                      label: &'static str,
                      action: Box<dyn gpui::Action>| {
             let keys = keys_for(action.as_ref(), window);
-            tool_row(id, icon, label, keys, colors)
-                .h(px(34.))
+            div()
+                .id(id)
+                .h(px(36.))
+                .px(px(10.))
+                .flex()
+                .items_center()
+                .gap(px(10.))
+                .rounded(px(8.))
+                .text_size(px(13.5))
+                .text_color(colors.text)
+                .cursor_pointer()
+                .hover(|row| row.bg(colors.hover))
+                .active(|row| row.bg(colors.selected))
                 .on_click(move |_, window, cx| window.dispatch_action(action.boxed_clone(), cx))
+                .child(Icon::new(icon).size(px(16.)).text_color(colors.accent))
+                .child(div().flex_1().min_w_0().truncate().child(label))
+                .children(keys.map(|keys| key_hint(keys, colors)))
+                .into_any_element()
         };
-        let mut actions: Vec<gpui::Stateful<Div>> = Vec::new();
+        let mut actions: Vec<AnyElement> = Vec::new();
         if has_project {
             actions.push(start(
                 "welcome-go-to-file",
@@ -1040,7 +1056,7 @@ impl Workbench {
             Box::new(OpenSettings),
         ));
         let recent = crate::recent::projects(cx);
-        let recent_rows: Vec<_> = recent
+        let recent_rows: Vec<AnyElement> = recent
             .into_iter()
             .filter(|project| Some(project) != self.project.root.as_ref())
             .take(6)
@@ -1056,13 +1072,12 @@ impl Workbench {
                     .unwrap_or_default();
                 div()
                     .id(("recent-project", index))
-                    .h(px(34.))
-                    .px_2()
+                    .h(px(44.))
+                    .px(px(10.))
                     .flex()
                     .items_center()
-                    .gap_2()
-                    .rounded(px(7.))
-                    .text_sm()
+                    .gap(px(10.))
+                    .rounded(px(8.))
                     .cursor_pointer()
                     .hover(|row| row.bg(colors.hover))
                     .active(|row| row.bg(colors.selected))
@@ -1074,16 +1089,34 @@ impl Workbench {
                             cx,
                         )
                     }))
-                    .child(Icon::new(IconName::Folder).small().text_color(colors.muted))
-                    .child(div().flex_none().text_color(colors.text).child(name))
+                    .child(
+                        Icon::new(IconName::Folder)
+                            .size(px(16.))
+                            .flex_none()
+                            .text_color(colors.muted),
+                    )
                     .child(
                         div()
+                            .flex_1()
                             .min_w_0()
-                            .truncate()
-                            .text_xs()
-                            .text_color(colors.faint)
-                            .child(location),
+                            .flex()
+                            .flex_col()
+                            .child(
+                                div()
+                                    .truncate()
+                                    .text_size(px(13.5))
+                                    .text_color(colors.text)
+                                    .child(name),
+                            )
+                            .child(
+                                div()
+                                    .truncate()
+                                    .text_size(px(11.5))
+                                    .text_color(colors.faint)
+                                    .child(location),
+                            ),
                     )
+                    .into_any_element()
             })
             .collect();
         let title = if has_project {
@@ -1095,93 +1128,114 @@ impl Workbench {
             (Some(branch), true) => branch.clone(),
             _ => strings.welcome_tagline.to_owned(),
         };
-        let duration = self.look.duration(260);
+        let column = |title: &str, rows: Vec<AnyElement>| {
+            div()
+                .flex_1()
+                .min_w(px(260.))
+                .max_w(px(330.))
+                .flex()
+                .flex_col()
+                .gap(px(1.))
+                .child(div().pb(px(6.)).child(heading(title, colors)))
+                .children(rows)
+        };
         let page = div()
-            .w(px(420.))
+            .w(px(760.))
             .max_w_full()
-            .px_4()
+            .px_6()
             .flex()
             .flex_col()
-            .gap_6()
-            .child(
-                div()
-                    .flex()
-                    .items_center()
-                    .gap_3()
-                    .child(
-                        div()
-                            .size(px(52.))
-                            .flex_none()
-                            .rounded(px(14.))
-                            .flex()
-                            .items_center()
-                            .justify_center()
-                            .bg(colors.accent.opacity(0.12))
-                            .child(
-                                svg()
-                                    .path(crate::assets::LOGO)
-                                    .size(px(30.))
-                                    .text_color(colors.accent),
-                            ),
-                    )
-                    .child(
-                        div()
-                            .min_w_0()
-                            .flex()
-                            .flex_col()
-                            .child(
-                                div()
-                                    .text_xl()
-                                    .font_weight(FontWeight::SEMIBOLD)
-                                    .text_color(colors.text)
-                                    .truncate()
-                                    .child(title),
-                            )
-                            .child(
-                                div()
-                                    .text_sm()
-                                    .text_color(colors.muted)
-                                    .truncate()
-                                    .child(subtitle),
-                            ),
-                    ),
-            )
+            .items_center()
+            .gap(px(40.))
             .child(
                 div()
                     .flex()
                     .flex_col()
-                    .child(heading(strings.welcome_start, colors))
-                    .children(actions),
+                    .items_center()
+                    .gap(px(8.))
+                    .child(
+                        svg()
+                            .path(crate::assets::LOGO)
+                            .size(px(46.))
+                            .text_color(colors.accent),
+                    )
+                    .child(
+                        div()
+                            .pt(px(4.))
+                            .text_size(px(30.))
+                            .line_height(px(36.))
+                            .font_weight(FontWeight::BOLD)
+                            .text_color(colors.text)
+                            .max_w_full()
+                            .truncate()
+                            .child(title),
+                    )
+                    .child(
+                        div()
+                            .text_size(px(14.))
+                            .text_color(colors.muted)
+                            .max_w_full()
+                            .truncate()
+                            .child(subtitle),
+                    ),
             )
-            .when(!recent_rows.is_empty(), |welcome| {
-                welcome.child(
-                    div()
-                        .flex()
-                        .flex_col()
-                        .child(heading(strings.recent_projects, colors))
-                        .children(recent_rows),
-                )
-            });
+            .child(
+                div()
+                    .w_full()
+                    .flex()
+                    .flex_wrap()
+                    .justify_center()
+                    .gap_x(px(48.))
+                    .gap_y(px(28.))
+                    .child(column(strings.welcome_start, actions))
+                    .when(!recent_rows.is_empty(), |columns| {
+                        columns.child(column(strings.recent_projects, recent_rows))
+                    }),
+            );
+        let duration = self.look.duration(320);
         let page: AnyElement = if duration.is_zero() {
             page.into_any_element()
         } else {
             page.with_animation(
                 "welcome-in",
                 Animation::new(duration).with_easing(look::settle),
-                |page, delta| page.opacity(delta).mt(px(10. * (1. - delta))),
+                |page, delta| page.opacity(delta).mt(px(14. * (1. - delta))),
             )
             .into_any_element()
         };
         div()
-            .id("welcome")
             .flex_1()
             .min_h_0()
-            .overflow_y_scroll()
+            .relative()
             .flex()
             .flex_col()
-            .items_center()
-            .justify_center()
-            .child(page)
+            .child(
+                canvas(
+                    |_, _, _| (),
+                    move |bounds, _, window, _| {
+                        super::intro::paint_calm_sea(bounds, colors.accent, window)
+                    },
+                )
+                .absolute()
+                .left_0()
+                .right_0()
+                .bottom_0()
+                .h(px(84.)),
+            )
+            .child(
+                div()
+                    .id("welcome")
+                    .flex_1()
+                    .min_h_0()
+                    .overflow_y_scroll()
+                    .flex()
+                    .flex_col()
+                    .items_center()
+                    .justify_center()
+                    .pt(px(24.))
+                    .pb(px(96.))
+                    .child(page),
+            )
             .into_any_element()
     }
 
@@ -2537,6 +2591,7 @@ impl Render for Workbench {
             look::glide("sidebar-open", open(self.layout.sidebar), slide, window, cx);
         let agent_open = look::glide("agent-open", open(self.layout.agent), slide, window, cx);
         let panel_open = look::glide("panel-open", open(self.layout.panel), slide, window, cx);
+        let intro = self.render_intro(window, cx);
         let toolbar = self.render_toolbar(colors, window, cx);
         let gap = look.gap();
         let body = div()
@@ -2630,6 +2685,9 @@ impl Render for Workbench {
             .on_action(cx.listener(|this, _: &CheckForUpdates, window, cx| {
                 this.check_for_updates(true, window, cx)
             }))
+            .on_action(
+                cx.listener(|this, _: &ShowWelcome, window, cx| this.start_intro(window, cx)),
+            )
             .on_action(cx.listener(|this, _: &ImportCursorSettings, window, cx| {
                 this.import_cursor_settings(window, cx)
             }))
@@ -2690,6 +2748,7 @@ impl Render for Workbench {
             .children(self.render_blame_card(colors, cx))
             .children(self.render_diff_edit(colors, cx))
             .children(self.render_thread_card(colors, cx))
+            .children(intro)
     }
 }
 
