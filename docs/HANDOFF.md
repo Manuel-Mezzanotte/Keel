@@ -1,6 +1,6 @@
 # Keel — passaggio di consegne
 
-*Scritto il 18 novembre 2026, aggiornato il 22 novembre all'ultimo commit di `develop`.*
+*Scritto il 18 novembre 2026, aggiornato il 24 novembre con l'interfaccia rifatta e il benvenuto del primo avvio (non ancora nei commit).*
 
 Questo documento serve a chi riprende il lavoro su Keel, persona o assistente, senza aver seguito la storia. Spiega:
 - che cos'è il progetto e perché esiste;
@@ -96,7 +96,8 @@ Le versioni si aggiornano solo di proposito, e con i test.
 
 `~/Library/Application Support/com.manuelmezzanotte.keel` contiene:
 - `settings.json` e `keybindings.json`;
-- estensioni, sessioni, progetti recenti, copie di emergenza e registri dei crash.
+- estensioni, sessioni, progetti recenti, copie di emergenza e registri dei crash;
+- `welcome-seen`, scritto quando finisce il benvenuto del primo avvio: finché manca, e manca ogni altra traccia di Keel, la prima finestra si apre col benvenuto. `KEEL_WELCOME=1` lo mostra comunque, per provarlo.
 
 Per le prove si usa sempre una cartella a parte, con `KEEL_DATA_DIR`, mai quella vera.
 
@@ -162,8 +163,15 @@ Dopo le prime prove dell'app vera (18 novembre) sono arrivati altri giri di rito
   Come provarle, cosa è stato provato davvero e i limiti di ognuna sono in [`DETTAGLI.md`](DETTAGLI.md), «Le funzioni nuove».
 - **la pagina di presentazione** (22 novembre), in una repo sua, `KeelSite` (privata su GitHub, sul Mac accanto a Keel): React, Vite, Tailwind e shadcn/ui, in italiano e in inglese. Dal cielo si scende nel mare, che copre una copia di Keel in HTML, navigabile e nei tre temi; poi il confronto misurato con VS Code e Cursor, le funzioni, i linguaggi, le estensioni e le domande. I numeri e come sono stati misurati stanno nel suo `src/site.ts`. Per pubblicarla servono un dominio, dove metterla e l'app firmata da Apple: finché `downloadUrl` è `null` la pagina dice «In arrivo».
 
+- **l'interfaccia rifatta e il benvenuto** (24 novembre):
+  - **Impostazioni** disegnate da Keel (`settings_page.rs`) invece che dal componente di gpui-component: le pagine con la loro icona e il numero di impostazioni cambiate, una ricerca in italiano su tutte le pagine (nome, descrizione e chiave, ogni parola conta), le impostazioni in riquadri divisi per gruppo, una barra a sinistra su quelle cambiate e il pulsante per tornare al valore di Keel. I temi preferiti si scelgono da un elenco. Raggio e spazio dei pannelli e «Schede su più righe», che non si vedevano più, sono tornati nella pagina Interfaccia; un test controlla che ogni impostazione del catalogo abbia il suo posto;
+  - **scorciatoie da tastiera** con titolo, ricerca, tasti disegnati come tastini, «Tua» in evidenza e i pulsanti solo sulla riga sotto il puntatore;
+  - **pagina di benvenuto** con il marchio, «L'IDE per Mac scritto in Rust», le azioni e i progetti recenti in due colonne e un mare calmo in fondo;
+  - **il benvenuto del primo avvio** (`intro.rs`): sopra la prima finestra un cielo (di notte con un tema scuro, di giorno con uno chiaro), il mare che sale, la barca di Keel che entra e dondola, il nome, la frase e «Sali a bordo». Con il pulsante, Invio, Esc o lo spazio il mare sale su tutta la finestra e si schiarisce sull'IDE. È disegnato solo con rettangoli (le onde sono colonne sottili) e con la barca in nove piccoli SVG (`assets/intro/`): niente tracciati, che terrebbero in memoria immagini grandi come la finestra. Si ridisegna sessanta volte al secondo solo con la finestra in primo piano (circa il 22% di un core mentre si muove, misurato sulla versione release), e si ferma quando è dietro le altre. Con Riduci movimento o `keel.animations` spento resta fermo e il pulsante entra subito. Gli avvisi che arrivano intanto aspettano la fine. Aiuto → «Rivedi il benvenuto» (comando `keel.showWelcome`) lo fa rivedere;
+  - `scripts/snapshots.sh` fotografa anche le pagine nuove (`settings-editor`, `settings-updates`, `settings-search`, `keybindings`) e il benvenuto fermo in sette momenti (`intro-mezzanotte-0`…`out-3`, lo stesso di giorno); con `KEEL_SNAPSHOTS_FILM=1` anche tutto il benvenuto, quindici fotogrammi al secondo, per farne un video con ffmpeg.
+
 Stato dei controlli all'ultimo commit:
-- tutti i test passano, 566 in tutto, 316 solo nell'app;
+- tutti i test passano, 571 in tutto, 321 solo nell'app;
 - clippy non segnala niente;
 - la prima schermata di Keel arriva in 330 ms, media di sei avvii;
 - **memoria di Keel** (22 novembre, versione installata, M4 Pro, language server spenti), come la dà Monitoraggio Attività: 132 MB con una finestra vuota, 271 MB con un progetto e un file, 299 MB con 450 file e 20 schede, 326 MB con due progetti. I 130–150 MB scritti in `PIANO.md` sono la memoria residente (RSS), che non conta quella grafica: non vanno usati per i confronti;
