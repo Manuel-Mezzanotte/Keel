@@ -198,6 +198,7 @@ fn run(path: Option<PathBuf>, more: Vec<PathBuf>, socket: PathBuf) {
         // reads its project's settings too.
         let settings = settings::Settings::load(paths::user_settings_file(&data), None);
         theme::apply(&theme::ThemeChoice::from_settings(&settings), None, cx);
+        theme::apply_caret(settings.string("editor.cursorBlinking"), cx);
         menus::set(
             i18n::UiLanguage::from_setting(
                 settings.string("keel.language"),

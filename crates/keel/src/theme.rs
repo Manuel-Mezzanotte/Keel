@@ -1,7 +1,10 @@
 //! Keel's color themes: Mezzanotte (the default, with Sail's midnight blues),
 //! Chiaro and Nero (with Sail's blacks).
 
+use std::time::Duration;
+
 use gpui::{App, SharedString, Window};
+use gpui_component::input::CursorBlink;
 use gpui_component::{Theme, ThemeMode, ThemeRegistry};
 use settings::Settings;
 
@@ -11,6 +14,28 @@ const THEMES: &str = include_str!("../themes/keel.json");
 pub const NAMES: [&str; 3] = ["Mezzanotte", "Chiaro", "Nero"];
 const DEFAULT_DARK: &str = "Mezzanotte";
 const DEFAULT_LIGHT: &str = "Chiaro";
+
+/// How long the caret blinks after the last key, click or move before it
+/// holds still, as GNOME's. A window that is not redrawn lets macOS take back
+/// the memory it keeps for drawing it: some 120 MB on a large window.
+const CARET_IDLE: Duration = Duration::from_secs(10);
+
+/// The caret's blinking from `editor.cursorBlinking`, as VS Code names it:
+/// `solid` holds it still; the others blink, until a while of nothing.
+pub fn caret_blink(setting: Option<&str>) -> CursorBlink {
+    match setting {
+        Some("solid") => CursorBlink::steady(),
+        _ => CursorBlink::default().with_idle_timeout(CARET_IDLE),
+    }
+}
+
+/// Applies `editor.cursorBlinking` to every editor of every window.
+pub fn apply_caret(setting: Option<&str>, cx: &mut App) {
+    let blink = caret_blink(setting);
+    if Theme::global(cx).cursor_blink != blink {
+        Theme::update(cx, |theme| theme.cursor_blink = blink);
+    }
+}
 
 /// Registers Keel's themes. Call after `gpui_component::init`.
 pub fn init(cx: &mut App) {
@@ -129,6 +154,16 @@ mod tests {
     use gpui_component::theme::ThemeSet;
 
     use super::*;
+
+    #[test]
+    fn the_caret_blinks_until_ten_quiet_seconds_or_holds_still() {
+        assert!(caret_blink(Some("solid")).is_steady());
+        for setting in [None, Some("blink"), Some("smooth"), Some("phase")] {
+            let blink = caret_blink(setting);
+            assert!(!blink.is_steady());
+            assert_eq!(blink.idle_timeout(), Some(CARET_IDLE));
+        }
+    }
 
     #[test]
     fn the_theme_file_has_the_three_themes() {

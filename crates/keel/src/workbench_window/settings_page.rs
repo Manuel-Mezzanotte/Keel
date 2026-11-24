@@ -107,7 +107,8 @@ fn section_of(key: &str) -> Option<(&'static str, &'static str)> {
         | "editor.detectIndentation"
         | "editor.insertSpaces"
         | "editor.wordWrap"
-        | "editor.cursorSmoothCaretAnimation" => ("Testo e rientri", "Text and Indentation"),
+        | "editor.cursorSmoothCaretAnimation"
+        | "editor.cursorBlinking" => ("Testo e rientri", "Text and Indentation"),
         "editor.formatOnSave" | "editor.defaultFormatter" | "editor.codeActionsOnSave" => {
             ("Formattazione", "Formatting")
         }

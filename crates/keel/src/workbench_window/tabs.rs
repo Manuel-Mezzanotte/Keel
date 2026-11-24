@@ -303,7 +303,11 @@ impl Workbench {
         let cursor_id = editor_id.clone();
         let cursor = cx.observe_in(&editor, window, move |this, editor, window, cx| {
             this.note_cursor(&cursor_uri, &editor, cx);
-            this.redecorate(&cursor_id, &editor, true, cx);
+            // The caret's blinking and the decorations themselves tell this
+            // too: only a move or a new theme is worth decorating again.
+            if this.cursor_moved(&cursor_id, &editor, cx) {
+                this.redecorate(&cursor_id, &editor, true, cx);
+            }
             this.update_hunk_bar(cx);
             this.signature_after_cursor_move(window, cx);
             this.sync_preview_from_editor(&editor, cx);

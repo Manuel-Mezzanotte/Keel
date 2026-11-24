@@ -233,6 +233,17 @@ pub(super) const CATALOG: &[Entry] = &[
         ),
     },
     Entry {
+        key: "editor.cursorBlinking",
+        page: Page::Editor,
+        kind: Kind::Choice(&[("blink", "Lampeggia", "Blink"), ("solid", "Fermo", "Solid")]),
+        default: "\"blink\"",
+        title: ("Cursore che lampeggia", "Cursor Blinking"),
+        description: (
+            "Il cursore lampeggia mentre scrivi e si ferma, sempre visibile, dopo dieci secondi senza far niente.",
+            "The cursor blinks while you type and holds still, always visible, after ten seconds of nothing.",
+        ),
+    },
+    Entry {
         key: "editor.detectIndentation",
         page: Page::Editor,
         kind: Kind::Switch,
@@ -853,6 +864,9 @@ impl Workbench {
                 crate::theme::apply(&choice, Some(window), cx);
             }
             "editor.tabSize" | "editor.insertSpaces" => self.apply_tab_size(cx),
+            "editor.cursorBlinking" => {
+                crate::theme::apply_caret(self.settings.string("editor.cursorBlinking"), cx)
+            }
             "editor.cursorSmoothCaretAnimation" => {
                 let smooth = self.smooth_caret();
                 for pane in &self.panes {

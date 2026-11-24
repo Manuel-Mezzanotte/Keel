@@ -62,6 +62,29 @@ pub(super) struct Decor {
     mirroring: bool,
     /// The text before the last change, to see what it changed.
     before: Option<String>,
+    /// The cursor and the theme the decorations were last asked for: the
+    /// editor tells its observers of every blink of its caret too.
+    asked: Option<(Range<usize>, u64)>,
+    /// What the decorations on screen were made from. Setting them tells
+    /// the editor's observers again, so the same ones are not set twice.
+    drawn: Option<u64>,
+    /// How many times they were set, for the tests.
+    #[cfg(test)]
+    pub(super) set_count: usize,
+}
+
+/// The theme's colours the decorations are made of, as one number.
+fn theme_key(cx: &App) -> u64 {
+    use std::hash::{Hash as _, Hasher as _};
+    let theme = cx.theme();
+    let mut hasher = std::collections::hash_map::DefaultHasher::new();
+    theme.mode.is_dark().hash(&mut hasher);
+    for color in [theme.accent, theme.info] {
+        for part in [color.h, color.s, color.l, color.a] {
+            part.to_bits().hash(&mut hasher);
+        }
+    }
+    hasher.finish()
 }
 
 pub(super) type DecorMap = HashMap<String, Decor>;
@@ -270,6 +293,26 @@ impl Workbench {
         self.redecorate(editor_id, editor, false, cx);
     }
 
+    /// Whether the cursor moved or the theme changed since the decorations
+    /// were last asked for. The editor tells its observers of every blink of
+    /// its caret, and of every decoration set on it, as well as of a move.
+    pub(super) fn cursor_moved(
+        &mut self,
+        editor_id: &str,
+        editor: &Entity<EditorState>,
+        cx: &App,
+    ) -> bool {
+        let Some(decor) = self.decor.get_mut(editor_id) else {
+            return false;
+        };
+        let now = (editor.read(cx).selected_range(), theme_key(cx));
+        if decor.asked.as_ref() == Some(&now) {
+            return false;
+        }
+        decor.asked = Some(now);
+        true
+    }
+
     /// The text or the cursor changed: brackets, the word's places and the
     /// scrollbar's marks follow after a short pause.
     pub(super) fn redecorate(
@@ -322,14 +365,41 @@ impl Workbench {
             .map(|document| document.language_id.clone())
             .unwrap_or_default();
         let dark = cx.theme().mode.is_dark();
+        let colour_brackets = on(
+            &self.settings,
+            "editor.bracketPairColorization.enabled",
+            true,
+        );
+        let highlight_word = on(&self.settings, "editor.occurrencesHighlight", true);
+        // The bookmarks, following their lines.
+        let path = self
+            .panes
+            .iter()
+            .find(|pane| pane.editor_id == editor_id)
+            .and_then(|pane| self.documents.get(&pane.uri))
+            .and_then(|document| document.disk_path().map(Path::to_path_buf));
+        let bookmarked = match path {
+            Some(path) if !self.bookmarks.is_empty() => self.bookmark_ranges(&path, &text),
+            _ => Vec::new(),
+        };
+        // Nothing they are made of changed: the ones on screen stay.
+        let made_of = {
+            use std::hash::{Hash as _, Hasher as _};
+            let mut hasher = std::collections::hash_map::DefaultHasher::new();
+            (&text, &selection, &language, &bookmarked).hash(&mut hasher);
+            (colour_brackets, highlight_word, theme_key(cx)).hash(&mut hasher);
+            hasher.finish()
+        };
+        if self
+            .decor
+            .get(editor_id)
+            .is_some_and(|decor| decor.drawn == Some(made_of))
+        {
+            return;
+        }
         let colours = if dark { DARK_BRACKETS } else { LIGHT_BRACKETS };
         let brackets: Vec<TextDecoration> =
-            if on(
-                &self.settings,
-                "editor.bracketPairColorization.enabled",
-                true,
-            ) && !matches!(language.as_str(), "plaintext" | "markdown" | "")
-            {
+            if colour_brackets && !matches!(language.as_str(), "plaintext" | "markdown" | "") {
                 text_edits::bracket_depths(&text, &language)
                     .into_iter()
                     .map(|(at, depth)| {
@@ -346,22 +416,21 @@ impl Workbench {
                 Vec::new()
             };
         // The word under the cursor, elsewhere in the file.
-        let places =
-            if on(&self.settings, "editor.occurrencesHighlight", true) && selection.is_empty() {
-                let word = editor::text_edits::word_at(&text, selection.start);
-                let word = &text[word];
-                if word
-                    .chars()
-                    .next()
-                    .is_some_and(|c| c.is_alphabetic() || c == '_')
-                {
-                    text_edits::occurrences(&text, word, 400)
-                } else {
-                    Vec::new()
-                }
+        let places = if highlight_word && selection.is_empty() {
+            let word = editor::text_edits::word_at(&text, selection.start);
+            let word = &text[word];
+            if word
+                .chars()
+                .next()
+                .is_some_and(|c| c.is_alphabetic() || c == '_')
+            {
+                text_edits::occurrences(&text, word, 400)
             } else {
                 Vec::new()
-            };
+            }
+        } else {
+            Vec::new()
+        };
         let highlight = cx.theme().accent.opacity(if dark { 0.16 } else { 0.12 });
         let occurrences: Vec<TextDecoration> = if places.len() > 1 {
             places
@@ -389,17 +458,11 @@ impl Workbench {
             collection.set(occurrences, cx);
         }
         decor.places = if places.len() > 1 { places } else { Vec::new() };
-        // The bookmarks, following their lines.
-        let path = self
-            .panes
-            .iter()
-            .find(|pane| pane.editor_id == editor_id)
-            .and_then(|pane| self.documents.get(&pane.uri))
-            .and_then(|document| document.disk_path().map(Path::to_path_buf));
-        let bookmarked = match path {
-            Some(path) if !self.bookmarks.is_empty() => self.bookmark_ranges(&path, &text),
-            _ => Vec::new(),
-        };
+        decor.drawn = Some(made_of);
+        #[cfg(test)]
+        {
+            decor.set_count += 1;
+        }
         let lit = cx.theme().info.opacity(0.13);
         if let Some(decor) = self.decor.get_mut(editor_id) {
             if let Some(collection) = &decor.bookmarks {
@@ -607,6 +670,57 @@ mod tests {
         view.read_with(cx, |view, cx| {
             view.active_editor().unwrap().read(cx).selected_range()
         })
+    }
+
+    /// Setting the decorations tells the editor's observers, which once
+    /// asked for them again: Keel redrew six times a second doing nothing.
+    #[gpui::test]
+    fn decorations_rest_while_nothing_changes(cx: &mut TestAppContext) {
+        cx.update(|cx| {
+            gpui_component::init(cx);
+            language::register_grammars();
+            crate::workbench_window::init(cx);
+        });
+        let folder = tempfile::tempdir().unwrap();
+        let root = fs::canonicalize(folder.path()).unwrap();
+        fs::write(
+            root.join("a.rs"),
+            "fn main() { let total = (1 + 2) * 3; }\n",
+        )
+        .unwrap();
+        let settings = Settings::load(root.join(".settings.json"), None);
+        let opening = Opening::new(Some(root.clone()), None);
+        let (view, cx) =
+            cx.add_window_view(|window, cx| Workbench::new(opening, settings, None, window, cx));
+        view.update_in(cx, |view, window, cx| {
+            view.open_file(&root.join("a.rs"), window, cx)
+        });
+        cx.update(|window, _| window.activate_window());
+        cx.run_until_parked();
+        let count = |view: &Entity<Workbench>, cx: &mut VisualTestContext| {
+            view.read_with(cx, |view, _| {
+                let id = &view.panes[view.active].editor_id;
+                view.decor.get(id).map_or(0, |decor| decor.set_count)
+            })
+        };
+        let pause = |cx: &mut VisualTestContext, millis: u64| {
+            for _ in 0..(millis / 50) {
+                cx.executor().advance_clock(Duration::from_millis(50));
+                cx.run_until_parked();
+            }
+        };
+        pause(cx, 400);
+        let settled = count(&view, cx);
+        assert!(settled >= 1, "the first decorations are set");
+        pause(cx, 2_000);
+        assert_eq!(count(&view, cx), settled, "nothing changed, nothing set");
+
+        // A move of the cursor is worth new decorations, once.
+        select(&view, cx, 16..16);
+        pause(cx, 400);
+        assert_eq!(count(&view, cx), settled + 1);
+        pause(cx, 2_000);
+        assert_eq!(count(&view, cx), settled + 1);
     }
 
     #[gpui::test]
