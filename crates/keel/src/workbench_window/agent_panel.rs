@@ -40,6 +40,38 @@ pub(super) enum AgentView {
 /// How many chats the list keeps.
 const MOST_CHATS: usize = 60;
 
+/// The Claude app's chats: those of the project in `cwd`, and those of the
+/// other projects of its account, by project, as chats of the list.
+fn read_app_chats(cwd: &Path) -> (Vec<ai::history::AppChat>, Vec<(PathBuf, Vec<Chat>)>) {
+    let Some(store) = ai::history::app_sessions_dir() else {
+        return (Vec::new(), Vec::new());
+    };
+    let all = ai::history::app_chats_everywhere(&store);
+    let here_text = cwd.to_string_lossy();
+    let here_text = here_text.trim_end_matches('/');
+    let here = all
+        .iter()
+        .filter(|chat| chat.cwd.to_string_lossy() == here_text)
+        .cloned()
+        .collect();
+    let elsewhere = ai::history::app_chats_elsewhere(&all, cwd)
+        .into_iter()
+        .map(|(folder, chats)| {
+            let chats = chats
+                .into_iter()
+                .map(|chat| Chat {
+                    id: chat.session,
+                    title: chat.title,
+                    updated: chat.updated,
+                    app: true,
+                })
+                .collect();
+            (folder, chats)
+        })
+        .collect();
+    (here, elsewhere)
+}
+
 #[derive(Clone, Debug, PartialEq)]
 pub(super) enum AgentStatus {
     Off,
@@ -97,6 +129,9 @@ pub(super) struct AgentPanel {
     /// The project's chats in Claude Code, the latest first: read from its
     /// files at first, then from the agent.
     pub(super) chats: Vec<Chat>,
+    /// The Claude app's chats of other projects, by project: they open in
+    /// their project's window.
+    pub(super) other_chats: Vec<(PathBuf, Vec<Chat>)>,
     /// The list of chats is shown in place of the chat.
     pub(super) show_chats: bool,
     /// What the list of chats is filtered by.
@@ -205,6 +240,7 @@ impl AgentPanel {
             uses_api_key: false,
             key_input: None,
             chats: Vec::new(),
+            other_chats: Vec::new(),
             show_chats: false,
             chat_filter,
             pending_load: None,
@@ -888,14 +924,16 @@ impl Workbench {
         let cwd = self.agent_folder();
         let read = cx.background_spawn(async move {
             let chats = ai::history::chats(&claude, &cwd, MOST_CHATS);
-            let app = ai::history::app_sessions_dir()
-                .map(|store| ai::history::app_chats(&store, &cwd))
-                .unwrap_or_default();
-            ai::history::with_app_chats(chats, &app, MOST_CHATS)
+            let (app, elsewhere) = read_app_chats(&cwd);
+            (
+                ai::history::with_app_chats(chats, &app, MOST_CHATS),
+                elsewhere,
+            )
         });
         cx.spawn(async move |this, cx| {
-            let mut chats = read.await;
+            let (mut chats, elsewhere) = read.await;
             this.update(cx, |this, cx| {
+                this.agent_panel.other_chats = elsewhere;
                 // The agent's list wins once it runs.
                 if this.agent_panel.agent.is_none() {
                     let deleted = &this.agent_panel.deleted_chats;
@@ -920,13 +958,14 @@ impl Workbench {
         let cwd = self.agent_folder();
         let fake = self.agent_panel.fake;
         let app = cx.background_spawn(async move {
-            match ai::history::app_sessions_dir() {
-                Some(store) if !fake => ai::history::app_chats(&store, &cwd),
-                _ => Vec::new(),
+            if fake {
+                (Vec::new(), Vec::new())
+            } else {
+                read_app_chats(&cwd)
             }
         });
         cx.spawn_in(window, async move |this, cx| {
-            let app = app.await;
+            let (app, elsewhere) = app.await;
             let Ok(listed) = listed.await else { return };
             let chats: Vec<Chat> = listed["sessions"]
                 .as_array()
@@ -954,6 +993,7 @@ impl Workbench {
                 .collect();
             let mut chats = ai::history::with_app_chats(chats, &app, MOST_CHATS);
             this.update(cx, |this, cx| {
+                this.agent_panel.other_chats = elsewhere;
                 let deleted = &this.agent_panel.deleted_chats;
                 chats.retain(|chat| !deleted.contains(&chat.id));
                 this.agent_panel

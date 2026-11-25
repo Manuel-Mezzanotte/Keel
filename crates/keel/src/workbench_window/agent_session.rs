@@ -17,7 +17,7 @@ use ai::session_meta::{self, Account, ConfigOption};
 use anyhow::Result;
 use gpui_component::input::InputState;
 
-use super::agent_panel::AgentStatus;
+use super::agent_panel::{AgentStatus, AgentView};
 use super::*;
 
 /// Where the API key is kept in the login keychain.
@@ -568,6 +568,45 @@ impl Workbench {
             .ok();
         })
         .detach();
+        cx.notify();
+    }
+
+    /// Goes on with a chat: here, or, for a chat of another project, in that
+    /// project's window, which opens or comes forward.
+    pub(super) fn open_agent_chat(
+        &mut self,
+        id: String,
+        folder: Option<PathBuf>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let Some(folder) = folder.filter(|folder| *folder != self.agent_folder()) else {
+            self.load_agent_conversation(id, window, cx);
+            return;
+        };
+        self.agent_panel.show_chats = false;
+        cx.defer(move |cx| {
+            crate::windows::open_then(
+                folder,
+                move |workbench, window, cx| workbench.open_claude_chat(id, window, cx),
+                cx,
+            );
+        });
+        cx.notify();
+    }
+
+    /// Shows Claude's panel and goes on with the chat `id` in it.
+    pub(crate) fn open_claude_chat(
+        &mut self,
+        id: String,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.layout.agent = true;
+        self.agent_panel.view = AgentView::Agent;
+        self.read_claude_chats(cx);
+        self.load_agent_conversation(id, window, cx);
+        self.session_changed(cx);
         cx.notify();
     }
 

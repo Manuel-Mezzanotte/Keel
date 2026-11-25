@@ -29,6 +29,9 @@ use super::*;
 const DIFF_LINES: usize = 14;
 /// How many chats the home shows.
 const RECENT_CHATS: usize = 5;
+/// How many other projects the home shows, and how many chats of each.
+const OTHER_PROJECTS: usize = 4;
+const OTHER_PROJECT_CHATS: usize = 3;
 /// How many rows a `/` or `@` menu offers.
 const MENU_ROWS: usize = 40;
 
@@ -596,7 +599,9 @@ impl Workbench {
             .iter()
             .take(RECENT_CHATS)
             .enumerate()
-            .map(|(index, chat)| self.render_chat_row(("agent-recent", index), chat, colors, cx))
+            .map(|(index, chat)| {
+                self.render_chat_row(("agent-recent", index), chat, None, colors, cx)
+            })
             .collect();
         let suggestion = |index: usize, text: &'static str| {
             div()
@@ -732,6 +737,33 @@ impl Workbench {
                     )
                     .children(recent),
             );
+        }
+        if !panel.other_chats.is_empty() {
+            let mut others = div()
+                .flex()
+                .flex_col()
+                .child(heading(strings.agent_other_projects, colors));
+            let mut row = 0usize;
+            for (project, (folder, chats)) in
+                panel.other_chats.iter().take(OTHER_PROJECTS).enumerate()
+            {
+                others = others.child(project_heading(
+                    ("agent-home-project", project),
+                    folder,
+                    colors,
+                ));
+                for chat in chats.iter().take(OTHER_PROJECT_CHATS) {
+                    others = others.child(self.render_chat_row(
+                        ("agent-other", row),
+                        chat,
+                        Some(folder),
+                        colors,
+                        cx,
+                    ));
+                    row += 1;
+                }
+            }
+            home = home.child(others);
         }
         home.into_any_element()
     }
@@ -904,9 +936,11 @@ impl Workbench {
         &self,
         id: impl Into<gpui::ElementId>,
         chat: &Chat,
+        folder: Option<&Path>,
         colors: Colors,
         cx: &mut Context<Self>,
     ) -> AnyElement {
+        let elsewhere = folder.map(Path::to_path_buf);
         let italian = self.language == UiLanguage::Italian;
         let now = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
@@ -988,7 +1022,7 @@ impl Workbench {
             .when(current, |row| row.bg(colors.selected))
             .when(!current, |row| row.hover(|row| row.bg(colors.hover)))
             .on_click(cx.listener(move |this, _, window, cx| {
-                this.load_agent_conversation(chat_id.clone(), window, cx)
+                this.open_agent_chat(chat_id.clone(), elsewhere.clone(), window, cx)
             }))
             .child(
                 div()
@@ -998,7 +1032,7 @@ impl Workbench {
                     .text_color(colors.text)
                     .child(chat.title.clone()),
             )
-            .when(chat.app, |row| {
+            .when(chat.app && folder.is_none(), |row| {
                 row.child(
                     div()
                         .flex_none()
@@ -1072,7 +1106,7 @@ impl Workbench {
             .pb_2()
             .flex()
             .flex_col();
-        if shown.is_empty() {
+        if shown.is_empty() && panel.other_chats.is_empty() {
             list = list.child(
                 div()
                     .px_2()
@@ -1101,7 +1135,29 @@ impl Workbench {
             }
             list = list.child(div().pt_2().child(heading(label, colors)));
             for chat in chats {
-                list = list.child(self.render_chat_row(("agent-chat", row), chat, colors, cx));
+                list =
+                    list.child(self.render_chat_row(("agent-chat", row), chat, None, colors, cx));
+                row += 1;
+            }
+        }
+        // The Claude app's chats of the other projects, by project.
+        for (project, (folder, chats)) in panel.other_chats.iter().enumerate() {
+            let chats: Vec<&Chat> = chats
+                .iter()
+                .filter(|chat| filter.is_empty() || chat.title.to_lowercase().contains(&filter))
+                .collect();
+            if chats.is_empty() {
+                continue;
+            }
+            list = list.child(project_heading(("agent-project", project), folder, colors));
+            for chat in chats {
+                list = list.child(self.render_chat_row(
+                    ("agent-chat", row),
+                    chat,
+                    Some(folder),
+                    colors,
+                    cx,
+                ));
                 row += 1;
             }
         }
@@ -1954,6 +2010,35 @@ impl Workbench {
             )
             .into_any_element()
     }
+}
+
+/// The name of another project over its chats, with its folder's symbol.
+fn project_heading(
+    id: impl Into<gpui::ElementId>,
+    folder: &Path,
+    colors: Colors,
+) -> gpui::Stateful<gpui::Div> {
+    let name = folder
+        .file_name()
+        .map(|name| name.to_string_lossy().into_owned())
+        .unwrap_or_else(|| folder.display().to_string());
+    div()
+        .id(id)
+        .px(px(10.))
+        .pt(px(8.))
+        .pb(px(2.))
+        .flex()
+        .items_center()
+        .gap(px(6.))
+        .text_size(px(12.))
+        .font_weight(FontWeight::MEDIUM)
+        .text_color(colors.muted)
+        .child(
+            Icon::new(IconName::Folder)
+                .xsmall()
+                .text_color(colors.faint),
+        )
+        .child(name)
 }
 
 /// A notice under the conversation, such as an error.
