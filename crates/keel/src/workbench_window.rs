@@ -1,8 +1,11 @@
 //! The workbench: the window with its panels and editors, and the bridge
 //! between Keel and the extension host. The layout is drawn in `shell`.
 
+mod agent_cards;
 mod agent_panel;
 mod agent_review;
+mod agent_session;
+mod agent_view;
 mod blame;
 mod blame_card;
 mod bookmarks;
@@ -733,6 +736,10 @@ impl Workbench {
                 this.refresh_git(cx);
                 this.refresh_tree(cx);
                 this.index_files(cx);
+                // A chat may have gone on in Claude Code elsewhere.
+                if this.layout.agent && this.agent_panel.view == agent_panel::AgentView::Agent {
+                    this.sync_agent_chat(window, cx);
+                }
             }
         }));
         subscriptions.push(cx.observe_pending_input(window, |this, window, cx| {
@@ -2034,6 +2041,10 @@ impl Workbench {
     ) -> bool {
         let keystroke = &event.keystroke;
         if !keystroke.modifiers.modified() && self.commit_message_key(&keystroke.key, window, cx) {
+            return true;
+        }
+        // The `/` and `@` menus of Claude's message box.
+        if !keystroke.modifiers.modified() && self.composer_key(&keystroke.key, window, cx) {
             return true;
         }
         // Esc closes a peek first, then the Explorer's filter.

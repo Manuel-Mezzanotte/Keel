@@ -473,7 +473,46 @@ fn shots() -> Vec<Shot> {
             });
             workbench.send_to_agent(window, cx);
         }));
+        // The `/` menu with the commands and skills, then `@` with files.
+        shots.push(shot(name("claude-slash"), |workbench, window, cx| {
+            window.clear_notifications(cx);
+            workbench.agent_panel.input.update(cx, |input, cx| {
+                input.set_value("/", window, cx);
+                input.set_selected_range(1..1, cx);
+                input.focus(window, cx);
+            });
+            workbench.agent_panel.menus.text_changed();
+            cx.notify();
+        }));
+        shots.push(shot(name("claude-mention"), |workbench, window, cx| {
+            workbench.agent_panel.input.update(cx, |input, cx| {
+                input.set_value("Spiega @agent", window, cx);
+                input.set_selected_range(13..13, cx);
+            });
+            workbench.agent_panel.menus.text_changed();
+            cx.notify();
+        }));
+        // The cards over the message box: model, mode, usage.
+        for (what, card) in [
+            ("claude-model", agent_cards::ComposerPopover::Model),
+            ("claude-mode", agent_cards::ComposerPopover::Mode),
+            ("claude-usage", agent_cards::ComposerPopover::Usage),
+        ] {
+            shots.push(shot(name(what), move |workbench, window, cx| {
+                window.clear_notifications(cx);
+                workbench.agent_panel.input.update(cx, |input, cx| {
+                    input.set_value("", window, cx);
+                });
+                workbench.agent_panel.more_models = false;
+                workbench.agent_panel.popover = None;
+                workbench.toggle_composer_popover(card, cx);
+            }));
+        }
         shots.push(shot(name("claude-tools"), |workbench, window, cx| {
+            workbench.agent_panel.popover = None;
+            workbench.agent_panel.input.update(cx, |input, cx| {
+                input.set_value("", window, cx);
+            });
             // A file of the snapshots' own data folder: the edit is only
             // asked, never allowed.
             let file = paths::data_dir().join("prezzi.ts");
@@ -483,6 +522,13 @@ fn shots() -> Vec<Shot> {
             });
             workbench.send_to_agent(window, cx);
         }));
+        // Logged out: the ways in, in place of the chat.
+        if round == 1 {
+            shots.push(shot(name("claude-login"), |workbench, window, cx| {
+                workbench.cancel_agent(cx);
+                workbench.logout_agent(window, cx);
+            }));
+        }
     }
     // The Settings tab's other pages, and a search.
     for (style, theme) in [("flat", "Chiaro"), ("floating", "Mezzanotte")] {

@@ -289,16 +289,47 @@ impl Agent {
     // The calls Keel makes
 
     /// `initialize`: Keel reads and writes files for the agent, so its edits
-    /// pass through the editor; no terminal of its own for now.
+    /// pass through the editor; no terminal of its own for the agent, but
+    /// one for logging in, which the agent names (`terminal-auth`).
     pub fn initialize(&self) -> impl Future<Output = Result<Value>> + use<> {
         self.request(
             "initialize",
             json!({
                 "protocolVersion": PROTOCOL_VERSION,
-                "clientCapabilities": { "fs": { "readTextFile": true, "writeTextFile": true }, "terminal": false },
+                "clientCapabilities": {
+                    "fs": { "readTextFile": true, "writeTextFile": true },
+                    "terminal": false,
+                    "auth": { "terminal": true },
+                    "_meta": { "terminal-auth": true },
+                },
                 "clientInfo": { "name": "keel", "title": "Keel", "version": env!("CARGO_PKG_VERSION") },
             }),
         )
+    }
+
+    /// Who the agent works as: `{ state, accounts }`.
+    pub fn auth_status(&self) -> impl Future<Output = Result<Value>> + use<> {
+        self.request("auth/status", json!({}))
+    }
+
+    /// Tells the agent a login method finished, so it reads the login again.
+    pub fn authenticate(&self, method: &str) -> impl Future<Output = Result<Value>> + use<> {
+        self.request("authenticate", json!({ "methodId": method }))
+    }
+
+    /// Logs out of the account the agent works as.
+    pub fn logout(&self) -> impl Future<Output = Result<Value>> + use<> {
+        self.request("logout", json!({}))
+    }
+
+    /// Deletes a conversation for good: every file Claude Code keeps of it.
+    pub fn delete_session(&self, session: &str) -> impl Future<Output = Result<Value>> + use<> {
+        self.request("session/delete", json!({ "sessionId": session }))
+    }
+
+    /// Ends a session in the agent, so it can be loaded again afresh.
+    pub fn close_session(&self, session: &str) -> impl Future<Output = Result<Value>> + use<> {
+        self.request("session/close", json!({ "sessionId": session }))
     }
 
     pub fn new_session(&self, cwd: &Path) -> impl Future<Output = Result<Value>> + use<> {

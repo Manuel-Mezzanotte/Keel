@@ -80,13 +80,23 @@ gpui_kit_assets::icon_assets!(
         FolderCog,
         Languages,
         CircleArrowDown,
-        Puzzle
+        Puzzle,
+        Key,
+        Lightbulb,
+        SquareSlash,
+        TextCursorInput,
+        ListChecks,
+        ShieldAlert,
+        Zap
     ]
 );
 
 /// Keel's mark, the outline of a paper boat.
 pub const LOGO: &str = "brand/keel-mark.svg";
 const LOGO_SVG: &[u8] = include_bytes!("../../../assets/brand/keel-mark.svg");
+/// Claude's mark in Keel: a spark of eight rays.
+pub const CLAUDE_MARK: &str = "brand/claude-mark.svg";
+const CLAUDE_MARK_SVG: &[u8] = include_bytes!("../../../assets/brand/claude-mark.svg");
 
 /// The drawings of the first start's welcome: the boat in layers, one
 /// color each, and a gull.
@@ -140,6 +150,9 @@ impl AssetSource for KeelAssets {
         if path == LOGO {
             return Ok(Some(Cow::Borrowed(LOGO_SVG)));
         }
+        if path == CLAUDE_MARK {
+            return Ok(Some(Cow::Borrowed(CLAUDE_MARK_SVG)));
+        }
         if let Some((_, bytes)) = INTRO.iter().find(|(name, _)| *name == path) {
             return Ok(Some(Cow::Borrowed(bytes)));
         }
@@ -154,6 +167,9 @@ impl AssetSource for KeelAssets {
         paths.extend(ExtraIcons.list(path)?);
         if LOGO.starts_with(path) {
             paths.push(LOGO.into());
+        }
+        if CLAUDE_MARK.starts_with(path) {
+            paths.push(CLAUDE_MARK.into());
         }
         paths.extend(
             INTRO

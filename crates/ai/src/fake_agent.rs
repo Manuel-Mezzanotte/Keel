@@ -142,6 +142,9 @@ impl Fake {
                 self.update(&session, json!({ "sessionUpdate": "tool_call_update", "toolCallId": "edit-1", "status": "failed" }));
                 "Not changed.".to_owned()
             }
+        } else if text.trim() == "/usage" {
+            // Claude Code's own `/usage`, as the adapter writes it.
+            "## Usage\n\n> Claude pro subscription usage\n\n### Limits\n\n**5-hour limit** — **74%** · Resets Nov 25, 2:10 PM GMT+1\n\n`███████████████░░░░░`\n\n**Weekly · all models** — **86%** · Resets Nov 29, 2:00 AM GMT+1\n\n---\n\n### This session\n\n| Cost | API time | Active |\n|:--|:--|:--|\n| $0.00 | 0s | 3s |\n".to_owned()
         } else {
             format!("You said: {}", text.trim())
         };
@@ -155,6 +158,11 @@ impl Fake {
         {
             said.push((text.trim().to_owned(), reply));
         }
+        self.update(
+            &session,
+            json!({ "sessionUpdate": "usage_update", "used": 313_000, "size": 1_000_000,
+            "cost": { "amount": 0.42, "currency": "USD" } }),
+        );
         self.send(json!({ "jsonrpc": "2.0", "id": id, "result": { "stopReason": "end_turn" } }));
     }
 
@@ -165,21 +173,54 @@ impl Fake {
         };
         let params = message["params"].clone();
         let result = match method.as_str() {
-            "initialize" => json!({
+            "initialize" => {
+                self.send(json!({ "jsonrpc": "2.0", "method": "auth/status_update", "params": {
+                    "state": "authenticated", "accounts": [{ "label": "Claude Pro", "active": true,
+                    "email": "fake@example.com", "_meta": { "claudeCode": { "kind": "account" } } }] } }));
+                json!({
                 "protocolVersion": 1,
                 "agentCapabilities": { "loadSession": true, "promptCapabilities": { "embeddedContext": true },
-                    "sessionCapabilities": { "list": {} } },
+                    "sessionCapabilities": { "list": {}, "close": {} }, "auth": { "logout": {}, "status": {} } },
                 "agentInfo": { "name": "fake-agent", "title": "Fake Agent", "version": "1.0.0" },
-                "authMethods": [],
-            }),
+                "authMethods": [
+                    { "id": "claude-ai-login", "name": "Claude Subscription", "description": "Use Claude subscription",
+                      "type": "terminal", "_meta": { "terminal-auth": { "command": "/usr/bin/true", "args": ["login"] } } },
+                    { "id": "console-login", "name": "Anthropic Console", "description": "Use Anthropic Console (API usage billing)",
+                      "type": "terminal", "_meta": { "terminal-auth": { "command": "/usr/bin/true", "args": ["console"] } } } ],
+                })
+            }
+            "auth/status" => {
+                json!({ "state": "authenticated", "accounts": [{ "label": "Claude Pro", "active": true,
+                "email": "fake@example.com", "_meta": { "claudeCode": { "kind": "account" } } }] })
+            }
+            "logout" => {
+                self.send(
+                    json!({ "jsonrpc": "2.0", "method": "auth/status_update", "params": {
+                    "state": "unauthenticated", "accounts": [] } }),
+                );
+                json!({})
+            }
+            "authenticate" | "session/close" => json!({}),
+            "session/delete" => {
+                let session = params["sessionId"].as_str().unwrap_or_default();
+                self.sessions.retain(|(known, _, _)| known != session);
+                json!({})
+            }
             "session/new" => {
                 let session = format!("session-{}", self.sessions.len() + 1);
                 let cwd = params["cwd"].as_str().unwrap_or_default().to_owned();
                 self.sessions.push((session.clone(), cwd, Vec::new()));
                 self.update(&session, json!({ "sessionUpdate": "available_commands_update",
-                    "availableCommands": [{ "name": "review", "description": "Review the changes" }] }));
-                json!({ "sessionId": session, "modes": { "currentModeId": "default", "availableModes": [
-                    { "id": "default", "name": "Default" }, { "id": "plan", "name": "Plan" } ] } })
+                    "availableCommands": [{ "name": "review", "description": "Review the changes" },
+                        { "name": "frontend-design", "description": "Design pages that look designed" },
+                        { "name": "compact", "description": "Make the conversation shorter", "input": { "hint": "[instructions]" } }] }));
+                json!({ "sessionId": session, "configOptions": [
+                    { "id": "mode", "name": "Mode", "category": "mode", "type": "select", "currentValue": "default",
+                      "options": [{ "value": "default", "name": "Default" }, { "value": "plan", "name": "Plan" }] },
+                    { "id": "model", "name": "Model", "category": "model", "type": "select", "currentValue": "opus",
+                      "options": [{ "value": "opus", "name": "Opus 5.5" }, { "value": "sonnet", "name": "Sonnet 5.5" }] },
+                    { "id": "effort", "name": "Effort", "category": "thought_level", "type": "select", "currentValue": "high",
+                      "options": [{ "value": "low", "name": "Low" }, { "value": "high", "name": "High" }] } ] })
             }
             "session/list" => {
                 let cwd = params["cwd"].as_str().unwrap_or_default();
@@ -205,14 +246,27 @@ impl Fake {
                 }
                 json!({})
             }
-            "session/set_mode" | "session/set_config_option" => {
+            "session/set_mode" => {
                 let session = params["sessionId"].as_str().unwrap_or_default().to_owned();
-                let mode = params.get("modeId").unwrap_or(&params["value"]).clone();
+                let mode = params["modeId"].clone();
                 self.update(
                     &session,
                     json!({ "sessionUpdate": "current_mode_update", "currentModeId": mode }),
                 );
                 json!({})
+            }
+            "session/set_config_option" => {
+                let session = params["sessionId"].as_str().unwrap_or_default().to_owned();
+                let option = params["configId"].as_str().unwrap_or_default().to_owned();
+                let value = params["value"].clone();
+                if option == "mode" {
+                    self.update(
+                        &session,
+                        json!({ "sessionUpdate": "current_mode_update", "currentModeId": value }),
+                    );
+                }
+                json!({ "configOptions": [{ "id": option, "name": option, "currentValue": value,
+                    "options": [{ "value": value, "name": value }] }] })
             }
             "session/prompt" => {
                 self.prompt(id, &params);

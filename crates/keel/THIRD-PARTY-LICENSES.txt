@@ -2,7 +2,7 @@ Third-party software in Keel
 
 Keel is built on open source software. These are the notices and licences
 of everything compiled into the app, as their authors ask them to be passed
-on: 515 packages, and the libraries that come compiled inside them.
+on: 517 packages, and the libraries that come compiled inside them.
 Each text covers the packages listed above it; the MIT and Apache 2.0
 licences, the same for many packages, are written once, after the copyright
 lines of all the packages they cover.
@@ -87,41 +87,41 @@ regex-syntax 0.8.11, resvg 0.46.0, rgb 0.8.53, ropey 2.0.0-beta.1, roxmltree
 0.21.2, rust-embed 8.14.0, rust-embed-utils 8.14.0, rust-i18n 4.2.4,
 rust-i18n-support 4.2.4, rustc-demangle 0.1.28, rustc-hash 2.1.3, rustix
 1.1.6, rustix-openpty 0.2.0, rusty-fork 0.3.1, rustybuzz 0.20.1, same-file
-1.0.6, schemars 1.2.3, scopeguard 1.2.0, seahash 4.1.0, semver 1.0.28, serde
-1.0.229, serde-saphyr 1.3.0, serde_core 1.0.229, serde_json 1.0.154,
-serde_spanned 0.6.9, serde_urlencoded 0.7.1, serde_v8 0.322.0, sha1 0.11.0,
-sha2 0.10.9, sha2 0.11.1, signal-hook 0.4.6, signal-hook-registry 1.4.8,
-signature 2.2.0, simd-adler32 0.3.10, simdutf8 0.1.5, simplecss 0.2.2,
-siphasher 1.0.4, slab 0.4.12, smallvec 1.16.5, smol 2.0.2, smol_str 0.3.7,
-socket2 0.6.5, spin 0.10.1, spin 0.9.9, spki 0.7.3, stable_deref_trait
-1.2.1, static_assertions 1.1.0, str_indices 0.4.4, streaming-iterator 0.1.9,
-strict-num 0.1.1, string_cache 0.8.9, strum 0.28.0, svg_fmt 0.4.5, svgtypes
-0.16.2, sys-locale 0.3.2, sys_traits 0.1.29, taffy 0.15.1, tap 1.0.1,
-tempfile 3.27.0, temporal_capi 0.2.6, temporal_rs 0.2.6, tendril 0.4.3,
-thiserror 1.0.69, thiserror 2.0.21, tiff 0.11.3, timezone_provider 0.2.6,
-tinytemplate 1.2.1, tinyvec 1.13.3, tokio 1.54.1, toml 0.8.23, toml_datetime
-0.6.11, toml_edit 0.22.27, toml_write 0.1.2, tracing 0.1.44, tracing-core
-0.1.36, trash 5.3.0, tree-sitter 0.26.13, tree-sitter-bash 0.23.3,
-tree-sitter-c 0.24.2, tree-sitter-c-sharp 0.23.5, tree-sitter-containerfile
-0.9.2, tree-sitter-cpp 0.23.4, tree-sitter-css 0.23.2, tree-sitter-html
-0.23.2, tree-sitter-java 0.23.5, tree-sitter-javascript 0.23.1,
-tree-sitter-json 0.24.8, tree-sitter-language 0.1.9, tree-sitter-make 1.1.1,
-tree-sitter-md 0.5.4, tree-sitter-properties 0.3.0, tree-sitter-python
-0.23.6, tree-sitter-rust 0.24.2, tree-sitter-sequel 0.3.13,
-tree-sitter-toml-ng 0.7.0, tree-sitter-typescript 0.23.2, tree-sitter-xml
-0.7.0, tree-sitter-yaml 0.7.2, triomphe 0.1.17, ttf-parser 0.25.1,
-tungstenite 0.30.0, typed-path 0.13.0, typenum 1.20.1, unarray 0.1.4,
-unicode-bidi 0.3.18, unicode-bidi-mirroring 0.4.0, unicode-ccc 0.4.0,
-unicode-id 0.3.7, unicode-id-start 1.5.0, unicode-ident 1.0.27,
-unicode-properties 0.1.5, unicode-script 0.5.9, unicode-segmentation 1.13.3,
-unicode-vo 0.1.0, unicode-width 0.2.3, url 2.5.8, usvg 0.46.0, utf-8 0.7.6,
-utf8_iter 1.1.0, utf_types 1.0.0, uuid 1.29.2, v8x 149.4.0-rc.4, vsimd
-0.8.0, vte 0.15.0, wait-timeout 0.2.1, waker-fn 1.2.0, walkdir 2.5.0,
-wasm-bindgen 0.2.130, wasm-bindgen-shared 0.2.130, wasm_dep_analyzer 0.4.0,
-web-time 1.1.0, weezl 0.1.12, winnow 0.7.15, wyz 0.5.1, xml5ever 0.18.1,
-xmlwriter 0.1.0, y4m 0.8.0, zed-font-kit 0.14.1-zed, zerocopy 0.8.63,
-zeroize 1.9.1, zip 9.5.1, zmij 1.0.23, zune-core 0.5.3, zune-inflate 0.2.54,
-zune-jpeg 0.5.15
+1.0.6, schemars 1.2.3, scopeguard 1.2.0, seahash 4.1.0, security-framework
+3.7.0, security-framework-sys 2.17.0, semver 1.0.28, serde 1.0.229,
+serde-saphyr 1.3.0, serde_core 1.0.229, serde_json 1.0.154, serde_spanned
+0.6.9, serde_urlencoded 0.7.1, serde_v8 0.322.0, sha1 0.11.0, sha2 0.10.9,
+sha2 0.11.1, signal-hook 0.4.6, signal-hook-registry 1.4.8, signature 2.2.0,
+simd-adler32 0.3.10, simdutf8 0.1.5, simplecss 0.2.2, siphasher 1.0.4, slab
+0.4.12, smallvec 1.16.5, smol 2.0.2, smol_str 0.3.7, socket2 0.6.5, spin
+0.10.1, spin 0.9.9, spki 0.7.3, stable_deref_trait 1.2.1, static_assertions
+1.1.0, str_indices 0.4.4, streaming-iterator 0.1.9, strict-num 0.1.1,
+string_cache 0.8.9, strum 0.28.0, svg_fmt 0.4.5, svgtypes 0.16.2, sys-locale
+0.3.2, sys_traits 0.1.29, taffy 0.15.1, tap 1.0.1, tempfile 3.27.0,
+temporal_capi 0.2.6, temporal_rs 0.2.6, tendril 0.4.3, thiserror 1.0.69,
+thiserror 2.0.21, tiff 0.11.3, timezone_provider 0.2.6, tinytemplate 1.2.1,
+tinyvec 1.13.3, tokio 1.54.1, toml 0.8.23, toml_datetime 0.6.11, toml_edit
+0.22.27, toml_write 0.1.2, tracing 0.1.44, tracing-core 0.1.36, trash 5.3.0,
+tree-sitter 0.26.13, tree-sitter-bash 0.23.3, tree-sitter-c 0.24.2,
+tree-sitter-c-sharp 0.23.5, tree-sitter-containerfile 0.9.2, tree-sitter-cpp
+0.23.4, tree-sitter-css 0.23.2, tree-sitter-html 0.23.2, tree-sitter-java
+0.23.5, tree-sitter-javascript 0.23.1, tree-sitter-json 0.24.8,
+tree-sitter-language 0.1.9, tree-sitter-make 1.1.1, tree-sitter-md 0.5.4,
+tree-sitter-properties 0.3.0, tree-sitter-python 0.23.6, tree-sitter-rust
+0.24.2, tree-sitter-sequel 0.3.13, tree-sitter-toml-ng 0.7.0,
+tree-sitter-typescript 0.23.2, tree-sitter-xml 0.7.0, tree-sitter-yaml
+0.7.2, triomphe 0.1.17, ttf-parser 0.25.1, tungstenite 0.30.0, typed-path
+0.13.0, typenum 1.20.1, unarray 0.1.4, unicode-bidi 0.3.18,
+unicode-bidi-mirroring 0.4.0, unicode-ccc 0.4.0, unicode-id 0.3.7,
+unicode-id-start 1.5.0, unicode-ident 1.0.27, unicode-properties 0.1.5,
+unicode-script 0.5.9, unicode-segmentation 1.13.3, unicode-vo 0.1.0,
+unicode-width 0.2.3, url 2.5.8, usvg 0.46.0, utf-8 0.7.6, utf8_iter 1.1.0,
+utf_types 1.0.0, uuid 1.29.2, v8x 149.4.0-rc.4, vsimd 0.8.0, vte 0.15.0,
+wait-timeout 0.2.1, waker-fn 1.2.0, walkdir 2.5.0, wasm-bindgen 0.2.130,
+wasm-bindgen-shared 0.2.130, wasm_dep_analyzer 0.4.0, web-time 1.1.0, weezl
+0.1.12, winnow 0.7.15, wyz 0.5.1, xml5ever 0.18.1, xmlwriter 0.1.0, y4m
+0.8.0, zed-font-kit 0.14.1-zed, zerocopy 0.8.63, zeroize 1.9.1, zip 9.5.1,
+zmij 1.0.23, zune-core 0.5.3, zune-inflate 0.2.54, zune-jpeg 0.5.15
 ----------------------------------------------------------------------------
 
 Copyright (c) The AccessKit contributors (accesskit 0.24.1; from its declared licence: the package has no licence file)
@@ -411,6 +411,8 @@ Copyright (c) 2017 Andrew Gallant (same-file 1.0.6)
 Copyright (c) 2019 Graham Esau (schemars 1.2.3)
 Copyright (c) 2016-2019 Ulrik Sverdrup "bluss" and scopeguard developers (scopeguard 1.2.0)
 Copyright (c) ticki, Tom Almeida (seahash 4.1.0; from its declared licence: the package has no licence file)
+Copyright (c) 2015 Steven Fackler (security-framework 3.7.0)
+Copyright (c) 2015 Steven Fackler (security-framework-sys 2.17.0)
 Copyright (c) Individual contributors (serde_spanned 0.6.9)
 Copyright (c) 2016 Anthony Ramine (serde_urlencoded 0.7.1)
 Copyright (c) the Deno authors (serde_v8 0.322.0; from its declared licence: the package has no licence file)
@@ -606,28 +608,28 @@ raw-window-handle 0.6.2, rayon 1.12.0, rayon-core 1.13.0, ref-cast 1.0.27,
 regex 1.13.1, regex-automata 0.4.18, regex-syntax 0.8.11, resvg 0.46.0,
 ropey 2.0.0-beta.1, roxmltree 0.21.2, rustc-demangle 0.1.28, rustc-hash
 2.1.3, rustix 1.1.6, rustix-openpty 0.2.0, rusty-fork 0.3.1, ryu 1.0.23,
-scopeguard 1.2.0, semver 1.0.28, serde 1.0.229, serde-saphyr 1.3.0,
-serde_core 1.0.229, serde_json 1.0.154, serde_spanned 0.6.9,
-serde_urlencoded 0.7.1, sha1 0.11.0, sha2 0.10.9, sha2 0.11.1, signal-hook
-0.4.6, signal-hook-registry 1.4.8, signature 2.2.0, simdutf8 0.1.5, similar
-2.7.0, simplecss 0.2.2, siphasher 1.0.4, smallvec 1.16.5, smol 2.0.2,
-smol_str 0.3.7, socket2 0.6.5, spki 0.7.3, stable_deref_trait 1.2.1,
-static_assertions 1.1.0, str_indices 0.4.4, streaming-iterator 0.1.9,
-string_cache 0.8.9, svgtypes 0.16.2, sys-locale 0.3.2, tempfile 3.27.0,
-temporal_capi 0.2.6, temporal_rs 0.2.6, tendril 0.4.3, thiserror 1.0.69,
-thiserror 2.0.21, timezone_provider 0.2.6, tinytemplate 1.2.1, tinyvec
-1.13.3, toml 0.8.23, toml_datetime 0.6.11, toml_edit 0.22.27, toml_write
-0.1.2, triomphe 0.1.17, ttf-parser 0.25.1, tungstenite 0.30.0, typed-path
-0.13.0, typenum 1.20.1, unarray 0.1.4, unicode-bidi 0.3.18,
-unicode-bidi-mirroring 0.4.0, unicode-ccc 0.4.0, unicode-id 0.3.7,
-unicode-id-start 1.5.0, unicode-ident 1.0.27, unicode-linebreak 0.1.5,
-unicode-properties 0.1.5, unicode-script 0.5.9, unicode-segmentation 1.13.3,
-unicode-vo 0.1.0, unicode-width 0.2.3, url 2.5.8, usvg 0.46.0, utf-8 0.7.6,
-utf8_iter 1.1.0, utf_types 1.0.0, uuid 1.29.2, v8x 149.4.0-rc.4, vte 0.15.0,
-wait-timeout 0.2.1, waker-fn 1.2.0, wasm-bindgen 0.2.130,
-wasm-bindgen-shared 0.2.130, web-time 1.1.0, weezl 0.1.12, xml5ever 0.18.1,
-zed-font-kit 0.14.1-zed, zerocopy 0.8.63, zeroize 1.9.1, zopfli 0.8.4,
-zune-core 0.5.3, zune-jpeg 0.5.15
+scopeguard 1.2.0, security-framework 3.7.0, security-framework-sys 2.17.0,
+semver 1.0.28, serde 1.0.229, serde-saphyr 1.3.0, serde_core 1.0.229,
+serde_json 1.0.154, serde_spanned 0.6.9, serde_urlencoded 0.7.1, sha1
+0.11.0, sha2 0.10.9, sha2 0.11.1, signal-hook 0.4.6, signal-hook-registry
+1.4.8, signature 2.2.0, simdutf8 0.1.5, similar 2.7.0, simplecss 0.2.2,
+siphasher 1.0.4, smallvec 1.16.5, smol 2.0.2, smol_str 0.3.7, socket2 0.6.5,
+spki 0.7.3, stable_deref_trait 1.2.1, static_assertions 1.1.0, str_indices
+0.4.4, streaming-iterator 0.1.9, string_cache 0.8.9, svgtypes 0.16.2,
+sys-locale 0.3.2, tempfile 3.27.0, temporal_capi 0.2.6, temporal_rs 0.2.6,
+tendril 0.4.3, thiserror 1.0.69, thiserror 2.0.21, timezone_provider 0.2.6,
+tinytemplate 1.2.1, tinyvec 1.13.3, toml 0.8.23, toml_datetime 0.6.11,
+toml_edit 0.22.27, toml_write 0.1.2, triomphe 0.1.17, ttf-parser 0.25.1,
+tungstenite 0.30.0, typed-path 0.13.0, typenum 1.20.1, unarray 0.1.4,
+unicode-bidi 0.3.18, unicode-bidi-mirroring 0.4.0, unicode-ccc 0.4.0,
+unicode-id 0.3.7, unicode-id-start 1.5.0, unicode-ident 1.0.27,
+unicode-linebreak 0.1.5, unicode-properties 0.1.5, unicode-script 0.5.9,
+unicode-segmentation 1.13.3, unicode-vo 0.1.0, unicode-width 0.2.3, url
+2.5.8, usvg 0.46.0, utf-8 0.7.6, utf8_iter 1.1.0, utf_types 1.0.0, uuid
+1.29.2, v8x 149.4.0-rc.4, vte 0.15.0, wait-timeout 0.2.1, waker-fn 1.2.0,
+wasm-bindgen 0.2.130, wasm-bindgen-shared 0.2.130, web-time 1.1.0, weezl
+0.1.12, xml5ever 0.18.1, zed-font-kit 0.14.1-zed, zerocopy 0.8.63, zeroize
+1.9.1, zopfli 0.8.4, zune-core 0.5.3, zune-jpeg 0.5.15
 ----------------------------------------------------------------------------
 
 Copyright 2020 The Alacritty Project (alacritty_terminal 0.26.0)

@@ -12,4 +12,5 @@ pub mod acp;
 pub mod fake_agent;
 pub mod history;
 pub mod ide;
+pub mod session_meta;
 pub mod thread;

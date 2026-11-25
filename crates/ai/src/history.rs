@@ -22,6 +22,9 @@ pub struct Chat {
     pub id: String,
     pub title: String,
     pub updated: i64,
+    /// A chat of the Claude app's Code tab: Keel lists it, opens it and
+    /// goes on with it, but only the app deletes it.
+    pub app: bool,
 }
 
 /// How much of the end of a file is read for its title, and of the start
@@ -71,10 +74,140 @@ pub fn chats(claude: &Path, cwd: &Path, most: usize) -> Vec<Chat> {
         .filter_map(|(updated, path)| {
             let id = path.file_stem()?.to_string_lossy().into_owned();
             let title = title_of(&path)?;
-            Some(Chat { id, title, updated })
+            Some(Chat {
+                id,
+                title,
+                updated,
+                app: false,
+            })
         })
         .take(most)
         .collect()
+}
+
+/// Where the Claude app keeps the chats of its Code tab: one small file per
+/// chat (`local_<id>.json`), two folders down, with its title, its folder
+/// and the Claude Code session it runs on. They are the app's files: Keel
+/// only reads them.
+pub fn app_sessions_dir() -> Option<PathBuf> {
+    if let Some(dir) = std::env::var_os("KEEL_CLAUDE_APP_DIR").filter(|dir| !dir.is_empty()) {
+        return Some(PathBuf::from(dir));
+    }
+    std::env::var_os("HOME").map(|home| {
+        PathBuf::from(home).join("Library/Application Support/Claude/claude-code-sessions")
+    })
+}
+
+/// A chat of the Claude app in a project.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct AppChat {
+    /// The Claude Code session the chat goes on in now.
+    pub session: String,
+    /// The sessions it went on in before, when its context was summarized.
+    pub earlier: Vec<String>,
+    pub title: String,
+    /// When it last changed, in seconds since 1970.
+    pub updated: i64,
+}
+
+/// The Claude app's chats in `cwd` that are not archived, the latest first.
+pub fn app_chats(store: &Path, cwd: &Path) -> Vec<AppChat> {
+    let cwd = cwd.to_string_lossy();
+    let cwd = cwd.trim_end_matches('/');
+    let mut found: Vec<AppChat> = Vec::new();
+    let folders = |path: &Path| -> Vec<PathBuf> {
+        std::fs::read_dir(path)
+            .into_iter()
+            .flatten()
+            .flatten()
+            .map(|entry| entry.path())
+            .filter(|path| path.is_dir())
+            .collect()
+    };
+    for account in folders(store) {
+        for place in folders(&account) {
+            let Ok(entries) = std::fs::read_dir(&place) else {
+                continue;
+            };
+            for path in entries.flatten().map(|entry| entry.path()) {
+                let named = path
+                    .file_name()
+                    .and_then(|name| name.to_str())
+                    .is_some_and(|name| name.starts_with("local_") && name.ends_with(".json"));
+                // A chat's file is a few kilobytes; anything big is not one.
+                let small = path.metadata().is_ok_and(|meta| meta.len() < 1024 * 1024);
+                if !named || !small {
+                    continue;
+                }
+                let Some(chat) = std::fs::read(&path)
+                    .ok()
+                    .and_then(|bytes| serde_json::from_slice::<Value>(&bytes).ok())
+                else {
+                    continue;
+                };
+                let here = chat["cwd"]
+                    .as_str()
+                    .is_some_and(|folder| folder.trim_end_matches('/') == cwd);
+                if !here || chat["isArchived"].as_bool() == Some(true) {
+                    continue;
+                }
+                let Some(session) = chat["cliSessionId"].as_str().filter(|id| !id.is_empty())
+                else {
+                    continue;
+                };
+                let title = chat["title"]
+                    .as_str()
+                    .map(str::trim)
+                    .filter(|title| !title.is_empty())
+                    .unwrap_or(session);
+                let updated = chat["lastActivityAt"]
+                    .as_i64()
+                    .or(chat["createdAt"].as_i64())
+                    .unwrap_or(0)
+                    / 1000;
+                let earlier = chat["priorCliSessionIds"]
+                    .as_array()
+                    .into_iter()
+                    .flatten()
+                    .filter_map(|id| id.as_str().map(str::to_owned))
+                    .collect();
+                let chat = AppChat {
+                    session: session.to_owned(),
+                    earlier,
+                    title: title.chars().take(TITLE_CHARS).collect(),
+                    updated,
+                };
+                match found.iter_mut().find(|known| known.session == chat.session) {
+                    Some(known) if known.updated >= chat.updated => {}
+                    Some(known) => *known = chat,
+                    None => found.push(chat),
+                }
+            }
+        }
+    }
+    found.sort_by_key(|chat| std::cmp::Reverse(chat.updated));
+    found
+}
+
+/// Claude Code's chats with the Claude app's: an app chat takes the place
+/// of the sessions it runs on, with the app's title, as the app lists it.
+pub fn with_app_chats(chats: Vec<Chat>, app: &[AppChat], most: usize) -> Vec<Chat> {
+    let mut merged: Vec<Chat> = chats
+        .into_iter()
+        .filter(|chat| {
+            !app.iter()
+                .any(|known| known.session == chat.id || known.earlier.contains(&chat.id))
+        })
+        .collect();
+    merged.extend(app.iter().map(|chat| Chat {
+        id: chat.session.clone(),
+        title: chat.title.clone(),
+        updated: chat.updated,
+        app: true,
+    }));
+    merged.sort_by_key(|chat| std::cmp::Reverse(chat.updated));
+    merged.truncate(most);
+    merged
 }
 
 /// The lines of a piece of a file, the first one dropped when it may have
@@ -302,5 +435,54 @@ mod tests {
         assert_eq!(iso_seconds("2026-11-18T20:41:58.123Z"), Some(1_795_034_518));
         assert_eq!(iso_seconds("2000-03-01T00:00:00Z"), Some(951_868_800));
         assert_eq!(iso_seconds("ieri"), None);
+    }
+
+    #[test]
+    fn the_claude_apps_chats_take_the_place_of_their_sessions() {
+        let store = tempfile::tempdir().unwrap();
+        let place = store.path().join("account").join("org");
+        std::fs::create_dir_all(&place).unwrap();
+        let chat = |name: &str, body: Value| {
+            std::fs::write(place.join(name), body.to_string()).unwrap();
+        };
+        chat(
+            "local_a.json",
+            serde_json::json!({ "cwd": "/work/keel", "cliSessionId": "s3",
+            "priorCliSessionIds": ["s1", "s2"], "title": "Handoff", "lastActivityAt": 9_000_000, "isArchived": false }),
+        );
+        chat(
+            "local_b.json",
+            serde_json::json!({ "cwd": "/work/keel/", "cliSessionId": "s9",
+            "title": "Old", "lastActivityAt": 1_000_000, "isArchived": true }),
+        );
+        chat(
+            "local_c.json",
+            serde_json::json!({ "cwd": "/work/other", "cliSessionId": "s7",
+            "title": "Elsewhere", "lastActivityAt": 5_000_000 }),
+        );
+        chat(
+            "deleted_d",
+            serde_json::json!({ "cwd": "/work/keel", "cliSessionId": "s8" }),
+        );
+        let app = app_chats(store.path(), Path::new("/work/keel"));
+        assert_eq!(app.len(), 1);
+        assert_eq!((app[0].title.as_str(), app[0].updated), ("Handoff", 9_000));
+        let cli = |id: &str, updated: i64| Chat {
+            id: id.to_owned(),
+            title: format!("cli {id}"),
+            updated,
+            app: false,
+        };
+        let merged = with_app_chats(
+            vec![cli("s3", 8_000), cli("s2", 7_000), cli("s5", 10_000)],
+            &app,
+            10,
+        );
+        let ids: Vec<(&str, bool)> = merged
+            .iter()
+            .map(|chat| (chat.id.as_str(), chat.app))
+            .collect();
+        assert_eq!(ids, [("s5", false), ("s3", true)]);
+        assert_eq!(merged[1].title, "Handoff");
     }
 }

@@ -3917,6 +3917,7 @@ dependencies = [
  "objc2-foundation 0.3.2",
  "pdf",
  "regex",
+ "security-framework",
  "serde",
  "serde_json",
  "settings",

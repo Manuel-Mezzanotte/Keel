@@ -50,6 +50,7 @@ workbench.workspace = true
 objc2.workspace = true
 objc2-foundation.workspace = true
 objc2-app-kit.workspace = true
+security-framework = "3.7.0"
 
 [dev-dependencies]
 gpui = { workspace = true, features = ["test-support"] }

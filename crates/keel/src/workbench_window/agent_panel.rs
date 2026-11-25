@@ -1,38 +1,32 @@
 //! The Claude panel: Claude Code as a chat on the right, through the Agent
 //! Client Protocol, next to Claude Code in a terminal. It is the user's own
-//! Claude Code, with its login and its chats: Keel installs the
+//! Claude Code, with its login, its skills and its chats: Keel installs the
 //! `claude-agent-acp` adapter once and starts it in the project only when
 //! the chat is used, and shows Claude Code's past chats at once, read from
-//! where Claude Code keeps them. A chat shows its messages, reasoning,
-//! tools with their file differences, the plan, permission requests and
-//! the mode; files and selections go along with a message.
+//! where Claude Code keeps them. The chats are Claude Code's own files, so
+//! one goes on in the terminal and comes back here up to date.
+//!
+//! This file holds the conversation's state and its talk with the agent;
+//! `agent_view` draws it, `agent_session` handles the account and options.
 
 use std::collections::HashSet;
 
 use ai::acp::{self, Agent, AgentCommand, AgentEvent};
 use ai::history::Chat;
-use ai::thread::{Entry, Thread, ToolCall, ToolContent, ToolStatus};
+use ai::thread::{Entry, Thread, ToolContent};
 use futures::StreamExt as _;
-use gpui::{
-    Animation, AnimationExt as _, AnyElement, ScrollHandle, StatefulInteractiveElement as _,
-    Subscription,
-};
-use gpui_component::button::{Button, ButtonVariants as _};
-use gpui_component::input::{Input, InputEvent, InputState, Textarea, TextareaState};
-use gpui_component::menu::DropdownMenu as _;
-use gpui_component::text::{TextView, TextViewState};
-use gpui_component::{ActiveTheme as _, Disableable as _, Icon, Selectable as _, Sizable as _};
-use gpui_kit_assets::IconName;
+use gpui::{ScrollHandle, Subscription};
+use gpui_component::input::{InputEvent, InputState, TextareaState};
+use gpui_component::text::TextViewState;
 
-use super::shell::{Colors, chevron_turn, empty_state, heading, keys_for, tool_row};
+pub(super) use super::agent_view::spinner;
+use super::agent_view::{AgentAccount, ComposerMenus, ContinueInTerminal, SetAgentOption};
 use super::*;
 
 actions!(keel, [OpenAgent, NewAgentConversation, AddToAgent]);
 
 /// How many lines the message box grows to.
 const INPUT_ROWS: usize = 8;
-/// How many lines of a file difference a tool shows before "…".
-const DIFF_LINES: usize = 14;
 
 /// What the panel on the right shows: the chat at first, Claude Code in
 /// a terminal on Cmd+Esc.
@@ -45,8 +39,6 @@ pub(super) enum AgentView {
 
 /// How many chats the list keeps.
 const MOST_CHATS: usize = 60;
-/// How many chats the panel shows before the first message.
-const RECENT_CHATS: usize = 5;
 
 #[derive(Clone, Debug, PartialEq)]
 pub(super) enum AgentStatus {
@@ -86,10 +78,22 @@ pub(super) struct AgentPanel {
     pub(super) attachments: Vec<Attachment>,
     /// The rendered text of each agent message, by entry, and how much of
     /// it is in.
-    markdown: HashMap<usize, (Entity<TextViewState>, usize)>,
-    /// Modes the agent offers (value, name), and the current one.
-    pub(super) modes: Vec<(String, String)>,
-    pub(super) mode: Option<String>,
+    pub(super) markdown: HashMap<usize, (Entity<TextViewState>, usize)>,
+    /// The session's options: mode, model, effort, fast mode...
+    pub(super) options: Vec<ai::session_meta::ConfigOption>,
+    /// The `/` commands, the user's skills among them.
+    pub(super) commands: Vec<ai::session_meta::SlashCommand>,
+    /// How the agent can log in, and who it works as.
+    pub(super) auth_methods: Vec<ai::session_meta::AuthMethod>,
+    pub(super) account: Option<ai::session_meta::Account>,
+    /// The agent wants a login before anything else.
+    pub(super) needs_login: bool,
+    /// A login running in a terminal: its method, and the wait for it.
+    pub(super) login: Option<(String, Task<()>)>,
+    /// The agent runs with the user's own API key, from the keychain.
+    pub(super) uses_api_key: bool,
+    /// Typing a key to keep in the keychain.
+    pub(super) key_input: Option<Entity<InputState>>,
     /// The project's chats in Claude Code, the latest first: read from its
     /// files at first, then from the agent.
     pub(super) chats: Vec<Chat>,
@@ -99,10 +103,37 @@ pub(super) struct AgentPanel {
     pub(super) chat_filter: Entity<InputState>,
     /// A chat to open as soon as the agent is ready.
     pending_load: Option<String>,
-    open_thoughts: HashSet<usize>,
-    /// Tools opened to show what they did.
-    open_tools: HashSet<usize>,
-    scroll: ScrollHandle,
+    pub(super) open_thoughts: HashSet<usize>,
+    /// Tools opened, or edits closed, by hand.
+    pub(super) open_tools: HashSet<usize>,
+    pub(super) scroll: ScrollHandle,
+    /// The `/` and `@` menus of the message box.
+    pub(super) menus: ComposerMenus,
+    /// When the open chat's file last changed as Keel knows it: a later
+    /// change came from Claude Code elsewhere, and the chat is read again.
+    pub(super) synced: Option<std::time::SystemTime>,
+    /// How full the open chat's context is, and what it cost.
+    pub(super) context: Option<ai::session_meta::ContextUsage>,
+    /// The plan's limits, from `/usage` and from each turn, and when
+    /// `/usage` last answered.
+    pub(super) plan_usage: Option<ai::session_meta::PlanUsage>,
+    pub(super) usage_read: Option<std::time::Instant>,
+    /// The throwaway session `/usage` runs in, and what it answered so far.
+    pub(super) usage_session: Option<(String, String)>,
+    pub(super) reading_usage: bool,
+    /// The card open over the message box: the mode, the model, the usage.
+    pub(super) popover: Option<super::agent_cards::ComposerPopover>,
+    /// A card closed by a click outside it, and when: the click on its own
+    /// button must not open it again.
+    pub(super) popover_closed: Option<(super::agent_cards::ComposerPopover, std::time::Instant)>,
+    /// The model card shows the older models too.
+    pub(super) more_models: bool,
+    /// The chat whose deletion waits for a second click.
+    pub(super) deleting: Option<String>,
+    /// Chats to delete once the agent runs.
+    pub(super) pending_deletes: Vec<String>,
+    /// Chats deleted here: a list asked for before stays without them.
+    pub(super) deleted_chats: HashSet<String>,
     /// A message written before the session was ready.
     waiting: Option<Vec<Value>>,
     /// A notice under the conversation, such as an error.
@@ -134,6 +165,8 @@ impl AgentPanel {
             |this, input, event: &InputEvent, window, cx| match event {
                 InputEvent::PressEnter { shift: false, .. } => this.send_to_agent(window, cx),
                 InputEvent::Change => {
+                    this.agent_panel.menus.text_changed();
+                    this.agent_panel.popover = None;
                     let lines = input
                         .read(cx)
                         .value()
@@ -163,8 +196,14 @@ impl AgentPanel {
             input,
             attachments: Vec::new(),
             markdown: HashMap::new(),
-            modes: Vec::new(),
-            mode: None,
+            options: Vec::new(),
+            commands: Vec::new(),
+            auth_methods: Vec::new(),
+            account: None,
+            needs_login: false,
+            login: None,
+            uses_api_key: false,
+            key_input: None,
             chats: Vec::new(),
             show_chats: false,
             chat_filter,
@@ -172,6 +211,19 @@ impl AgentPanel {
             open_thoughts: HashSet::new(),
             open_tools: HashSet::new(),
             scroll: ScrollHandle::new(),
+            menus: ComposerMenus::default(),
+            synced: None,
+            context: None,
+            plan_usage: None,
+            usage_read: None,
+            usage_session: None,
+            reading_usage: false,
+            popover: None,
+            popover_closed: None,
+            more_models: false,
+            deleting: None,
+            pending_deletes: Vec::new(),
+            deleted_chats: HashSet::new(),
             waiting: None,
             notice: None,
             fake: false,
@@ -207,53 +259,13 @@ impl AgentPanel {
         self.open_tools.clear();
         self.permissions.clear();
         self.notice = None;
+        self.context = None;
     }
-}
-
-/// The modes of `session/new`: `configOptions` with category `mode`, or
-/// the older `modes`.
-fn modes_of(session: &Value) -> (Vec<(String, String)>, Option<String>) {
-    if let Some(option) = session["configOptions"]
-        .as_array()
-        .into_iter()
-        .flatten()
-        .find(|option| option["category"] == "mode" || option["id"] == "mode")
-    {
-        let modes = option["options"]
-            .as_array()
-            .into_iter()
-            .flatten()
-            .filter_map(|mode| {
-                Some((
-                    mode["value"].as_str()?.to_owned(),
-                    mode["name"].as_str()?.to_owned(),
-                ))
-            })
-            .collect();
-        return (modes, option["currentValue"].as_str().map(str::to_owned));
-    }
-    let modes = session["modes"]["availableModes"]
-        .as_array()
-        .into_iter()
-        .flatten()
-        .filter_map(|mode| {
-            Some((
-                mode["id"].as_str()?.to_owned(),
-                mode["name"].as_str()?.to_owned(),
-            ))
-        })
-        .collect();
-    (
-        modes,
-        session["modes"]["currentModeId"]
-            .as_str()
-            .map(str::to_owned),
-    )
 }
 
 impl Workbench {
     /// The folder the agent works in.
-    fn agent_folder(&self) -> PathBuf {
+    pub(super) fn agent_folder(&self) -> PathBuf {
         self.project
             .root
             .clone()
@@ -308,8 +320,15 @@ impl Workbench {
             ));
         }
         let folder = cwd.clone();
+        self.agent_panel.uses_api_key = false;
         let start = cx.background_spawn(async move {
-            let env = lsp::servers::login_environment().clone();
+            let mut env = lsp::servers::login_environment().clone();
+            // The user's own key, kept in the keychain, wins over a login.
+            let key = super::agent_session::saved_api_key();
+            let uses_key = key.is_some();
+            if let Some(key) = key {
+                env.insert("ANTHROPIC_API_KEY".to_owned(), key);
+            }
             let program = match acp::find_adapter(&servers) {
                 Some(program) => program,
                 None => {
@@ -327,12 +346,15 @@ impl Workbench {
                 env,
                 cwd: folder,
             };
-            anyhow::Ok(Agent::start(&command)?)
+            anyhow::Ok((Agent::start(&command)?, uses_key))
         });
         cx.spawn_in(window, async move |this, cx| {
             let started = start.await;
             this.update_in(cx, |this, window, cx| match started {
-                Ok((agent, events)) => this.agent_started(agent, events, cwd, window, cx),
+                Ok(((agent, events), uses_key)) => {
+                    this.agent_panel.uses_api_key = uses_key;
+                    this.agent_started(agent, events, cwd, window, cx)
+                }
                 Err(error) => {
                     this.log(format!("Claude: {error:#}"));
                     this.agent_panel.status = AgentStatus::Failed(format!("{error:#}"));
@@ -378,6 +400,16 @@ impl Workbench {
         }
         cx.spawn_in(window, async move |this, cx| {
             let ready = initialize.await;
+            if let Ok(answer) = &ready {
+                let methods = ai::session_meta::auth_methods(answer);
+                this.update(cx, |this, cx| {
+                    this.agent_panel.auth_methods = methods;
+                    for id in std::mem::take(&mut this.agent_panel.pending_deletes) {
+                        this.delete_agent_chat(id, cx);
+                    }
+                })
+                .ok();
+            }
             let session = match (ready, resume) {
                 (Ok(_), Some(id)) => agent.load_session(&id, &cwd).await.map(|mut loaded| {
                     loaded["sessionId"] = json!(id);
@@ -390,9 +422,9 @@ impl Workbench {
                 match session {
                     Ok(session) => {
                         this.agent_panel.session = session["sessionId"].as_str().map(str::to_owned);
-                        let (modes, mode) = modes_of(&session);
-                        this.agent_panel.modes = modes;
-                        this.agent_panel.mode = mode;
+                        this.apply_agent_options(&session);
+                        this.mark_agent_chat_synced();
+                        this.agent_panel.needs_login = false;
                         this.agent_panel.status = AgentStatus::Ready;
                         if let Some(blocks) = this.agent_panel.waiting.take() {
                             this.prompt_agent(blocks, window, cx);
@@ -401,7 +433,7 @@ impl Workbench {
                     }
                     Err(error) => {
                         this.log(format!("Claude: {error:#}"));
-                        this.agent_panel.status = AgentStatus::Failed(format!("{error:#}"));
+                        this.agent_failed_to_open(&error);
                     }
                 }
                 cx.notify();
@@ -414,6 +446,30 @@ impl Workbench {
     fn on_agent_event(&mut self, event: AgentEvent, window: &mut Window, cx: &mut Context<Self>) {
         match event {
             AgentEvent::Notification { method, params } => {
+                if method == "auth/status_update" {
+                    self.agent_account_changed(ai::session_meta::account(&params), window, cx);
+                }
+                // The commands come while the session opens, before Keel
+                // knows its id: they are the same for every session here.
+                if method == "session/update"
+                    && params["update"]["sessionUpdate"] == "available_commands_update"
+                {
+                    self.agent_panel.commands = ai::session_meta::slash_commands(&params["update"]);
+                }
+                // What `/usage` answers, in its own session.
+                if method == "session/update"
+                    && let Some((usage, text)) = &mut self.agent_panel.usage_session
+                    && params["sessionId"].as_str() == Some(usage.as_str())
+                {
+                    if params["update"]["sessionUpdate"] == "agent_message_chunk" {
+                        text.push_str(
+                            params["update"]["content"]["text"]
+                                .as_str()
+                                .unwrap_or_default(),
+                        );
+                    }
+                    return;
+                }
                 if method == "session/update"
                     && params["sessionId"].as_str() == self.agent_panel.session.as_deref()
                 {
@@ -421,16 +477,15 @@ impl Workbench {
                     self.before_agent_update(update, cx);
                     self.agent_panel.thread.apply(update);
                     if update["sessionUpdate"] == "config_option_update" {
-                        let (modes, mode) = modes_of(update);
-                        if !modes.is_empty() {
-                            self.agent_panel.modes = modes;
-                            self.agent_panel.mode = mode;
-                        }
+                        self.apply_agent_options(update);
                     }
-                    if let Some(mode) = &self.agent_panel.thread.mode
+                    if update["sessionUpdate"] == "usage_update" {
+                        self.agent_usage_update(update);
+                    }
+                    if let Some(mode) = self.agent_panel.thread.mode.clone()
                         && update["sessionUpdate"] == "current_mode_update"
                     {
-                        self.agent_panel.mode = Some(mode.clone());
+                        self.agent_option_changed("mode", mode);
                     }
                     self.agent_panel.sync_markdown(cx);
                     if update["sessionUpdate"] == "tool_call_update" {
@@ -745,6 +800,7 @@ impl Workbench {
             let result = turn.await;
             this.update_in(cx, |this, window, cx| {
                 this.agent_panel.running = false;
+                this.mark_agent_chat_synced();
                 this.refresh_agent_changes();
                 match result {
                     Ok(answer) => {
@@ -803,15 +859,14 @@ impl Workbench {
                 match session {
                     Ok(session) => {
                         this.agent_panel.session = session["sessionId"].as_str().map(str::to_owned);
-                        let (modes, mode) = modes_of(&session);
-                        this.agent_panel.modes = modes;
-                        this.agent_panel.mode = mode;
+                        this.apply_agent_options(&session);
+                        this.agent_panel.needs_login = false;
                         // A message written while the chat was opening.
                         if let Some(blocks) = this.agent_panel.waiting.take() {
                             this.prompt_agent(blocks, window, cx);
                         }
                     }
-                    Err(error) => this.agent_panel.notice = Some(format!("{error:#}")),
+                    Err(error) => this.agent_failed_to_open(&error),
                 }
                 cx.notify();
             })
@@ -831,13 +886,20 @@ impl Workbench {
             return;
         };
         let cwd = self.agent_folder();
-        let read =
-            cx.background_spawn(async move { ai::history::chats(&claude, &cwd, MOST_CHATS) });
+        let read = cx.background_spawn(async move {
+            let chats = ai::history::chats(&claude, &cwd, MOST_CHATS);
+            let app = ai::history::app_sessions_dir()
+                .map(|store| ai::history::app_chats(&store, &cwd))
+                .unwrap_or_default();
+            ai::history::with_app_chats(chats, &app, MOST_CHATS)
+        });
         cx.spawn(async move |this, cx| {
-            let chats = read.await;
+            let mut chats = read.await;
             this.update(cx, |this, cx| {
                 // The agent's list wins once it runs.
                 if this.agent_panel.agent.is_none() {
+                    let deleted = &this.agent_panel.deleted_chats;
+                    chats.retain(|chat| !deleted.contains(&chat.id));
                     this.agent_panel.chats = chats;
                     cx.notify();
                 }
@@ -849,13 +911,22 @@ impl Workbench {
 
     /// Reads the project's chats from the agent, which knows them best;
     /// without it, from Claude Code's files.
-    fn refresh_agent_history(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+    pub(super) fn refresh_agent_history(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let Some(agent) = self.agent_panel.agent.clone() else {
             self.read_claude_chats(cx);
             return;
         };
         let listed = agent.list_sessions(&self.agent_folder());
+        let cwd = self.agent_folder();
+        let fake = self.agent_panel.fake;
+        let app = cx.background_spawn(async move {
+            match ai::history::app_sessions_dir() {
+                Some(store) if !fake => ai::history::app_chats(&store, &cwd),
+                _ => Vec::new(),
+            }
+        });
         cx.spawn_in(window, async move |this, cx| {
+            let app = app.await;
             let Ok(listed) = listed.await else { return };
             let chats: Vec<Chat> = listed["sessions"]
                 .as_array()
@@ -873,11 +944,21 @@ impl Workbench {
                         .as_str()
                         .and_then(ai::history::iso_seconds)
                         .unwrap_or(0);
-                    Some(Chat { id, title, updated })
+                    Some(Chat {
+                        id,
+                        title,
+                        updated,
+                        app: false,
+                    })
                 })
-                .take(MOST_CHATS)
                 .collect();
+            let mut chats = ai::history::with_app_chats(chats, &app, MOST_CHATS);
             this.update(cx, |this, cx| {
+                let deleted = &this.agent_panel.deleted_chats;
+                chats.retain(|chat| !deleted.contains(&chat.id));
+                this.agent_panel
+                    .chats
+                    .retain(|chat| !deleted.contains(&chat.id));
                 if !chats.is_empty() || this.agent_panel.chats.is_empty() {
                     this.agent_panel.chats = chats;
                 }
@@ -900,6 +981,7 @@ impl Workbench {
         let Some(agent) = self.agent_panel.agent.clone() else {
             // The agent starts, then opens the chat instead of a new one.
             self.agent_panel.reset_thread();
+            self.note_app_chat(&id);
             self.agent_panel.pending_load = Some(id.clone());
             self.agent_panel.session = Some(id);
             self.ensure_agent(window, cx);
@@ -910,6 +992,7 @@ impl Workbench {
             self.cancel_agent(cx);
         }
         self.agent_panel.reset_thread();
+        self.note_app_chat(&id);
         self.agent_panel.session = Some(id.clone());
         let loaded = agent.load_session(&id, &self.agent_folder());
         cx.spawn_in(window, async move |this, cx| {
@@ -917,11 +1000,8 @@ impl Workbench {
             this.update(cx, |this, cx| {
                 match loaded {
                     Ok(session) => {
-                        let (modes, mode) = modes_of(&session);
-                        if !modes.is_empty() {
-                            this.agent_panel.modes = modes;
-                            this.agent_panel.mode = mode;
-                        }
+                        this.apply_agent_options(&session);
+                        this.mark_agent_chat_synced();
                     }
                     Err(error) => this.agent_panel.notice = Some(format!("{error:#}")),
                 }
@@ -936,25 +1016,7 @@ impl Workbench {
 
     /// Changes how the agent asks permission.
     pub(super) fn set_agent_mode(&mut self, mode: String, cx: &mut Context<Self>) {
-        let (Some(agent), Some(session)) = (
-            self.agent_panel.agent.clone(),
-            self.agent_panel.session.clone(),
-        ) else {
-            return;
-        };
-        self.agent_panel.mode = Some(mode.clone());
-        let changed = agent.set_config_option(&session, "mode", &mode);
-        cx.spawn(async move |this, cx| {
-            if let Err(error) = changed.await {
-                this.update(cx, |this, cx| {
-                    this.agent_panel.notice = Some(format!("{error:#}"));
-                    cx.notify();
-                })
-                .ok();
-            }
-        })
-        .detach();
-        cx.notify();
+        self.set_agent_option("mode".to_owned(), mode, cx);
     }
 
     /// The active file, or its selection, goes with the next message.
@@ -1002,1107 +1064,22 @@ impl Workbench {
             .on_action(cx.listener(|this, action: &SetAgentMode, _, cx| {
                 this.set_agent_mode(action.mode.clone(), cx)
             }))
-    }
-
-    // -----------------------------------------------------------------
-    // Drawing
-
-    /// What the chat is called: Claude Code's title, the one in the list of
-    /// chats, or its first message; "Claude Code" before there is one.
-    pub(super) fn agent_title(&self) -> String {
-        let panel = &self.agent_panel;
-        if let Some(title) = panel
-            .thread
-            .title
-            .as_ref()
-            .filter(|title| !title.is_empty())
-        {
-            return title.clone();
-        }
-        if let Some(chat) = panel
-            .session
-            .as_ref()
-            .and_then(|id| panel.chats.iter().find(|chat| &chat.id == id))
-        {
-            return chat.title.clone();
-        }
-        panel
-            .thread
-            .entries
-            .iter()
-            .find_map(|entry| match entry {
-                Entry::User(text) => text.lines().next().map(str::to_owned),
-                _ => None,
-            })
-            .unwrap_or_else(|| "Claude Code".to_owned())
-    }
-
-    /// The buttons of the panel's header while the chat is shown: the
-    /// list of chats and a new one.
-    pub(super) fn render_agent_header_buttons(&self, cx: &mut Context<Self>) -> AnyElement {
-        let strings = self.strings();
-        div()
-            .flex()
-            .items_center()
-            .gap_0p5()
-            .child(
-                Button::new("agent-history")
-                    .ghost()
-                    .small()
-                    .icon(Icon::new(IconName::Clock))
-                    .selected(self.agent_panel.show_chats)
-                    .tooltip(strings.agent_all_chats)
-                    .on_click(cx.listener(|this, _, window, cx| {
-                        this.agent_panel.show_chats = !this.agent_panel.show_chats;
-                        if this.agent_panel.show_chats {
-                            this.refresh_agent_history(window, cx);
-                            this.agent_panel
-                                .chat_filter
-                                .update(cx, |input, cx| input.focus(window, cx));
-                        }
-                        cx.notify();
-                    })),
-            )
-            .child(
-                Button::new("agent-new")
-                    .ghost()
-                    .small()
-                    .icon(Icon::new(IconName::Plus))
-                    .tooltip(strings.agent_new_chat)
-                    .on_click(
-                        cx.listener(|this, _, window, cx| this.new_agent_conversation(window, cx)),
-                    ),
-            )
-            .into_any_element()
-    }
-
-    pub(super) fn render_agent_conversation(
-        &self,
-        colors: Colors,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) -> AnyElement {
-        let strings = self.strings();
-        let panel = &self.agent_panel;
-        if panel.show_chats {
-            return div()
-                .flex_1()
-                .min_h_0()
-                .flex()
-                .flex_col()
-                .child(self.render_agent_chats(colors, cx))
-                .child(self.render_agent_input(colors, window, cx))
-                .into_any_element();
-        }
-        let body: AnyElement = if panel.thread.entries.is_empty() {
-            self.render_agent_home(colors, window, cx)
-        } else {
-            let mut body = div()
-                .id("agent-conversation")
-                .flex_1()
-                .min_h_0()
-                .overflow_y_scroll()
-                .track_scroll(&panel.scroll)
-                .px_3()
-                .py_3()
-                .flex()
-                .flex_col()
-                .gap_3();
-            let mut after_user = true;
-            for (index, entry) in panel.thread.entries.iter().enumerate() {
-                // Claude's name over the first block of each answer.
-                let starts_answer = after_user && !matches!(entry, Entry::User(_));
-                after_user = matches!(entry, Entry::User(_));
-                if starts_answer {
-                    body = body.child(claude_label(strings.agent_claude, colors));
-                }
-                body = body.child(self.render_agent_entry(index, entry, colors, window, cx));
-            }
-            if panel.running && panel.permissions.is_empty() {
-                body = body.child(working(strings.agent_working, colors, self.look.motion));
-            }
-            if let Some(notice) = &panel.notice {
-                body = body.child(
-                    div()
-                        .px_2()
-                        .py_1p5()
-                        .rounded(px(8.))
-                        .bg(cx.theme().warning.opacity(0.1))
-                        .text_xs()
-                        .text_color(cx.theme().warning)
-                        .child(notice.clone()),
-                );
-            }
-            body.into_any_element()
-        };
-        div()
-            .flex_1()
-            .min_h_0()
-            .flex()
-            .flex_col()
-            .child(body)
-            .children(self.render_agent_plan(colors))
-            .children(self.render_agent_changes(colors, cx))
-            .children(
-                panel
-                    .permissions
-                    .iter()
-                    .enumerate()
-                    .map(|(index, permission)| {
-                        self.render_permission(index, permission, colors, cx)
-                    }),
-            )
-            .child(self.render_agent_input(colors, window, cx))
-            .into_any_element()
-    }
-
-    /// Before the first message: who Claude is here, how it is doing, and
-    /// the latest chats to pick up.
-    fn render_agent_home(
-        &self,
-        colors: Colors,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) -> AnyElement {
-        let strings = self.strings();
-        let panel = &self.agent_panel;
-        let status: Option<(String, bool)> = match &panel.status {
-            AgentStatus::Installing => Some((strings.agent_installing.to_owned(), true)),
-            AgentStatus::Starting if panel.session.is_some() => {
-                Some((strings.agent_opening_chat.to_owned(), true))
-            }
-            AgentStatus::Starting => Some((strings.agent_starting.to_owned(), true)),
-            AgentStatus::Failed(error) => Some((error.clone(), false)),
-            AgentStatus::Off | AgentStatus::Ready => None,
-        };
-        let failed = matches!(panel.status, AgentStatus::Failed(_));
-        let recent: Vec<AnyElement> = panel
-            .chats
-            .iter()
-            .take(RECENT_CHATS)
-            .enumerate()
-            .map(|(index, chat)| self.render_chat_row(("agent-recent", index), chat, colors, cx))
-            .collect();
-        // What else the panel does, with the keys.
-        let tool = |id: &'static str,
-                    icon: IconName,
-                    label: &'static str,
-                    action: Box<dyn gpui::Action>| {
-            let keys = keys_for(action.as_ref(), window);
-            tool_row(id, icon, label, keys, colors)
-                .on_click(move |_, window, cx| window.dispatch_action(action.boxed_clone(), cx))
-        };
-        let tools = [
-            tool(
-                "agent-tool-new",
-                IconName::Plus,
-                strings.agent_new_chat,
-                Box::new(NewAgentConversation),
-            ),
-            tool(
-                "agent-tool-file",
-                IconName::AtSign,
-                strings.agent_add_file,
-                Box::new(AddToAgent),
-            ),
-            tool(
-                "agent-tool-terminal",
-                IconName::SquareTerminal,
-                strings.open_claude_code,
-                Box::new(super::OpenClaudeCode),
-            ),
-        ];
-        div()
-            .id("agent-home")
-            .flex_1()
-            .min_h_0()
-            .overflow_y_scroll()
-            .px_2()
-            .py_4()
-            .flex()
-            .flex_col()
-            .gap_3()
-            .child(empty_state(
-                IconName::Sparkles,
-                "Claude Code",
-                strings.agent_home_hint,
-                colors,
-            ))
-            .when_some(status, |home, (text, busy)| {
-                home.child(
-                    div()
-                        .mx_2()
-                        .px_2p5()
-                        .py_2()
-                        .flex()
-                        .items_center()
-                        .gap_2()
-                        .rounded(px(9.))
-                        .bg(if busy {
-                            colors.hover
-                        } else {
-                            cx.theme().warning.opacity(0.1)
-                        })
-                        .text_xs()
-                        .text_color(if busy {
-                            colors.muted
-                        } else {
-                            cx.theme().warning
-                        })
-                        .when(busy, |row| {
-                            row.child(spinner(colors.accent, self.look.motion))
-                        })
-                        .child(div().flex_1().min_w_0().child(text))
-                        .when(failed, |row| {
-                            row.child(
-                                Button::new("agent-start")
-                                    .primary()
-                                    .small()
-                                    .label(strings.agent_start)
-                                    .on_click(cx.listener(|this, _, window, cx| {
-                                        this.open_agent(window, cx)
-                                    })),
-                            )
-                        }),
-                )
-            })
-            .when(!recent.is_empty(), |home| {
-                home.child(
-                    div()
-                        .flex()
-                        .flex_col()
-                        .child(
-                            div()
-                                .flex()
-                                .items_center()
-                                .child(
-                                    div()
-                                        .flex_1()
-                                        .child(heading(strings.agent_recent_chats, colors)),
-                                )
-                                .child(
-                                    Button::new("agent-all-chats")
-                                        .ghost()
-                                        .small()
-                                        .label(strings.agent_all_chats)
-                                        .on_click(cx.listener(|this, _, window, cx| {
-                                            this.agent_panel.show_chats = true;
-                                            this.refresh_agent_history(window, cx);
-                                            cx.notify();
-                                        })),
-                                ),
-                        )
-                        .children(recent),
-                )
-            })
-            .child(
-                div()
-                    .flex()
-                    .flex_col()
-                    .child(heading(strings.extensions_tools, colors))
-                    .children(tools),
-            )
-            .into_any_element()
-    }
-
-    /// A chat in a list: its symbol, its title and how long ago it changed.
-    fn render_chat_row(
-        &self,
-        id: impl Into<gpui::ElementId>,
-        chat: &Chat,
-        colors: Colors,
-        cx: &mut Context<Self>,
-    ) -> AnyElement {
-        let italian = self.language == UiLanguage::Italian;
-        let now = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .map_or(0, |elapsed| elapsed.as_secs() as i64);
-        let current = self.agent_panel.session.as_deref() == Some(chat.id.as_str());
-        let chat_id = chat.id.clone();
-        let when =
-            (chat.updated > 0).then(|| super::scm_graph::relative_time(chat.updated, now, italian));
-        div()
-            .id(id)
-            .h(px(32.))
-            .px_2()
-            .flex()
-            .items_center()
-            .gap_2()
-            .rounded(px(7.))
-            .text_sm()
-            .cursor_pointer()
-            .when(current, |row| row.bg(colors.selected))
-            .when(!current, |row| row.hover(|row| row.bg(colors.hover)))
-            .active(|row| row.bg(colors.selected))
-            .on_click(cx.listener(move |this, _, window, cx| {
-                this.load_agent_conversation(chat_id.clone(), window, cx)
+            .on_action(cx.listener(|this, action: &SetAgentOption, _, cx| {
+                this.set_agent_option(action.id.clone(), action.value.clone(), cx)
             }))
-            .child(
-                Icon::new(IconName::MessageSquare)
-                    .small()
-                    .text_color(colors.faint),
-            )
-            .child(
-                div()
-                    .flex_1()
-                    .min_w_0()
-                    .truncate()
-                    .text_color(colors.text)
-                    .child(chat.title.clone()),
-            )
-            .children(when.map(|when| {
-                div()
-                    .flex_none()
-                    .text_xs()
-                    .text_color(colors.faint)
-                    .child(when)
-            }))
-            .into_any_element()
-    }
-
-    /// Every chat of the project, by day, with a field to find one.
-    fn render_agent_chats(&self, colors: Colors, cx: &mut Context<Self>) -> AnyElement {
-        let strings = self.strings();
-        let panel = &self.agent_panel;
-        let filter = panel.chat_filter.read(cx).value().to_lowercase();
-        let now = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .map_or(0, |elapsed| elapsed.as_secs() as i64);
-        let midnight = local_midnight(now);
-        let groups = [
-            (strings.agent_today, midnight),
-            (strings.agent_yesterday, midnight - 86_400),
-            (strings.agent_this_week, midnight - 6 * 86_400),
-            (strings.agent_older, i64::MIN),
-        ];
-        let shown: Vec<&Chat> = panel
-            .chats
-            .iter()
-            .filter(|chat| filter.is_empty() || chat.title.to_lowercase().contains(&filter))
-            .collect();
-        let mut list = div()
-            .id("agent-chats")
-            .flex_1()
-            .min_h_0()
-            .overflow_y_scroll()
-            .px_2()
-            .pb_2()
-            .flex()
-            .flex_col();
-        if shown.is_empty() {
-            list = list.child(
-                div()
-                    .px_2()
-                    .py_6()
-                    .text_sm()
-                    .text_center()
-                    .text_color(colors.muted)
-                    .child(if panel.chats.is_empty() {
-                        strings.agent_no_chats
-                    } else {
-                        strings.agent_no_match
-                    }),
-            );
-        }
-        let mut row = 0usize;
-        let mut newer = i64::MAX;
-        for (label, since) in groups {
-            let chats: Vec<&Chat> = shown
-                .iter()
-                .copied()
-                .filter(|chat| chat.updated >= since && chat.updated < newer)
-                .collect();
-            newer = since;
-            if chats.is_empty() {
-                continue;
-            }
-            list = list.child(div().pt_2().child(heading(label, colors)));
-            for chat in chats {
-                list = list.child(self.render_chat_row(("agent-chat", row), chat, colors, cx));
-                row += 1;
-            }
-        }
-        div()
-            .flex_1()
-            .min_h_0()
-            .flex()
-            .flex_col()
-            .child(
-                div().px_3().pt_2p5().pb_1().child(
-                    Input::new(&panel.chat_filter)
-                        .small()
-                        .prefix(Icon::new(IconName::Search).small().text_color(colors.faint))
-                        .cleanable(true),
-                ),
-            )
-            .child(list)
-            .into_any_element()
-    }
-
-    fn render_agent_entry(
-        &self,
-        index: usize,
-        entry: &Entry,
-        colors: Colors,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) -> AnyElement {
-        match entry {
-            // Your messages on the right, in a bubble of the accent's tint.
-            Entry::User(text) => div()
-                .flex()
-                .justify_end()
-                .child(
-                    div()
-                        .max_w(px(self.agent_width * 0.86))
-                        .px_3()
-                        .py_2()
-                        .rounded(px(14.))
-                        .rounded_br(px(5.))
-                        .bg(colors.accent.opacity(0.16))
-                        .text_sm()
-                        .text_color(colors.text)
-                        .child(text.clone()),
-                )
-                .into_any_element(),
-            Entry::Agent(_) => match self.agent_panel.markdown.get(&index) {
-                Some((state, _)) => div()
-                    .text_sm()
-                    .child(TextView::new(state))
-                    .into_any_element(),
-                None => div().into_any_element(),
-            },
-            Entry::Thought(text) => {
-                let open = self.agent_panel.open_thoughts.contains(&index);
-                let turn = chevron_turn(("agent-thought-turn", index), open, self.look, window, cx);
-                let first = text.lines().next().unwrap_or_default().to_owned();
-                div()
-                    .id(("agent-thought", index))
-                    .flex()
-                    .flex_col()
-                    .gap_1()
-                    .text_xs()
-                    .text_color(colors.faint)
-                    .cursor_pointer()
-                    .on_click(cx.listener(move |this, _, _, cx| {
-                        if !this.agent_panel.open_thoughts.remove(&index) {
-                            this.agent_panel.open_thoughts.insert(index);
-                        }
-                        cx.notify();
-                    }))
-                    .child(
-                        div()
-                            .flex()
-                            .items_center()
-                            .gap_1p5()
-                            .child(
-                                Icon::new(IconName::ChevronRight)
-                                    .xsmall()
-                                    .rotate(gpui::radians(turn * std::f32::consts::FRAC_PI_2)),
-                            )
-                            .child(
-                                div()
-                                    .flex_none()
-                                    .font_weight(FontWeight::MEDIUM)
-                                    .child(self.strings().agent_thinking),
-                            )
-                            .when(!open, |line| {
-                                line.child(div().min_w_0().truncate().child(first))
-                            }),
-                    )
-                    .when(open, |thought| {
-                        thought.child(
-                            div()
-                                .ml(px(5.))
-                                .pl_3()
-                                .border_l_2()
-                                .border_color(colors.border)
-                                .italic()
-                                .child(text.clone()),
-                        )
-                    })
-                    .into_any_element()
-            }
-            Entry::Tool(tool) => self.render_tool(index, tool, colors, window, cx),
-        }
-    }
-
-    /// A tool Claude used: a row with its symbol, its title and its state,
-    /// that opens on what it did. A file's edit is open at first.
-    fn render_tool(
-        &self,
-        index: usize,
-        tool: &ToolCall,
-        colors: Colors,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) -> AnyElement {
-        let theme = cx.theme();
-        let (success, danger) = (theme.success, theme.danger);
-        let icon = match tool.kind.as_str() {
-            "edit" | "delete" | "move" => IconName::Pencil,
-            "read" => IconName::FileText,
-            "search" => IconName::Search,
-            "execute" => IconName::SquareTerminal,
-            "fetch" => IconName::Globe,
-            "think" => IconName::Sparkles,
-            _ => IconName::Blocks,
-        };
-        let has_diff = tool
-            .content
-            .iter()
-            .any(|content| matches!(content, ToolContent::Diff { .. }));
-        let toggled = self.agent_panel.open_tools.contains(&index);
-        // An edit shows its difference until it is closed; the others
-        // open on a click.
-        let open = !tool.content.is_empty() && (has_diff != toggled);
-        let turn = chevron_turn(("agent-tool-turn", index), open, self.look, window, cx);
-        let state: AnyElement = match tool.status {
-            ToolStatus::Pending | ToolStatus::InProgress => {
-                spinner(colors.accent, self.look.motion).into_any_element()
-            }
-            ToolStatus::Completed => Icon::new(IconName::Check)
-                .xsmall()
-                .text_color(success)
-                .into_any_element(),
-            ToolStatus::Failed => Icon::new(IconName::X)
-                .xsmall()
-                .text_color(danger)
-                .into_any_element(),
-        };
-        let location = tool.locations.first().cloned();
-        let open_file = location.map(|(path, line)| {
-            Button::new(("agent-tool-open", index))
-                .ghost()
-                .xsmall()
-                .icon(Icon::new(IconName::ExternalLink))
-                .tooltip(self.strings().agent_open_file)
-                .on_click(cx.listener(move |this, _, window, cx| {
-                    cx.stop_propagation();
-                    if path.is_file() {
-                        this.open_file(&path, window, cx);
-                        if let Some(line) = line
-                            && let Some(editor) = this.active_editor()
-                        {
-                            editor.update(cx, |editor, cx| {
-                                editor.set_cursor_position(
-                                    gpui_component::input::Position::new(line.saturating_sub(1), 0),
-                                    window,
-                                    cx,
-                                );
-                            });
-                        }
-                    }
-                }))
-        });
-        let expandable = !tool.content.is_empty();
-        let mut card = div()
-            .flex()
-            .flex_col()
-            .rounded(px(10.))
-            .border_1()
-            .border_color(colors.border)
-            .bg(colors.editor.opacity(0.6))
-            .overflow_hidden()
-            .child(
-                div()
-                    .id(("agent-tool", index))
-                    .h(px(30.))
-                    .pl_1p5()
-                    .pr_1()
-                    .flex()
-                    .items_center()
-                    .gap_1p5()
-                    .text_xs()
-                    .when(expandable, |row| {
-                        row.cursor_pointer()
-                            .hover(|row| row.bg(colors.hover.opacity(0.5)))
-                            .on_click(cx.listener(move |this, _, _, cx| {
-                                if !this.agent_panel.open_tools.remove(&index) {
-                                    this.agent_panel.open_tools.insert(index);
-                                }
-                                cx.notify();
-                            }))
-                    })
-                    .child(
-                        div()
-                            .size(px(20.))
-                            .flex_none()
-                            .flex()
-                            .items_center()
-                            .justify_center()
-                            .rounded(px(5.))
-                            .bg(colors.hover)
-                            .child(Icon::new(icon).xsmall().text_color(colors.muted)),
-                    )
-                    .child(
-                        div()
-                            .flex_1()
-                            .min_w_0()
-                            .truncate()
-                            .text_color(colors.text)
-                            .child(tool.title.clone()),
-                    )
-                    .children(open_file)
-                    .child(
-                        div()
-                            .flex_none()
-                            .w(px(16.))
-                            .flex()
-                            .justify_center()
-                            .child(state),
-                    )
-                    .when(expandable, |row| {
-                        row.child(
-                            Icon::new(IconName::ChevronRight)
-                                .xsmall()
-                                .rotate(gpui::radians(turn * std::f32::consts::FRAC_PI_2))
-                                .text_color(colors.faint),
-                        )
-                    }),
-            );
-        if open {
-            card = card.child(
-                div()
-                    .px_2()
-                    .pb_2()
-                    .pt_0p5()
-                    .flex()
-                    .flex_col()
-                    .gap_1()
-                    .children(
-                        tool.content
-                            .iter()
-                            .map(|content| render_tool_content(content, colors, success, danger)),
-                    ),
-            );
-        }
-        card.into_any_element()
-    }
-
-    fn render_agent_plan(&self, colors: Colors) -> Option<AnyElement> {
-        let plan = &self.agent_panel.thread.plan;
-        if plan.is_empty() {
-            return None;
-        }
-        let done = plan
-            .iter()
-            .filter(|item| item.status == "completed")
-            .count();
-        let progress = done as f32 / plan.len() as f32;
-        Some(
-            div()
-                .flex_none()
-                .mx_2()
-                .mb_1p5()
-                .px_2p5()
-                .py_2()
-                .rounded(px(10.))
-                .border_1()
-                .border_color(colors.border)
-                .bg(colors.editor.opacity(0.6))
-                .flex()
-                .flex_col()
-                .gap_1()
-                .text_xs()
-                .child(
-                    div()
-                        .flex()
-                        .items_center()
-                        .gap_2()
-                        .child(
-                            div()
-                                .flex_none()
-                                .font_weight(FontWeight::SEMIBOLD)
-                                .text_color(colors.muted)
-                                .child(self.strings().agent_plan(done, plan.len())),
-                        )
-                        // How far along, as a thin bar.
-                        .child(
-                            div()
-                                .flex_1()
-                                .h(px(4.))
-                                .rounded_full()
-                                .bg(colors.hover)
-                                .child(
-                                    div()
-                                        .h_full()
-                                        .w(gpui::relative(progress))
-                                        .rounded_full()
-                                        .bg(colors.accent),
-                                ),
-                        ),
-                )
-                .children(plan.iter().map(|item| {
-                    let (mark, color) = match item.status.as_str() {
-                        "completed" => (IconName::CircleCheck, colors.accent),
-                        "in_progress" => (IconName::CircleDot, colors.text),
-                        _ => (IconName::Circle, colors.faint),
-                    };
-                    div()
-                        .flex()
-                        .items_start()
-                        .gap_1p5()
-                        .text_color(if item.status == "completed" {
-                            colors.faint
-                        } else {
-                            colors.text
-                        })
-                        .child(
-                            div()
-                                .pt(px(1.))
-                                .child(Icon::new(mark).xsmall().text_color(color)),
-                        )
-                        .child(div().flex_1().min_w_0().child(item.content.clone()))
-                }))
-                .into_any_element(),
-        )
-    }
-
-    fn render_permission(
-        &self,
-        index: usize,
-        permission: &Permission,
-        colors: Colors,
-        cx: &mut Context<Self>,
-    ) -> AnyElement {
-        let theme = cx.theme();
-        let mut card = div()
-            .flex_none()
-            .mx_2()
-            .mb_1p5()
-            .p_2p5()
-            .rounded(px(12.))
-            .border_1()
-            .border_color(colors.accent.opacity(0.6))
-            .bg(colors.accent.opacity(0.07))
-            .flex()
-            .flex_col()
-            .gap_2()
-            .child(
-                div()
-                    .flex()
-                    .items_center()
-                    .gap_1p5()
-                    .text_xs()
-                    .font_weight(FontWeight::MEDIUM)
-                    .text_color(colors.text)
-                    .child(
-                        Icon::new(IconName::ShieldCheck)
-                            .small()
-                            .text_color(colors.accent),
-                    )
-                    .child(
-                        div()
-                            .flex_1()
-                            .min_w_0()
-                            .child(self.strings().agent_permission(&permission.title)),
-                    ),
-            );
-        for content in &permission.content {
-            card = card.child(render_tool_content(
-                content,
-                colors,
-                theme.success,
-                theme.danger,
-            ));
-        }
-        let mut buttons = div().flex().flex_wrap().gap_1p5();
-        for (number, (id, name, kind)) in permission.options.iter().enumerate() {
-            let option = id.clone();
-            let button = Button::new(("agent-permission", index * 16 + number))
-                .small()
-                .label(name.clone());
-            let button = if kind.starts_with("allow") && number == 0 {
-                button.primary()
-            } else {
-                button.outline()
-            };
-            buttons = buttons.child(button.on_click(
-                cx.listener(move |this, _, _, cx| this.answer_permission(index, &option, cx)),
-            ));
-        }
-        card.child(buttons).into_any_element()
-    }
-
-    /// The message box, as a composer: what is attached, the text, and
-    /// under it @, the mode and the button that sends or stops.
-    fn render_agent_input(
-        &self,
-        colors: Colors,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) -> AnyElement {
-        let strings = self.strings();
-        let panel = &self.agent_panel;
-        let chips = panel
-            .attachments
-            .iter()
-            .enumerate()
-            .map(|(index, attachment)| {
-                let name = attachment
-                    .path
-                    .file_name()
-                    .map(|name| name.to_string_lossy().into_owned())
-                    .unwrap_or_default();
-                let label = match &attachment.selection {
-                    Some(((start, end), _)) => format!("{name}:{start}-{end}"),
-                    None => name,
-                };
-                div()
-                    .h(px(24.))
-                    .pl_2()
-                    .flex()
-                    .items_center()
-                    .gap_1()
-                    .rounded(px(7.))
-                    .border_1()
-                    .border_color(colors.border)
-                    .bg(colors.hover.opacity(0.6))
-                    .text_xs()
-                    .text_color(colors.text)
-                    .child(
-                        Icon::new(IconName::FileText)
-                            .xsmall()
-                            .text_color(colors.muted),
-                    )
-                    .child(label)
-                    .child(
-                        Button::new(("agent-attachment", index))
-                            .ghost()
-                            .xsmall()
-                            .icon(Icon::new(IconName::X))
-                            .on_click(cx.listener(move |this, _, _, cx| {
-                                if index < this.agent_panel.attachments.len() {
-                                    this.agent_panel.attachments.remove(index);
-                                }
-                                cx.notify();
-                            })),
-                    )
-            });
-        let modes = panel.modes.clone();
-        let mode_name = panel
-            .mode
-            .as_ref()
-            .and_then(|mode| {
-                modes
-                    .iter()
-                    .find(|(value, _)| value == mode)
-                    .map(|(_, name)| name.clone())
-            })
-            .unwrap_or_else(|| strings.agent_mode.to_owned());
-        let send: AnyElement = if panel.running {
-            Button::new("agent-stop")
-                .ghost()
-                .icon(Icon::new(IconName::Square))
-                .tooltip(strings.agent_stop)
-                .rounded(px(16.))
-                .on_click(cx.listener(|this, _, _, cx| this.cancel_agent(cx)))
-                .into_any_element()
-        } else {
-            let empty =
-                panel.input.read(cx).value().trim().is_empty() && panel.attachments.is_empty();
-            Button::new("agent-send")
-                .primary()
-                .icon(Icon::new(IconName::ArrowUp))
-                .tooltip(strings.agent_send)
-                .rounded(px(16.))
-                .disabled(empty)
-                .on_click(cx.listener(|this, _, window, cx| this.send_to_agent(window, cx)))
-                .into_any_element()
-        };
-        let typing = panel.input.read(cx).focus_handle(cx).is_focused(window);
-        div()
-            .id("agent-input-box")
-            // Files from the Explorer or the Finder become attachments, as in
-            // Cursor's chat.
-            .drag_over::<super::explorer::DraggedPath>(move |style, _, _, _| {
-                style
-                    .border_color(colors.accent)
-                    .bg(colors.accent.opacity(0.06))
-            })
-            .drag_over::<gpui::ExternalPaths>(move |style, _, _, _| {
-                style
-                    .border_color(colors.accent)
-                    .bg(colors.accent.opacity(0.06))
-            })
-            .on_drop(
-                cx.listener(|this, dragged: &super::explorer::DraggedPath, window, cx| {
-                    this.attach_to_agent(dragged.all(), window, cx)
+            .on_action(
+                cx.listener(|this, action: &ContinueInTerminal, window, cx| {
+                    this.continue_chat_in_terminal(action.session.clone(), window, cx)
                 }),
             )
-            .on_drop(
-                cx.listener(|this, paths: &gpui::ExternalPaths, window, cx| {
-                    this.attach_to_agent(paths.paths().to_vec(), window, cx)
+            .on_action(
+                cx.listener(|this, action: &AgentAccount, window, cx| match action {
+                    AgentAccount::UseKey => this.ask_agent_api_key(window, cx),
+                    AgentAccount::ForgetKey => this.forget_agent_api_key(window, cx),
+                    AgentAccount::Logout => this.logout_agent(window, cx),
                 }),
             )
-            // A pasted picture, such as a screenshot, is attached too.
-            .capture_action(
-                cx.listener(|this, _: &gpui_component::input::Paste, window, cx| {
-                    if this.paste_image_into_chat(window, cx) {
-                        cx.stop_propagation();
-                    }
-                }),
-            )
-            .flex_none()
-            .m_2()
-            .pt_1()
-            .pb_1p5()
-            .px_1p5()
-            .rounded(px(14.))
-            .border_1()
-            .border_color(if typing {
-                colors.accent.opacity(0.7)
-            } else {
-                colors.border
-            })
-            .bg(colors.editor)
-            .flex()
-            .flex_col()
-            .gap_1()
-            .when(!panel.attachments.is_empty(), |input| {
-                input.child(
-                    div()
-                        .px_1()
-                        .pt_1()
-                        .flex()
-                        .flex_wrap()
-                        .gap_1()
-                        .children(chips),
-                )
-            })
-            .child(
-                div()
-                    .text_sm()
-                    .child(Textarea::new(&panel.input).appearance(false)),
-            )
-            .child(
-                div()
-                    .flex()
-                    .items_center()
-                    .gap_1()
-                    .child(
-                        Button::new("agent-add-file")
-                            .ghost()
-                            .small()
-                            .icon(Icon::new(IconName::AtSign))
-                            .tooltip(strings.agent_add_file)
-                            .on_click(
-                                cx.listener(|this, _, window, cx| this.add_to_agent(window, cx)),
-                            ),
-                    )
-                    .when(!modes.is_empty(), |row| {
-                        row.child(
-                            Button::new("agent-mode")
-                                .ghost()
-                                .small()
-                                .icon(Icon::new(IconName::ShieldCheck))
-                                .label(mode_name)
-                                .dropdown_menu(move |mut menu, _, _| {
-                                    for (value, name) in &modes {
-                                        let value = value.clone();
-                                        menu = menu.item(
-                                            gpui_component::menu::PopupMenuItem::new(name.clone())
-                                                .on_click(move |_, window, cx| {
-                                                    window.dispatch_action(
-                                                        Box::new(SetAgentMode {
-                                                            mode: value.clone(),
-                                                        }),
-                                                        cx,
-                                                    );
-                                                }),
-                                        );
-                                    }
-                                    menu
-                                }),
-                        )
-                    })
-                    .child(div().flex_1())
-                    .child(send),
-            )
-            .into_any_element()
     }
-}
-
-/// Claude's name and mark over its answer.
-fn claude_label(name: &'static str, colors: Colors) -> gpui::Div {
-    div()
-        .flex()
-        .items_center()
-        .gap_1p5()
-        .mb(px(-6.))
-        .text_xs()
-        .font_weight(FontWeight::SEMIBOLD)
-        .text_color(colors.muted)
-        .child(
-            div()
-                .size(px(18.))
-                .rounded_full()
-                .flex()
-                .items_center()
-                .justify_center()
-                .bg(colors.accent.opacity(0.16))
-                .child(
-                    Icon::new(IconName::Sparkles)
-                        .xsmall()
-                        .text_color(colors.accent),
-                ),
-        )
-        .child(name)
-}
-
-/// A small circle turning while something runs; still without movements.
-pub(super) fn spinner(color: Hsla, motion: bool) -> AnyElement {
-    let icon = Icon::new(IconName::LoaderCircle).xsmall().text_color(color);
-    if !motion {
-        return icon.into_any_element();
-    }
-    icon.with_animation(
-        "spinner",
-        Animation::new(std::time::Duration::from_millis(900)).repeat(),
-        |icon, delta| icon.rotate(gpui::radians(delta * std::f32::consts::TAU)),
-    )
-    .into_any_element()
-}
-
-/// "Claude is working…" with three dots that breathe in turn.
-fn working(text: &'static str, colors: Colors, motion: bool) -> gpui::Div {
-    let dot = |index: usize| {
-        let dot = div().size(px(5.)).rounded_full().bg(colors.accent);
-        if !motion {
-            return dot.into_any_element();
-        }
-        dot.with_animation(
-            ("working-dot", index),
-            Animation::new(std::time::Duration::from_millis(1100)).repeat(),
-            move |dot, delta| {
-                let phase = (delta - index as f32 * 0.18).rem_euclid(1.);
-                let lift = (phase * std::f32::consts::TAU).sin().max(0.);
-                dot.opacity(0.3 + 0.7 * lift)
-            },
-        )
-        .into_any_element()
-    };
-    div()
-        .flex()
-        .items_center()
-        .gap_2()
-        .text_xs()
-        .text_color(colors.faint)
-        .child(div().flex().gap_1().children((0..3).map(dot)))
-        .child(text)
-}
-
-/// Seconds since 1970 of the last local midnight before `now`.
-fn local_midnight(now: i64) -> i64 {
-    let time = now as libc::time_t;
-    // SAFETY: localtime_r writes only into the tm it is given.
-    let mut tm: libc::tm = unsafe { std::mem::zeroed() };
-    let found = unsafe { !libc::localtime_r(&time, &mut tm).is_null() };
-    if !found {
-        return now - now.rem_euclid(86_400);
-    }
-    now - (tm.tm_hour as i64 * 3600 + tm.tm_min as i64 * 60 + tm.tm_sec as i64)
 }
 
 /// Opens a past conversation, from the history menu.
@@ -2119,62 +1096,6 @@ pub struct SetAgentMode {
     pub mode: String,
 }
 
-/// A tool's text, or a file difference with its removed lines in red and
-/// added lines in green.
-fn render_tool_content(
-    content: &ToolContent,
-    colors: Colors,
-    added: gpui::Hsla,
-    removed: gpui::Hsla,
-) -> AnyElement {
-    match content {
-        ToolContent::Text(text) => {
-            let shown: String = text.lines().take(6).collect::<Vec<_>>().join("\n");
-            div()
-                .text_xs()
-                .font_family("Menlo")
-                .text_color(colors.muted)
-                .child(shown)
-                .into_any_element()
-        }
-        ToolContent::Diff { path, old, new } => {
-            let name = path
-                .file_name()
-                .map(|name| name.to_string_lossy().into_owned())
-                .unwrap_or_default();
-            let mut lines: Vec<(char, String)> = Vec::new();
-            for line in old.as_deref().unwrap_or_default().lines() {
-                lines.push(('-', line.to_owned()));
-            }
-            for line in new.lines() {
-                lines.push(('+', line.to_owned()));
-            }
-            let more = lines.len().saturating_sub(DIFF_LINES);
-            div()
-                .flex()
-                .flex_col()
-                .rounded(px(6.))
-                .bg(colors.editor)
-                .px_1p5()
-                .py_1()
-                .text_xs()
-                .font_family("Menlo")
-                .child(div().text_color(colors.faint).child(name))
-                .children(lines.into_iter().take(DIFF_LINES).map(|(mark, line)| {
-                    let color = if mark == '-' { removed } else { added };
-                    div()
-                        .text_color(color)
-                        .bg(color.opacity(0.08))
-                        .child(format!("{mark} {line}"))
-                }))
-                .when(more > 0, |diff| {
-                    diff.child(div().text_color(colors.faint).child(format!("… +{more}")))
-                })
-                .into_any_element()
-        }
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use std::time::{Duration, Instant};
@@ -2182,6 +1103,8 @@ mod tests {
     use gpui::{TestAppContext, VisualTestContext};
 
     use super::super::tests::test_settings;
+    use ai::thread::ToolStatus;
+
     use super::*;
 
     fn wait_until(
@@ -2265,7 +1188,19 @@ mod tests {
         view.read_with(cx, |view, _| {
             assert_eq!(view.agent_panel.status, AgentStatus::Ready);
             assert_eq!(view.agent_panel.view, AgentView::Agent);
-            assert_eq!(view.agent_panel.modes.len(), 2);
+            let mode = view.agent_option("mode").unwrap();
+            assert_eq!(mode.values.len(), 2);
+            assert_eq!(
+                view.agent_option("model").unwrap().current.as_deref(),
+                Some("opus")
+            );
+            assert_eq!(view.agent_panel.commands.len(), 3);
+            assert!(
+                view.agent_panel
+                    .account
+                    .as_ref()
+                    .is_some_and(|account| account.signed_in)
+            );
             assert_eq!(
                 view.agent_panel.thread.entries[0],
                 Entry::User("ciao".into())

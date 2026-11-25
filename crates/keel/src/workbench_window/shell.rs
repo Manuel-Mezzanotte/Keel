@@ -2156,11 +2156,16 @@ impl Workbench {
                 .tooltip(tooltip)
                 .selected(self.agent_panel.view == view)
                 .on_click(cx.listener(move |this, _, window, cx| {
+                    let back = this.agent_panel.view != view;
                     this.agent_panel.view = view;
                     if view == AgentView::Agent {
                         this.agent_panel
                             .input
                             .update(cx, |input, cx| input.focus(window, cx));
+                        // Back from Claude Code: what it added shows here.
+                        if back {
+                            this.sync_agent_chat(window, cx);
+                        }
                     }
                     cx.notify();
                 }))
@@ -2225,12 +2230,8 @@ impl Workbench {
                     .flex()
                     .items_center()
                     .justify_center()
-                    .bg(colors.accent.opacity(0.16))
-                    .child(
-                        Icon::new(IconName::Sparkles)
-                            .xsmall()
-                            .text_color(colors.accent),
-                    )
+                    .bg(super::agent_view::claude_colour().opacity(0.14))
+                    .child(super::agent_view::claude_mark(14.))
                     .when(connected, |mark| {
                         mark.child(
                             div()

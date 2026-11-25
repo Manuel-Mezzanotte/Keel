@@ -64,7 +64,7 @@ impl Workbench {
         self.agent_panel.view = super::agent_panel::AgentView::Terminal;
         if self.agent_terminal.is_none() {
             let spawn = terminal_view::shell_spawn(self.terminal_folder(), cx);
-            if !self.start_agent_terminal(spawn, None, window, cx) {
+            if !self.start_agent_terminal(spawn, CLAUDE, window, cx) {
                 return;
             }
         }
@@ -100,7 +100,7 @@ impl Workbench {
             Some(agent) => agent.view.read(cx).send(&prompt, true),
             None => {
                 let spawn = terminal_view::shell_spawn(self.terminal_folder(), cx);
-                if !self.start_agent_terminal(spawn, Some(&prompt), window, cx) {
+                if !self.start_agent_terminal(spawn, &claude_with(&prompt), window, cx) {
                     return;
                 }
             }
@@ -112,23 +112,62 @@ impl Workbench {
         cx.notify();
     }
 
-    /// Starts the terminal on the right and runs Claude Code in it, with
-    /// the panel wide enough for its screen; with a prompt, Claude Code
-    /// starts on it.
+    /// Goes on with a chat of the panel in Claude Code, in the terminal on
+    /// the right: `claude --resume`, or `/resume` when Claude Code runs
+    /// there already. Back in the chat, Keel reads what was added.
+    pub(super) fn continue_chat_in_terminal(
+        &mut self,
+        session: String,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        // A chat's id is a UUID: anything else stays out of the shell.
+        if session.is_empty()
+            || !session
+                .chars()
+                .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_')
+        {
+            return;
+        }
+        if self.agent_panel.running {
+            self.cancel_agent(cx);
+        }
+        self.layout.agent = true;
+        self.agent_panel.view = super::agent_panel::AgentView::Terminal;
+        let resume = format!("{CLAUDE} --resume {session}");
+        match &self.agent_terminal {
+            Some(agent) if agent.view.read(cx).runs_shell() => agent.view.read(cx).run(&resume),
+            Some(agent) => agent
+                .view
+                .read(cx)
+                .send(&format!("/resume {session}"), true),
+            None => {
+                let spawn = terminal_view::shell_spawn(self.terminal_folder(), cx);
+                if !self.start_agent_terminal(spawn, &resume, window, cx) {
+                    return;
+                }
+            }
+        }
+        if let Some(agent) = &self.agent_terminal {
+            agent.view.read(cx).focus_handle(cx).focus(window, cx);
+        }
+        self.session_changed(cx);
+        cx.notify();
+    }
+
+    /// Starts the terminal on the right and runs `command`, Claude Code,
+    /// in it, with the panel wide enough for its screen.
     fn start_agent_terminal(
         &mut self,
         spawn: terminal::Spawn,
-        prompt: Option<&str>,
+        command: &str,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> bool {
         let Some(view) = self.start_terminal_view(spawn, window, cx) else {
             return false;
         };
-        match prompt {
-            Some(prompt) => view.read(cx).run(&claude_with(prompt)),
-            None => view.read(cx).run(CLAUDE),
-        }
+        view.read(cx).run(command);
         let subscription = cx.subscribe_in(&view, window, Self::terminal_event);
         self.agent_terminal = Some(AgentTerminal {
             view,
@@ -253,7 +292,7 @@ mod tests {
                     "read line; echo \"ran:$line\"; sleep 30".into(),
                 ],
             ));
-            assert!(view.start_agent_terminal(spawn, None, window, cx));
+            assert!(view.start_agent_terminal(spawn, CLAUDE, window, cx));
             view.layout.agent = false;
             // Cmd+Esc shows the panel, keeps the terminal and gives it the keyboard.
             view.open_claude_code(window, cx);
