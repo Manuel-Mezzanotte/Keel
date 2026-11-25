@@ -32,13 +32,13 @@ Le fonti sono in fondo. Niente qui è deciso: ogni voce parte solo col via dell'
 |---|---|---|---|
 | 1 | ~~**Correggere la memoria grafica e la CPU da fermo**~~ **fatto il 24 novembre** | Da fermo, con un file aperto: CPU dal 7% allo 0%, memoria da 272 a 157 MB. Il racconto è in `HANDOFF.md` | — |
 | 2 | **Rivedere le modifiche di Claude come in Warp e Xcode 27** | Oggi si accetta o si rifiuta. Serve l'elenco dei file toccati dalla sessione, le differenze blocco per blocco e i commenti sulle righe mandati a Claude tutti insieme | grande |
-| 3 | **Importare da VS Code** | Oggi si importa solo da Cursor. Impostazioni, scorciatoie, temi ed estensioni di VS Code in un clic, per il 70% di chi arriva | medio |
+| 3 | ~~**Importare da VS Code**~~ **fatto il 25 novembre** | Impostazioni, scorciatoie, frammenti, progetti recenti ed estensioni, da VS Code come da Cursor | — |
 | 4 | **Go e Swift** | Keel non ha né server né colori per Go, Swift, PHP, Ruby, Kotlin, Vue e Svelte. Go è fra i linguaggi più usati; Swift è il linguaggio del Mac, e `sourcekit-lsp` c'è già con Xcode | medio |
 | 5 | **Più sessioni di Claude insieme, ognuna nel suo worktree** | È la novità di Cursor 3, della finestra Agenti di VS Code e di Zed 1.0. Keel segue già i worktree, ma non li crea né li mostra | grande |
 | 6 | **Il piano di Claude da commentare, e tornare indietro** | Claude Code nell'estensione di VS Code apre il piano come documento con commenti in riga, e ha i punti a cui tornare (checkpoint) | medio |
-| 7 | **Dopo il benvenuto, tre scelte** 🔸 | Tema, «Importa da VS Code o Cursor», comando `keel` nel Terminale. Oggi dopo «Sali a bordo» si è soli | piccolo |
+| 7 | ~~**Dopo il benvenuto, tre scelte**~~ **fatto il 25 novembre** | «Prepara Keel»: tema, «Importa» da VS Code o Cursor, comando `keel` nel Terminale | — |
 | 8 | **Un editor per i conflitti** | Oggi i conflitti si aprono come file normali. VS Code e IntelliJ hanno «Accetta la corrente / quella in arrivo / entrambe» e la vista a tre colonne | medio |
-| 9 | **Firma e notarizzazione di Apple** 🔸 | Chi scarica Keel oggi vede l'avviso di macOS. Serve l'account sviluppatore Apple (99 $ l'anno) | piccolo, ma con l'account |
+| 9 | ~~**Firma e notarizzazione di Apple**~~ **non si fa**, per scelta dell'autore (25 novembre): niente account sviluppatore a 99 $ l'anno | Chi installa con lo script del sito (`curl … \| sh`) non vede l'avviso di macOS; chi scarica il DMG dal browser sì, e deve aprirlo da Impostazioni di Sistema › Privacy e sicurezza › «Apri comunque» | — |
 | 10 | **Staccare pannelli e terminale in finestre loro** | È la richiesta più votata di sempre su VS Code, e la seconda è il terminale staccato. Su Keel c'è già in elenco la scheda trascinata fuori | grande |
 
 ---
@@ -113,7 +113,7 @@ Le fonti sono in fondo. Niente qui è deciso: ogni voce parte solo col via dell'
 | **Un tema per progetto**, per riconoscere le finestre (da verificare: forse basta già `workbench.colorTheme` nelle impostazioni del progetto) | Xcode 27, VS Code con Peacock | piccolo |
 | **Profili** (impostazioni ed estensioni diverse per lavoro e per progetti personali) | VS Code | medio |
 | **Impostazioni sincronizzate fra più Mac** con una cartella di iCloud Drive, senza account nuovi 🔸 | VS Code (con account) | medio |
-| **Comando `keel` nel Terminale** installato dall'app (oggi c'è il programma, ma va messo nel PATH a mano) | VS Code, Zed | piccolo |
+| ~~**Comando `keel` nel Terminale**~~ fatto il 25 novembre: da «Prepara Keel» o dalla palette, e `keel .` apre Keel come app a sé | VS Code, Zed | — |
 
 ## Linguaggi
 
@@ -128,7 +128,7 @@ Le fonti sono in fondo. Niente qui è deciso: ogni voce parte solo col via dell'
 
 | Cosa | Perché | Peso |
 |---|---|---|
-| **Firma e notarizzazione di Apple** 🔸 | Senza, macOS avverte chi scarica; con, Keel si apre come un'app qualunque | piccolo, con l'account |
+| ~~**Firma e notarizzazione di Apple**~~ | Non si fa, per scelta dell'autore. Il sito può spiegare l'avviso di macOS a chi scarica il DMG, e consigliare lo script di installazione | — |
 | **Scegliere la licenza** 🔸 | Il README dice «tutti i diritti riservati»: va deciso prima di aprire la repo | — |
 | **Segnalare un crash, solo se lo vuoi**: alla riapertura dopo un crash, un pulsante che prepara la segnalazione con il registro, da mandare tu | Keel tiene già i registri dei crash | piccolo |
 | **Le FAQ del sito su cosa Keel manda in rete**: mancano il fetch automatico di Git e Claude (KeelSite) | Correttezza | piccolo |

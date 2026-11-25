@@ -180,7 +180,7 @@ Differences side by side, with the words that changed and the code that moved. S
 
 ## At home from VS Code
 
-Keep your fingers where they are. Keel uses VS Code's command ids, so your `keybindings.json` works as it is, and **Import from Cursor** brings your extensions along.
+Keep your fingers where they are. Keel uses VS Code's command ids, so your `keybindings.json` works as it is, and **Import from VS Code** (or from Cursor) brings your settings, shortcuts, snippets, recent projects and extensions along. The `keel` command opens folders from the Terminal, as `code` does.
 
 <table>
   <tr>

@@ -180,7 +180,7 @@ Differenze affiancate, con le parole cambiate e il codice spostato. Metti in sta
 
 ## Per chi viene da VS Code
 
-Le dita restano dove sono. Keel usa gli id dei comandi di VS Code, quindi il tuo `keybindings.json` funziona così com'è, e **Importa da Cursor** porta anche le estensioni.
+Le dita restano dove sono. Keel usa gli id dei comandi di VS Code, quindi il tuo `keybindings.json` funziona così com'è, e **Importa da VS Code** (o da Cursor) porta impostazioni, scorciatoie, frammenti, progetti recenti ed estensioni. Il comando `keel` apre le cartelle dal Terminale, come `code`.
 
 <table>
   <tr>
