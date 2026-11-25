@@ -172,7 +172,7 @@ Differences side by side, with the words that changed and the code that moved. S
 | **Tests** | Rust's `#[test]`, Vitest, Jest and pytest, run or debugged from the margin, with their outcome |
 | **Tasks** | `tasks.json`, plus the cargo, npm and TypeScript tasks Keel finds, with their errors in Problems |
 | **Terminal** | Splits, shell integration, jumps between commands, quick fixes, text that comes back after a restart, open ports |
-| **Claude** | The panel with your chats, <kbd>⌘</kbd> <kbd>I</kbd>, the commit message, fixes from Problems and from the terminal, the IDE link for Claude Code |
+| **Claude** | The panel with your chats, shared with Claude Code in the terminal: sign in, model and mode, `/` for commands and your skills, `@` for any file or folder. <kbd>⌘</kbd> <kbd>I</kbd>, the commit message, fixes from Problems and from the terminal, the IDE link for Claude Code |
 | **Preview** | Markdown and PDF |
 | **The Mac** | Native menus, recent projects in the Dock, files dragged to and from Finder, notifications, light and dark with the system |
 

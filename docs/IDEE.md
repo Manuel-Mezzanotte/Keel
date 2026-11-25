@@ -47,6 +47,8 @@ Le fonti sono in fondo. Niente qui è deciso: ogni voce parte solo col via dell'
 
 È l'area che si muove più in fretta. Keel parte bene: pannello di Claude Code con le tue chat, Cmd+I nel codice, messaggio del commit, correzioni dai Problemi e dal terminale.
 
+**Fatto il 25 novembre:** il pannello di Claude rifatto, come l'estensione ufficiale: accesso e uscita dal pannello (abbonamento, Console o chiave API nel portachiavi), modello, ragionamento, fast mode e modo, il menu `/` con comandi e skill, `@` per file e cartelle del progetto, le chat che si continuano nel terminale e tornano aggiornate. Il dettaglio è in `HANDOFF.md`.
+
 | Cosa | Chi ce l'ha | Peso |
 |---|---|---|
 | **Revisione delle modifiche della sessione:** un elenco dei file toccati da Claude, le differenze blocco per blocco con accetta o rifiuta, commenti sulle righe raccolti e mandati a Claude in un colpo solo | Warp (anche per Claude Code), Xcode 27, Claude Code in VS Code | grande |

@@ -172,7 +172,7 @@ Differenze affiancate, con le parole cambiate e il codice spostato. Metti in sta
 | **Test** | `#[test]` di Rust, Vitest, Jest e pytest, eseguiti o in debug dal margine, con l'esito |
 | **Attività** | `tasks.json`, più quelle di cargo, npm e TypeScript che Keel trova, con gli errori nei Problemi |
 | **Terminale** | Divisioni, integrazione della shell, salti fra i comandi, correzioni rapide, testo che torna dopo il riavvio, porte aperte |
-| **Claude** | Il pannello con le tue chat, <kbd>⌘</kbd> <kbd>I</kbd>, il messaggio del commit, correzioni dai Problemi e dal terminale, il collegamento per Claude Code |
+| **Claude** | Il pannello con le tue chat, in comune con Claude Code nel terminale: accesso, modello e modo, `/` per i comandi e le tue skill, `@` per ogni file o cartella. <kbd>⌘</kbd> <kbd>I</kbd>, il messaggio del commit, correzioni dai Problemi e dal terminale, il collegamento per Claude Code |
 | **Anteprima** | Markdown e PDF |
 | **Il Mac** | Menu veri, progetti recenti nel Dock, file trascinati da e verso il Finder, notifiche, chiaro e scuro con il sistema |
 
