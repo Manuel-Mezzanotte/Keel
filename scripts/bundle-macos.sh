@@ -32,6 +32,8 @@ cp assets/brand/Assets.car "$app/Contents/Resources/Assets.car"
 cp assets/brand/Keel.icns "$app/Contents/Resources/Keel.icns"
 # The notices of the software built in, also shown in Settings > Updates.
 cp crates/keel/THIRD-PARTY-LICENSES.txt "$app/Contents/Resources/THIRD-PARTY-LICENSES.txt"
+# Keel's own license travels with the app too.
+cp LICENSE "$app/Contents/Resources/LICENSE"
 
 cat > "$app/Contents/Info.plist" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>

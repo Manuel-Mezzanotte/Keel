@@ -228,7 +228,7 @@ Ordine: **A → B → C → D**. Il sito va online solo dopo che tutto è stato 
 
 ## Da decidere più avanti
 
-- **La licenza di Keel:** oggi non ce n'è una, quindi tutti i diritti sono riservati.
+- ~~**La licenza di Keel**~~: decisa il 25 novembre 2026, in `LICENSE` (in italiano `docs/LICENZA.it.md`). Codice da leggere e basta, app gratis da usare anche per lavoro.
 - **La prima versione ufficiale:** `0.1.0`, oppure `1.0.0`.
 - **La lingua principale del sito,** oggi l'italiano.
 

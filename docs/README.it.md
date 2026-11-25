@@ -392,7 +392,7 @@ Keel non è legato a Microsoft, Anysphere, Anthropic, GitHub o Apple. Visual Stu
 
 ## Licenza
 
-Una licenza non è ancora stata scelta, quindi per ora tutti i diritti sono riservati. I file in `vendor/gpui-base` tengono la loro [licenza Apache 2.0](../vendor/gpui-base/LICENSE-APACHE).
+Il codice di Keel è pubblico per essere letto, non riusato: tutti i diritti sono riservati. L'app si scarica gratis da [keel.mezzalab.eu](https://keel.mezzalab.eu) e si usa, anche per lavoro, ma non si condivide altrove, non si vende e non si modifica; il codice non si può copiare, compilare, cambiare, ridistribuire né usare in altri software. Le condizioni sono in [`LICENZA.it.md`](LICENZA.it.md) (il testo che fa fede è [`LICENSE`](../LICENSE), in inglese). I file in `vendor/gpui-base` tengono la loro [licenza Apache 2.0](../vendor/gpui-base/LICENSE-APACHE).
 
 Keel è costruito su software open source, le cui licenze chiedono che i loro avvisi accompagnino l'app. Sono tutti in [`crates/keel/THIRD-PARTY-LICENSES.txt`](../crates/keel/THIRD-PARTY-LICENSES.txt), che Keel mostra in Impostazioni › Aggiornamenti e porta con sé in `Keel.app/Contents/Resources`. Lo scrive `scripts/third-party-licenses.py` a partire da `Cargo.lock`: dopo aver cambiato le dipendenze va rilanciato, e fino ad allora un test fallisce e un rilascio non parte.
 

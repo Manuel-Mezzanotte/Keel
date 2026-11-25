@@ -1,0 +1,100 @@
+Keel License
+
+Copyright (c) 2026 Manuel Mezzanotte. All rights reserved.
+
+Keel's source code is public so that people can read it. Being able to read
+it gives no right to use it. This license says what you may and may not do
+with Keel. An Italian translation is in docs/LICENZA.it.md; where the two
+differ, this text prevails.
+
+
+1. Definitions
+
+"The author" is Manuel Mezzanotte.
+
+"The source code" is everything in this repository and in its history,
+except the parts listed in section 5.
+
+"The app" is Keel as a program ready to run (Keel.app, and the disk images
+and archives that contain it) as published by the author at
+https://keel.mezzalab.eu, together with its updates.
+
+
+2. The source code
+
+You may read the source code, on GitHub or in a copy that GitHub's own
+features make, such as a fork, for your own information and study.
+
+Without the author's written permission, you may not, in whole or in part:
+
+  a. copy the source code anywhere outside GitHub;
+  b. modify it, translate it, or make works based on it;
+  c. build it, run it, or use programs that anyone but the author built
+     from it (the app the author publishes is covered by section 3);
+  d. publish, distribute, sublicense, rent, lease or sell it;
+  e. include it in other software, products or services, free or paid;
+  f. use it to train or improve machine learning or AI models.
+
+Forking this repository on GitHub, which GitHub's Terms of Service allow,
+gives no rights beyond those in this section.
+
+
+3. The app
+
+You may download the app from https://keel.mezzalab.eu, install it on any
+number of your own computers and use it free of charge, for personal use
+and for work, including to write software that you sell. What you make with
+Keel is yours.
+
+Without the author's written permission, you may not:
+
+  a. share, publish or distribute the app, or offer it for download
+     anywhere else;
+  b. sell, rent or lease the app, or charge for it in any way;
+  c. modify the app, or reverse engineer, decompile or disassemble it,
+     except where the law allows it regardless of this license;
+  d. remove or change its notices, this license and the third-party notices
+     among them.
+
+
+4. Extensions and tools
+
+Extensions, language servers, debuggers and other tools that the app
+downloads or runs come from their own authors, under their own licenses.
+This license does not cover them.
+
+
+5. Third-party software
+
+The parts of Keel written by others keep their own licenses, which this
+license does not change:
+
+  - the files in vendor/gpui-base, under the Apache License 2.0
+    (vendor/gpui-base/LICENSE-APACHE);
+  - the third-party software built into the app, whose notices and
+    licenses are in crates/keel/THIRD-PARTY-LICENSES.txt.
+
+Whatever those licenses allow, you may still do with those parts.
+
+
+6. No warranty
+
+The app and the source code are provided "as is", without warranty of any
+kind, express or implied, including the warranties of merchantability,
+fitness for a particular purpose and non-infringement. To the extent the
+law allows, the author is not liable for any claim, damages or other
+liability arising from or in connection with Keel or its use.
+
+
+7. Ending, changes and law
+
+If you break this license, the rights it gives you end at once.
+
+The author may publish new versions of this license. Each version of the app
+and of the source code is covered by the license published with it; the
+versions published before this license are covered by this one.
+
+This license is governed by Italian law.
+
+For any use that this license does not allow, ask the author:
+manuel.mezzanotte@gmail.com.

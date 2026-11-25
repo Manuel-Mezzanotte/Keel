@@ -392,7 +392,7 @@ Keel is not affiliated with Microsoft, Anysphere, Anthropic, GitHub or Apple. Vi
 
 ## License
 
-No licence has been chosen yet, so all rights are reserved for now. The files in `vendor/gpui-base` keep their own [Apache 2.0 licence](vendor/gpui-base/LICENSE-APACHE).
+Keel's source code is public to be read, not reused: all rights are reserved. The app is free to download from [keel.mezzalab.eu](https://keel.mezzalab.eu) and to use, for personal use and for work, but not to share elsewhere, sell or modify; the code may not be copied, built, changed, redistributed or used in other software. The terms are in [`LICENSE`](LICENSE) (in Italian in [`docs/LICENZA.it.md`](docs/LICENZA.it.md)). The files in `vendor/gpui-base` keep their own [Apache 2.0 licence](vendor/gpui-base/LICENSE-APACHE).
 
 Keel is built on open source software, whose licences ask for their notices to go with the app. They are all in [`crates/keel/THIRD-PARTY-LICENSES.txt`](crates/keel/THIRD-PARTY-LICENSES.txt), which Keel shows in Settings › Updates and carries in `Keel.app/Contents/Resources`. It is written from `Cargo.lock` by `scripts/third-party-licenses.py`: after changing dependencies, run it again; until then a test fails and a release does not start.
 
