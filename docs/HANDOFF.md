@@ -20,7 +20,7 @@ Keel è un **IDE personale per macOS scritto in Rust**. L'idea è avere un edito
 - **familiare:** stesse scorciatoie e stessi nomi dei comandi di VS Code, `settings.json` e `keybindings.json` compatibili;
 - **estendibile:** le estensioni di VS Code funzionano dove possibile, e quelle dell'autore sempre. La prova del nove è **VSAuto Ghost**, la sua estensione di «fake coding».
 
-Nasce dalla curiosità per le app native in Rust e dal desiderio di un editor tutto suo. Cursor resta installato come riserva. La pubblicazione (firma Apple, aggiornamenti automatici) non è ancora decisa: se ne parla dopo le prove a mano. La pagina di presentazione invece c'è, in una repo sua (`KeelSite`).
+Nasce dalla curiosità per le app native in Rust e dal desiderio di un editor tutto suo. Cursor resta installato come riserva. È pubblicato dal 23 novembre 2026: si scarica da https://keel.mezzalab.eu, la pagina di presentazione che sta in una repo sua (`KeelSite`), e si aggiorna da solo; la firma di Apple è rimandata (punto 4, «Punti aperti»). Il codice è pubblico su GitHub dal 24 novembre.
 
 ### Perché è fatto così
 
@@ -109,7 +109,7 @@ Per le prove si usa sempre una cartella a parte, con `KEEL_DATA_DIR`, mai quella
 cargo run -p keel                              # avvio in sviluppo
 cargo test --workspace                         # tutti i test
 cargo clippy --workspace --all-targets         # controlli
-scripts/make-dmg.sh                            # Keel.app + target/release/Keel-0.1.0.dmg
+scripts/make-dmg.sh                            # Keel.app + target/release/Keel-<versione>.dmg
 scripts/snapshots.sh <cartella>                # la finestra disegnata fuori dallo schermo, in PNG
 scripts/third-party-licenses.py                # gli avvisi delle licenze, dopo aver cambiato le dipendenze
 ```
@@ -163,7 +163,7 @@ Dopo le prime prove dell'app vera (18 novembre) sono arrivati altri giri di rito
   Con queste i dettagli di `DETTAGLI.md` sono 131 fatti, 9 a metà e 3 non ancora.
 
   Come provarle, cosa è stato provato davvero e i limiti di ognuna sono in [`DETTAGLI.md`](DETTAGLI.md), «Le funzioni nuove».
-- **la pagina di presentazione** (22 novembre), in una repo sua, `KeelSite` (privata su GitHub, sul Mac accanto a Keel): React, Vite, Tailwind e shadcn/ui, in italiano e in inglese. Dal cielo si scende nel mare, che copre una copia di Keel in HTML, navigabile e nei tre temi; poi il confronto misurato con VS Code e Cursor, le funzioni, i linguaggi, le estensioni e le domande. I numeri e come sono stati misurati stanno nel suo `src/site.ts`. Per pubblicarla servono un dominio, dove metterla e l'app firmata da Apple: finché `downloadUrl` è `null` la pagina dice «In arrivo».
+- **la pagina di presentazione** (22 novembre), in una repo sua, `KeelSite` (privata su GitHub, sul Mac accanto a Keel): React, Vite, Tailwind e shadcn/ui, in italiano e in inglese. Dal cielo si scende nel mare, che copre una copia di Keel in HTML, navigabile e nei tre temi; poi il confronto misurato con VS Code e Cursor, le funzioni, i linguaggi, le estensioni e le domande. I numeri e come sono stati misurati stanno nel suo `src/site.ts`. È online su https://keel.mezzalab.eu dal 23 novembre, servita dal mini PC: ogni push su `main` di `KeelSite` la pubblica da solo. Oltre alla presentazione ha la pagina di download (legge `/updates.json`), quella della privacy e, dal 25 novembre, quella delle novità (`/changelog/`).
 
 - **l'interfaccia rifatta e il benvenuto** (24 novembre):
   - **Impostazioni** disegnate da Keel (`settings_page.rs`) invece che dal componente di gpui-component: le pagine con la loro icona e il numero di impostazioni cambiate, una ricerca in italiano su tutte le pagine (nome, descrizione e chiave, ogni parola conta), le impostazioni in riquadri divisi per gruppo, una barra a sinistra su quelle cambiate e il pulsante per tornare al valore di Keel. I temi preferiti si scelgono da un elenco. Raggio e spazio dei pannelli e «Schede su più righe», che non si vedevano più, sono tornati nella pagina Interfaccia; un test controlla che ogni impostazione del catalogo abbia il suo posto;
@@ -289,6 +289,7 @@ L'idea è permettere a chi usa Keel di cambiarne l'aspetto con un suo file, come
 - Il font del codice di serie: SF Mono oppure un altro.
 - La minimappa: accesa o spenta di serie.
 - La pubblicazione: **Keel è scaricabile da https://keel.mezzalab.eu dal 23 novembre (0.1.0); il 24 novembre è uscita la 0.1.1** con l'interfaccia rifatta e il benvenuto, **il 25 novembre la 0.1.2** con il pannello di Claude rifatto; si aggiorna da solo. Ogni versione va scritta in `CHANGELOG.md` e `docs/CHANGELOG.it.md` prima del rilascio. Il piano e com'è andata sono in [`PUBBLICAZIONE.md`](PUBBLICAZIONE.md), in quattro fasi da fare in ordine, ognuna col via dell'autore: aggiornamenti dentro Keel con un motore suo (crate `update`), controllati solo all'avvio (fase A fatta il 23 novembre); script di rilascio e di installazione (fase B fatta il 23 novembre: la chiave di firma è nel Portachiavi login come «Keel release signing key», e ne va tenuta una copia fuori dal Mac); pagina di download su KeelSite (fase C fatta il 23 novembre, legge `/updates.json`); sito su keel.mezzalab.eu dal mini PC, con il deploy da `main` e solo due versioni dei pacchetti. La firma di Apple è rimandata. Dal 23 novembre l'app porta con sé gli avvisi delle licenze di terze parti (`crates/keel/THIRD-PARTY-LICENSES.txt`, scritto da `scripts/third-party-licenses.py`, visibile in Impostazioni › Aggiornamenti): vanno rigenerati quando cambiano le dipendenze, e un test e `release.sh` lo ricordano. Restano da decidere la licenza di Keel e le condizioni d'uso per chi lo scarica, e la lingua principale del sito (ora l'italiano).
+- La repo `Keel` è pubblica su GitHub dal 24 novembre, ma senza una licenza: il codice si può leggere, non riusare (tutti i diritti riservati). Finché non se ne sceglie una, Keel non va chiamato «open source», né sul sito né nel README.
 - Il ramo `main` non esiste ancora su GitHub: il predefinito è `develop`.
 - La cartella `KeelSite/` dentro Keel è un sito vecchio del 21 novembre, in Next.js, messo lì dall'autore: non è in git e non va committata. Quello buono è la repo `KeelSite` accanto a Keel.
 - Il merge di `develop` su `main`: solo quando lo chiede l'autore.
