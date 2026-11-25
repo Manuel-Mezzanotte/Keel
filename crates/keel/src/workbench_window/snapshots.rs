@@ -492,6 +492,29 @@ fn shots() -> Vec<Shot> {
             workbench.agent_panel.menus.text_changed();
             cx.notify();
         }));
+        // Reasoning as a bar, opened, and a command of several lines.
+        shots.push(shot(name("claude-thinking"), |workbench, window, cx| {
+            window.clear_notifications(cx);
+            workbench.agent_panel.input.update(cx, |input, cx| {
+                input.set_value("run il comando", window, cx)
+            });
+            workbench.send_to_agent(window, cx);
+        }));
+        shots.push(shot(name("claude-thinking-open"), |workbench, _, cx| {
+            let entries = &workbench.agent_panel.thread.entries;
+            if let Some(index) = entries
+                .iter()
+                .rposition(|entry| matches!(entry, ai::thread::Entry::Thought(_)))
+            {
+                workbench.agent_panel.open_thoughts.insert(index);
+            }
+            if let Some(index) = entries.iter().rposition(
+                |entry| matches!(entry, ai::thread::Entry::Tool(tool) if tool.kind == "execute"),
+            ) {
+                workbench.agent_panel.open_tools.insert(index);
+            }
+            cx.notify();
+        }));
         // The cards over the message box: model, mode, usage.
         for (what, card) in [
             ("claude-model", agent_cards::ComposerPopover::Model),

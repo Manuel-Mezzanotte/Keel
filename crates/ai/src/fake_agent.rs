@@ -142,6 +142,20 @@ impl Fake {
                 self.update(&session, json!({ "sessionUpdate": "tool_call_update", "toolCallId": "edit-1", "status": "failed" }));
                 "Not changed.".to_owned()
             }
+        } else if words.first() == Some(&"run") {
+            // Reasoning, a command of several lines with its output, and
+            // an empty message between them, as replayed chats have.
+            self.text(&session, "agent_thought_chunk", "Guardo come è fatto il pannello. Prima leggo il file, poi provo il comando, poi controllo che i test passino ancora.\n\nIl comando cambia una riga sola.");
+            self.text(&session, "agent_message_chunk", "\n\n");
+            self.update(&session, json!({ "sessionUpdate": "tool_call", "toolCallId": "run-1", "kind": "execute",
+                "title": "python3 - <<'EOF'\np='crates/keel/src/workbench_window/agent_view.rs'\nprint(open(p).read()[:10])\nEOF",
+                "status": "completed", "content": [{ "type": "content", "content": { "type": "text", "text": "//! How Cla" } }] }));
+            self.update(
+                &session,
+                json!({ "sessionUpdate": "tool_call", "toolCallId": "run-2", "kind": "search",
+                "title": "grep -n \"fn render\" crates/keel/src", "status": "completed" }),
+            );
+            "Fatto: il comando ha letto il file.".to_owned()
         } else if text.trim() == "/usage" {
             // Claude Code's own `/usage`, as the adapter writes it.
             "## Usage\n\n> Claude pro subscription usage\n\n### Limits\n\n**5-hour limit** — **74%** · Resets Nov 25, 2:10 PM GMT+1\n\n`███████████████░░░░░`\n\n**Weekly · all models** — **86%** · Resets Nov 29, 2:00 AM GMT+1\n\n---\n\n### This session\n\n| Cost | API time | Active |\n|:--|:--|:--|\n| $0.00 | 0s | 3s |\n".to_owned()

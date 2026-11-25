@@ -532,6 +532,13 @@ impl Workbench {
                 .gap(px(12.));
             let mut after_user = false;
             for (index, entry) in panel.thread.entries.iter().enumerate() {
+                // Text with nothing to read, as a replayed chat may have,
+                // leaves no gap.
+                if let Entry::Agent(text) | Entry::Thought(text) = entry
+                    && text.trim().is_empty()
+                {
+                    continue;
+                }
                 // A little more room before each new message of yours.
                 let user = matches!(entry, Entry::User(_));
                 if user && index > 0 && !after_user {
@@ -1150,17 +1157,21 @@ impl Workbench {
                 None => div().into_any_element(),
             },
             Entry::Thought(text) => {
-                let open = self.agent_panel.open_thoughts.contains(&index);
+                let panel = &self.agent_panel;
+                let open = panel.open_thoughts.contains(&index);
                 let turn = chevron_turn(("agent-thought-turn", index), open, self.look, window, cx);
-                let first = text.lines().next().unwrap_or_default().to_owned();
-                div()
+                // Still thinking: the last entry of a turn that runs.
+                let live = panel.running && index + 1 == panel.thread.entries.len();
+                let header = div()
                     .id(("agent-thought", index))
+                    .h(px(26.))
+                    .px(px(8.))
                     .flex()
-                    .flex_col()
-                    .gap_1()
-                    .text_size(px(12.))
-                    .text_color(colors.faint)
+                    .items_center()
+                    .gap(px(8.))
+                    .rounded(px(8.))
                     .cursor_pointer()
+                    .hover(|row| row.bg(colors.hover.opacity(0.6)))
                     .on_click(cx.listener(move |this, _, _, cx| {
                         if !this.agent_panel.open_thoughts.remove(&index) {
                             this.agent_panel.open_thoughts.insert(index);
@@ -1169,33 +1180,48 @@ impl Workbench {
                     }))
                     .child(
                         div()
-                            .flex()
-                            .items_center()
-                            .gap_1p5()
-                            .child(
-                                Icon::new(IconName::ChevronRight)
-                                    .xsmall()
-                                    .rotate(gpui::radians(turn * std::f32::consts::FRAC_PI_2)),
-                            )
-                            .child(
-                                div()
-                                    .flex_none()
-                                    .font_weight(FontWeight::MEDIUM)
-                                    .child(self.strings().agent_thinking),
-                            )
-                            .when(!open, |line| {
-                                line.child(div().min_w_0().truncate().child(first))
-                            }),
+                            .flex_none()
+                            .text_size(px(12.))
+                            .font_weight(FontWeight::MEDIUM)
+                            .text_color(colors.muted)
+                            .child(self.strings().agent_thinking),
                     )
+                    .child(thinking_bar(
+                        index,
+                        text.len(),
+                        live,
+                        colors,
+                        self.look.motion,
+                    ))
+                    .child(div().flex_1())
+                    .child(
+                        Icon::new(IconName::ChevronRight)
+                            .xsmall()
+                            .text_color(colors.faint)
+                            .rotate(gpui::radians(turn * std::f32::consts::FRAC_PI_2)),
+                    );
+                div()
+                    .flex()
+                    .flex_col()
+                    .gap_1()
+                    .child(header)
                     .when(open, |thought| {
                         thought.child(
                             div()
-                                .ml(px(5.))
-                                .pl_3()
+                                .id(("agent-thought-text", index))
+                                .mx(px(8.))
+                                .max_h(px(280.))
+                                .overflow_y_scroll()
+                                .px(px(12.))
+                                .py(px(8.))
+                                .rounded(px(8.))
                                 .border_l_2()
-                                .border_color(colors.border)
-                                .italic()
-                                .child(text.clone()),
+                                .border_color(claude_colour().opacity(0.6))
+                                .bg(colors.hover.opacity(0.35))
+                                .text_size(px(12.5))
+                                .line_height(px(19.))
+                                .text_color(colors.muted)
+                                .child(text.trim().to_owned()),
                         )
                     })
                     .into_any_element()
@@ -1230,7 +1256,14 @@ impl Workbench {
             .iter()
             .any(|content| matches!(content, ToolContent::Diff { .. }));
         let toggled = self.agent_panel.open_tools.contains(&index);
-        let open = !tool.content.is_empty() && (has_diff != toggled);
+        // A command may be several lines: the row shows the first, the
+        // card all of it.
+        let title = tool.title.trim();
+        let first_line = title.lines().next().unwrap_or_default();
+        let more_title = title.contains('\n') || title.chars().count() > 90;
+        let command = tool.kind == "execute";
+        let expandable = !tool.content.is_empty() || more_title;
+        let open = expandable && (has_diff != toggled);
         let turn = chevron_turn(("agent-tool-turn", index), open, self.look, window, cx);
         let state: AnyElement = match tool.status {
             ToolStatus::Pending | ToolStatus::InProgress => {
@@ -1282,7 +1315,6 @@ impl Workbench {
                     }
                 }))
         });
-        let expandable = !tool.content.is_empty();
         let row = div()
             .id(("agent-tool", index))
             .h(px(28.))
@@ -1314,7 +1346,14 @@ impl Workbench {
                     .min_w_0()
                     .truncate()
                     .text_color(colors.muted)
-                    .child(tool.title.clone()),
+                    .when(command, |title| {
+                        title.font_family("Menlo").text_size(px(11.5))
+                    })
+                    .child(if more_title && title.contains('\n') {
+                        format!("{first_line} …")
+                    } else {
+                        first_line.to_owned()
+                    }),
             )
             .when(has_diff, |row| {
                 row.child(
@@ -1364,6 +1403,22 @@ impl Workbench {
                     .flex()
                     .flex_col()
                     .gap_1()
+                    .when(more_title, |card| {
+                        card.child(
+                            div()
+                                .px(px(8.))
+                                .py(px(6.))
+                                .rounded(px(7.))
+                                .bg(colors.editor)
+                                .border_1()
+                                .border_color(colors.border.opacity(0.6))
+                                .text_size(px(11.5))
+                                .line_height(px(17.))
+                                .font_family("Menlo")
+                                .text_color(colors.text)
+                                .child(title.to_owned()),
+                        )
+                    })
                     .children(
                         tool.content
                             .iter()
@@ -1918,6 +1973,53 @@ pub(super) fn spinner(color: Hsla, motion: bool) -> AnyElement {
         |icon, delta| icon.rotate(gpui::radians(delta * std::f32::consts::TAU)),
     )
     .into_any_element()
+}
+
+/// Claude's reasoning as a bar: a rounded track with a fill as long as the
+/// reasoning is (longer thinking, fuller bar); while Claude still thinks
+/// the fill runs back and forth.
+fn thinking_bar(
+    index: usize,
+    length: usize,
+    live: bool,
+    colors: Colors,
+    motion: bool,
+) -> AnyElement {
+    // 300 characters a quarter, 3000 about three quarters.
+    let fraction = (length as f32 / (length as f32 + 1000.)).clamp(0.12, 1.);
+    let track = div()
+        .flex_none()
+        .w(px(96.))
+        .h(px(10.))
+        .p(px(2.))
+        .rounded_full()
+        .border_1()
+        .border_color(colors.border);
+    let fill = div().h_full().rounded_full().bg(if live {
+        claude_colour()
+    } else {
+        colors.muted.opacity(0.7)
+    });
+    if live && motion {
+        return track
+            .child(
+                fill.with_animation(
+                    ("agent-thinking-fill", index),
+                    Animation::new(std::time::Duration::from_millis(1400))
+                        .repeat()
+                        .with_easing(gpui::ease_in_out),
+                    |fill, delta| {
+                        // Out and back: 20% to 100% and down again.
+                        let wave = 1. - (delta * 2. - 1.).abs();
+                        fill.w(gpui::relative(0.2 + 0.8 * wave))
+                    },
+                ),
+            )
+            .into_any_element();
+    }
+    track
+        .child(fill.w(gpui::relative(if live { 0.6 } else { fraction })))
+        .into_any_element()
 }
 
 /// "Claude is working…", next to Claude's mark breathing.
