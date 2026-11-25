@@ -16,8 +16,6 @@ mod code_actions;
 mod code_navigation;
 mod commit_view;
 mod contributions;
-mod cursor_import;
-mod cursor_settings;
 mod debug;
 mod debug_config;
 mod debug_view;
@@ -43,6 +41,8 @@ mod git_marks;
 mod github;
 mod host_watchdog;
 mod image_diff;
+mod import_extensions;
+mod import_settings;
 mod interface_page;
 mod intro;
 mod keybindings_view;
@@ -57,6 +57,7 @@ mod nav_history;
 mod navigation;
 mod notices;
 mod npm_scripts;
+mod other_editor;
 mod other_files;
 mod outline;
 mod panel_views;
@@ -72,7 +73,9 @@ mod search_results;
 mod search_view;
 mod settings_page;
 mod settings_view;
+mod setup_sheet;
 pub(crate) use intro::{WelcomePending, first_start};
+pub(crate) use setup_sheet::InstallShellCommand;
 pub use updates::start_pending_update;
 mod shell;
 mod signature_help;
@@ -128,7 +131,6 @@ pub(crate) use code_navigation::{
     ShowIncomingCalls, ShowOutgoingCalls,
 };
 pub(crate) use contributions::SelectIconTheme;
-pub(crate) use cursor_import::ImportFromCursor;
 pub(crate) use debug::{
     DebugConfigure, DebugEvaluateSelection, DebugPause, DebugRestart, DebugRun, DebugRunToCursor,
     DebugSelectAndStart, DebugStart, DebugStepInto, DebugStepOut, DebugStepOver, DebugStop,
@@ -148,6 +150,7 @@ pub(crate) use git_daily::{
 };
 pub(crate) use git_graph::ShowGitGraph;
 pub(crate) use git_gutter::{NextChange, PreviousChange, RevertChange, StageChange};
+pub(crate) use import_extensions::{ImportFromCursor, ImportFromVsCode};
 pub(crate) use language_servers::RestartLanguageServers;
 pub(crate) use local_history::{CompareWithClipboard, FindDeletedFile, ShowLocalHistory};
 pub(crate) use markdown_preview::{ShowMarkdownPreview, ShowMarkdownPreviewToSide};
@@ -253,6 +256,7 @@ actions!(
         OpenSettingsJson,
         OpenKeybindings,
         ImportCursorSettings,
+        ImportVsCodeSettings,
         ShowWelcome
     ]
 );
@@ -631,6 +635,10 @@ pub struct Workbench {
     settings_ui: settings_page::SettingsUi,
     /// The welcome of the first start, while it shows.
     intro: Option<intro::Intro>,
+    /// «Prepara Keel», right after the welcome.
+    setup: Option<setup_sheet::SetupSheet>,
+    /// How installing the `keel` command went.
+    shell_command: setup_sheet::CommandState,
     /// A new version of Keel offered in its window, and how far it got.
     update_offer: Option<updates::Offer>,
     /// Whether a check for updates asked from the Settings is running.
@@ -877,6 +885,8 @@ impl Workbench {
             settings_jump: (0, None),
             settings_ui: Default::default(),
             intro: None,
+            setup: None,
+            shell_command: setup_sheet::CommandState::Idle,
             update_offer: None,
             checking_updates: false,
             agent_terminal: None,

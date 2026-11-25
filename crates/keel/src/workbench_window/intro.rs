@@ -523,6 +523,8 @@ impl Workbench {
         for notice in intro.waiting {
             self.show_notice(notice, window, cx);
         }
+        // Aboard: three things to make Keel one's own.
+        self.open_setup(window, cx);
         cx.notify();
     }
 
@@ -850,6 +852,13 @@ mod tests {
         cx.simulate_keystrokes("enter");
         cx.run_until_parked();
         assert!(!view.read_with(cx, |view, _| view.intro_shown()), "aboard");
+        assert!(
+            view.read_with(cx, |view, _| view.setup_shown()),
+            "«Prepara Keel» follows"
+        );
+        cx.simulate_keystrokes("escape");
+        cx.run_until_parked();
+        assert!(!view.read_with(cx, |view, _| view.setup_shown()));
         assert!(data.join(SEEN_MARK).exists());
         assert!(!first_start(&data), "never again");
     }

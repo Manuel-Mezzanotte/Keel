@@ -101,8 +101,51 @@ fn main() -> ExitCode {
                 }
                 return ExitCode::SUCCESS;
             }
+            // `keel .` typed in a terminal opens Keel as an app of its own,
+            // as `code .` does, and gives the prompt back at once.
+            if let Some(app) = app_to_open_from_terminal() {
+                let mut all: Vec<PathBuf> = first.into_iter().collect();
+                all.extend(paths_to_open);
+                return open_detached(&app, &all);
+            }
             run(first, paths_to_open, socket);
             ExitCode::SUCCESS
+        }
+    }
+}
+
+/// The app Keel runs from, when it was started from a terminal and runs
+/// from inside `Keel.app`: `KEEL_FOREGROUND` keeps it in the terminal.
+fn app_to_open_from_terminal() -> Option<PathBuf> {
+    use std::io::IsTerminal as _;
+    if !std::io::stdin().is_terminal() || std::env::var_os("KEEL_FOREGROUND").is_some() {
+        return None;
+    }
+    let program = std::env::current_exe().ok()?.canonicalize().ok()?;
+    let app = program.parent()?.parent()?.parent()?.to_path_buf();
+    (app.extension().is_some_and(|extension| extension == "app")
+        && app.join("Contents/Info.plist").is_file())
+    .then_some(app)
+}
+
+/// Opens `app` through macOS, on `paths`, keeping the data folder of a
+/// Keel tried on a folder of its own.
+fn open_detached(app: &std::path::Path, paths: &[PathBuf]) -> ExitCode {
+    let mut open = std::process::Command::new("/usr/bin/open");
+    if let Some(data) = std::env::var_os("KEEL_DATA_DIR") {
+        let mut variable = std::ffi::OsString::from("KEEL_DATA_DIR=");
+        variable.push(data);
+        open.arg("--env").arg(variable);
+    }
+    open.arg("-a").arg(app);
+    if !paths.is_empty() {
+        open.arg("--args").args(paths);
+    }
+    match open.status() {
+        Ok(status) if status.success() => ExitCode::SUCCESS,
+        _ => {
+            eprintln!("keel: could not open {}", app.display());
+            ExitCode::FAILURE
         }
     }
 }

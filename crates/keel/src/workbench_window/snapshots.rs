@@ -606,6 +606,19 @@ fn shots() -> Vec<Shot> {
             }));
         }
     }
+    // «Prepara Keel», after the welcome, by night and by day.
+    for theme in ["Mezzanotte", "Chiaro"] {
+        let name: &'static str =
+            Box::leak(format!("setup-{theme}").to_lowercase().into_boxed_str());
+        shots.push(shot(name, move |workbench, window, cx| {
+            set_theme(theme, window, cx);
+            workbench.intro = None;
+            if !workbench.setup_shown() {
+                workbench.open_setup(window, cx);
+            }
+            cx.notify();
+        }));
+    }
     shots
 }
 

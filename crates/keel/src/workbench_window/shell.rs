@@ -2652,6 +2652,7 @@ impl Render for Workbench {
         let root = self.contributions_actions(root, cx);
         let root = self.cursor_import_actions(root, cx);
         let root = self.claude_ide_actions(root, cx);
+        let root = self.setup_actions(root, cx);
         let root = self.claude_diff_actions(root, cx);
         let root = self.agent_panel_actions(root, cx);
         let root = self.editing_actions(root, cx);
@@ -2689,7 +2690,20 @@ impl Render for Workbench {
                 cx.listener(|this, _: &ShowWelcome, window, cx| this.start_intro(window, cx)),
             )
             .on_action(cx.listener(|this, _: &ImportCursorSettings, window, cx| {
-                this.import_cursor_settings(window, cx)
+                this.import_settings_from(
+                    super::other_editor::OtherEditor::Cursor,
+                    None,
+                    window,
+                    cx,
+                )
+            }))
+            .on_action(cx.listener(|this, _: &ImportVsCodeSettings, window, cx| {
+                this.import_settings_from(
+                    super::other_editor::OtherEditor::VsCode,
+                    None,
+                    window,
+                    cx,
+                )
             }))
             .on_action(cx.listener(|this, _: &OpenSettingsJson, window, cx| {
                 this.open_settings_json(window, cx)
@@ -2748,6 +2762,7 @@ impl Render for Workbench {
             .children(self.render_blame_card(colors, cx))
             .children(self.render_diff_edit(colors, cx))
             .children(self.render_thread_card(colors, cx))
+            .children(self.render_setup(colors, window, cx))
             .children(intro)
     }
 }

@@ -8,17 +8,17 @@ use serde_json::Value;
 
 use crate::workbench_window::explorer;
 use crate::workbench_window::{
-    AcceptProposedDiff, AddToAgent, CheckExtensionUpdates, ImportFromCursor, InsertAtMention,
-    InstallFromVsix, NewAgentConversation, OpenAgent, RejectProposedDiff, RestartExtensions,
-    SelectIconTheme, ShowFileHistory, ToggleBlame, UpdateAllExtensions,
+    AcceptProposedDiff, AddToAgent, CheckExtensionUpdates, ImportFromCursor, ImportFromVsCode,
+    InsertAtMention, InstallFromVsix, NewAgentConversation, OpenAgent, RejectProposedDiff,
+    RestartExtensions, SelectIconTheme, ShowFileHistory, ToggleBlame, UpdateAllExtensions,
 };
 use crate::workbench_window::{
     AskClaudeAboutTerminal, CopyLastCommand, CopyLastCommandOutput, RunRecentCommand,
     ScrollToNextCommand, ScrollToPreviousCommand,
 };
 use crate::workbench_window::{
-    CheckForUpdates, ImportCursorSettings, OpenKeybindings, OpenSettings, OpenSettingsJson,
-    ShowWelcome,
+    CheckForUpdates, ImportCursorSettings, ImportVsCodeSettings, InstallShellCommand,
+    OpenKeybindings, OpenSettings, OpenSettingsJson, ShowWelcome,
 };
 use crate::workbench_window::{
     CheckoutBranch, Commit, CommitAmend, CreateBranch, DiscardAll, GitFetch, GitPull, GitPush,
@@ -127,6 +127,12 @@ pub const COMMANDS: &[KeelCommand] = &[
         context: None,
     },
     KeelCommand {
+        id: "workbench.action.installCommandLine",
+        action: || Box::new(InstallShellCommand),
+        default_key: None,
+        context: None,
+    },
+    KeelCommand {
         id: "keel.showWelcome",
         action: || Box::new(ShowWelcome),
         default_key: None,
@@ -141,6 +147,12 @@ pub const COMMANDS: &[KeelCommand] = &[
     KeelCommand {
         id: "workbench.action.openSettingsJson",
         action: || Box::new(OpenSettingsJson),
+        default_key: None,
+        context: None,
+    },
+    KeelCommand {
+        id: "keel.settings.importFromVsCode",
+        action: || Box::new(ImportVsCodeSettings),
         default_key: None,
         context: None,
     },
@@ -645,6 +657,12 @@ pub const COMMANDS: &[KeelCommand] = &[
     KeelCommand {
         id: "claude-code.rejectProposedDiff",
         action: || Box::new(RejectProposedDiff),
+        default_key: None,
+        context: None,
+    },
+    KeelCommand {
+        id: "keel.extensions.importFromVsCode",
+        action: || Box::new(ImportFromVsCode),
         default_key: None,
         context: None,
     },

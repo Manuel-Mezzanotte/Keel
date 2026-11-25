@@ -1,60 +1,88 @@
-//! "Import from Cursor": its settings, keyboard shortcuts and recent
-//! projects, from `~/Library/Application Support/Cursor/User`. Nothing of
-//! Keel's is overwritten: settings Keel already has stay, shortcuts already
-//! there are not doubled, and Keel's own recent projects stay first.
-//! Cursor's files are only read; its database through macOS's `sqlite3`,
-//! read-only.
+//! "Import from VS Code" and "Import from Cursor": their settings, keyboard
+//! shortcuts, snippets and recent projects, from their folder in
+//! `~/Library/Application Support`. Nothing of Keel's is overwritten:
+//! settings Keel already has stay, shortcuts already there are not doubled,
+//! a snippet file Keel has keeps its own, and Keel's recent projects stay
+//! first. The other editor's files are only read; its database through
+//! macOS's `sqlite3`, read-only.
 
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 
 use serde_json::{Map, Value};
 
+use super::other_editor::OtherEditor;
 use super::*;
 
-/// What would come from Cursor.
+/// What runs once an import is over, imported or not.
+pub(super) type AfterImport = Box<dyn FnOnce(&mut Workbench, &mut Window, &mut Context<Workbench>)>;
+
+/// What would come from the other editor.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub(super) struct ImportPlan {
     pub(super) settings: Vec<(String, Value)>,
     pub(super) keybindings: Vec<Value>,
+    /// Snippet files Keel has none of by that name: copied as they are.
+    pub(super) snippets: Vec<PathBuf>,
     pub(super) projects: Vec<PathBuf>,
 }
 
 impl ImportPlan {
     pub(super) fn is_empty(&self) -> bool {
-        self.settings.is_empty() && self.keybindings.is_empty() && self.projects.is_empty()
+        self.settings.is_empty()
+            && self.keybindings.is_empty()
+            && self.snippets.is_empty()
+            && self.projects.is_empty()
+    }
+
+    /// Settings, shortcuts, snippet files and projects, as the words say them.
+    pub(super) fn counts(&self) -> [usize; 4] {
+        [
+            self.settings.len(),
+            self.keybindings.len(),
+            self.snippets.len(),
+            self.projects.len(),
+        ]
     }
 }
 
-/// Cursor's user folder.
-pub(super) fn cursor_user_dir() -> Option<PathBuf> {
-    std::env::var_os("HOME")
-        .map(|home| PathBuf::from(home).join("Library/Application Support/Cursor/User"))
-        .filter(|dir| dir.is_dir())
+/// The snippet files of `folder` (`*.json`, `*.code-snippets`) that
+/// `keel_snippets` has none of by the same name.
+pub(super) fn new_snippets(folder: &Path, keel_snippets: &Path) -> Vec<PathBuf> {
+    let mut found: Vec<PathBuf> = std::fs::read_dir(folder)
+        .into_iter()
+        .flatten()
+        .flatten()
+        .map(|entry| entry.path())
+        .filter(|path| {
+            path.is_file()
+                && path
+                    .extension()
+                    .is_some_and(|extension| extension == "json" || extension == "code-snippets")
+        })
+        .filter(|path| {
+            path.file_name()
+                .is_some_and(|name| !keel_snippets.join(name).exists())
+        })
+        .collect();
+    found.sort();
+    found
 }
 
-/// Settings of Cursor's own that mean nothing in Keel, or that would
-/// change what Keel looks like into something it does not have.
-fn skipped(key: &str) -> bool {
-    key.starts_with("cursor.")
-        || key.starts_with("telemetry.")
-        || key.starts_with("update.")
-        || matches!(key, "workbench.colorTheme" | "workbench.iconTheme")
-}
-
-/// What to import, given Cursor's folder, Keel's files as they are, and
-/// Cursor's recent folders (`folderUri` entries).
+/// What to import, given the other editor's files, Keel's files as they
+/// are, and the other editor's recent folders (`folderUri` entries).
 pub(super) fn plan(
-    cursor_settings: &str,
-    cursor_keybindings: &str,
-    cursor_recent: &[String],
+    editor: OtherEditor,
+    other_settings: &str,
+    other_keybindings: &str,
+    other_recent: &[String],
     keel_settings: &Map<String, Value>,
     keel_keybindings: &str,
 ) -> ImportPlan {
-    let settings = match settings::parse_jsonc(cursor_settings) {
+    let settings = match settings::parse_jsonc(other_settings) {
         Ok(Value::Object(values)) => values
             .into_iter()
-            .filter(|(key, _)| !skipped(key) && !keel_settings.contains_key(key))
+            .filter(|(key, _)| !editor.skips(key) && !keel_settings.contains_key(key))
             .collect(),
         _ => Vec::new(),
     };
@@ -63,7 +91,7 @@ pub(super) fn plan(
         _ => Vec::new(),
     };
     let same = |a: &Value, b: &Value| a["key"] == b["key"] && a["command"] == b["command"];
-    let keybindings = match settings::parse_jsonc(cursor_keybindings) {
+    let keybindings = match settings::parse_jsonc(other_keybindings) {
         Ok(Value::Array(entries)) => entries
             .into_iter()
             .filter(|entry| entry["key"].is_string() && entry["command"].is_string())
@@ -71,7 +99,7 @@ pub(super) fn plan(
             .collect(),
         _ => Vec::new(),
     };
-    let projects = cursor_recent
+    let projects = other_recent
         .iter()
         .filter_map(|uri| workbench::uri::Uri::parse(uri)?.file_path())
         .filter(|path| path.is_dir())
@@ -79,27 +107,70 @@ pub(super) fn plan(
     ImportPlan {
         settings,
         keybindings,
+        snippets: Vec::new(),
         projects,
     }
 }
 
-/// Cursor's recent folders, from its database, read-only.
-pub(super) fn cursor_recent_folders(user_dir: &Path) -> Vec<String> {
-    let database = user_dir.join("globalStorage/state.vscdb");
-    if !database.exists() {
-        return Vec::new();
+/// The other editor's recent folders, most recent first: from its
+/// database, read-only, or else from its File menu's «Open Recent», which
+/// newer versions of VS Code keep in `storage.json`.
+pub(super) fn recent_folders_of(user_dir: &Path) -> Vec<String> {
+    let storage = user_dir.join("globalStorage");
+    let database = storage.join("state.vscdb");
+    if database.exists() {
+        let query = "select value from ItemTable where key = 'history.recentlyOpenedPathsList';";
+        // The editor running holds its database: `immutable` reads it anyway.
+        let names = [
+            database.display().to_string(),
+            format!("file:{}?immutable=1", database.display()),
+        ];
+        for name in names {
+            let Ok(output) = Command::new("/usr/bin/sqlite3")
+                .arg("-readonly")
+                .arg(&name)
+                .arg(query)
+                .stdin(Stdio::null())
+                .stderr(Stdio::null())
+                .output()
+            else {
+                continue;
+            };
+            let found = recent_folders(&String::from_utf8_lossy(&output.stdout));
+            if output.status.success() && !found.is_empty() {
+                return found;
+            }
+        }
     }
-    let Ok(output) = Command::new("/usr/bin/sqlite3")
-        .arg("-readonly")
-        .arg(&database)
-        .arg("select value from ItemTable where key = 'history.recentlyOpenedPathsList';")
-        .stdin(Stdio::null())
-        .stderr(Stdio::null())
-        .output()
-    else {
+    std::fs::read_to_string(storage.join("storage.json"))
+        .map(|text| menu_recent_folders(&text))
+        .unwrap_or_default()
+}
+
+/// The folders of «Open Recent» in the File menu that `storage.json` keeps
+/// for the next start, as `file:` addresses.
+pub(super) fn menu_recent_folders(json: &str) -> Vec<String> {
+    fn walk(items: &[Value], found: &mut Vec<String>) {
+        for item in items {
+            if item["id"] == "openRecentFolder"
+                && item["uri"]["scheme"] == "file"
+                && let Some(path) = item["uri"]["path"].as_str()
+            {
+                found.push(workbench::uri::Uri::file(Path::new(path)).to_string());
+            }
+            if let Some(items) = item["submenu"]["items"].as_array() {
+                walk(items, found);
+            }
+        }
+    }
+    let Ok(value) = serde_json::from_str::<Value>(json) else {
         return Vec::new();
     };
-    recent_folders(&String::from_utf8_lossy(&output.stdout))
+    let mut found = Vec::new();
+    if let Some(items) = value["lastKnownMenubarData"]["menus"]["File"]["items"].as_array() {
+        walk(items, &mut found);
+    }
+    found
 }
 
 /// The folders of `history.recentlyOpenedPathsList`, most recent first.
@@ -114,12 +185,22 @@ pub(super) fn recent_folders(json: &str) -> Vec<String> {
 }
 
 impl Workbench {
-    /// Reads Cursor's files, then asks before importing what Keel lacks.
-    pub(super) fn import_cursor_settings(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+    /// Reads the other editor's files, then asks before importing what
+    /// Keel lacks. `then` runs once it is over, imported or not.
+    pub(super) fn import_settings_from(
+        &mut self,
+        editor: OtherEditor,
+        then: Option<AfterImport>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
         let strings = self.strings();
-        let Some(user_dir) = cursor_user_dir() else {
-            self.status_message = Some(strings.cursor_not_found.to_owned());
+        let Some(user_dir) = editor.user_dir() else {
+            self.status_message = Some(strings.import_not_found(editor.name()));
             cx.notify();
+            if let Some(then) = then {
+                then(self, window, cx);
+            }
             return;
         };
         let Some(keybindings_file) = self
@@ -130,27 +211,29 @@ impl Workbench {
             return;
         };
         let read = |path: PathBuf| std::fs::read_to_string(path).unwrap_or_default();
-        let plan = plan(
+        let mut plan = plan(
+            editor,
             &read(user_dir.join("settings.json")),
             &read(user_dir.join("keybindings.json")),
-            &cursor_recent_folders(&user_dir),
+            &recent_folders_of(&user_dir),
             &self.settings.layer(settings::Source::User),
             &read(keybindings_file),
         );
+        if let Some(data) = self.data_dir.as_deref() {
+            plan.snippets = new_snippets(&user_dir.join("snippets"), &data.join("snippets"));
+        }
         // Projects already in Keel's list are not news.
-        let mut plan = plan;
         let known = crate::recent::projects(cx);
         plan.projects.retain(|project| !known.contains(project));
         if plan.is_empty() {
-            self.status_message = Some(strings.cursor_nothing_new.to_owned());
+            self.status_message = Some(strings.import_nothing_new(editor.name()));
             cx.notify();
+            if let Some(then) = then {
+                then(self, window, cx);
+            }
             return;
         }
-        let message = strings.cursor_import_question(
-            plan.settings.len(),
-            plan.keybindings.len(),
-            plan.projects.len(),
-        );
+        let message = strings.import_question(editor.name(), plan.counts());
         let answer = window.prompt(
             PromptLevel::Info,
             &message,
@@ -159,19 +242,23 @@ impl Workbench {
             cx,
         );
         cx.spawn_in(window, async move |this, cx| {
-            if answer.await.ok() != Some(0) {
-                return;
-            }
+            let yes = answer.await.ok() == Some(0);
             this.update_in(cx, |this, window, cx| {
-                this.apply_cursor_import(plan, window, cx)
+                if yes {
+                    this.apply_import(editor, plan, window, cx);
+                }
+                if let Some(then) = then {
+                    then(this, window, cx);
+                }
             })
             .ok();
         })
         .detach();
     }
 
-    fn apply_cursor_import(
+    fn apply_import(
         &mut self,
+        editor: OtherEditor,
         plan: ImportPlan,
         window: &mut Window,
         cx: &mut Context<Self>,
@@ -203,16 +290,26 @@ impl Workbench {
                 Err(error) => problems.push(format!("keybindings.json: {error:#}")),
             }
         }
+        if !plan.snippets.is_empty()
+            && let Some(data) = self.data_dir.clone()
+        {
+            let folder = data.join("snippets");
+            let _ = std::fs::create_dir_all(&folder);
+            for file in &plan.snippets {
+                let Some(name) = file.file_name() else {
+                    continue;
+                };
+                if let Err(error) = std::fs::copy(file, folder.join(name)) {
+                    problems.push(format!("{}: {error}", file.display()));
+                }
+            }
+        }
         if !plan.projects.is_empty() {
             crate::recent::add_older(&plan.projects, cx);
             crate::menus::set(self.language, cx);
         }
         let strings = self.strings();
-        let done = strings.cursor_imported(
-            plan.settings.len(),
-            plan.keybindings.len(),
-            plan.projects.len(),
-        );
+        let done = strings.imported(editor.name(), plan.counts());
         for problem in &problems {
             self.log(problem.clone());
         }
@@ -245,6 +342,7 @@ mod tests {
             "file:///nowhere/gone".to_owned(),
         ];
         let plan = plan(
+            OtherEditor::Cursor,
             cursor_settings,
             cursor_keys,
             &recent,
@@ -273,30 +371,78 @@ mod tests {
         assert!(recent_folders("").is_empty());
     }
 
-    /// What would come from this Mac's Cursor into an empty Keel; only reads.
-    /// Run with `cargo test -p keel -- --ignored --nocapture this_macs_cursor`.
+    #[test]
+    fn vs_code_recent_folders_from_its_file_menu() {
+        let json = r#"{"lastKnownMenubarData":{"menus":{"File":{"items":[
+            {"id":"workbench.action.files.newUntitledFile","label":"&&New Text File"},
+            {"id":"submenuitem.MenubarRecentMenu","label":"Open &&Recent","submenu":{"items":[
+                {"id":"openRecentFolder","uri":{"$mid":1,"path":"/Users/m/Keel","scheme":"file"},"label":"~/Keel"},
+                {"id":"openRecentFolder","uri":{"$mid":1,"path":"/srv/app","scheme":"vscode-remote"},"label":"app [SSH]"},
+                {"id":"openRecentFile","uri":{"$mid":1,"path":"/Users/m/notes.md","scheme":"file"},"label":"notes.md"},
+                {"id":"openRecentFolder","uri":{"$mid":1,"path":"/Users/m/My Site","scheme":"file"},"label":"~/My Site"}
+            ]}}
+        ]}}}}"#;
+        let folders = menu_recent_folders(json);
+        assert_eq!(folders.len(), 2, "{folders:?}");
+        assert!(folders[0].ends_with("/Users/m/Keel"));
+        assert!(folders[1].contains("My%20Site"), "{folders:?}");
+        assert!(menu_recent_folders("not json").is_empty());
+    }
+
+    #[test]
+    fn snippet_files_keel_has_keep_its_own() {
+        let other = tempfile::tempdir().unwrap();
+        let keel = tempfile::tempdir().unwrap();
+        for name in [
+            "rust.json",
+            "web.code-snippets",
+            "typescript.json",
+            "notes.txt",
+        ] {
+            std::fs::write(other.path().join(name), "{}").unwrap();
+        }
+        std::fs::write(keel.path().join("typescript.json"), "{}").unwrap();
+        let names: Vec<String> = new_snippets(other.path(), keel.path())
+            .iter()
+            .map(|path| path.file_name().unwrap().to_string_lossy().into_owned())
+            .collect();
+        assert_eq!(names, ["rust.json", "web.code-snippets"]);
+        assert!(new_snippets(&other.path().join("missing"), keel.path()).is_empty());
+    }
+
+    /// What would come from this Mac's VS Code and Cursor into an empty
+    /// Keel; only reads. Run with
+    /// `cargo test -p keel -- --ignored --nocapture this_macs_editors`.
     #[test]
     #[ignore]
-    fn this_macs_cursor() {
-        let Some(user_dir) = cursor_user_dir() else {
-            println!("no Cursor");
-            return;
-        };
-        let read = |name: &str| std::fs::read_to_string(user_dir.join(name)).unwrap_or_default();
-        let recent = cursor_recent_folders(&user_dir);
-        let plan = plan(
-            &read("settings.json"),
-            &read("keybindings.json"),
-            &recent,
-            &Map::new(),
-            "",
-        );
-        println!(
-            "settings {:?}\nkeybindings {}\nprojects {} of {} recent",
-            plan.settings.iter().map(|(key, _)| key).collect::<Vec<_>>(),
-            plan.keybindings.len(),
-            plan.projects.len(),
-            recent.len()
-        );
+    fn this_macs_editors() {
+        for editor in OtherEditor::ALL {
+            let Some(user_dir) = editor.user_dir() else {
+                println!("{}: not here", editor.name());
+                continue;
+            };
+            let read =
+                |name: &str| std::fs::read_to_string(user_dir.join(name)).unwrap_or_default();
+            let recent = recent_folders_of(&user_dir);
+            let mut plan = plan(
+                editor,
+                &read("settings.json"),
+                &read("keybindings.json"),
+                &recent,
+                &Map::new(),
+                "",
+            );
+            plan.snippets =
+                new_snippets(&user_dir.join("snippets"), Path::new("/nonexistent-keel"));
+            println!(
+                "{}: settings {:?}\nkeybindings {}\nsnippets {:?}\nprojects {} of {} recent",
+                editor.name(),
+                plan.settings.iter().map(|(key, _)| key).collect::<Vec<_>>(),
+                plan.keybindings.len(),
+                plan.snippets,
+                plan.projects.len(),
+                recent.len()
+            );
+        }
     }
 }

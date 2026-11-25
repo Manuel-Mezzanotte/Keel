@@ -58,7 +58,7 @@ pub(super) struct ExtensionStore {
     /// Icons of the results, by lower-case id.
     icons: HashMap<String, PathBuf>,
     /// "Import from Cursor", while it is shown.
-    pub(super) cursor: Option<super::cursor_import::CursorImport>,
+    pub(super) cursor: Option<super::import_extensions::CursorImport>,
     /// Cursor's extensions folder; none means `~/.cursor/extensions`.
     pub(super) cursor_dir: Option<PathBuf>,
     /// What keeps each installed extension from working fully in Keel,
@@ -350,13 +350,13 @@ impl Workbench {
                 format!(
                     "{}. {}.",
                     strings.extension_partly_working,
-                    strings.cursor_partial(&super::cursor_import::reasons(blockers, strings))
+                    strings.cursor_partial(&super::import_extensions::reasons(blockers, strings))
                 ),
             )
         } else {
             (
                 false,
-                strings.extension_not_working_detail(&super::cursor_import::reasons(
+                strings.extension_not_working_detail(&super::import_extensions::reasons(
                     &blocking, strings,
                 )),
             )
@@ -1128,8 +1128,12 @@ impl Workbench {
                             })
                             .separator()
                             .menu(
+                                strings.extensions_import_vscode,
+                                Box::new(super::import_extensions::ImportFromVsCode),
+                            )
+                            .menu(
                                 strings.extensions_import_cursor,
-                                Box::new(super::cursor_import::ImportFromCursor),
+                                Box::new(super::import_extensions::ImportFromCursor),
                             )
                             .menu(strings.extensions_install_vsix, Box::new(InstallFromVsix))
                             .menu(strings.extensions_restart, Box::new(RestartExtensions))
@@ -1299,10 +1303,16 @@ impl Workbench {
                     Box::new(InstallFromVsix),
                 ),
                 tool(
+                    "extensions-tool-vscode",
+                    IconName::Import,
+                    strings.extensions_import_vscode,
+                    Box::new(super::import_extensions::ImportFromVsCode),
+                ),
+                tool(
                     "extensions-tool-cursor",
                     IconName::Import,
                     strings.extensions_import_cursor,
-                    Box::new(super::cursor_import::ImportFromCursor),
+                    Box::new(super::import_extensions::ImportFromCursor),
                 ),
                 tool(
                     "extensions-tool-settings",

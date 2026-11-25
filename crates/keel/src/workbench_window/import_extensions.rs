@@ -1,7 +1,8 @@
-//! "Import from Cursor": the extensions of Cursor in the Extensions view,
-//! in three groups: to install (from Open VSX, or copied when built
-//! locally), already in Keel, and those that cannot work in Keel with the
-//! reason. One button installs all that can be installed.
+//! "Import from VS Code" and "Import from Cursor": the other editor's
+//! extensions in the Extensions view, in three groups: to install (from
+//! Open VSX, or copied when built locally), already in Keel, and those that
+//! cannot work in Keel with the reason. One button installs all that can be
+//! installed.
 
 use extensions::cursor::{self, Blocker, BuiltIn, CursorEntry, Verdict};
 use gpui::AnyElement;
@@ -9,14 +10,17 @@ use gpui_component::button::{Button, ButtonVariants as _};
 use gpui_component::{Disableable as _, Icon, Sizable as _};
 use gpui_kit_assets::IconName;
 
+use super::other_editor::OtherEditor;
 use super::shell::{Colors, heading, note};
 use super::*;
 
-actions!(keel, [ImportFromCursor]);
+actions!(keel, [ImportFromCursor, ImportFromVsCode]);
 
 /// The report shown in the Extensions view.
 #[derive(Default)]
 pub(super) struct CursorImport {
+    /// The editor the extensions come from.
+    pub(super) editor: OtherEditor,
     pub(super) loading: bool,
     pub(super) entries: Vec<CursorEntry>,
     pub(super) error: Option<String>,
@@ -67,18 +71,29 @@ fn group(verdict: &Verdict) -> usize {
 }
 
 impl Workbench {
-    /// Reads Cursor's extensions and what Keel would do with each.
-    pub(super) fn import_from_cursor(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+    /// Reads the other editor's extensions and what Keel would do with each.
+    pub(super) fn import_extensions_from(
+        &mut self,
+        editor: OtherEditor,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
         self.show_side_view(SideView::Extensions, cx);
         let Some(folder) = self
             .store
             .cursor_dir
             .clone()
-            .or_else(cursor::cursor_extensions_dir)
+            .or_else(|| editor.extensions_dir())
         else {
+            self.store.cursor = Some(CursorImport {
+                editor,
+                ..Default::default()
+            });
+            cx.notify();
             return;
         };
         self.store.cursor = Some(CursorImport {
+            editor,
             loading: true,
             ..Default::default()
         });
@@ -98,10 +113,12 @@ impl Workbench {
             this.update(cx, |this, cx| {
                 this.store.cursor = Some(match report {
                     Ok(entries) => CursorImport {
+                        editor,
                         entries,
                         ..Default::default()
                     },
                     Err(error) => CursorImport {
+                        editor,
                         error: Some(format!("{error:#}")),
                         ..Default::default()
                     },
@@ -169,11 +186,12 @@ impl Workbench {
         root: gpui::Div,
         cx: &mut Context<Self>,
     ) -> gpui::Div {
-        root.on_action(
-            cx.listener(|this, _: &ImportFromCursor, window, cx| {
-                this.import_from_cursor(window, cx)
-            }),
-        )
+        root.on_action(cx.listener(|this, _: &ImportFromCursor, window, cx| {
+            this.import_extensions_from(OtherEditor::Cursor, window, cx)
+        }))
+        .on_action(cx.listener(|this, _: &ImportFromVsCode, window, cx| {
+            this.import_extensions_from(OtherEditor::VsCode, window, cx)
+        }))
     }
 
     /// The report in place of the installed extensions.
@@ -184,6 +202,7 @@ impl Workbench {
         cx: &mut Context<Self>,
     ) -> AnyElement {
         let strings = self.strings();
+        let editor = report.editor.name();
         let to_install = report
             .entries
             .iter()
@@ -199,7 +218,7 @@ impl Workbench {
                 div()
                     .flex_1()
                     .min_w_0()
-                    .child(heading(strings.cursor_heading, colors)),
+                    .child(heading(&strings.import_heading(editor), colors)),
             )
             .when(to_install > 0, |header| {
                 header.child(
@@ -226,7 +245,7 @@ impl Workbench {
         let mut view = div().flex().flex_col().gap_1().child(header);
         if report.loading {
             return view
-                .child(note(strings.cursor_loading.to_owned(), colors))
+                .child(note(strings.import_loading(editor), colors))
                 .into_any_element();
         }
         if let Some(error) = &report.error {
@@ -234,7 +253,7 @@ impl Workbench {
         }
         if report.entries.is_empty() {
             return view
-                .child(note(strings.cursor_none.to_owned(), colors))
+                .child(note(strings.import_none(editor), colors))
                 .into_any_element();
         }
         for (number, title) in [
@@ -267,6 +286,12 @@ impl Workbench {
         cx: &mut Context<Self>,
     ) -> AnyElement {
         let strings = self.strings();
+        let from = self
+            .store
+            .cursor
+            .as_ref()
+            .map_or(OtherEditor::Cursor, |report| report.editor)
+            .name();
         let installed = self.installed_version(&entry.extension.id).is_some();
         let installing = self
             .store
@@ -280,11 +305,11 @@ impl Workbench {
             Verdict::Local { partial } => (
                 entry.extension.version.clone(),
                 Some(if partial.is_empty() {
-                    strings.cursor_local.to_owned()
+                    strings.import_local(from)
                 } else {
                     format!(
                         "{} · {}",
-                        strings.cursor_local,
+                        strings.import_local(from),
                         strings.cursor_partial(&reasons(partial, strings))
                     )
                 }),
@@ -467,7 +492,9 @@ mod tests {
             workbench.start_extensions(setup, window, cx);
             workbench
         });
-        view.update_in(cx, |view, window, cx| view.import_from_cursor(window, cx));
+        view.update_in(cx, |view, window, cx| {
+            view.import_extensions_from(OtherEditor::Cursor, window, cx)
+        });
         wait_until(cx, "the report", |cx| {
             view.read_with(cx, |view, _| {
                 view.store

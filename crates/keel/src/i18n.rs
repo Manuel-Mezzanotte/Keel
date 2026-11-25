@@ -96,12 +96,13 @@ pub struct Strings {
     pub command_open_settings_json: &'static str,
     pub command_open_keybindings: &'static str,
     pub command_import_cursor_settings: &'static str,
-    pub cursor_not_found: &'static str,
-    pub cursor_nothing_new: &'static str,
-    cursor_import_question_text: &'static str,
+    pub command_import_vscode_settings: &'static str,
+    import_not_found_text: &'static str,
+    import_nothing_new_text: &'static str,
+    import_question_text: &'static str,
     pub cursor_import_detail: &'static str,
     pub cursor_import_button: &'static str,
-    cursor_imported_text: &'static str,
+    imported_text: &'static str,
     pub cursor_import_problems: &'static str,
     pub search_commands: &'static str,
     pub toggle_sidebar: &'static str,
@@ -487,17 +488,19 @@ pub struct Strings {
     pub extensions_restarted_text: &'static str,
     pub extensions_gave_up: &'static str,
     pub extensions_import_cursor: &'static str,
+    pub extensions_import_vscode: &'static str,
     pub command_import_cursor: &'static str,
-    pub cursor_heading: &'static str,
+    pub command_import_vscode: &'static str,
+    import_heading_text: &'static str,
     pub cursor_close: &'static str,
-    pub cursor_loading: &'static str,
-    pub cursor_none: &'static str,
+    import_loading_text: &'static str,
+    import_none_text: &'static str,
     pub cursor_install_all_text: &'static str,
     pub cursor_group_install: &'static str,
     pub cursor_group_keel: &'static str,
     pub cursor_group_blocked: &'static str,
     pub cursor_installed: &'static str,
-    pub cursor_local: &'static str,
+    import_local_text: &'static str,
     pub cursor_partial_text: &'static str,
     pub cursor_blocked_text: &'static str,
     pub cursor_needs_text: &'static str,
@@ -550,6 +553,9 @@ pub struct Strings {
     pub menu_check_updates: &'static str,
     pub command_check_updates: &'static str,
     pub command_show_welcome: &'static str,
+    pub command_install_shell_command: &'static str,
+    pub shell_command_done: &'static str,
+    pub shell_command_failed: &'static str,
     pub menu_show_welcome: &'static str,
     pub command_insert_at_mention: &'static str,
     pub claude_not_connected: &'static str,
@@ -1307,6 +1313,7 @@ impl Strings {
             "workbench.action.selectTheme" => self.command_theme,
             "workbench.action.selectIconTheme" => self.command_icon_theme,
             "keel.extensions.importFromCursor" => self.command_import_cursor,
+            "keel.extensions.importFromVsCode" => self.command_import_vscode,
             "claude-code.insertAtMentioned" => self.command_insert_at_mention,
             "claude-code.acceptProposedDiff" => self.command_accept_proposed,
             "keel.agent.open" => self.command_open_agent,
@@ -1512,10 +1519,12 @@ impl Strings {
             "workbench.action.openSettings" => self.command_open_settings,
             "update.checkForUpdates" => self.command_check_updates,
             "keel.showWelcome" => self.command_show_welcome,
+            "workbench.action.installCommandLine" => self.command_install_shell_command,
             "workbench.action.showCommands" => self.command_show_commands,
             "workbench.action.openSettingsJson" => self.command_open_settings_json,
             "workbench.action.openGlobalKeybindings" => self.command_open_keybindings,
             "keel.settings.importFromCursor" => self.command_import_cursor_settings,
+            "keel.settings.importFromVsCode" => self.command_import_vscode_settings,
             "editor.fold" => self.command_fold,
             "editor.unfold" => self.command_unfold,
             "editor.foldAll" => self.command_fold_all,
@@ -1875,18 +1884,50 @@ impl Strings {
         }
     }
 
-    pub fn cursor_import_question(&self, settings: usize, keys: usize, projects: usize) -> String {
-        self.cursor_import_question_text
+    pub fn import_question(&self, editor: &str, counts: [usize; 4]) -> String {
+        Self::import_counts(self.import_question_text, editor, counts)
+    }
+
+    pub fn imported(&self, editor: &str, counts: [usize; 4]) -> String {
+        Self::import_counts(self.imported_text, editor, counts)
+    }
+
+    /// `{editor}` and the settings, shortcuts, snippet files and recent
+    /// projects to import, in this order.
+    fn import_counts(
+        text: &str,
+        editor: &str,
+        [settings, keys, snippets, projects]: [usize; 4],
+    ) -> String {
+        text.replace("{editor}", editor)
             .replace("{settings}", &settings.to_string())
             .replace("{keys}", &keys.to_string())
+            .replace("{snippets}", &snippets.to_string())
             .replace("{projects}", &projects.to_string())
     }
 
-    pub fn cursor_imported(&self, settings: usize, keys: usize, projects: usize) -> String {
-        self.cursor_imported_text
-            .replace("{settings}", &settings.to_string())
-            .replace("{keys}", &keys.to_string())
-            .replace("{projects}", &projects.to_string())
+    pub fn import_not_found(&self, editor: &str) -> String {
+        self.import_not_found_text.replace("{editor}", editor)
+    }
+
+    pub fn import_nothing_new(&self, editor: &str) -> String {
+        self.import_nothing_new_text.replace("{editor}", editor)
+    }
+
+    pub fn import_heading(&self, editor: &str) -> String {
+        self.import_heading_text.replace("{editor}", editor)
+    }
+
+    pub fn import_loading(&self, editor: &str) -> String {
+        self.import_loading_text.replace("{editor}", editor)
+    }
+
+    pub fn import_none(&self, editor: &str) -> String {
+        self.import_none_text.replace("{editor}", editor)
+    }
+
+    pub fn import_local(&self, editor: &str) -> String {
+        self.import_local_text.replace("{editor}", editor)
     }
 
     pub fn lsp_failed(&self, name: &str, error: &str) -> String {
@@ -1992,12 +2033,13 @@ pub const ITALIAN: Strings = Strings {
     command_open_settings_json: "Preferenze: Apri le impostazioni (JSON)",
     command_open_keybindings: "Preferenze: Apri le scorciatoie da tastiera",
     command_import_cursor_settings: "Preferenze: Importa impostazioni, scorciatoie e progetti recenti da Cursor",
-    cursor_not_found: "Cursor non è installato su questo Mac",
-    cursor_nothing_new: "Da Cursor non c'è niente di nuovo da importare",
-    cursor_import_question_text: "Da Cursor: {settings} impostazioni, {keys} scorciatoie e {projects} progetti recenti. Li importo?",
+    command_import_vscode_settings: "Preferenze: Importa impostazioni, scorciatoie e progetti recenti da VS Code",
+    import_not_found_text: "{editor} non è installato su questo Mac",
+    import_nothing_new_text: "Da {editor} non c'è niente di nuovo da importare",
+    import_question_text: "Da {editor}: {settings} impostazioni, {keys} scorciatoie, {snippets} file di frammenti e {projects} progetti recenti. Li importo?",
     cursor_import_detail: "Le impostazioni e le scorciatoie che hai già in Keel restano come sono; i tuoi progetti recenti restano per primi.",
     cursor_import_button: "Importa",
-    cursor_imported_text: "Importate da Cursor {settings} impostazioni, {keys} scorciatoie e {projects} progetti recenti",
+    imported_text: "Importati da {editor}: {settings} impostazioni, {keys} scorciatoie, {snippets} file di frammenti e {projects} progetti recenti",
     cursor_import_problems: "Qualcosa non è entrato: i dettagli sono nell'Output.",
     search_commands: "Cerca comandi",
     toggle_sidebar: "Mostra o nascondi la barra laterale",
@@ -2386,17 +2428,19 @@ pub const ITALIAN: Strings = Strings {
     extensions_restarted_text: "Un'estensione non rispondeva ({what}): estensioni riavviate.",
     extensions_gave_up: "Le estensioni si sono bloccate troppe volte e restano spente. Riavviale dal menu «…» della vista Estensioni.",
     extensions_import_cursor: "Importa da Cursor…",
+    extensions_import_vscode: "Importa da VS Code…",
     command_import_cursor: "Estensioni: Importa da Cursor",
-    cursor_heading: "Da Cursor",
+    command_import_vscode: "Estensioni: Importa da VS Code",
+    import_heading_text: "Da {editor}",
     cursor_close: "Chiudi",
-    cursor_loading: "Lettura delle estensioni di Cursor…",
-    cursor_none: "Cursor non ha estensioni da importare.",
+    import_loading_text: "Lettura delle estensioni di {editor}…",
+    import_none_text: "{editor} non ha estensioni da importare.",
     cursor_install_all_text: "Installa le disponibili ({count})",
     cursor_group_install: "Da installare",
     cursor_group_keel: "Già in Keel",
     cursor_group_blocked: "Non funzionano in Keel",
     cursor_installed: "Già installata",
-    cursor_local: "Copiata dalla cartella di Cursor",
+    import_local_text: "Copiata dalla cartella di {editor}",
     cursor_partial_text: "Senza: {reasons}",
     cursor_blocked_text: "Non funziona: {reasons}",
     cursor_needs_text: "Serve {name}, che non funziona in Keel",
@@ -2449,6 +2493,9 @@ pub const ITALIAN: Strings = Strings {
     menu_check_updates: "Cerca aggiornamenti…",
     command_check_updates: "Keel: Cerca aggiornamenti",
     command_show_welcome: "Keel: Rivedi il benvenuto",
+    command_install_shell_command: "Keel: Installa il comando keel nel Terminale",
+    shell_command_done: "Il comando keel è pronto: nel Terminale scrivi «keel .» per aprire la cartella in cui sei.",
+    shell_command_failed: "Il comando keel non è stato installato:",
     menu_show_welcome: "Rivedi il benvenuto",
     command_insert_at_mention: "Claude Code: Inserisci il riferimento al file",
     claude_not_connected: "Claude Code non è collegato a questa finestra: avvialo in un terminale di Keel.",
@@ -3134,12 +3181,13 @@ pub const ENGLISH: Strings = Strings {
     command_open_settings_json: "Preferences: Open Settings (JSON)",
     command_open_keybindings: "Preferences: Open Keyboard Shortcuts",
     command_import_cursor_settings: "Preferences: Import Settings, Shortcuts and Recent Projects from Cursor",
-    cursor_not_found: "Cursor is not installed on this Mac",
-    cursor_nothing_new: "Cursor has nothing new to import",
-    cursor_import_question_text: "From Cursor: {settings} settings, {keys} shortcuts and {projects} recent projects. Import them?",
+    command_import_vscode_settings: "Preferences: Import Settings, Shortcuts and Recent Projects from VS Code",
+    import_not_found_text: "{editor} is not installed on this Mac",
+    import_nothing_new_text: "{editor} has nothing new to import",
+    import_question_text: "From {editor}: {settings} settings, {keys} shortcuts, {snippets} snippet files and {projects} recent projects. Import them?",
     cursor_import_detail: "Settings and shortcuts you already have in Keel stay as they are; your recent projects stay first.",
     cursor_import_button: "Import",
-    cursor_imported_text: "Imported from Cursor {settings} settings, {keys} shortcuts and {projects} recent projects",
+    imported_text: "Imported from {editor}: {settings} settings, {keys} shortcuts, {snippets} snippet files and {projects} recent projects",
     cursor_import_problems: "Some did not go in: the details are in the Output.",
     search_commands: "Search commands",
     toggle_sidebar: "Show or hide the sidebar",
@@ -3528,17 +3576,19 @@ pub const ENGLISH: Strings = Strings {
     extensions_restarted_text: "An extension stopped responding ({what}): extensions restarted.",
     extensions_gave_up: "Extensions stopped responding too many times and stay off. Restart them from the … menu of the Extensions view.",
     extensions_import_cursor: "Import from Cursor…",
+    extensions_import_vscode: "Import from VS Code…",
     command_import_cursor: "Extensions: Import from Cursor",
-    cursor_heading: "From Cursor",
+    command_import_vscode: "Extensions: Import from VS Code",
+    import_heading_text: "From {editor}",
     cursor_close: "Close",
-    cursor_loading: "Reading Cursor's extensions…",
-    cursor_none: "Cursor has no extensions to import.",
+    import_loading_text: "Reading {editor}'s extensions…",
+    import_none_text: "{editor} has no extensions to import.",
     cursor_install_all_text: "Install available ({count})",
     cursor_group_install: "To install",
     cursor_group_keel: "Already in Keel",
     cursor_group_blocked: "Not working in Keel",
     cursor_installed: "Already installed",
-    cursor_local: "Copied from Cursor's folder",
+    import_local_text: "Copied from {editor}'s folder",
     cursor_partial_text: "Without: {reasons}",
     cursor_blocked_text: "Does not work: {reasons}",
     cursor_needs_text: "Needs {name}, which does not work in Keel",
@@ -3591,6 +3641,9 @@ pub const ENGLISH: Strings = Strings {
     menu_check_updates: "Check for Updates…",
     command_check_updates: "Keel: Check for Updates",
     command_show_welcome: "Keel: Show the Welcome Again",
+    command_install_shell_command: "Keel: Install the keel Command in the Terminal",
+    shell_command_done: "The keel command is ready: type “keel .” in the Terminal to open the folder you are in.",
+    shell_command_failed: "The keel command was not installed:",
     menu_show_welcome: "Show the Welcome Again",
     command_insert_at_mention: "Claude Code: Insert At-Mention",
     claude_not_connected: "Claude Code is not connected to this window: start it in a Keel terminal.",
