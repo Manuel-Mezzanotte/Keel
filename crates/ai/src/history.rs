@@ -108,12 +108,42 @@ pub struct AppChat {
     pub title: String,
     /// When it last changed, in seconds since 1970.
     pub updated: i64,
+    /// The project folder it works in.
+    pub cwd: PathBuf,
+}
+
+/// The account the Claude app is signed in with: its chats are in a folder
+/// of the store named after it. Only that one value of the app's
+/// `config.json` is looked for, in its text.
+fn app_account(store: &Path) -> Option<String> {
+    let config = std::fs::read_to_string(store.parent()?.join("config.json")).ok()?;
+    let key = "\"lastKnownAccountUuid\"";
+    let rest = &config[config.find(key)? + key.len()..];
+    let rest = rest
+        .trim_start()
+        .strip_prefix(':')?
+        .trim_start()
+        .strip_prefix('"')?;
+    let account = &rest[..rest.find('"')?];
+    (!account.is_empty() && account.chars().all(|c| c.is_ascii_hexdigit() || c == '-'))
+        .then(|| account.to_owned())
 }
 
 /// The Claude app's chats in `cwd` that are not archived, the latest first.
 pub fn app_chats(store: &Path, cwd: &Path) -> Vec<AppChat> {
     let cwd = cwd.to_string_lossy();
     let cwd = cwd.trim_end_matches('/');
+    app_chats_everywhere(store)
+        .into_iter()
+        .filter(|chat| chat.cwd.to_string_lossy().trim_end_matches('/') == cwd)
+        .collect()
+}
+
+/// The Claude app's chats of every project of the account it is signed in
+/// with, as its sidebar shows them: not archived, not in the app's own
+/// scratch folders, the latest first.
+pub fn app_chats_everywhere(store: &Path) -> Vec<AppChat> {
+    let account = app_account(store);
     let mut found: Vec<AppChat> = Vec::new();
     let folders = |path: &Path| -> Vec<PathBuf> {
         std::fs::read_dir(path)
@@ -124,7 +154,12 @@ pub fn app_chats(store: &Path, cwd: &Path) -> Vec<AppChat> {
             .filter(|path| path.is_dir())
             .collect()
     };
-    for account in folders(store) {
+    let accounts = folders(store).into_iter().filter(|folder| {
+        account
+            .as_deref()
+            .is_none_or(|account| folder.file_name().is_some_and(|name| name == account))
+    });
+    for account in accounts {
         for place in folders(&account) {
             let Ok(entries) = std::fs::read_dir(&place) else {
                 continue;
@@ -145,10 +180,13 @@ pub fn app_chats(store: &Path, cwd: &Path) -> Vec<AppChat> {
                 else {
                     continue;
                 };
-                let here = chat["cwd"]
-                    .as_str()
-                    .is_some_and(|folder| folder.trim_end_matches('/') == cwd);
-                if !here || chat["isArchived"].as_bool() == Some(true) {
+                let Some(cwd) = chat["cwd"].as_str().filter(|cwd| !cwd.is_empty()) else {
+                    continue;
+                };
+                // The app's own folders for chats without a project.
+                if cwd.contains("/Claude/scratch-workspaces/")
+                    || chat["isArchived"].as_bool() == Some(true)
+                {
                     continue;
                 }
                 let Some(session) = chat["cliSessionId"].as_str().filter(|id| !id.is_empty())
@@ -176,6 +214,7 @@ pub fn app_chats(store: &Path, cwd: &Path) -> Vec<AppChat> {
                     earlier,
                     title: title.chars().take(TITLE_CHARS).collect(),
                     updated,
+                    cwd: PathBuf::from(cwd.trim_end_matches('/')),
                 };
                 match found.iter_mut().find(|known| known.session == chat.session) {
                     Some(known) if known.updated >= chat.updated => {}
@@ -187,6 +226,25 @@ pub fn app_chats(store: &Path, cwd: &Path) -> Vec<AppChat> {
     }
     found.sort_by_key(|chat| std::cmp::Reverse(chat.updated));
     found
+}
+
+/// The Claude app's chats of other projects than `cwd`, by project, the
+/// project used last first.
+pub fn app_chats_elsewhere(all: &[AppChat], cwd: &Path) -> Vec<(PathBuf, Vec<AppChat>)> {
+    let cwd = cwd.to_string_lossy();
+    let cwd = cwd.trim_end_matches('/');
+    let mut projects: Vec<(PathBuf, Vec<AppChat>)> = Vec::new();
+    for chat in all {
+        if chat.cwd.to_string_lossy() == cwd {
+            continue;
+        }
+        match projects.iter_mut().find(|(folder, _)| *folder == chat.cwd) {
+            Some((_, chats)) => chats.push(chat.clone()),
+            None => projects.push((chat.cwd.clone(), vec![chat.clone()])),
+        }
+    }
+    // `all` is the latest first, so is each project and their order.
+    projects
 }
 
 /// Claude Code's chats with the Claude app's: an app chat takes the place
@@ -439,12 +497,34 @@ mod tests {
 
     #[test]
     fn the_claude_apps_chats_take_the_place_of_their_sessions() {
-        let store = tempfile::tempdir().unwrap();
-        let place = store.path().join("account").join("org");
+        let base = tempfile::tempdir().unwrap();
+        let store = base.path().join("claude-code-sessions");
+        let place = store.join("abc-123").join("org");
         std::fs::create_dir_all(&place).unwrap();
         let chat = |name: &str, body: Value| {
             std::fs::write(place.join(name), body.to_string()).unwrap();
         };
+        // Another account's chats are not the app's now.
+        let other = store.join("def-456").join("org");
+        std::fs::create_dir_all(&other).unwrap();
+        std::fs::write(
+            other.join("local_x.json"),
+            serde_json::json!({ "cwd": "/work/keel",
+            "cliSessionId": "s4", "title": "Other account", "lastActivityAt": 9_500_000 })
+            .to_string(),
+        )
+        .unwrap();
+        std::fs::write(
+            base.path().join("config.json"),
+            r#"{"oauth:tokenCache":"secret","lastKnownAccountUuid": "abc-123"}"#,
+        )
+        .unwrap();
+        // The app's scratch folders are left out.
+        chat(
+            "local_s.json",
+            serde_json::json!({ "cwd": "/u/Library/Application Support/Claude/scratch-workspaces/a/b/c",
+            "cliSessionId": "s6", "title": "Scratch", "lastActivityAt": 9_900_000 }),
+        );
         chat(
             "local_a.json",
             serde_json::json!({ "cwd": "/work/keel", "cliSessionId": "s3",
@@ -464,8 +544,13 @@ mod tests {
             "deleted_d",
             serde_json::json!({ "cwd": "/work/keel", "cliSessionId": "s8" }),
         );
-        let app = app_chats(store.path(), Path::new("/work/keel"));
+        let app = app_chats(&store, Path::new("/work/keel"));
         assert_eq!(app.len(), 1);
+        let everywhere = app_chats_everywhere(&store);
+        let elsewhere = app_chats_elsewhere(&everywhere, Path::new("/work/keel"));
+        assert_eq!(elsewhere.len(), 1);
+        assert_eq!(elsewhere[0].0, PathBuf::from("/work/other"));
+        assert_eq!(elsewhere[0].1[0].title, "Elsewhere");
         assert_eq!((app[0].title.as_str(), app[0].updated), ("Handoff", 9_000));
         let cli = |id: &str, updated: i64| Chat {
             id: id.to_owned(),
