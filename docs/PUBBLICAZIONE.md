@@ -220,7 +220,7 @@ Perché è sicuro e non invadente:
 - **Primo rilascio:** `scripts/release.sh 0.1.0 …`. Il mini PC chiede un codice di verifica a ogni connessione SSH, quindi `release.sh` apre una connessione sola e la riusa (`5eb0a2f`).
 - **Controllato da fuori:** pagine 200; `curl -fsSL https://keel.mezzalab.eu/install.sh | sh` installa Keel 0.1.0 (2) con firma del codice valida e senza quarantena; `keel-release check` riscarica e verifica l'aggiornamento come fa Keel; il DMG arriva con il tipo giusto.
 
-**Per ogni versione nuova:** con la VPN accesa, dalla cartella di Keel, `scripts/release.sh VERSIONE novita.md`, poi il push di `develop` e del tag quando vuoi. Il sito non va toccato.
+**Per ogni versione nuova:** si scrive cosa cambia in `CHANGELOG.md` e `docs/CHANGELOG.it.md` e si fa il commit; poi, con la VPN accesa, dalla cartella di Keel, `scripts/release.sh VERSIONE novita.md` (le novità sono il riassunto del changelog), poi il push di `develop` e del tag quando vuoi. Il sito non va toccato.
 
 Ordine: **A → B → C → D**. Il sito va online solo dopo che tutto è stato confermato dall'autore.
 

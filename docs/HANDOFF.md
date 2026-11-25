@@ -1,6 +1,6 @@
 # Keel — passaggio di consegne
 
-*Scritto il 18 novembre 2026, aggiornato il 24 novembre con l'interfaccia rifatta e il benvenuto del primo avvio, usciti con la 0.1.1.*
+*Scritto il 18 novembre 2026, aggiornato il 25 novembre con il pannello di Claude rifatto, l'import da VS Code, «Prepara Keel», il comando `keel` e Keel che da fermo non consuma più, usciti con la 0.1.2. Cosa cambia in ogni versione è in [`CHANGELOG.it.md`](CHANGELOG.it.md).*
 
 Questo documento serve a chi riprende il lavoro su Keel, persona o assistente, senza aver seguito la storia. Spiega:
 - che cos'è il progetto e perché esiste;
@@ -61,6 +61,7 @@ Nasce dalla curiosità per le app native in Rust e dal desiderio di un editor tu
 | `scripts/` | `bundle-macos.sh` (crea `Keel.app`), `make-dmg.sh` (crea il DMG), `measure-memory.sh`, `release.sh` e `install.sh` (pubblicazione), `third-party-licenses.py` (gli avvisi delle licenze, con i testi mancanti in `licenses/`) |
 | `assets/` | il marchio e le immagini del README (`readme/`: testata e confronto sono SVG animati, il resto sono finestre vere disegnate da Keel) |
 | `README.md` | la presentazione per chi arriva sulla repo, in inglese; in italiano è `docs/README.it.md`. Vanno aggiornati insieme |
+| `CHANGELOG.md` | cosa cambia in ogni versione, in inglese; in italiano è `docs/CHANGELOG.it.md`. A ogni versione si aggiungono tutti e due, e le note del rilascio sono il loro riassunto |
 | `docs/` | questo documento, il piano, i dettagli da aggiungere (`DETTAGLI.md`) e le bozze grafiche, in italiano |
 
 L'interfaccia sta quasi tutta in `crates/keel/src/workbench_window/`, un file per vista:
@@ -72,6 +73,7 @@ L'interfaccia sta quasi tutta in `crates/keel/src/workbench_window/`, un file pe
 - `terminal_view.rs`: terminale;
 - `tabs.rs`: gruppi di editor, schede trascinate, divisioni in ogni direzione;
 - `claude_inline.rs`: Claude nell'editor (Cmd+I) e il messaggio del commit;
+- `agent_panel.rs`, `agent_view.rs`, `agent_session.rs`, `agent_cards.rs`, `agent_chats.rs`: il pannello di Claude (la conversazione con l'agente, il disegno con i menu `/` e `@`, account e limiti, le schede di modello, modo e consumo, le chat per progetto); il protocollo è in `crates/ai` (`acp.rs`, `session_meta.rs`, `history.rs`);
 - `testing.rs`: test dal margine e vista Test;
 - `debug.rs`, `debug_config.rs`, `debug_view.rs`, `breakpoints.rs`: debugger, sopra `crates/dap`;
 - `tasks.rs`, `task_config.rs`, `problem_matchers.rs`: attività di `tasks.json`, con gli errori nei Problemi;
@@ -170,12 +172,12 @@ Dopo le prime prove dell'app vera (18 novembre) sono arrivati altri giri di rito
   - **il benvenuto del primo avvio** (`intro.rs`): sopra la prima finestra un cielo (di notte con un tema scuro, di giorno con uno chiaro), il mare che sale, la barca di Keel che entra e dondola, il nome, la frase e «Sali a bordo». Con il pulsante, Invio, Esc o lo spazio il mare sale su tutta la finestra e si schiarisce sull'IDE. È disegnato solo con rettangoli (le onde sono colonne sottili) e con la barca in nove piccoli SVG (`assets/intro/`): niente tracciati, che terrebbero in memoria immagini grandi come la finestra. Si ridisegna sessanta volte al secondo solo con la finestra in primo piano (circa il 22% di un core mentre si muove, misurato sulla versione release), e si ferma quando è dietro le altre. Con Riduci movimento o `keel.animations` spento resta fermo e il pulsante entra subito. Gli avvisi che arrivano intanto aspettano la fine. Aiuto → «Rivedi il benvenuto» (comando `keel.showWelcome`) lo fa rivedere;
   - `scripts/snapshots.sh` fotografa anche le pagine nuove (`settings-editor`, `settings-updates`, `settings-search`, `keybindings`) e il benvenuto fermo in sette momenti (`intro-mezzanotte-0`…`out-3`, lo stesso di giorno); con `KEEL_SNAPSHOTS_FILM=1` anche tutto il benvenuto, quindici fotogrammi al secondo, per farne un video con ffmpeg.
 
-- **i primi minuti** (25 novembre):
+- **i primi minuti** (25 novembre, usciti con la 0.1.2):
   - **Importa da VS Code**, oltre che da Cursor, con lo stesso codice (`other_editor.rs`, `import_settings.rs`, `import_extensions.rs`): impostazioni, scorciatoie, frammenti (`snippets/`, nuovi anche per Cursor) e progetti recenti dopo una domanda, poi le estensioni nella vista Estensioni. Niente di Keel viene sovrascritto. I progetti recenti si leggono dal database dell'editor, anche mentre è aperto (`immutable=1`: prima con Cursor aperto non si leggevano), oppure dal menu «Apri recenti» che VS Code tiene in `storage.json`. Comandi: «Preferenze: Importa impostazioni… da VS Code», «Estensioni: Importa da VS Code»;
   - **«Prepara Keel»**, la scheda che segue il benvenuto del primo avvio (`setup_sheet.rs`): il tema, «Importa» per ogni editor trovato sul Mac, il comando `keel`. Esc o «Inizia a lavorare» la chiudono;
   - **il comando `keel` nel Terminale**: un collegamento in `/usr/local/bin` al programma di Keel; se la cartella è del sistema, macOS chiede la password (la scrive la persona, nella finestra di macOS). Si installa anche dalla palette, «Keel: Installa il comando keel nel Terminale». Lanciato da un terminale con Keel chiuso, `keel .` apre Keel come app a sé e restituisce subito il prompt, come `code .` (`KEEL_FOREGROUND=1` lo tiene nel terminale). Provato dal vivo: prompt in 0,7 s, Keel figlio di macOS e non del Terminale.
 
-- **il pannello di Claude rifatto** (25 novembre). Il pannello parla con Claude Code attraverso l'adattatore ACP (`claude-agent-acp`), che dice già tutto quello che serve: account, modi d'accesso, modelli, comandi e skill, chat. Keel ora lo usa:
+- **il pannello di Claude rifatto** (25 novembre, uscito con la 0.1.2). Il pannello parla con Claude Code attraverso l'adattatore ACP (`claude-agent-acp`), che dice già tutto quello che serve: account, modi d'accesso, modelli, comandi e skill, chat. Keel ora lo usa:
   - **accesso e uscita dal pannello**: se Claude Code non ha un login, al posto della chat compare «Accedi a Claude» con «Abbonamento Claude» (Pro, Max, Team, Enterprise) e «Console Anthropic» (a consumo). Il login è quello di Claude Code (`claude auth login`), lanciato in un terminale del pannello in basso, dove si apre il browser; Keel chiede ogni 2 secondi se è arrivato (per 10 minuti al massimo) e poi apre la chat. Il menu dell'account nell'intestazione (l'iniziale dell'email) mostra il piano e l'email, ed ha «Esci»;
   - **chiave API propria**: «Usa una chiave API» la tiene nel portachiavi di macOS (servizio «Keel · Anthropic API key», mai in un file) e riavvia Claude con `ANTHROPIC_API_KEY`; «Dimentica la chiave API» torna all'account. Si accetta solo ciò che sembra una chiave (`sk-ant-…`);
   - **modello, ragionamento e fast mode** in una scheda sopra il messaggio («Opus 5.5 · Alto»): i cinque modelli principali e «Altri modelli» per i vecchi, il ragionamento come un cursore da trascinare (una barra arrotondata che si riempie fino alla manopola, un punto e un nome per ogni livello, una riga che dice cosa fa il livello scelto; anche un clic su un punto o su un nome lo sceglie) e «Auto» come interruttore accanto al titolo, la modalità veloce con un interruttore. **Il modo** in un'altra scheda, con una riga di spiegazione per ognuno (Manuale, Accetta modifiche, Piano, Automatico, Senza permessi in arancione). Sono le opzioni della sessione (`configOptions`): i valori sono quelli di Claude Code, i nomi in italiano li mette Keel (`agent_cards.rs`). In un pannello stretto (sotto i 400 punti) il modo mostra solo il simbolo;
@@ -286,7 +288,7 @@ L'idea è permettere a chi usa Keel di cambiarne l'aspetto con un suo file, come
 
 - Il font del codice di serie: SF Mono oppure un altro.
 - La minimappa: accesa o spenta di serie.
-- La pubblicazione: **Keel è scaricabile da https://keel.mezzalab.eu dal 23 novembre (0.1.0), e dal 24 novembre c'è la 0.1.1** con l'interfaccia rifatta e il benvenuto; si aggiorna da solo. Il piano e com'è andata sono in [`PUBBLICAZIONE.md`](PUBBLICAZIONE.md), in quattro fasi da fare in ordine, ognuna col via dell'autore: aggiornamenti dentro Keel con un motore suo (crate `update`), controllati solo all'avvio (fase A fatta il 23 novembre); script di rilascio e di installazione (fase B fatta il 23 novembre: la chiave di firma è nel Portachiavi login come «Keel release signing key», e ne va tenuta una copia fuori dal Mac); pagina di download su KeelSite (fase C fatta il 23 novembre, legge `/updates.json`); sito su keel.mezzalab.eu dal mini PC, con il deploy da `main` e solo due versioni dei pacchetti. La firma di Apple è rimandata. Dal 23 novembre l'app porta con sé gli avvisi delle licenze di terze parti (`crates/keel/THIRD-PARTY-LICENSES.txt`, scritto da `scripts/third-party-licenses.py`, visibile in Impostazioni › Aggiornamenti): vanno rigenerati quando cambiano le dipendenze, e un test e `release.sh` lo ricordano. Restano da decidere la licenza di Keel e le condizioni d'uso per chi lo scarica, e la lingua principale del sito (ora l'italiano).
+- La pubblicazione: **Keel è scaricabile da https://keel.mezzalab.eu dal 23 novembre (0.1.0); il 24 novembre è uscita la 0.1.1** con l'interfaccia rifatta e il benvenuto, **il 25 novembre la 0.1.2** con il pannello di Claude rifatto; si aggiorna da solo. Ogni versione va scritta in `CHANGELOG.md` e `docs/CHANGELOG.it.md` prima del rilascio. Il piano e com'è andata sono in [`PUBBLICAZIONE.md`](PUBBLICAZIONE.md), in quattro fasi da fare in ordine, ognuna col via dell'autore: aggiornamenti dentro Keel con un motore suo (crate `update`), controllati solo all'avvio (fase A fatta il 23 novembre); script di rilascio e di installazione (fase B fatta il 23 novembre: la chiave di firma è nel Portachiavi login come «Keel release signing key», e ne va tenuta una copia fuori dal Mac); pagina di download su KeelSite (fase C fatta il 23 novembre, legge `/updates.json`); sito su keel.mezzalab.eu dal mini PC, con il deploy da `main` e solo due versioni dei pacchetti. La firma di Apple è rimandata. Dal 23 novembre l'app porta con sé gli avvisi delle licenze di terze parti (`crates/keel/THIRD-PARTY-LICENSES.txt`, scritto da `scripts/third-party-licenses.py`, visibile in Impostazioni › Aggiornamenti): vanno rigenerati quando cambiano le dipendenze, e un test e `release.sh` lo ricordano. Restano da decidere la licenza di Keel e le condizioni d'uso per chi lo scarica, e la lingua principale del sito (ora l'italiano).
 - Il ramo `main` non esiste ancora su GitHub: il predefinito è `develop`.
 - La cartella `KeelSite/` dentro Keel è un sito vecchio del 21 novembre, in Next.js, messo lì dall'autore: non è in git e non va committata. Quello buono è la repo `KeelSite` accanto a Keel.
 - Il merge di `develop` su `main`: solo quando lo chiede l'autore.
@@ -301,6 +303,7 @@ L'idea è permettere a chi usa Keel di cambiarne l'aspetto con un suo file, come
 - **Commit:**
   - sul branch `develop`, con l'account dell'autore e senza attribuzioni ad assistenti;
   - in inglese, nello stile Conventional Commits;
+  - i commit li fa l'assistente man mano, divisi per argomento, anche molti in un lavoro lungo;
   - il push si fa solo quando lo chiede l'autore;
   - `main` si aggiorna solo su richiesta.
 - **Lingue:** codice, commenti, README e commit in inglese; i documenti in `docs/` e le risposte all'autore in italiano.
@@ -310,3 +313,4 @@ L'idea è permettere a chi usa Keel di cambiarne l'aspetto con un suo file, come
   - le prove usano una `KEEL_DATA_DIR` a parte.
 - **`PIANO.md`** si aggiorna alla fine di ogni fase o giro di ritocchi; questo documento e `DETTAGLI.md` quando cambia quello che raccontano.
 - **Repo `KeelSite`:** commit su `develop`, push e poi `main`, ma solo quando lo chiede l'autore.
+- **Una versione nuova:** si scrive in `CHANGELOG.md` e `docs/CHANGELOG.it.md`, si fa il commit, poi con la VPN accesa `scripts/release.sh VERSIONE note.md` (le note sono un riassunto del changelog, con `## it` e `## en`): il mini PC chiede il suo codice di verifica una volta, e lo scrive l'autore. Lo script fa da solo il commit `chore(release)` e il tag; poi il push di `develop` e del tag.
