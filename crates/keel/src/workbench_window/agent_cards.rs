@@ -6,7 +6,9 @@
 use std::time::{Duration, Instant};
 
 use ai::session_meta::{ConfigOption, LimitKind};
-use gpui::{AnyElement, PathBuilder, StatefulInteractiveElement as _, canvas, point};
+use gpui::{
+    AnyElement, DragMoveEvent, PathBuilder, StatefulInteractiveElement as _, canvas, point,
+};
 use gpui_component::button::{Button, ButtonVariants as _};
 use gpui_component::switch::Switch;
 use gpui_component::{ActiveTheme as _, Icon, Sizable as _};
@@ -15,6 +17,16 @@ use gpui_kit_assets::IconName;
 use super::agent_view::{claude_colour, spinner};
 use super::shell::Colors;
 use super::*;
+
+/// The knob of the reasoning slider, while it is dragged.
+#[derive(Clone)]
+pub(super) struct EffortDrag;
+
+impl gpui::Render for EffortDrag {
+    fn render(&mut self, _: &mut Window, _: &mut Context<Self>) -> impl IntoElement {
+        gpui::Empty
+    }
+}
 
 /// Which card is open over the message box.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -155,6 +167,16 @@ pub(super) fn ring(
     )
     .size(px(size))
     .flex_none()
+}
+
+/// The level under `x` on a slider `width` wide with `count` levels of the
+/// same width; before the start the first, past the end the last.
+fn effort_index(x: f32, width: f32, count: usize) -> usize {
+    if count == 0 {
+        return 0;
+    }
+    let fraction = x / width.max(1.);
+    ((fraction * count as f32).floor().max(0.) as usize).min(count - 1)
 }
 
 /// The colour of a bar that fills up: calm, then a warning, then red.
@@ -363,7 +385,7 @@ impl Workbench {
                 .left(px(10.))
                 .right(px(10.))
                 .bottom(gpui::relative(1.))
-                .max_h(px(460.))
+                .max_h(px(560.))
                 .overflow_y_scroll()
                 .p(px(6.))
                 .flex()
@@ -499,7 +521,6 @@ impl Workbench {
         if let Some(effort) = effort {
             card = card
                 .child(divider(colors))
-                .child(card_heading(strings.agent_effort, colors))
                 .child(self.render_effort_bar(&effort, colors, cx));
         }
         if let Some(fast) = fast {
@@ -544,9 +565,10 @@ impl Workbench {
         Some(card.into_any_element())
     }
 
-    /// The reasoning as a bar: a rounded track filled as far as the level
-    /// chosen, with the levels under it; a click anywhere on the bar picks
-    /// that level. "Auto" (Claude Code's default) stands beside it.
+    /// The reasoning as a slider: a rounded track filled up to the level
+    /// chosen, with a knob to drag and a stop for each level, its name
+    /// under it; a click on a stop or a name picks it too. "Auto" (Claude
+    /// Code's own choice) is a switch beside the heading.
     fn render_effort_bar(
         &self,
         effort: &ConfigOption,
@@ -561,128 +583,206 @@ impl Workbench {
             .filter(|value| value.value != "default")
             .cloned()
             .collect();
-        let auto = effort.values.iter().any(|value| value.value == "default");
+        let has_auto = effort.values.iter().any(|value| value.value == "default");
         let chosen = levels.iter().position(|value| value.value == current);
-        let count = levels.len().max(1) as f32;
-        let fraction = chosen.map_or(0., |index| (index + 1) as f32 / count);
+        let count = levels.len().max(1);
+        // Each level has a cell of the same width; its stop is the cell's
+        // middle, so the names line up under the stops.
+        let stop = |index: usize| (index as f32 + 0.5) / count as f32;
         let id = effort.id.clone();
-        // The places to click, one per level, over the bar and its names.
-        let mut hits = div().absolute().inset_0().flex();
+        let auto_on = chosen.is_none();
+        let accent = claude_colour();
+        let name_of =
+            |value: &ai::session_meta::OptionValue| effort_name(&value.value, &value.name, strings);
+
+        let heading = div()
+            .flex()
+            .items_center()
+            .child(
+                div()
+                    .flex_1()
+                    .child(card_heading(strings.agent_effort, colors)),
+            )
+            .when(has_auto, |row| {
+                let option = id.clone();
+                let first = levels
+                    .iter()
+                    .find(|value| value.value == "high")
+                    .or(levels.first())
+                    .map(|value| value.value.clone());
+                row.child(
+                    div()
+                        .pr(px(8.))
+                        .flex()
+                        .items_center()
+                        .gap(px(6.))
+                        .text_size(px(11.5))
+                        .text_color(if auto_on { colors.text } else { colors.muted })
+                        .child(strings.agent_effort_auto)
+                        .child(
+                            Switch::new("agent-effort-auto")
+                                .checked(auto_on)
+                                .xsmall()
+                                .on_click(cx.listener(move |this, on: &bool, _, cx| {
+                                    // Off: back to a level, "High" when there is one.
+                                    let value = if *on {
+                                        Some("default".to_owned())
+                                    } else {
+                                        first.clone()
+                                    };
+                                    if let Some(value) = value {
+                                        this.set_agent_option(option.clone(), value, cx)
+                                    }
+                                })),
+                        ),
+                )
+            });
+
+        let mut slider = div()
+            .id("agent-effort-slider")
+            .relative()
+            .h(px(28.))
+            .cursor_pointer()
+            .on_drag(EffortDrag, |drag, _, _, cx| cx.new(|_| drag.clone()))
+            .on_drag_move::<EffortDrag>(cx.listener({
+                let (id, levels) = (id.clone(), levels.clone());
+                move |this, event: &DragMoveEvent<EffortDrag>, _, cx| {
+                    let bounds = event.bounds;
+                    let x = f32::from(event.event.position.x - bounds.left());
+                    let index = effort_index(x, f32::from(bounds.size.width), levels.len());
+                    if let Some(value) = levels.get(index) {
+                        let chosen = this
+                            .agent_option(&id)
+                            .and_then(|option| option.current.clone());
+                        if chosen.as_deref() != Some(value.value.as_str()) {
+                            this.set_agent_option(id.clone(), value.value.clone(), cx);
+                        }
+                    }
+                }
+            }))
+            // The track.
+            .child(
+                div()
+                    .absolute()
+                    .left_0()
+                    .right_0()
+                    .top(px(7.))
+                    .h(px(14.))
+                    .p(px(2.))
+                    .rounded_full()
+                    .border_1()
+                    .border_color(colors.muted.opacity(if auto_on { 0.35 } else { 0.6 }))
+                    .bg(colors.hover.opacity(0.4))
+                    .children(chosen.map(|index| {
+                        div()
+                            .h_full()
+                            .w(gpui::relative(stop(index)))
+                            .rounded_full()
+                            .bg(accent)
+                    })),
+            );
+        // A dot on each stop, light on the filled part.
+        for index in 0..levels.len() {
+            let filled = chosen.is_some_and(|chosen| index < chosen);
+            slider = slider.child(
+                div()
+                    .absolute()
+                    .top(px(12.))
+                    .left(gpui::relative(stop(index)))
+                    .ml(px(-2.))
+                    .size(px(4.))
+                    .rounded_full()
+                    .bg(if filled {
+                        gpui::white().opacity(0.75)
+                    } else {
+                        colors.muted.opacity(0.55)
+                    }),
+            );
+        }
+        // The knob, on the stop chosen.
+        if let Some(index) = chosen {
+            slider = slider.child(
+                div()
+                    .absolute()
+                    .top(px(4.))
+                    .left(gpui::relative(stop(index)))
+                    .ml(px(-10.))
+                    .size(px(20.))
+                    .rounded_full()
+                    .border_2()
+                    .border_color(accent)
+                    .bg(gpui::white())
+                    .shadow_md(),
+            );
+        }
+        // The cells to click, over the track.
+        let mut cells = div().absolute().inset_0().flex();
+        let mut names = div().flex();
         for (index, value) in levels.iter().enumerate() {
-            let (option, level) = (id.clone(), value.value.clone());
-            hits = hits.child(
+            let on = chosen == Some(index);
+            let pick = || {
+                let (option, level) = (id.clone(), value.value.clone());
+                cx.listener(move |this: &mut Workbench, _: &gpui::ClickEvent, _, cx| {
+                    this.set_agent_option(option.clone(), level.clone(), cx)
+                })
+            };
+            cells = cells.child(
                 div()
                     .id(("agent-effort", index))
                     .flex_1()
                     .h_full()
+                    .on_click(pick()),
+            );
+            names = names.child(
+                div()
+                    .id(("agent-effort-name", index))
+                    .flex_1()
+                    .flex()
+                    .justify_center()
+                    .py(px(2.))
+                    .rounded(px(6.))
                     .cursor_pointer()
-                    .on_click(cx.listener(move |this, _, _, cx| {
-                        this.set_agent_option(option.clone(), level.clone(), cx)
-                    })),
+                    .text_size(px(11.))
+                    .text_color(if on { colors.text } else { colors.faint })
+                    .when(on, |name| name.font_weight(FontWeight::SEMIBOLD))
+                    .when(!on, |name| name.hover(|name| name.text_color(colors.muted)))
+                    .on_click(pick())
+                    .child(name_of(value)),
             );
         }
-        let name_of =
-            |value: &ai::session_meta::OptionValue| effort_name(&value.value, &value.name, strings);
-        // Notches between the levels, inside the track.
-        let notches = (1..levels.len()).map(|step| {
-            div()
-                .absolute()
-                .top(px(4.))
-                .bottom(px(4.))
-                .left(gpui::relative(step as f32 / count))
-                .w(px(1.))
-                .bg(colors.muted.opacity(0.35))
-        });
-        let bar = div()
-            .relative()
-            .flex_1()
-            .min_w_0()
+        let slider = slider.child(cells);
+        let hint = match chosen.and_then(|index| levels.get(index)) {
+            Some(value) => match value.value.as_str() {
+                "low" => strings.agent_effort_low_hint,
+                "medium" => strings.agent_effort_medium_hint,
+                "high" => strings.agent_effort_high_hint,
+                "xhigh" => strings.agent_effort_xhigh_hint,
+                "max" => strings.agent_effort_max_hint,
+                _ => "",
+            },
+            None => strings.agent_effort_auto_hint,
+        };
+        div()
             .flex()
             .flex_col()
-            .gap(px(4.))
+            .child(heading)
             .child(
                 div()
-                    .relative()
-                    .h(px(18.))
-                    .p(px(3.))
-                    .rounded_full()
-                    .border_1()
-                    .border_color(colors.muted.opacity(0.6))
-                    .children(notches)
+                    .px(px(10.))
+                    .pt(px(2.))
+                    .pb(px(8.))
+                    .flex()
+                    .flex_col()
+                    .gap(px(2.))
+                    .child(slider)
+                    .child(names)
                     .child(
                         div()
-                            .h_full()
-                            .w(gpui::relative(fraction))
-                            .rounded_full()
-                            .bg(claude_colour())
-                            .shadow_sm(),
+                            .pt(px(4.))
+                            .text_size(px(11.5))
+                            .text_color(colors.muted)
+                            .child(hint),
                     ),
-            )
-            .child(
-                div()
-                    .flex()
-                    .justify_between()
-                    .text_size(px(10.5))
-                    .text_color(colors.faint)
-                    .children(levels.first().map(name_of))
-                    .children(levels.last().map(name_of)),
-            )
-            .child(hits);
-        let current_name = chosen
-            .and_then(|index| levels.get(index))
-            .map(name_of)
-            .unwrap_or_else(|| strings.agent_effort_auto.to_owned());
-        let auto_on = chosen.is_none();
-        let option = id.clone();
-        div()
-            .px(px(8.))
-            .pt(px(2.))
-            .pb(px(6.))
-            .flex()
-            .items_start()
-            .gap(px(10.))
-            .when(auto, |row| {
-                row.child(
-                    div()
-                        .id("agent-effort-auto")
-                        .flex_none()
-                        .h(px(18.))
-                        .px(px(8.))
-                        .flex()
-                        .items_center()
-                        .rounded_full()
-                        .border_1()
-                        .text_size(px(11.))
-                        .cursor_pointer()
-                        .when(auto_on, |pill| {
-                            pill.border_color(claude_colour())
-                                .bg(claude_colour().opacity(0.14))
-                                .text_color(colors.text)
-                        })
-                        .when(!auto_on, |pill| {
-                            pill.border_color(colors.border)
-                                .text_color(colors.muted)
-                                .hover(|pill| pill.bg(colors.hover))
-                        })
-                        .on_click(cx.listener(move |this, _, _, cx| {
-                            this.set_agent_option(option.clone(), "default".to_owned(), cx)
-                        }))
-                        .child(strings.agent_effort_auto),
-                )
-            })
-            .child(bar)
-            .child(
-                div()
-                    .flex_none()
-                    .w(px(64.))
-                    .h(px(18.))
-                    .flex()
-                    .items_center()
-                    .justify_end()
-                    .text_size(px(12.))
-                    .font_weight(FontWeight::SEMIBOLD)
-                    .text_color(colors.text)
-                    .child(current_name),
             )
             .into_any_element()
     }
@@ -943,14 +1043,16 @@ fn option_row(
     div()
         .id(id)
         .px(px(8.))
-        .py(px(6.))
+        .py(px(5.))
         .flex()
         .items_center()
         .gap(px(10.))
         .rounded(px(8.))
         .cursor_pointer()
-        .when(chosen, |row| row.bg(colors.selected))
-        .when(!chosen, |row| row.hover(|row| row.bg(colors.hover)))
+        .when(chosen, |row| row.bg(claude_colour().opacity(0.12)))
+        .when(!chosen, |row| {
+            row.hover(|row| row.bg(colors.hover.opacity(0.7)))
+        })
         .children(icon.map(|icon| {
             Icon::new(icon)
                 .small()
@@ -976,7 +1078,8 @@ fn option_row(
                 )
                 .children(hint.map(|hint| {
                     div()
-                        .text_size(px(11.5))
+                        .truncate()
+                        .text_size(px(11.))
                         .text_color(colors.faint)
                         .child(hint)
                 })),
@@ -994,6 +1097,17 @@ fn option_row(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn the_slider_level_under_the_pointer() {
+        assert_eq!(effort_index(-20., 500., 5), 0);
+        assert_eq!(effort_index(99., 500., 5), 0);
+        assert_eq!(effort_index(100., 500., 5), 1);
+        assert_eq!(effort_index(250., 500., 5), 2);
+        assert_eq!(effort_index(499., 500., 5), 4);
+        assert_eq!(effort_index(900., 500., 5), 4);
+        assert_eq!(effort_index(10., 500., 0), 0);
+    }
 
     #[test]
     fn counts_are_short() {
