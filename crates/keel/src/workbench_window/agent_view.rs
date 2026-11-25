@@ -1394,7 +1394,6 @@ impl Workbench {
             .border_1()
             .border_color(colors.border.opacity(0.8))
             .bg(colors.editor.opacity(0.7))
-            .overflow_hidden()
             .child(row)
             .child(
                 div()

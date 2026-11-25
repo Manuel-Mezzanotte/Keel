@@ -515,6 +515,42 @@ fn shots() -> Vec<Shot> {
             }
             cx.notify();
         }));
+        // A real chat, replayed from the updates the adapter sent for it
+        // (`KEEL_SNAPSHOTS_REPLAY`, a JSON list of its messages), then
+        // with its first rows opened.
+        if round == 0
+            && let Some(replay) = std::env::var_os("KEEL_SNAPSHOTS_REPLAY")
+        {
+            let updates: Vec<Value> = std::fs::read(&replay)
+                .ok()
+                .and_then(|bytes| serde_json::from_slice(&bytes).ok())
+                .unwrap_or_default();
+            shots.push(shot(name("claude-replay"), move |workbench, window, cx| {
+                window.clear_notifications(cx);
+                workbench.cancel_agent(cx);
+                workbench.agent_panel.reset_thread();
+                for update in &updates {
+                    if update["method"] == "session/update" {
+                        workbench
+                            .agent_panel
+                            .thread
+                            .apply(&update["params"]["update"]);
+                    }
+                }
+                workbench.agent_panel.sync_markdown(cx);
+                workbench.agent_panel.scroll.scroll_to_bottom();
+                cx.notify();
+            }));
+            shots.push(shot(name("claude-replay-open"), |workbench, _, cx| {
+                let entries = workbench.agent_panel.thread.entries.len();
+                for index in entries.saturating_sub(12)..entries {
+                    workbench.agent_panel.open_tools.insert(index);
+                    workbench.agent_panel.open_thoughts.insert(index);
+                }
+                workbench.agent_panel.scroll.scroll_to_bottom();
+                cx.notify();
+            }));
+        }
         // The cards over the message box: model, mode, usage.
         for (what, card) in [
             ("claude-model", agent_cards::ComposerPopover::Model),

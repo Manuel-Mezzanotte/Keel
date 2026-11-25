@@ -234,7 +234,7 @@ impl AgentPanel {
     }
 
     /// Brings the rendered messages up to date with the thread.
-    fn sync_markdown(&mut self, cx: &mut Context<Workbench>) {
+    pub(super) fn sync_markdown(&mut self, cx: &mut Context<Workbench>) {
         for (index, entry) in self.thread.entries.iter().enumerate() {
             let Entry::Agent(text) = entry else { continue };
             match self.markdown.get_mut(&index) {
