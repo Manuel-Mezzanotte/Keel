@@ -11,6 +11,8 @@
 Debugger, test, Git, terminale e Claude Code in un'app sola,<br>
 con un quarto della memoria di VS Code e le stesse scorciatoie.
 
+**[keel.mezzalab.eu](https://keel.mezzalab.eu)** · [Scarica](https://keel.mezzalab.eu/download/) · [Novità](https://keel.mezzalab.eu/changelog/)
+
 <br>
 
 ![macOS 13 o successivo](https://img.shields.io/badge/macOS-13%20o%20successivo-24409b?style=flat-square&logo=apple&logoColor=white)
@@ -268,6 +270,8 @@ Apri un file e Keel installa da solo il server giusto: gli stessi motori delle e
 Giorno, mezzanotte e nero, in due stili di finestra: pannelli sospesi o piatta. Vale anche ogni tema colori di VS Code.
 
 ## Costruirlo
+
+La [licenza](LICENZA.it.md) permette di leggere questo codice, non di copiarlo, compilarlo o avviarlo: per usare Keel, [scaricalo](https://keel.mezzalab.eu/download/). Questi passi sono per l'autore, e per chi lui autorizza per scritto.
 
 **Serve** un Mac con Apple Silicon e macOS 13 o successivo, [rustup](https://rustup.rs) e Xcode con la toolchain di Metal, scelto con `xcode-select`. La versione di Rust scritta in `rust-toolchain.toml` si installa da sola.
 
