@@ -41,7 +41,7 @@ with a quarter of VS Code's memory and the same shortcuts.
 </p>
 
 > [!NOTE]
-> **Keel is in pre-release.** Its first version is feature complete and is being tried by hand. There is no signed download yet: to run it today, [build it from source](#build-it).
+> **Keel is in pre-release.** It downloads from [keel.mezzalab.eu](https://keel.mezzalab.eu) and updates itself; it can also be [built from source](#build-it). What changes in each version is in [CHANGELOG.md](CHANGELOG.md).
 
 ## Why Keel
 
@@ -280,7 +280,7 @@ scripts/bundle-macos.sh          # or make target/release/Keel.app
 scripts/make-dmg.sh              # or a disk image to install it from
 ```
 
-The app has an ad hoc signature: it opens on the Mac that built it. Elsewhere macOS will warn about it until Keel is signed and notarized.
+The app has an ad hoc signature: it opens on the Mac that built it. On another Mac, macOS warns about an app downloaded with the browser; the site's install script avoids the warning.
 
 ## Architecture
 
@@ -362,14 +362,14 @@ Keel collects nothing. It connects only to:
 
 ## Status and roadmap
 
-The thirteen phases of the plan are done, from the first prototype to the debugger and the pull requests. What comes next:
+The thirteen phases of the plan are done, from the first prototype to the debugger and the pull requests; each version since is in [CHANGELOG.md](CHANGELOG.md). What comes next:
 
-- [ ] Less graphics memory when a file is open, and less work at rest
+- [x] Less graphics memory when a file is open, and no work at rest (0.1.2)
 - [ ] Node and TypeScript debugging tried for real
 - [ ] Commit message in a large tab
 - [ ] A tab dragged out into a window of its own
 - [ ] Your own `style.css`, to restyle any part of Keel
-- [ ] Signed and notarized builds, with automatic updates
+- [x] Updates from Keel itself (0.1.0)
 
 <details>
 <summary><b>Known limits</b></summary>

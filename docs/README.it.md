@@ -41,7 +41,7 @@ con un quarto della memoria di VS Code e le stesse scorciatoie.
 </p>
 
 > [!NOTE]
-> **Keel è in anteprima.** Le funzioni della prima versione ci sono tutte e si stanno provando a mano. Non c'è ancora un'app firmata da scaricare: per usarlo oggi si [costruisce dal codice](#costruirlo).
+> **Keel è in anteprima.** Si scarica da [keel.mezzalab.eu](https://keel.mezzalab.eu) e si aggiorna da solo; si può anche [costruire dal codice](#costruirlo). Cosa cambia in ogni versione è in [CHANGELOG.it.md](CHANGELOG.it.md).
 
 ## Perché Keel
 
@@ -280,7 +280,7 @@ scripts/bundle-macos.sh          # oppure crea target/release/Keel.app
 scripts/make-dmg.sh              # oppure un disco da cui installarlo
 ```
 
-L'app ha una firma locale: si apre sul Mac che l'ha costruita. Altrove macOS avvisa, finché Keel non sarà firmato e notarizzato da Apple.
+L'app ha una firma locale: si apre sul Mac che l'ha costruita. Su un altro Mac, macOS avvisa per un'app scaricata con il browser; lo script di installazione del sito evita l'avviso.
 
 ## Architettura
 
@@ -362,14 +362,14 @@ Keel non raccoglie niente. Si collega solo a:
 
 ## A che punto è
 
-Le tredici fasi del piano sono fatte, dal primo prototipo al debugger e alle pull request. Cosa viene dopo:
+Le tredici fasi del piano sono fatte, dal primo prototipo al debugger e alle pull request; ogni versione da allora è in [CHANGELOG.it.md](CHANGELOG.it.md). Cosa viene dopo:
 
-- [ ] Meno memoria grafica con un file aperto, e meno lavoro da fermo
+- [x] Meno memoria grafica con un file aperto, e niente lavoro da fermo (0.1.2)
 - [ ] Debug di Node e TypeScript provato davvero
 - [ ] Messaggio del commit in una scheda grande
 - [ ] Una scheda trascinata fuori in una finestra sua
 - [ ] Il tuo `style.css`, per ridisegnare qualunque parte di Keel
-- [ ] Versioni firmate e notarizzate, con aggiornamenti automatici
+- [x] Aggiornamenti da Keel stesso (0.1.0)
 
 <details>
 <summary><b>Limiti conosciuti</b></summary>
