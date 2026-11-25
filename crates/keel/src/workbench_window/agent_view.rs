@@ -1186,14 +1186,22 @@ impl Workbench {
                             .text_color(colors.muted)
                             .child(self.strings().agent_thinking),
                     )
-                    .child(thinking_bar(
-                        index,
-                        text.len(),
-                        live,
-                        colors,
-                        self.look.motion,
-                    ))
-                    .child(div().flex_1())
+                    .when(live, |row| {
+                        row.child(spinner(colors.accent, self.look.motion))
+                    })
+                    .child(
+                        div()
+                            .flex_1()
+                            .min_w_0()
+                            .truncate()
+                            .text_size(px(12.))
+                            .text_color(colors.faint)
+                            .when(!open, |preview| {
+                                preview.child(
+                                    text.trim().lines().next().unwrap_or_default().to_owned(),
+                                )
+                            }),
+                    )
                     .child(
                         Icon::new(IconName::ChevronRight)
                             .xsmall()
@@ -1972,53 +1980,6 @@ pub(super) fn spinner(color: Hsla, motion: bool) -> AnyElement {
         |icon, delta| icon.rotate(gpui::radians(delta * std::f32::consts::TAU)),
     )
     .into_any_element()
-}
-
-/// Claude's reasoning as a bar: a rounded track with a fill as long as the
-/// reasoning is (longer thinking, fuller bar); while Claude still thinks
-/// the fill runs back and forth.
-fn thinking_bar(
-    index: usize,
-    length: usize,
-    live: bool,
-    colors: Colors,
-    motion: bool,
-) -> AnyElement {
-    // 300 characters a quarter, 3000 about three quarters.
-    let fraction = (length as f32 / (length as f32 + 1000.)).clamp(0.12, 1.);
-    let track = div()
-        .flex_none()
-        .w(px(96.))
-        .h(px(10.))
-        .p(px(2.))
-        .rounded_full()
-        .border_1()
-        .border_color(colors.border);
-    let fill = div().h_full().rounded_full().bg(if live {
-        claude_colour()
-    } else {
-        colors.muted.opacity(0.7)
-    });
-    if live && motion {
-        return track
-            .child(
-                fill.with_animation(
-                    ("agent-thinking-fill", index),
-                    Animation::new(std::time::Duration::from_millis(1400))
-                        .repeat()
-                        .with_easing(gpui::ease_in_out),
-                    |fill, delta| {
-                        // Out and back: 20% to 100% and down again.
-                        let wave = 1. - (delta * 2. - 1.).abs();
-                        fill.w(gpui::relative(0.2 + 0.8 * wave))
-                    },
-                ),
-            )
-            .into_any_element();
-    }
-    track
-        .child(fill.w(gpui::relative(if live { 0.6 } else { fraction })))
-        .into_any_element()
 }
 
 /// "Claude is working…", next to Claude's mark breathing.

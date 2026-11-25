@@ -234,7 +234,9 @@ impl Fake {
                     { "id": "model", "name": "Model", "category": "model", "type": "select", "currentValue": "opus",
                       "options": [{ "value": "opus", "name": "Opus 5.5" }, { "value": "sonnet", "name": "Sonnet 5.5" }] },
                     { "id": "effort", "name": "Effort", "category": "thought_level", "type": "select", "currentValue": "high",
-                      "options": [{ "value": "low", "name": "Low" }, { "value": "high", "name": "High" }] } ] })
+                      "options": [{ "value": "default", "name": "Default" }, { "value": "low", "name": "Low" },
+                        { "value": "medium", "name": "Medium" }, { "value": "high", "name": "High" },
+                        { "value": "xhigh", "name": "Xhigh" }, { "value": "max", "name": "Max" }] } ] })
             }
             "session/list" => {
                 let cwd = params["cwd"].as_str().unwrap_or_default();

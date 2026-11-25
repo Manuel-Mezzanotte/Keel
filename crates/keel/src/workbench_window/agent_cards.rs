@@ -497,41 +497,10 @@ impl Workbench {
             );
         }
         if let Some(effort) = effort {
-            let mut pills = div().px(px(6.)).pb(px(4.)).flex().flex_wrap().gap(px(4.));
-            for (index, value) in effort.values.iter().enumerate() {
-                let on = effort.current.as_deref() == Some(value.value.as_str());
-                let (id, chosen) = (effort.id.clone(), value.value.clone());
-                pills = pills.child(
-                    div()
-                        .id(("agent-effort", index))
-                        .h(px(26.))
-                        .px(px(10.))
-                        .flex()
-                        .items_center()
-                        .rounded(px(13.))
-                        .border_1()
-                        .text_size(px(12.))
-                        .cursor_pointer()
-                        .when(on, |pill| {
-                            pill.border_color(claude_colour())
-                                .bg(claude_colour().opacity(0.14))
-                                .text_color(colors.text)
-                        })
-                        .when(!on, |pill| {
-                            pill.border_color(colors.border)
-                                .text_color(colors.muted)
-                                .hover(|pill| pill.bg(colors.hover))
-                        })
-                        .on_click(cx.listener(move |this, _, _, cx| {
-                            this.set_agent_option(id.clone(), chosen.clone(), cx)
-                        }))
-                        .child(effort_name(&value.value, &value.name, strings)),
-                );
-            }
             card = card
                 .child(divider(colors))
                 .child(card_heading(strings.agent_effort, colors))
-                .child(pills);
+                .child(self.render_effort_bar(&effort, colors, cx));
         }
         if let Some(fast) = fast {
             let on = fast.current.as_deref() == Some("on");
@@ -573,6 +542,149 @@ impl Workbench {
                 );
         }
         Some(card.into_any_element())
+    }
+
+    /// The reasoning as a bar: a rounded track filled as far as the level
+    /// chosen, with the levels under it; a click anywhere on the bar picks
+    /// that level. "Auto" (Claude Code's default) stands beside it.
+    fn render_effort_bar(
+        &self,
+        effort: &ConfigOption,
+        colors: Colors,
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
+        let strings = self.strings();
+        let current = effort.current.clone().unwrap_or_default();
+        let levels: Vec<_> = effort
+            .values
+            .iter()
+            .filter(|value| value.value != "default")
+            .cloned()
+            .collect();
+        let auto = effort.values.iter().any(|value| value.value == "default");
+        let chosen = levels.iter().position(|value| value.value == current);
+        let count = levels.len().max(1) as f32;
+        let fraction = chosen.map_or(0., |index| (index + 1) as f32 / count);
+        let id = effort.id.clone();
+        // The places to click, one per level, over the bar and its names.
+        let mut hits = div().absolute().inset_0().flex();
+        for (index, value) in levels.iter().enumerate() {
+            let (option, level) = (id.clone(), value.value.clone());
+            hits = hits.child(
+                div()
+                    .id(("agent-effort", index))
+                    .flex_1()
+                    .h_full()
+                    .cursor_pointer()
+                    .on_click(cx.listener(move |this, _, _, cx| {
+                        this.set_agent_option(option.clone(), level.clone(), cx)
+                    })),
+            );
+        }
+        let name_of =
+            |value: &ai::session_meta::OptionValue| effort_name(&value.value, &value.name, strings);
+        // Notches between the levels, inside the track.
+        let notches = (1..levels.len()).map(|step| {
+            div()
+                .absolute()
+                .top(px(4.))
+                .bottom(px(4.))
+                .left(gpui::relative(step as f32 / count))
+                .w(px(1.))
+                .bg(colors.muted.opacity(0.35))
+        });
+        let bar = div()
+            .relative()
+            .flex_1()
+            .min_w_0()
+            .flex()
+            .flex_col()
+            .gap(px(4.))
+            .child(
+                div()
+                    .relative()
+                    .h(px(18.))
+                    .p(px(3.))
+                    .rounded_full()
+                    .border_1()
+                    .border_color(colors.muted.opacity(0.6))
+                    .children(notches)
+                    .child(
+                        div()
+                            .h_full()
+                            .w(gpui::relative(fraction))
+                            .rounded_full()
+                            .bg(claude_colour())
+                            .shadow_sm(),
+                    ),
+            )
+            .child(
+                div()
+                    .flex()
+                    .justify_between()
+                    .text_size(px(10.5))
+                    .text_color(colors.faint)
+                    .children(levels.first().map(name_of))
+                    .children(levels.last().map(name_of)),
+            )
+            .child(hits);
+        let current_name = chosen
+            .and_then(|index| levels.get(index))
+            .map(name_of)
+            .unwrap_or_else(|| strings.agent_effort_auto.to_owned());
+        let auto_on = chosen.is_none();
+        let option = id.clone();
+        div()
+            .px(px(8.))
+            .pt(px(2.))
+            .pb(px(6.))
+            .flex()
+            .items_start()
+            .gap(px(10.))
+            .when(auto, |row| {
+                row.child(
+                    div()
+                        .id("agent-effort-auto")
+                        .flex_none()
+                        .h(px(18.))
+                        .px(px(8.))
+                        .flex()
+                        .items_center()
+                        .rounded_full()
+                        .border_1()
+                        .text_size(px(11.))
+                        .cursor_pointer()
+                        .when(auto_on, |pill| {
+                            pill.border_color(claude_colour())
+                                .bg(claude_colour().opacity(0.14))
+                                .text_color(colors.text)
+                        })
+                        .when(!auto_on, |pill| {
+                            pill.border_color(colors.border)
+                                .text_color(colors.muted)
+                                .hover(|pill| pill.bg(colors.hover))
+                        })
+                        .on_click(cx.listener(move |this, _, _, cx| {
+                            this.set_agent_option(option.clone(), "default".to_owned(), cx)
+                        }))
+                        .child(strings.agent_effort_auto),
+                )
+            })
+            .child(bar)
+            .child(
+                div()
+                    .flex_none()
+                    .w(px(64.))
+                    .h(px(18.))
+                    .flex()
+                    .items_center()
+                    .justify_end()
+                    .text_size(px(12.))
+                    .font_weight(FontWeight::SEMIBOLD)
+                    .text_color(colors.text)
+                    .child(current_name),
+            )
+            .into_any_element()
     }
 
     /// The context of the chat, the plan's limits, the cost.
