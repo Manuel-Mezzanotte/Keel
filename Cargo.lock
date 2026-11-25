@@ -88,7 +88,7 @@ dependencies = [
 
 [[package]]
 name = "ai"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "anyhow",
  "futures",
@@ -1427,7 +1427,7 @@ dependencies = [
 
 [[package]]
 name = "dap"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "anyhow",
  "futures",
@@ -1808,7 +1808,7 @@ dependencies = [
 
 [[package]]
 name = "editor"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "tempfile",
 ]
@@ -2007,7 +2007,7 @@ dependencies = [
 
 [[package]]
 name = "extensions"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "anyhow",
  "deno_core",
@@ -2052,7 +2052,7 @@ checksum = "28dea519a9695b9977216879a3ebfddf92f1c08c05d984f8996aecd6ecdc811d"
 
 [[package]]
 name = "files"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "globset",
  "ignore",
@@ -2448,7 +2448,7 @@ checksum = "1033caf0b349c518623b5396bfb2cf0bddf44f0306d543a250e5743297aafd10"
 
 [[package]]
 name = "git"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "imara-diff",
  "tempfile",
@@ -3890,7 +3890,7 @@ dependencies = [
 
 [[package]]
 name = "keel"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "ai",
  "anyhow",
@@ -3993,7 +3993,7 @@ dependencies = [
 
 [[package]]
 name = "language"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "gpui-component",
  "gpui-pre",
@@ -4136,7 +4136,7 @@ checksum = "4050469837a6ff301cd14c1f8f24f88549e6d548f24f64e2148eb0f72cebc51f"
 
 [[package]]
 name = "lsp"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "anyhow",
  "futures",
@@ -5262,7 +5262,7 @@ dependencies = [
 
 [[package]]
 name = "pdf"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "anyhow",
  "futures",
@@ -6665,7 +6665,7 @@ dependencies = [
 
 [[package]]
 name = "settings"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "anyhow",
  "serde",
@@ -7330,7 +7330,7 @@ dependencies = [
 
 [[package]]
 name = "terminal"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "alacritty_terminal",
  "libc",
@@ -8088,7 +8088,7 @@ checksum = "8ecb6da28b8a351d773b68d5825ac39017e680750f980f3a1a85cd8dd28a47c1"
 
 [[package]]
 name = "update"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "anyhow",
  "ed25519-dalek",
@@ -9348,7 +9348,7 @@ checksum = "1ebf944e87a7c253233ad6766e082e3cd714b5d03812acc24c318f549614536e"
 
 [[package]]
 name = "workbench"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "serde",
  "serde_json",
