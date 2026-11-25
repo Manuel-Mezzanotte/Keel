@@ -645,8 +645,8 @@ pub struct Strings {
     pub agent_delete_chat: &'static str,
     pub agent_delete_question: &'static str,
     pub agent_delete: &'static str,
-    pub agent_app_chat: &'static str,
-    pub agent_other_projects: &'static str,
+    pub agent_this_project: &'static str,
+    pub agent_show_all_text: &'static str,
     pub agent_app_chat_delete: &'static str,
     pub agent_app_chat_busy: &'static str,
     pub agent_no_data: &'static str,
@@ -1862,6 +1862,11 @@ impl Strings {
             .replace("{total}", &total.to_string())
     }
 
+    pub fn agent_show_all(&self, count: usize) -> String {
+        self.agent_show_all_text
+            .replace("{count}", &count.to_string())
+    }
+
     pub fn agent_more_models(&self, count: usize) -> String {
         self.agent_more_models_text
             .replace("{count}", &count.to_string())
@@ -2697,8 +2702,8 @@ pub const ITALIAN: Strings = Strings {
     agent_delete_chat: "Elimina la chat",
     agent_delete_question: "Eliminarla per sempre?",
     agent_delete: "Elimina",
-    agent_app_chat: "App Claude",
-    agent_other_projects: "Altri progetti",
+    agent_this_project: "questo progetto",
+    agent_show_all_text: "Mostra tutte ({count})",
     agent_app_chat_delete: "Questa chat è dell'app Claude: si elimina dall'app, e sparisce anche qui.",
     agent_app_chat_busy: "Questa chat è aperta anche nell'app Claude: scrivi in un posto alla volta.",
     agent_no_data: "Keel non sa dove installare l'adattatore di Claude.",
@@ -3926,8 +3931,8 @@ pub const ENGLISH: Strings = Strings {
     agent_delete_chat: "Delete chat",
     agent_delete_question: "Delete it for good?",
     agent_delete: "Delete",
-    agent_app_chat: "Claude app",
-    agent_other_projects: "Other projects",
+    agent_this_project: "this project",
+    agent_show_all_text: "Show all ({count})",
     agent_app_chat_delete: "This chat belongs to the Claude app: delete it there, and it goes from here too.",
     agent_app_chat_busy: "This chat is open in the Claude app too: write in one place at a time.",
     agent_no_data: "Keel does not know where to install Claude's adapter.",

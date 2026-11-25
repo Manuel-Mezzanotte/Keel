@@ -132,6 +132,8 @@ pub(super) struct AgentPanel {
     /// The Claude app's chats of other projects, by project: they open in
     /// their project's window.
     pub(super) other_chats: Vec<(PathBuf, Vec<Chat>)>,
+    /// The projects whose chats are folded in the lists, by folder.
+    pub(super) folded_projects: HashSet<PathBuf>,
     /// The list of chats is shown in place of the chat.
     pub(super) show_chats: bool,
     /// What the list of chats is filtered by.
@@ -241,6 +243,7 @@ impl AgentPanel {
             key_input: None,
             chats: Vec::new(),
             other_chats: Vec::new(),
+            folded_projects: HashSet::new(),
             show_chats: false,
             chat_filter,
             pending_load: None,

@@ -8,7 +8,6 @@
 
 use std::cell::{Cell, RefCell};
 
-use ai::history::Chat;
 use ai::session_meta::matching_commands;
 use ai::thread::{Entry, ToolCall, ToolContent, ToolStatus};
 use gpui::{Animation, AnimationExt as _, AnyElement, StatefulInteractiveElement as _, svg};
@@ -19,19 +18,12 @@ use gpui_component::text::TextView;
 use gpui_component::{ActiveTheme as _, Disableable as _, Icon, Selectable as _, Sizable as _};
 use gpui_kit_assets::IconName;
 
-use gpui::SharedString;
-
 use super::agent_panel::{AgentStatus, Attachment, Permission};
-use super::shell::{Colors, chevron_turn, heading};
+use super::shell::{Colors, chevron_turn};
 use super::*;
 
 /// How many lines of a file difference a tool shows before "…".
 const DIFF_LINES: usize = 14;
-/// How many chats the home shows.
-const RECENT_CHATS: usize = 5;
-/// How many other projects the home shows, and how many chats of each.
-const OTHER_PROJECTS: usize = 4;
-const OTHER_PROJECT_CHATS: usize = 3;
 /// How many rows a `/` or `@` menu offers.
 const MENU_ROWS: usize = 40;
 
@@ -594,15 +586,6 @@ impl Workbench {
             AgentStatus::Off | AgentStatus::Ready => None,
         };
         let failed = matches!(panel.status, AgentStatus::Failed(_));
-        let recent: Vec<AnyElement> = panel
-            .chats
-            .iter()
-            .take(RECENT_CHATS)
-            .enumerate()
-            .map(|(index, chat)| {
-                self.render_chat_row(("agent-recent", index), chat, None, colors, cx)
-            })
-            .collect();
         let suggestion = |index: usize, text: &'static str| {
             div()
                 .id(("agent-suggestion", index))
@@ -709,62 +692,7 @@ impl Workbench {
                     .child(suggestion(2, strings.agent_suggest_tests)),
             );
         }
-        if !recent.is_empty() {
-            home = home.child(
-                div()
-                    .flex()
-                    .flex_col()
-                    .child(
-                        div()
-                            .flex()
-                            .items_center()
-                            .child(
-                                div()
-                                    .flex_1()
-                                    .child(heading(strings.agent_recent_chats, colors)),
-                            )
-                            .child(
-                                Button::new("agent-all-chats")
-                                    .ghost()
-                                    .small()
-                                    .label(strings.agent_all_chats)
-                                    .on_click(cx.listener(|this, _, window, cx| {
-                                        this.agent_panel.show_chats = true;
-                                        this.refresh_agent_history(window, cx);
-                                        cx.notify();
-                                    })),
-                            ),
-                    )
-                    .children(recent),
-            );
-        }
-        if !panel.other_chats.is_empty() {
-            let mut others = div()
-                .flex()
-                .flex_col()
-                .child(heading(strings.agent_other_projects, colors));
-            let mut row = 0usize;
-            for (project, (folder, chats)) in
-                panel.other_chats.iter().take(OTHER_PROJECTS).enumerate()
-            {
-                others = others.child(project_heading(
-                    ("agent-home-project", project),
-                    folder,
-                    colors,
-                ));
-                for chat in chats.iter().take(OTHER_PROJECT_CHATS) {
-                    others = others.child(self.render_chat_row(
-                        ("agent-other", row),
-                        chat,
-                        Some(folder),
-                        colors,
-                        cx,
-                    ));
-                    row += 1;
-                }
-            }
-            home = home.child(others);
-        }
+        home = home.children(self.render_home_chats(colors, cx));
         home.into_any_element()
     }
 
@@ -929,253 +857,6 @@ impl Workbench {
             ),
         )
         .into_any_element()
-    }
-
-    /// A chat in a list: its title and how long ago it changed.
-    fn render_chat_row(
-        &self,
-        id: impl Into<gpui::ElementId>,
-        chat: &Chat,
-        folder: Option<&Path>,
-        colors: Colors,
-        cx: &mut Context<Self>,
-    ) -> AnyElement {
-        let elsewhere = folder.map(Path::to_path_buf);
-        let italian = self.language == UiLanguage::Italian;
-        let now = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .map_or(0, |elapsed| elapsed.as_secs() as i64);
-        let strings = self.strings();
-        let current = self.agent_panel.session.as_deref() == Some(chat.id.as_str());
-        let chat_id = chat.id.clone();
-        let when =
-            (chat.updated > 0).then(|| super::scm_graph::relative_time(chat.updated, now, italian));
-        let group: SharedString = format!("agent-chat-{}", chat.id).into();
-        // The second click on the bin: the row asks before deleting.
-        if self.agent_panel.deleting.as_deref() == Some(chat.id.as_str()) {
-            let (yes, no) = (chat.id.clone(), chat.id.clone());
-            return div()
-                .id(id)
-                .min_h(px(34.))
-                .px(px(10.))
-                .py(px(4.))
-                .flex()
-                .items_center()
-                .gap(px(8.))
-                .rounded(px(8.))
-                .bg(cx.theme().danger.opacity(0.08))
-                .child(
-                    div()
-                        .flex_1()
-                        .min_w_0()
-                        .flex()
-                        .flex_col()
-                        .child(
-                            div()
-                                .truncate()
-                                .text_size(px(12.5))
-                                .text_color(colors.text)
-                                .child(chat.title.clone()),
-                        )
-                        .child(
-                            div()
-                                .text_size(px(11.5))
-                                .text_color(cx.theme().danger)
-                                .child(strings.agent_delete_question),
-                        ),
-                )
-                .child(
-                    Button::new(SharedString::from(format!("agent-delete-no-{no}")))
-                        .ghost()
-                        .xsmall()
-                        .label(strings.cancel)
-                        .on_click(cx.listener(|this, _, _, cx| {
-                            this.agent_panel.deleting = None;
-                            cx.notify();
-                        })),
-                )
-                .child(
-                    Button::new(SharedString::from(format!("agent-delete-yes-{yes}")))
-                        .danger()
-                        .xsmall()
-                        .label(strings.agent_delete)
-                        .on_click(cx.listener(move |this, _, _, cx| {
-                            cx.stop_propagation();
-                            this.ask_delete_agent_chat(yes.clone(), cx)
-                        })),
-                )
-                .into_any_element();
-        }
-        let delete_id = chat.id.clone();
-        div()
-            .id(id)
-            .group(group.clone())
-            .h(px(34.))
-            .pl(px(10.))
-            .pr(px(4.))
-            .flex()
-            .items_center()
-            .gap(px(8.))
-            .rounded(px(8.))
-            .text_size(px(13.))
-            .cursor_pointer()
-            .when(current, |row| row.bg(colors.selected))
-            .when(!current, |row| row.hover(|row| row.bg(colors.hover)))
-            .on_click(cx.listener(move |this, _, window, cx| {
-                this.open_agent_chat(chat_id.clone(), elsewhere.clone(), window, cx)
-            }))
-            .child(
-                div()
-                    .flex_1()
-                    .min_w_0()
-                    .truncate()
-                    .text_color(colors.text)
-                    .child(chat.title.clone()),
-            )
-            .when(chat.app && folder.is_none(), |row| {
-                row.child(
-                    div()
-                        .flex_none()
-                        .px(px(5.))
-                        .rounded(px(4.))
-                        .bg(claude_colour().opacity(0.12))
-                        .text_size(px(10.5))
-                        .text_color(claude_colour())
-                        .child(strings.agent_app_chat),
-                )
-            })
-            .child(
-                div()
-                    .flex_none()
-                    .w(px(40.))
-                    .flex()
-                    .justify_end()
-                    .text_size(px(11.5))
-                    .text_color(colors.faint)
-                    .group_hover(group.clone(), |when| when.invisible())
-                    .children(when),
-            )
-            .child(
-                div()
-                    .absolute()
-                    .right(px(4.))
-                    .invisible()
-                    .group_hover(group, |bin| bin.visible())
-                    .child(
-                        Button::new(SharedString::from(format!("agent-delete-{delete_id}")))
-                            .ghost()
-                            .xsmall()
-                            .icon(Icon::new(IconName::Trash))
-                            .tooltip(strings.agent_delete_chat)
-                            .on_click(cx.listener(move |this, _, _, cx| {
-                                cx.stop_propagation();
-                                this.ask_delete_agent_chat(delete_id.clone(), cx)
-                            })),
-                    ),
-            )
-            .relative()
-            .into_any_element()
-    }
-
-    /// Every chat of the project, by day, with a field to find one.
-    fn render_agent_chats(&self, colors: Colors, cx: &mut Context<Self>) -> AnyElement {
-        let strings = self.strings();
-        let panel = &self.agent_panel;
-        let filter = panel.chat_filter.read(cx).value().to_lowercase();
-        let now = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .map_or(0, |elapsed| elapsed.as_secs() as i64);
-        let midnight = local_midnight(now);
-        let groups = [
-            (strings.agent_today, midnight),
-            (strings.agent_yesterday, midnight - 86_400),
-            (strings.agent_this_week, midnight - 6 * 86_400),
-            (strings.agent_older, i64::MIN),
-        ];
-        let shown: Vec<&Chat> = panel
-            .chats
-            .iter()
-            .filter(|chat| filter.is_empty() || chat.title.to_lowercase().contains(&filter))
-            .collect();
-        let mut list = div()
-            .id("agent-chats")
-            .flex_1()
-            .min_h_0()
-            .overflow_y_scroll()
-            .px(px(8.))
-            .pb_2()
-            .flex()
-            .flex_col();
-        if shown.is_empty() && panel.other_chats.is_empty() {
-            list = list.child(
-                div()
-                    .px_2()
-                    .py_6()
-                    .text_sm()
-                    .text_center()
-                    .text_color(colors.muted)
-                    .child(if panel.chats.is_empty() {
-                        strings.agent_no_chats
-                    } else {
-                        strings.agent_no_match
-                    }),
-            );
-        }
-        let mut row = 0usize;
-        let mut newer = i64::MAX;
-        for (label, since) in groups {
-            let chats: Vec<&Chat> = shown
-                .iter()
-                .copied()
-                .filter(|chat| chat.updated >= since && chat.updated < newer)
-                .collect();
-            newer = since;
-            if chats.is_empty() {
-                continue;
-            }
-            list = list.child(div().pt_2().child(heading(label, colors)));
-            for chat in chats {
-                list =
-                    list.child(self.render_chat_row(("agent-chat", row), chat, None, colors, cx));
-                row += 1;
-            }
-        }
-        // The Claude app's chats of the other projects, by project.
-        for (project, (folder, chats)) in panel.other_chats.iter().enumerate() {
-            let chats: Vec<&Chat> = chats
-                .iter()
-                .filter(|chat| filter.is_empty() || chat.title.to_lowercase().contains(&filter))
-                .collect();
-            if chats.is_empty() {
-                continue;
-            }
-            list = list.child(project_heading(("agent-project", project), folder, colors));
-            for chat in chats {
-                list = list.child(self.render_chat_row(
-                    ("agent-chat", row),
-                    chat,
-                    Some(folder),
-                    colors,
-                    cx,
-                ));
-                row += 1;
-            }
-        }
-        div()
-            .flex_1()
-            .min_h_0()
-            .flex()
-            .flex_col()
-            .child(
-                div().px(px(12.)).pt(px(10.)).pb_1().child(
-                    Input::new(&panel.chat_filter)
-                        .small()
-                        .prefix(Icon::new(IconName::Search).small().text_color(colors.faint))
-                        .cleanable(true),
-                ),
-            )
-            .child(list)
-            .into_any_element()
     }
 
     fn render_agent_entry(
@@ -2012,35 +1693,6 @@ impl Workbench {
     }
 }
 
-/// The name of another project over its chats, with its folder's symbol.
-fn project_heading(
-    id: impl Into<gpui::ElementId>,
-    folder: &Path,
-    colors: Colors,
-) -> gpui::Stateful<gpui::Div> {
-    let name = folder
-        .file_name()
-        .map(|name| name.to_string_lossy().into_owned())
-        .unwrap_or_else(|| folder.display().to_string());
-    div()
-        .id(id)
-        .px(px(10.))
-        .pt(px(8.))
-        .pb(px(2.))
-        .flex()
-        .items_center()
-        .gap(px(6.))
-        .text_size(px(12.))
-        .font_weight(FontWeight::MEDIUM)
-        .text_color(colors.muted)
-        .child(
-            Icon::new(IconName::Folder)
-                .xsmall()
-                .text_color(colors.faint),
-        )
-        .child(name)
-}
-
 /// A notice under the conversation, such as an error.
 fn notice_row(text: String, cx: &App) -> gpui::Div {
     div()
@@ -2094,7 +1746,7 @@ fn working(text: &'static str, colors: Colors, motion: bool) -> gpui::Div {
 }
 
 /// Seconds since 1970 of the last local midnight before `now`.
-fn local_midnight(now: i64) -> i64 {
+pub(super) fn local_midnight(now: i64) -> i64 {
     let time = now as libc::time_t;
     // SAFETY: localtime_r writes only into the tm it is given.
     let mut tm: libc::tm = unsafe { std::mem::zeroed() };

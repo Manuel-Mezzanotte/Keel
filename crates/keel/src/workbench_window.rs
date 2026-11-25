@@ -2,6 +2,7 @@
 //! between Keel and the extension host. The layout is drawn in `shell`.
 
 mod agent_cards;
+mod agent_chats;
 mod agent_panel;
 mod agent_review;
 mod agent_session;
