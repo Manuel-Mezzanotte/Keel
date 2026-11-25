@@ -38,12 +38,10 @@ with a quarter of VS Code's memory and the same shortcuts.
 
 <br>
 
-<p align="center">
-  <img src="assets/readme/window.webp" alt="Keel's window: the light theme above the waterline, the midnight theme below it" width="100%">
-</p>
+https://github.com/user-attachments/assets/a0a01bb9-4cb1-43b5-9d88-5e27c818ede7
 
 > [!NOTE]
-> **Keel is in pre-release.** It downloads from [keel.mezzalab.eu](https://keel.mezzalab.eu) and updates itself; it can also be [built from source](#build-it). What changes in each version is in [CHANGELOG.md](CHANGELOG.md).
+> **Keel is in pre-release.** It downloads from [keel.mezzalab.eu](https://keel.mezzalab.eu) and updates itself. What changes in each version is in [CHANGELOG.md](CHANGELOG.md).
 
 ## Why Keel
 

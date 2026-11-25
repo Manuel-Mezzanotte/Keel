@@ -38,12 +38,10 @@ con un quarto della memoria di VS Code e le stesse scorciatoie.
 
 <br>
 
-<p align="center">
-  <img src="../assets/readme/window.webp" alt="La finestra di Keel: il tema Chiaro sopra il pelo dell'acqua, Mezzanotte sotto" width="100%">
-</p>
+https://github.com/user-attachments/assets/a0a01bb9-4cb1-43b5-9d88-5e27c818ede7
 
 > [!NOTE]
-> **Keel è in anteprima.** Si scarica da [keel.mezzalab.eu](https://keel.mezzalab.eu) e si aggiorna da solo; si può anche [costruire dal codice](#costruirlo). Cosa cambia in ogni versione è in [CHANGELOG.it.md](CHANGELOG.it.md).
+> **Keel è in anteprima.** Si scarica da [keel.mezzalab.eu](https://keel.mezzalab.eu) e si aggiorna da solo. Cosa cambia in ogni versione è in [CHANGELOG.it.md](CHANGELOG.it.md).
 
 ## Perché Keel
 

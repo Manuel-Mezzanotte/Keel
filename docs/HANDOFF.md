@@ -59,7 +59,7 @@ Nasce dalla curiosità per le app native in Rust e dal desiderio di un editor tu
 | `vendor/gpui-base` | copia dell'editor di gpui-component, con le correzioni che servivano (pieghe, più cursori) |
 | `fixtures/` | file e pacchetti di estensioni per i test |
 | `scripts/` | `bundle-macos.sh` (crea `Keel.app`), `make-dmg.sh` (crea il DMG), `measure-memory.sh`, `release.sh` e `install.sh` (pubblicazione), `third-party-licenses.py` (gli avvisi delle licenze, con i testi mancanti in `licenses/`) |
-| `assets/` | il marchio e le immagini del README (`readme/`: testata e confronto sono SVG animati, il resto sono finestre vere disegnate da Keel) |
+| `assets/` | il marchio e le immagini del README (`readme/`: testata e confronto sono SVG animati, il resto sono finestre vere disegnate da Keel). Il video di 40 secondi in cima ai due README non sta qui: è caricato su GitHub (un link `user-attachments`, l'unico modo perché GitHub lo mostri con il player) e si rifà con `film/render.sh` della repo `KeelSite` |
 | `README.md` | la presentazione per chi arriva sulla repo, in inglese; in italiano è `docs/README.it.md`. Vanno aggiornati insieme |
 | `LICENSE` | la licenza di Keel, in inglese; in italiano è `docs/LICENZA.it.md`. Codice da leggere e basta, app gratis da usare anche per lavoro (punto 4, «Punti aperti») |
 | `CHANGELOG.md` | cosa cambia in ogni versione, in inglese; in italiano è `docs/CHANGELOG.it.md`. A ogni versione si aggiungono tutti e due, e le note del rilascio sono il loro riassunto |
