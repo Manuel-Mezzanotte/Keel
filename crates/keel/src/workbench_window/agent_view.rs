@@ -1560,6 +1560,7 @@ impl Workbench {
             ));
         }
         let mut buttons = div().flex().flex_wrap().gap_1p5();
+        let plan = permission.plan.is_some();
         for (number, (id, name, kind)) in permission.options.iter().enumerate() {
             let option = id.clone();
             let button = Button::new(("agent-permission", index * 16 + number))
@@ -1572,9 +1573,45 @@ impl Workbench {
             } else {
                 button.outline()
             };
-            buttons = buttons.child(button.on_click(
-                cx.listener(move |this, _, _, cx| this.answer_permission(index, &option, cx)),
-            ));
+            buttons = buttons.child(button.on_click(cx.listener(move |this, _, window, cx| {
+                this.answer_permission(index, &option, cx);
+                // The plan's tab goes with the answer.
+                if plan {
+                    this.close_agent_plan(window, cx);
+                }
+            })));
+        }
+        // The plan: its tab, and the changes and notes made there sent back.
+        if let Some(text) = permission.plan.clone() {
+            let strings = self.strings();
+            let shown = self.agent_panel.plan_doc.as_ref().is_some_and(|(uri, _)| {
+                self.groups
+                    .iter()
+                    .any(|group| group.tabs.iter().any(|tab| &tab.uri == uri))
+            });
+            buttons = buttons
+                .child(
+                    Button::new(("agent-plan-revise", index))
+                        .small()
+                        .outline()
+                        .icon(Icon::new(IconName::Pencil))
+                        .label(strings.agent_plan_revise)
+                        .on_click(cx.listener(move |this, _, window, cx| {
+                            this.revise_agent_plan(index, window, cx)
+                        })),
+                )
+                .when(!shown, |buttons| {
+                    buttons.child(
+                        Button::new(("agent-plan-open", index))
+                            .small()
+                            .ghost()
+                            .icon(Icon::new(IconName::FileText))
+                            .label(strings.agent_plan_open)
+                            .on_click(cx.listener(move |this, _, window, cx| {
+                                this.open_agent_plan(text.clone(), window, cx)
+                            })),
+                    )
+                });
         }
         card.child(buttons).into_any_element()
     }

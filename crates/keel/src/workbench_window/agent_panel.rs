@@ -117,6 +117,9 @@ pub(super) struct Permission {
     pub(super) content: Vec<ToolContent>,
     /// Option id, name and kind (`allow_once`, `reject_once`...).
     pub(super) options: Vec<(String, String, String)>,
+    /// The plan, when Claude asks to leave Plan mode with it ("Ready to
+    /// code?"): it opens in a tab, to read, change and annotate.
+    pub(super) plan: Option<String>,
 }
 
 /// A file as it was before Claude first changed it in a turn: the turn is
@@ -230,6 +233,8 @@ pub(super) struct AgentPanel {
     pub(super) notice: Option<String>,
     /// Tests talk to the fake agent instead of the adapter.
     pub(super) fake: bool,
+    /// The tab of the plan Claude proposed, and the plan as it came.
+    pub(super) plan_doc: Option<(String, String)>,
     /// The text files had before the agent first changed them in this
     /// conversation (none for a file it created), in order.
     pub(super) snapshots: Vec<(PathBuf, Option<String>)>,
@@ -331,6 +336,7 @@ impl AgentPanel {
             notice: None,
             fake: false,
             snapshots: Vec::new(),
+            plan_doc: None,
             changes: Vec::new(),
             checkpoints: Vec::new(),
             turn: None,
@@ -733,7 +739,7 @@ impl Workbench {
                             .map(|call| call.title.clone())
                     })
                     .unwrap_or_default();
-                let options = params["options"]
+                let options: Vec<(String, String, String)> = params["options"]
                     .as_array()
                     .into_iter()
                     .flatten()
@@ -745,11 +751,33 @@ impl Workbench {
                         ))
                     })
                     .collect();
+                // The plan of "Ready to code?": in `rawInput`, or the text
+                // of the request when the options are the plan's.
+                let plan = tool["rawInput"]["plan"]
+                    .as_str()
+                    .map(str::to_owned)
+                    .or_else(|| {
+                        options
+                            .iter()
+                            .any(|(option, _, _)| option.starts_with("exit-plan"))
+                            .then(|| {
+                                content.iter().find_map(|item| match item {
+                                    ToolContent::Text(text) => Some(text.clone()),
+                                    _ => None,
+                                })
+                            })
+                            .flatten()
+                    })
+                    .filter(|plan| !plan.trim().is_empty());
+                if let Some(plan) = &plan {
+                    self.open_agent_plan(plan.clone(), window, cx);
+                }
                 self.agent_panel.permissions.push(Permission {
                     id,
                     title: title.clone(),
                     content,
                     options,
+                    plan,
                 });
                 self.agent_panel.scroll.scroll_to_bottom();
                 self.agent_needs_you(self.strings().agent_waiting_permission, title, window, cx);
@@ -1163,6 +1191,81 @@ impl Workbench {
         })
         .detach();
         cx.notify();
+    }
+
+    /// Opens the plan Claude proposed in a tab of the editor, as Markdown,
+    /// in place of an older one: to read it whole, change it and write
+    /// notes in it before saying yes.
+    pub(super) fn open_agent_plan(
+        &mut self,
+        plan: String,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.close_agent_plan(window, cx);
+        let uri = format!("untitled:{}", self.strings().agent_plan_file);
+        let uri = self.add_document(uri, Backing::Untitled, "markdown".to_owned(), plan.clone());
+        let column = self.active.min(self.panes.len().saturating_sub(1));
+        self.open_in_pane(&uri, column, false, window, cx);
+        self.agent_panel.plan_doc = Some((uri, plan));
+        cx.notify();
+    }
+
+    /// Closes the plan's tab without asking: it was Claude's proposal.
+    pub(super) fn close_agent_plan(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if let Some((uri, _)) = self.agent_panel.plan_doc.take() {
+            self.close_document_tabs(&uri, window, cx);
+            self.documents.remove(&uri);
+        }
+    }
+
+    /// The plan as it reads now in its tab, with the changes and notes.
+    fn agent_plan_text(&self, cx: &App) -> Option<String> {
+        let (uri, _) = self.agent_panel.plan_doc.as_ref()?;
+        let open = self.panes.iter().find(|pane| &pane.uri == uri);
+        Some(match open {
+            Some(pane) => pane.editor.read(cx).value().to_string(),
+            None => self.documents.get(uri)?.synced_text.clone(),
+        })
+    }
+
+    /// "Revise with my notes": the plan, changed and annotated in its tab,
+    /// goes back to Claude, which keeps planning with it.
+    pub(super) fn revise_agent_plan(
+        &mut self,
+        index: usize,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let Some(permission) = self.agent_panel.permissions.get(index) else {
+            return;
+        };
+        let original = permission.plan.clone().unwrap_or_default();
+        let Some(keep_planning) = permission
+            .options
+            .iter()
+            .find(|(_, _, kind)| kind.starts_with("reject"))
+            .map(|(option, _, _)| option.clone())
+        else {
+            return;
+        };
+        let edited = self.agent_plan_text(cx).unwrap_or_else(|| original.clone());
+        if edited.trim() == original.trim() {
+            self.agent_panel.notice = Some(self.strings().agent_plan_unchanged.to_owned());
+            cx.notify();
+            return;
+        }
+        self.answer_permission(index, &keep_planning, cx);
+        self.close_agent_plan(window, cx);
+        let feedback = format!(
+            "{}\n\n{}",
+            self.strings().agent_plan_feedback,
+            edited.trim()
+        );
+        self.agent_panel
+            .input
+            .update(cx, |input, cx| input.set_value(feedback, window, cx));
+        self.send_to_agent(window, cx);
     }
 
     /// Sends what was written while Claude worked; with a turn running
@@ -1776,6 +1879,60 @@ mod tests {
         });
         let texts: Vec<String> = users(&view, cx).into_iter().map(|(_, text)| text).collect();
         assert!(!texts.contains(&"uno".to_owned()), "{texts:?}");
+    }
+
+    #[gpui::test]
+    fn the_plan_opens_in_a_tab_and_goes_back_with_notes(cx: &mut TestAppContext) {
+        cx.executor().allow_parking();
+        cx.update(|cx| {
+            gpui_component::init(cx);
+            language::register_grammars();
+            init(cx);
+        });
+        let (view, cx) = cx.add_window_view(|window, cx| {
+            let mut workbench = Workbench::new(None, test_settings(), None, window, cx);
+            workbench.agent_panel.fake = true;
+            workbench
+        });
+        view.update_in(cx, |view, window, cx| view.open_agent(window, cx));
+        send(&view, cx, "plan");
+        wait_until(cx, "the plan to approve", |cx| {
+            view.read_with(cx, |view, _| !view.agent_panel.permissions.is_empty())
+        });
+        // The plan is a Markdown tab of its own.
+        let uri = view.read_with(cx, |view, _| {
+            let permission = &view.agent_panel.permissions[0];
+            assert!(permission.plan.as_deref().unwrap().starts_with("# Piano"));
+            let (uri, _) = view.agent_panel.plan_doc.clone().unwrap();
+            let document = &view.documents[&uri];
+            assert_eq!(document.language_id, "markdown");
+            assert!(view.panes.iter().any(|pane| pane.uri == uri));
+            uri
+        });
+        // Unchanged, there is nothing to send back.
+        view.update_in(cx, |view, window, cx| {
+            view.revise_agent_plan(0, window, cx);
+            assert_eq!(view.agent_panel.permissions.len(), 1);
+            assert!(view.agent_panel.notice.is_some());
+        });
+        // A note in the plan, then "Revise with my notes".
+        view.update_in(cx, |view, window, cx| {
+            let text = "# Piano\n\n1. Leggi il file\n2. Cambia il prezzo\n> nota: a 95, non a 99";
+            view.set_document_text(&uri, text, window, cx);
+            view.revise_agent_plan(0, window, cx);
+            assert!(view.agent_panel.permissions.is_empty());
+            assert!(view.agent_panel.plan_doc.is_none());
+            assert!(!view.documents.contains_key(&uri));
+        });
+        // Claude keeps planning, then reads the notes.
+        wait_until(cx, "the notes to reach Claude", |cx| {
+            last_answer(&view, cx).is_some_and(|answer| answer.contains("> nota: a 95"))
+        });
+        assert!(
+            last_answer(&view, cx)
+                .unwrap()
+                .contains(view.read_with(cx, |view, _| view.strings().agent_plan_feedback))
+        );
     }
 
     #[gpui::test]

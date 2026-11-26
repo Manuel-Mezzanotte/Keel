@@ -863,7 +863,12 @@ impl Workbench {
     }
 
     /// Closes every tab showing `uri`.
-    fn close_document_tabs(&mut self, uri: &str, window: &mut Window, cx: &mut Context<Self>) {
+    pub(super) fn close_document_tabs(
+        &mut self,
+        uri: &str,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
         while let Some((group, tab)) = self.groups.iter().enumerate().find_map(|(group, tabs)| {
             tabs.tabs
                 .iter()

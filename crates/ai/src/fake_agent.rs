@@ -8,6 +8,8 @@
 //! - any other prompt is answered with "You said: <text>";
 //! - a prompt with `wait` waits until `session/cancel`;
 //! - `pwd` answers with the folder the session works in;
+//! - `plan` asks "Ready to code?" with a plan, as Claude Code leaving Plan
+//!   mode does;
 //! - `session/list` and `session/load` know the sessions it made, and
 //!   `session/set_title` names them;
 //! - its answers carry a `messageId` (`<session>-<n>`), and `session/fork`
@@ -162,6 +164,25 @@ impl Fake {
                 "title": "grep -n \"fn render\" crates/keel/src", "status": "completed" }),
             );
             "Fatto: il comando ha letto il file.".to_owned()
+        } else if text.trim() == "plan" {
+            let plan = "# Piano\n\n1. Leggi il file\n2. Cambia il prezzo";
+            let answer = self.ask("session/request_permission", json!({
+                "sessionId": session,
+                "toolCall": { "toolCallId": "plan-1", "title": "Ready to code?", "kind": "switch_mode",
+                    "rawInput": { "plan": plan },
+                    "content": [{ "type": "content", "content": { "type": "text", "text": plan } }] },
+                "options": [
+                    { "optionId": "exit-plan-default", "name": "Yes, manually approve edits", "kind": "allow_once" },
+                    { "optionId": "reject", "name": "No, keep planning", "kind": "reject_once" } ] }));
+            let approved = answer.is_some_and(|answer| {
+                answer["outcome"]["outcome"] == "selected"
+                    && answer["outcome"]["optionId"] != "reject"
+            });
+            if approved {
+                "Planned.".to_owned()
+            } else {
+                "Keep planning.".to_owned()
+            }
         } else if text.trim() == "pwd" {
             // The folder the session works in, as it was last opened.
             let cwd = self
