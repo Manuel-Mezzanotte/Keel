@@ -672,7 +672,10 @@ impl Workbench {
                         .text_color(colors.muted)
                         .tooltip({
                             let path = folder.display().to_string();
-                            move |window, cx| gpui_component::tooltip::Tooltip::new(path.clone()).build(window, cx)
+                            move |window, cx| {
+                                gpui_component::tooltip::Tooltip::new(path.clone())
+                                    .build(window, cx)
+                            }
                         })
                         .child(strings.agent_works_in(&name)),
                 )
@@ -1725,11 +1728,7 @@ impl Workbench {
                 .gap(px(6.))
                 .rounded(px(7.))
                 .bg(colors.hover.opacity(0.7))
-                .child(
-                    Icon::new(IconName::Clock)
-                        .xsmall()
-                        .text_color(colors.faint),
-                )
+                .child(Icon::new(IconName::Clock).xsmall().text_color(colors.faint))
                 .child(
                     div()
                         .flex_1()

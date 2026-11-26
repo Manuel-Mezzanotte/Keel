@@ -230,7 +230,11 @@ impl Fake {
             "authenticate" | "session/close" => json!({}),
             "session/set_title" => {
                 let session = params["sessionId"].as_str().unwrap_or_default().to_owned();
-                let title = params["title"].as_str().unwrap_or_default().trim().to_owned();
+                let title = params["title"]
+                    .as_str()
+                    .unwrap_or_default()
+                    .trim()
+                    .to_owned();
                 self.titles.retain(|(known, _)| *known != session);
                 self.titles.push((session, title.clone()));
                 json!({ "title": title })

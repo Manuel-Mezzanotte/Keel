@@ -40,6 +40,10 @@ pub(super) enum AgentView {
 /// How many chats the list keeps.
 const MOST_CHATS: usize = 60;
 
+/// How long a message written during a turn waits after the turn ends,
+/// for the turn's last updates to come in before it.
+const QUEUE_SETTLE: std::time::Duration = std::time::Duration::from_millis(150);
+
 /// Whether the Mac stays awake while Claude works (on by default).
 pub(super) const KEEP_AWAKE_SETTING: &str = "keel.claude.keepAwake";
 
@@ -73,6 +77,28 @@ fn read_app_chats(cwd: &Path) -> (Vec<ai::history::AppChat>, Vec<(PathBuf, Vec<C
         })
         .collect();
     (here, elsewhere)
+}
+
+/// Adds a message to one that waits to go: the texts joined in the first
+/// block, as if written together, then the files of both. A block of text
+/// that is only spaces is never sent: the API refuses it.
+fn join_message(into: &mut Vec<Value>, blocks: Vec<Value>) {
+    let mut blocks = blocks.into_iter();
+    let text = blocks.next();
+    match (into.first_mut(), text) {
+        (Some(first), Some(text)) if first["type"] == "text" => {
+            let joined = [first["text"].as_str(), text["text"].as_str()]
+                .into_iter()
+                .flatten()
+                .filter(|part| !part.trim().is_empty())
+                .collect::<Vec<_>>()
+                .join("\n\n");
+            first["text"] = json!(joined);
+        }
+        (_, Some(text)) => into.push(text),
+        _ => {}
+    }
+    into.extend(blocks);
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -876,7 +902,7 @@ impl Workbench {
             let shown = shown.trim().to_owned();
             match &mut self.agent_panel.queued {
                 Some((queued, said)) => {
-                    queued.extend(blocks);
+                    join_message(queued, blocks);
                     said.push_str("\n\n");
                     said.push_str(&shown);
                 }
@@ -888,7 +914,11 @@ impl Workbench {
         self.agent_panel.thread.push_user(shown.trim());
         self.agent_panel.notice = None;
         if self.agent_panel.session.is_none() {
-            self.agent_panel.waiting = Some(blocks);
+            // Several written while Claude starts go together.
+            match &mut self.agent_panel.waiting {
+                Some(waiting) => join_message(waiting, blocks),
+                None => self.agent_panel.waiting = Some(blocks),
+            }
             self.ensure_agent(window, cx);
         } else {
             self.prompt_agent(blocks, window, cx);
@@ -924,12 +954,17 @@ impl Workbench {
                 this.mark_agent_chat_synced();
                 this.refresh_agent_changes();
                 this.session_changed(cx);
-                // What was written meanwhile goes now, in the same chat.
-                if let Some((blocks, said)) = this.agent_panel.queued.take() {
-                    this.agent_panel.thread.push_user(&said);
+                // What was written meanwhile goes now, in the same chat. The
+                // turn's last updates may still be on their way, apart from
+                // its end: it goes once they are in, so it shows after them.
+                if this.agent_panel.queued.is_some() {
                     this.agent_panel.notice = None;
-                    this.prompt_agent(blocks, window, cx);
-                    this.agent_panel.scroll.scroll_to_bottom();
+                    cx.spawn_in(window, async move |this, cx| {
+                        cx.background_executor().timer(QUEUE_SETTLE).await;
+                        this.update_in(cx, |this, window, cx| this.send_queued(window, cx))
+                            .ok();
+                    })
+                    .detach();
                     cx.notify();
                     return;
                 }
@@ -950,6 +985,21 @@ impl Workbench {
             .ok();
         })
         .detach();
+    }
+
+    /// Sends what was written while Claude worked; with a turn running
+    /// again, it waits for that one.
+    fn send_queued(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if self.agent_panel.running {
+            return;
+        }
+        let Some((blocks, said)) = self.agent_panel.queued.take() else {
+            return;
+        };
+        self.agent_panel.thread.push_user(&said);
+        self.prompt_agent(blocks, window, cx);
+        self.agent_panel.scroll.scroll_to_bottom();
+        cx.notify();
     }
 
     /// The stop button: the turn ends, and permissions waiting are
@@ -1384,7 +1434,10 @@ mod tests {
         // It opened here, with no window of its own, and works in its folder.
         assert_eq!(windows(cx), before);
         view.read_with(cx, |view, _| {
-            assert_eq!(view.agent_panel.chat_folder.as_deref(), Some(other.as_path()));
+            assert_eq!(
+                view.agent_panel.chat_folder.as_deref(),
+                Some(other.as_path())
+            );
             assert_eq!(view.agent_panel.session.as_deref(), Some("session-1"));
             assert_eq!(view.agent_title(), "Documentazione");
         });
@@ -1415,6 +1468,55 @@ mod tests {
             last_answer(&view, cx).unwrap(),
             format!("cwd: {}", here.display())
         );
+    }
+
+    #[gpui::test]
+    fn messages_written_while_claude_starts_all_go(cx: &mut TestAppContext) {
+        cx.executor().allow_parking();
+        cx.update(|cx| {
+            gpui_component::init(cx);
+            init(cx);
+        });
+        let (view, cx) = cx.add_window_view(|window, cx| {
+            let mut workbench = Workbench::new(None, test_settings(), None, window, cx);
+            workbench.agent_panel.fake = true;
+            workbench
+        });
+        view.update_in(cx, |view, window, cx| view.open_agent(window, cx));
+        send(&view, cx, "uno");
+        send(&view, cx, "due");
+        wait_until(cx, "the answer", |cx| last_answer(&view, cx).is_some());
+        assert_eq!(last_answer(&view, cx).unwrap(), "You said: uno\n\ndue");
+        view.read_with(cx, |view, _| {
+            assert_eq!(
+                view.agent_panel.thread.entries[..2],
+                [Entry::User("uno".into()), Entry::User("due".into())]
+            );
+        });
+    }
+
+    #[test]
+    fn a_message_joins_the_one_that_waits() {
+        let mut waiting = vec![
+            acp::text_block("prima"),
+            json!({ "type": "resource_link", "uri": "file:///a.rs" }),
+        ];
+        join_message(
+            &mut waiting,
+            vec![
+                acp::text_block("poi"),
+                json!({ "type": "resource_link", "uri": "file:///b.rs" }),
+            ],
+        );
+        assert_eq!(waiting.len(), 3);
+        assert_eq!(waiting[0]["text"], "prima\n\npoi");
+        // Only files: no empty text joins it.
+        let mut files = vec![
+            acp::text_block(""),
+            json!({ "type": "resource_link", "uri": "file:///a.rs" }),
+        ];
+        join_message(&mut files, vec![acp::text_block("ecco")]);
+        assert_eq!(files[0]["text"], "ecco");
     }
 
     #[gpui::test]
@@ -1562,7 +1664,9 @@ mod tests {
             );
             view.agent_panel.chats.clear();
         });
-        view.update_in(cx, |view, window, cx| view.refresh_agent_history(window, cx));
+        view.update_in(cx, |view, window, cx| {
+            view.refresh_agent_history(window, cx)
+        });
         wait_until(cx, "the renamed chat in the list", |cx| {
             view.read_with(cx, |view, _| {
                 view.agent_panel
@@ -1603,15 +1707,13 @@ mod tests {
         wait_until(cx, "the second long turn", |cx| {
             view.read_with(cx, |view, _| view.agent_panel.running)
         });
+        // Two of them go as one message, their texts joined.
         send(&view, cx, "dopo");
+        send(&view, cx, "anche questo");
         view.read_with(cx, |view, _| {
-            assert_eq!(
-                view.agent_panel
-                    .queued
-                    .as_ref()
-                    .map(|(_, said)| said.as_str()),
-                Some("dopo")
-            );
+            let (blocks, said) = view.agent_panel.queued.as_ref().unwrap();
+            assert_eq!(said, "dopo\n\nanche questo");
+            assert_eq!(blocks[0]["text"], "dopo\n\nanche questo");
             assert!(
                 !view
                     .agent_panel
@@ -1631,7 +1733,7 @@ mod tests {
             assert!(view.composer_key("escape", window, cx));
         });
         wait_until(cx, "the answer to the queued message", |cx| {
-            last_answer(&view, cx).as_deref() == Some("You said: dopo")
+            last_answer(&view, cx).as_deref() == Some("You said: dopo\n\nanche questo")
         });
         view.read_with(cx, |view, _| {
             assert!(view.agent_panel.queued.is_none());
@@ -1645,7 +1747,7 @@ mod tests {
                     _ => None,
                 })
                 .collect();
-            assert_eq!(said[said.len() - 2..], ["wait", "dopo"]);
+            assert_eq!(said[said.len() - 2..], ["wait", "dopo\n\nanche questo"]);
         });
         // With Claude idle, Esc is left to the message box.
         view.update_in(cx, |view, window, cx| {

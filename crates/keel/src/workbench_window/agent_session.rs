@@ -381,7 +381,11 @@ impl Workbench {
 
     /// Opens again the chat the window had open when it closed, if its file
     /// is still there. Whether it did.
-    pub(super) fn resume_restored_chat(&mut self, window: &mut Window, cx: &mut Context<Self>) -> bool {
+    pub(super) fn resume_restored_chat(
+        &mut self,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> bool {
         let Some((id, folder)) = self.agent_panel.restored.take() else {
             return false;
         };
@@ -655,12 +659,22 @@ impl Workbench {
 
     /// Gives a chat the title `title` in Claude Code; with the agent off,
     /// once it runs. The list shows it at once.
-    pub(super) fn rename_agent_chat_to(&mut self, id: String, title: String, cx: &mut Context<Self>) {
+    pub(super) fn rename_agent_chat_to(
+        &mut self,
+        id: String,
+        title: String,
+        cx: &mut Context<Self>,
+    ) {
         let title = title.trim().to_owned();
         if title.is_empty() {
             return;
         }
-        for chat in self.agent_panel.chats.iter_mut().filter(|chat| chat.id == id) {
+        for chat in self
+            .agent_panel
+            .chats
+            .iter_mut()
+            .filter(|chat| chat.id == id)
+        {
             chat.title = title.clone();
         }
         if self.agent_panel.session.as_deref() == Some(id.as_str()) {

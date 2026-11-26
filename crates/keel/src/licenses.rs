@@ -50,7 +50,10 @@ mod tests {
 
     #[test]
     fn the_notices_follow_the_dependencies() {
-        let line = format!("Dependencies: {}", fingerprint(include_str!("../../../Cargo.lock")));
+        let line = format!(
+            "Dependencies: {}",
+            fingerprint(include_str!("../../../Cargo.lock"))
+        );
         assert!(
             super::NOTICES.contains(&line),
             "The dependencies changed: run scripts/third-party-licenses.py"
@@ -59,7 +62,15 @@ mod tests {
 
     #[test]
     fn the_notices_cover_the_engines_keel_runs_on() {
-        for name in ["gpui-pre ", "gpui-component ", "deno_core ", "alacritty_terminal ", "tree-sitter ", "V8\n", "ICU\n"] {
+        for name in [
+            "gpui-pre ",
+            "gpui-component ",
+            "deno_core ",
+            "alacritty_terminal ",
+            "tree-sitter ",
+            "V8\n",
+            "ICU\n",
+        ] {
             assert!(super::NOTICES.contains(name), "{name:?} is missing");
         }
     }

@@ -331,10 +331,7 @@ mod tests {
             shell_quote(Path::new("/Users/me/Desktop/Mini PC")),
             "'/Users/me/Desktop/Mini PC'"
         );
-        assert_eq!(
-            shell_quote(Path::new("/tmp/l'altro")),
-            r"'/tmp/l'\''altro'"
-        );
+        assert_eq!(shell_quote(Path::new("/tmp/l'altro")), r"'/tmp/l'\''altro'");
     }
 
     #[gpui::test]

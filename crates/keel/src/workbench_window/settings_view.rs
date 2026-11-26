@@ -507,7 +507,10 @@ pub(super) const CATALOG: &[Entry] = &[
         page: Page::Files,
         kind: Kind::Switch,
         default: "true",
-        title: ("Mac sveglio mentre Claude lavora", "Mac Awake While Claude Works"),
+        title: (
+            "Mac sveglio mentre Claude lavora",
+            "Mac Awake While Claude Works",
+        ),
         description: (
             "Il Mac non va in stop mentre Claude risponde; lo schermo si spegne e si blocca come sempre.",
             "The Mac does not go to sleep while Claude answers; the screen still dims and locks as usual.",

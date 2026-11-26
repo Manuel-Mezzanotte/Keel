@@ -515,6 +515,13 @@ fn shots() -> Vec<Shot> {
             }
             cx.notify();
         }));
+        // A message written while Claude works waits for the turn; the next
+        // pictures drop it.
+        shots.push(shot(name("claude-queued"), |workbench, _, cx| {
+            let said = "Poi aggiorna anche il README";
+            workbench.agent_panel.queued = Some((vec![ai::acp::text_block(said)], said.to_owned()));
+            cx.notify();
+        }));
         // A real chat, replayed from the updates the adapter sent for it
         // (`KEEL_SNAPSHOTS_REPLAY`, a JSON list of its messages), then
         // with its first rows opened.
@@ -559,6 +566,8 @@ fn shots() -> Vec<Shot> {
         ] {
             shots.push(shot(name(what), move |workbench, window, cx| {
                 window.clear_notifications(cx);
+                workbench.agent_panel.queued = None;
+                workbench.agent_panel.notice = None;
                 workbench.agent_panel.input.update(cx, |input, cx| {
                     input.set_value("", window, cx);
                 });
@@ -580,6 +589,18 @@ fn shots() -> Vec<Shot> {
                 input.set_value(format!("edit {} 90 95", file.display()), window, cx)
             });
             workbench.send_to_agent(window, cx);
+        }));
+        // A chat of another project, open here: the folder Claude works in.
+        shots.push(shot(name("claude-elsewhere"), |workbench, window, cx| {
+            window.clear_notifications(cx);
+            workbench.cancel_agent(cx);
+            let folder = workbench
+                .agent_folder()
+                .parent()
+                .map(Path::to_path_buf)
+                .unwrap_or_else(|| PathBuf::from("/"));
+            workbench.agent_panel.chat_folder = Some(folder);
+            cx.notify();
         }));
         // Logged out: the ways in, in place of the chat.
         if round == 1 {

@@ -359,10 +359,7 @@ impl Workbench {
             .collect();
         self.debug.chosen = state.debug_configuration.clone();
         self.pulls.watched = state.pulls;
-        self.agent_panel.restored = state
-            .claude_chat
-            .clone()
-            .map(|chat| (chat.id, chat.folder));
+        self.agent_panel.restored = state.claude_chat.clone().map(|chat| (chat.id, chat.folder));
         self.load_branch_pull(cx);
         self.graph_collapsed = state.collapsed.iter().any(|section| section == "git-graph");
         self.outline.collapsed = state.collapsed.iter().any(|section| section == "outline");
@@ -715,7 +712,10 @@ mod tests {
         while !again.read_with(window, |view, _| {
             view.agent_panel.status == super::agent_panel::AgentStatus::Ready
         }) {
-            assert!(std::time::Instant::now() < deadline, "the chat did not open");
+            assert!(
+                std::time::Instant::now() < deadline,
+                "the chat did not open"
+            );
             window.executor().advance_clock(Duration::from_millis(100));
             window.run_until_parked();
             std::thread::sleep(Duration::from_millis(10));
