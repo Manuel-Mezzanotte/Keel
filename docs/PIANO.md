@@ -4,9 +4,9 @@ Keel è il tuo IDE personale: scritto in Rust, veloce e leggero, bello come Curs
 
 Si lavora **una fase alla volta**. All'inizio di ogni fase ne dettagliamo i passi; alla fine la provi tu, e si passa alla successiva solo quando ti convince. La pubblicazione dell'app non è in questo piano: ci si pensa alla fine, dopo i tuoi test.
 
-*Scritto il 14 novembre 2026, aggiornato il 16 novembre. Stato: fasi 0–8 fatte, restano le tue prove a mano.*
+*Scritto il 14 novembre 2026, aggiornato il 26 novembre. Stato: tutte le fasi, dalla 0 alla 12, sono fatte (dal 14 al 18 novembre); restano le tue prove a mano. Quello che è venuto dopo, Keel pubblicato compreso, è in [`HANDOFF.md`](HANDOFF.md) e, versione per versione, in [`CHANGELOG.it.md`](CHANGELOG.it.md).*
 
-*I piccoli dettagli, con l'ordine in cui farli, sono in [`DETTAGLI.md`](DETTAGLI.md) (19 novembre 2026). Il 20 novembre i nove giri sono fatti: 125 dettagli su 143, gli altri sono a metà o spiegati lì, con la lista di cosa provare.*
+*I piccoli dettagli, con l'ordine in cui farli, sono in [`DETTAGLI.md`](DETTAGLI.md) (19 novembre 2026). Dal 22 novembre sono 131 fatti su 143, 9 a metà e 3 non ancora, spiegati lì con la lista di cosa provare.*
 
 ---
 
@@ -36,7 +36,7 @@ Si lavora **una fase alla volta**. All'inizio di ogni fase ne dettagliamo i pass
 - **Aspetto:** disposizione come Cursor, stile Apple; temi Mezzanotte (predefinito), Chiaro e Nero, più quelli importati.
 - **Sistemi:** solo Mac obbligatorio.
 - **Verifica:** test automatici e misure. Per l'aspetto, dal 18 novembre Keel si può disegnare fuori dallo schermo in immagini (`scripts/snapshots.sh`), senza catturare lo schermo; l'ultima parola resta tua.
-- **Commit:** li faccio io sul branch `develop`, con il tuo account e senza attribuzioni a Claude, in inglese e nello stile Conventional Commits (`feat:`, `fix:`, `docs:`, `chore:`, `test:`…). Uno per ogni sottofase o pezzo importante, con push su GitHub dopo ogni commit. `main` si aggiorna solo quando lo dici tu.
+- **Commit:** li faccio io sul branch `develop`, con il tuo account e senza attribuzioni a Claude, in inglese e nello stile Conventional Commits (`feat:`, `fix:`, `docs:`, `chore:`, `test:`…). Uno per ogni sottofase o pezzo importante. Il push su GitHub si fa solo quando lo chiedi tu, e `main` si aggiorna solo quando lo dici tu.
 - **Lingua del codice:** nomi, commenti, README e commit in inglese; i documenti in `docs/` in italiano.
 - **Identità:** nome Keel, app `Keel.app`, identificativo `com.manuelmezzanotte.keel` (come `com.manuelmezzanotte.sail` del browser), comando `keel` nel terminale.
 
@@ -2126,20 +2126,20 @@ Da fare dopo, solo se servono:
 
 ## Non in questo piano: la pubblicazione
 
-**Per provarla come un'app vera** (18 novembre 2026): `scripts/make-dmg.sh` costruisce Keel.app con la sua icona e la mette in `target/release/Keel-<versione>.dmg`, insieme alla scorciatoia ad Applicazioni da cui trascinarla. L'app si apre anche da Finder con «Apri con → Keel», per file di testo, codice e cartelle.
-- È firmata solo per questo Mac (firma «ad-hoc»), non da uno sviluppatore registrato da Apple. Dal DMG fatto qui si apre normalmente.
-- Una copia scaricata da internet, la prima volta, va aperta con il tasto destro → Apri, oppure da Impostazioni di Sistema → Privacy e sicurezza → «Apri comunque».
-- Per firmarla e farla controllare da Apple serve un account sviluppatore (99 dollari l'anno): è la pubblicazione vera, ancora da decidere.
+**Fatta dal 23 novembre 2026:** Keel si scarica da https://keel.mezzalab.eu e si aggiorna da solo. Il piano, le decisioni e com'è andata sono in [`PUBBLICAZIONE.md`](PUBBLICAZIONE.md).
 
-Firma e notarizzazione di Apple, aggiornamenti automatici, un eventuale sito: ci pensiamo alla fine, dopo i tuoi test.
+**Per provarla come un'app vera** (18 novembre 2026): `scripts/make-dmg.sh` costruisce Keel.app con la sua icona e la mette in `target/release/Keel-<versione>.dmg`, insieme alla scorciatoia ad Applicazioni da cui trascinarla. L'app si apre anche da Finder con «Apri con → Keel», per file di testo, codice e cartelle.
+- È firmata solo per il Mac che la costruisce (firma «ad-hoc»), non da uno sviluppatore registrato da Apple. Dal DMG fatto qui si apre normalmente.
+- Una copia scaricata con il browser, la prima volta, va aperta da Impostazioni di Sistema → Privacy e sicurezza → «Apri comunque»; con lo script di installazione del sito l'avviso non compare.
+- La firma e la notarizzazione di Apple (99 dollari l'anno) non si fanno, per scelta tua del 25 novembre.
 
 ## Come lavoriamo
 
 - **Una fase alla volta.** All'inizio di una fase ne dettagliamo i passi. Non si comincia la successiva finché la precedente non ti convince.
-- **Controlli:** test automatici (anche dell'interfaccia, senza aprire finestre), build, e misure di RAM e velocità con lo stesso script. Niente screenshot: l'aspetto lo controlli tu.
+- **Controlli:** test automatici (anche dell'interfaccia, senza aprire finestre), build, e misure di RAM e velocità con lo stesso script. Niente catture dello schermo: per l'aspetto `scripts/snapshots.sh` fa disegnare a Keel la sua finestra fuori dallo schermo, in immagini, e l'ultima parola resta tua.
 - **Fine fase:** ti lascio le prove da fare a mano (i punti «Fatto quando») e un riassunto di cosa è cambiato.
 - **VSAuto Ghost come prova fissa:** dalla fase 0 in poi deve funzionare sempre.
-- **Sottofasi e commit:** ogni fase si divide in sottofasi. Alla fine di ogni sottofase, o di un pezzo importante, faccio il commit su `develop` e il push su GitHub. Il merge su `main` lo faccio solo quando me lo chiedi.
+- **Sottofasi e commit:** ogni fase si divide in sottofasi. Alla fine di ogni sottofase, o di un pezzo importante, faccio il commit su `develop`. Il push su GitHub e il merge su `main` li faccio solo quando me lo chiedi.
 - **Questo documento** si aggiorna alla fine di ogni fase: stato, decisioni, cose rimandate.
 
 ## Rischi e come li gestiamo

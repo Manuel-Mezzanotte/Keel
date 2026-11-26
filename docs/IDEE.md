@@ -37,7 +37,7 @@ Le fonti sono in fondo. Niente qui è deciso: ogni voce parte solo col via dell'
 | 5 | **Più sessioni di Claude insieme, ognuna nel suo worktree** | È la novità di Cursor 3, della finestra Agenti di VS Code e di Zed 1.0. Keel segue già i worktree, ma non li crea né li mostra | grande |
 | 6 | **Il piano di Claude da commentare, e tornare indietro** | Claude Code nell'estensione di VS Code apre il piano come documento con commenti in riga, e ha i punti a cui tornare (checkpoint) | medio |
 | 7 | ~~**Dopo il benvenuto, tre scelte**~~ **fatto il 25 novembre** | «Prepara Keel»: tema, «Importa» da VS Code o Cursor, comando `keel` nel Terminale | — |
-| 8 | **Un editor per i conflitti** | Oggi i conflitti si aprono come file normali. VS Code e IntelliJ hanno «Accetta la corrente / quella in arrivo / entrambe» e la vista a tre colonne | medio |
+| 8 | **Un editor per i conflitti a tre colonne** | Oggi un file in conflitto si apre in una scheda con un pulsante per ogni conflitto (la corrente, quella in arrivo o entrambe) e «Salva e metti in stage» (fase 5.3). Manca la vista a tre colonne di VS Code e IntelliJ, con la base e il risultato, e i pulsanti dentro l'editor normale | medio |
 | 9 | ~~**Firma e notarizzazione di Apple**~~ **non si fa**, per scelta dell'autore (25 novembre): niente account sviluppatore a 99 $ l'anno | Chi installa con lo script del sito (`curl … \| sh`) non vede l'avviso di macOS; chi scarica il DMG dal browser sì, e deve aprirlo da Impostazioni di Sistema › Privacy e sicurezza › «Apri comunque» | — |
 | 10 | **Staccare pannelli e terminale in finestre loro** | È la richiesta più votata di sempre su VS Code, e la seconda è il terminale staccato. Su Keel c'è già in elenco la scheda trascinata fuori | grande |
 
@@ -79,7 +79,7 @@ Le fonti sono in fondo. Niente qui è deciso: ogni voce parte solo col via dell'
 
 | Cosa | Chi ce l'ha | Peso |
 |---|---|---|
-| **Editor dei conflitti**: sopra ogni conflitto «Accetta la corrente», «Accetta quella in arrivo», «Entrambe», e la vista a tre colonne | VS Code, IntelliJ | medio |
+| **Editor dei conflitti**: la vista a tre colonne, con la base e il risultato, e «Accetta la corrente», «Accetta quella in arrivo», «Entrambe» anche sopra i conflitti nell'editor normale (la scheda con un pulsante per conflitto c'è già dalla fase 5.3) | VS Code, IntelliJ | medio |
 | **Worktree**: crearli, aprirli e chiuderli dalla vista Git, copiando le impostazioni del progetto e collegando le cartelle ignorate (`node_modules`, `target`) | VS Code 1.140, IntelliJ 2026.3, Zed | medio |
 | **«Cosa cambia rispetto a main»**: i file del ramo confrontati con il ramo di base, prima di aprire una pull request | Zed 1.29 | piccolo |
 | **Rebase interattivo** con le righe da spostare, unire o togliere | IntelliJ, GitLens | medio |
@@ -131,7 +131,7 @@ Le fonti sono in fondo. Niente qui è deciso: ogni voce parte solo col via dell'
 | Cosa | Perché | Peso |
 |---|---|---|
 | ~~**Firma e notarizzazione di Apple**~~ | Non si fa, per scelta dell'autore. Il sito può spiegare l'avviso di macOS a chi scarica il DMG, e consigliare lo script di installazione | — |
-| **Scegliere la licenza** 🔸 | Il README dice «tutti i diritti riservati»: va deciso prima di aprire la repo | — |
+| ~~**Scegliere la licenza**~~ | Decisa il 25 novembre: `LICENSE` (in italiano `LICENZA.it.md`), codice da leggere e basta, app gratis anche per lavoro | — |
 | **Segnalare un crash, solo se lo vuoi**: alla riapertura dopo un crash, un pulsante che prepara la segnalazione con il registro, da mandare tu | Keel tiene già i registri dei crash | piccolo |
 | **Le FAQ del sito su cosa Keel manda in rete**: mancano il fetch automatico di Git e Claude (KeelSite) | Correttezza | piccolo |
 

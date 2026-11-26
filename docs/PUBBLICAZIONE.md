@@ -25,7 +25,7 @@ Lo scopo è rendere Keel scaricabile da chiunque da **keel.mezzalab.eu** e fare 
   - all'avvio il controllo fallisce in silenzio;
   - col pulsante, un messaggio dice che non è stato possibile controllare.
 - **Il motore è di Keel,** nel crate `update`, e non Sparkle come pensato all'inizio (decisione dell'autore del 23 novembre). Keel scarica già tutto con il `curl` del Mac. Un motore suo costa poche centinaia di righe di Rust e si prova con i test automatici. Sparkle avrebbe voluto un framework compilato dentro la repo, e da Rust la finestrella di Keel richiede un'interfaccia Objective-C fragile, che i test non raggiungono. Si rinuncia solo agli aggiornamenti «della sola parte cambiata»: si scarica sempre lo `.zip` intero.
-- **La firma degli aggiornamenti** è una chiave Ed25519 dell'autore: gratis e diversa da quella di Apple. La sua metà pubblica è `update::PUBLIC_KEY`, vuota finché la fase B non crea la coppia; con la chiave vuota Keel non installa niente.
+- **La firma degli aggiornamenti** è una chiave Ed25519 dell'autore: gratis e diversa da quella di Apple. La sua metà pubblica è `update::PUBLIC_KEY`, con la chiave vera dal 23 novembre (fase B); con la chiave vuota Keel non installerebbe niente.
   - Un pacchetto con una firma sbagliata non si installa.
   - La chiave sta nel portachiavi del Mac dell'autore, con una copia di riserva fuori dal Mac, e mai nella repo.
 
@@ -46,17 +46,13 @@ Lo scopo è rendere Keel scaricabile da chiunque da **keel.mezzalab.eu** e fare 
   - `https://keel.mezzalab.eu/updates.json`, l'elenco delle versioni letto da Keel;
   - `https://keel.mezzalab.eu/install.sh`;
   - `https://keel.mezzalab.eu/releases/Keel-<versione>.dmg` e `.zip`: il DMG per chi installa a mano, lo `.zip` (fatto con `ditto`) per gli aggiornamenti.
-- **Solo due versioni sul mini PC:** l'attuale e la precedente, circa 80 MB in tutto. A ogni rilascio la precedente si cancella, l'attuale diventa precedente e la nuova diventa attuale. La precedente serve:
-  - a chi ha la penultima, per scaricare solo la parte cambiata;
-  - per tornare indietro in un attimo se la nuova ha un problema.
-
-  Chi è molto indietro scarica l'attuale intera.
+- **Solo due versioni sul mini PC:** l'attuale e la precedente, circa 80 MB in tutto. A ogni rilascio la precedente si cancella, l'attuale diventa precedente e la nuova diventa attuale. La precedente serve per tornare indietro in un attimo se la nuova ha un problema. Gli aggiornamenti scaricano sempre lo `.zip` intero, da qualunque versione si parta: il motore di Keel non fa aggiornamenti «della sola parte cambiata».
 - **Il deploy del sito tocca solo le pagine.** I pacchetti li carica lo script di rilascio, attraverso la VPN.
 
 ### Altre scelte
 - **Niente App Store:** la sua sandbox vieta terminale, language server, debugger e accesso libero alle cartelle.
 - **Homebrew** viene dopo, se servirà: quello ufficiale vuole app notarizzate da Apple.
-- **Firma di Apple** (Developer ID e notarizzazione, 99 $ l'anno): rimandata. Quando arriverà, il DMG tornerà il modo principale, perché si apre con un doppio clic, e lo script resterà come alternativa.
+- **Firma di Apple** (Developer ID e notarizzazione, 99 $ l'anno): non si fa, per scelta dell'autore del 25 novembre. Se un giorno arrivasse, il DMG tornerebbe il modo principale, perché si apre con un doppio clic, e lo script resterebbe come alternativa.
 
 ---
 
@@ -67,7 +63,7 @@ Lo scopo è rendere Keel scaricabile da chiunque da **keel.mezzalab.eu** e fare 
    - `CFBundleShortVersionString`, quella che si legge, come `0.2.0`;
    - `CFBundleVersion`, un numero di build che cresce sempre: 1, 2, 3…
 
-   Oggi `scripts/bundle-macos.sh` mette in tutti e due la versione di `Cargo.toml` (0.1.0): il numero di build va separato.
+   Dalla fase A il numero di build è separato dalla versione: è `BUILD` in `crates/keel/src/version.rs`, e lo alza `scripts/release.sh`.
 2. **L'elenco `updates.json`** elenca le versioni presenti. Per ognuna:
    - il numero e la build;
    - la data e la versione minima di macOS;
@@ -229,7 +225,7 @@ Ordine: **A → B → C → D**. Il sito va online solo dopo che tutto è stato 
 ## Da decidere più avanti
 
 - ~~**La licenza di Keel**~~: decisa il 25 novembre 2026, in `LICENSE` (in italiano `docs/LICENZA.it.md`). Codice da leggere e basta, app gratis da usare anche per lavoro.
-- **La prima versione ufficiale:** `0.1.0`, oppure `1.0.0`.
+- ~~**La prima versione ufficiale**~~: è stata la `0.1.0`, il 23 novembre.
 - **La lingua principale del sito,** oggi l'italiano.
 
 ## Rischi

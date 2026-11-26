@@ -335,7 +335,7 @@ flowchart LR
 ## Development
 
 ```bash
-cargo test --workspace                     # 566 tests, with no window on screen
+cargo test --workspace                     # 587 tests, with no window on screen
 cargo clippy --workspace --all-targets     # no warnings
 scripts/snapshots.sh <folder>              # the window drawn off screen, as PNG
 scripts/third-party-licenses.py            # the licence notices, after changing dependencies

@@ -1,6 +1,6 @@
 # Keel — passaggio di consegne
 
-*Scritto il 18 novembre 2026, aggiornato il 25 novembre con il pannello di Claude rifatto, l'import da VS Code, «Prepara Keel», il comando `keel` e Keel che da fermo non consuma più, usciti con la 0.1.2. Cosa cambia in ogni versione è in [`CHANGELOG.it.md`](CHANGELOG.it.md).*
+*Scritto il 18 novembre 2026, aggiornato il 25 novembre con il pannello di Claude rifatto, l'import da VS Code, «Prepara Keel», il comando `keel` e Keel che da fermo non consuma più, usciti con la 0.1.2; il 26 novembre con i documenti allineati e la proposta della 0.1.3 ([`PIANO-0.1.3.md`](PIANO-0.1.3.md)). Cosa cambia in ogni versione è in [`CHANGELOG.it.md`](CHANGELOG.it.md).*
 
 Questo documento serve a chi riprende il lavoro su Keel, persona o assistente, senza aver seguito la storia. Spiega:
 - che cos'è il progetto e perché esiste;
@@ -20,7 +20,7 @@ Keel è un **IDE personale per macOS scritto in Rust**. L'idea è avere un edito
 - **familiare:** stesse scorciatoie e stessi nomi dei comandi di VS Code, `settings.json` e `keybindings.json` compatibili;
 - **estendibile:** le estensioni di VS Code funzionano dove possibile, e quelle dell'autore sempre. La prova del nove è **VSAuto Ghost**, la sua estensione di «fake coding».
 
-Nasce dalla curiosità per le app native in Rust e dal desiderio di un editor tutto suo. Cursor resta installato come riserva. È pubblicato dal 23 novembre 2026: si scarica da https://keel.mezzalab.eu, la pagina di presentazione che sta in una repo sua (`KeelSite`), e si aggiorna da solo; la firma di Apple è rimandata (punto 4, «Punti aperti»). Il codice è pubblico su GitHub dal 24 novembre.
+Nasce dalla curiosità per le app native in Rust e dal desiderio di un editor tutto suo. Cursor resta installato come riserva. È pubblicato dal 23 novembre 2026: si scarica da https://keel.mezzalab.eu, la pagina di presentazione che sta in una repo sua (`KeelSite`), e si aggiorna da solo; la firma di Apple non si fa, per scelta dell'autore (punto 4, «Punti aperti»). Il codice è pubblico su GitHub dal 24 novembre.
 
 ### Perché è fatto così
 
@@ -194,7 +194,7 @@ Dopo le prime prove dell'app vera (18 novembre) sono arrivati altri giri di rito
   - provato: i test con l'agente finto (comandi, file, modello, logout, tasti dei menu) e la forma delle risposte dell'adattatore vero per l'account. **Da provare a mano**: una chat dell'app Claude continuata in Keel e poi riaperta nell'app (l'app potrebbe mostrare i messaggi di Keel solo dopo averla riaperta); login e logout veri (il logout esce anche da Claude Code nel terminale, perché il login è lo stesso), la chiave API, una chat continuata nel terminale e ripresa nel pannello.
 
 Stato dei controlli all'ultimo commit:
-- tutti i test passano: 586, più 28 da lanciare a mano; nell'app 325, più 6;
+- tutti i test passano: 587, più 28 da lanciare a mano; nell'app 326, più 6 (rilanciati il 26 novembre);
 - clippy non segnala niente;
 - la prima schermata di Keel arriva in 330 ms, media di sei avvii;
 - **memoria di Keel** (22 novembre, versione installata, M4 Pro, language server spenti), come la dà Monitoraggio Attività: 132 MB con una finestra vuota, 271 MB con un progetto e un file, 299 MB con 450 file e 20 schede, 326 MB con due progetti. I 130–150 MB scritti in `PIANO.md` sono la memoria residente (RSS), che non conta quella grafica: non vanno usati per i confronti;
@@ -213,6 +213,10 @@ Stato dei controlli all'ultimo commit:
 
 ## 4. Cosa resta da fare
 
+### La 0.1.3
+
+La proposta è in [`PIANO-0.1.3.md`](PIANO-0.1.3.md) (26 novembre): le chat degli altri progetti nella finestra dove si lavora, le icone di serie come Material Icon Theme, e quello che è venuto fuori confrontando Keel con l'estensione ufficiale di Claude Code, VS Code e Zed. Si parte solo col via dell'autore.
+
 ### Subito: le prove a mano
 
 Le fasi sono fatte, ma l'autore deve ancora provarle a mano. L'elenco di ogni fase è in `PIANO.md`, nei punti «Le tue prove a mano». I difetti trovati diventano ritocchi, come quelli del 18 novembre.
@@ -224,7 +228,7 @@ Delle funzioni nuove restano da provare davvero due cose, che qui non si potevan
 ### Difetti trovati, da correggere
 
 Trovati il 22 novembre misurando e fotografando Keel per la pagina di presentazione:
-- **CPU da fermo e memoria grafica: corrette il 24 novembre** (non ancora in una versione pubblicata).
+- **CPU da fermo e memoria grafica: corrette il 24 novembre**, uscite con la 0.1.2.
   - *La CPU* (7% di un core con un file aperto e la finestra davanti) veniva da un giro senza fine: le decorazioni dell'editor (parentesi colorate, la parola sotto il cursore, i segni nella barra di scorrimento) avvisano l'editor quando cambiano; l'editor avvisava Keel come se il cursore si fosse mosso, e dopo 160 ms Keel le ricalcolava e le rimetteva. Erano sei ridisegni al secondo senza fare niente. Ora si ricalcolano solo se cambiano testo, cursore o tema (`writing.rs`, `cursor_moved`), e decorazioni uguali non si rimettono. Un test lo controlla.
   - *La memoria grafica* (+125 MB) non era di Keel né dei tracciati: GPUI riserva le stesse cose con o senza file (misurato con una copia di GPUI che annotava ogni allocazione). È la memoria che macOS tiene per una finestra che si ridisegna spesso, e il cursore che lampeggia la ridisegna due volte al secondo. Ora il cursore smette di lampeggiare dopo 10 secondi senza tasti né clic e resta visibile, come in GNOME (`theme::caret_blink`); `"editor.cursorBlinking": "solid"` lo tiene sempre fermo. Dopo qualche secondo fermo macOS si riprende la memoria.
   - *Misure* (versione release, M4 Pro, progetto Keel con `layout.rs` aperto, finestra davanti): CPU da fermo dal 7,1% allo 0%; memoria da 272 a 157 MB, 15 secondi dopo l'ultimo tasto. Mentre si scrive i 120 MB tornano, perché la finestra si aggiorna: succede a ogni app che si ridisegna.
@@ -289,7 +293,7 @@ L'idea è permettere a chi usa Keel di cambiarne l'aspetto con un suo file, come
 
 - Il font del codice di serie: SF Mono oppure un altro.
 - La minimappa: accesa o spenta di serie.
-- La pubblicazione: **Keel è scaricabile da https://keel.mezzalab.eu dal 23 novembre (0.1.0); il 24 novembre è uscita la 0.1.1** con l'interfaccia rifatta e il benvenuto, **il 25 novembre la 0.1.2** con il pannello di Claude rifatto; si aggiorna da solo. Ogni versione va scritta in `CHANGELOG.md` e `docs/CHANGELOG.it.md` prima del rilascio. Il piano e com'è andata sono in [`PUBBLICAZIONE.md`](PUBBLICAZIONE.md), in quattro fasi da fare in ordine, ognuna col via dell'autore: aggiornamenti dentro Keel con un motore suo (crate `update`), controllati solo all'avvio (fase A fatta il 23 novembre); script di rilascio e di installazione (fase B fatta il 23 novembre: la chiave di firma è nel Portachiavi login come «Keel release signing key», e ne va tenuta una copia fuori dal Mac); pagina di download su KeelSite (fase C fatta il 23 novembre, legge `/updates.json`); sito su keel.mezzalab.eu dal mini PC, con il deploy da `main` e solo due versioni dei pacchetti. La firma di Apple è rimandata. Dal 23 novembre l'app porta con sé gli avvisi delle licenze di terze parti (`crates/keel/THIRD-PARTY-LICENSES.txt`, scritto da `scripts/third-party-licenses.py`, visibile in Impostazioni › Aggiornamenti): vanno rigenerati quando cambiano le dipendenze, e un test e `release.sh` lo ricordano. Resta da decidere la lingua principale del sito (ora l'italiano).
+- La pubblicazione: **Keel è scaricabile da https://keel.mezzalab.eu dal 23 novembre (0.1.0); il 24 novembre è uscita la 0.1.1** con l'interfaccia rifatta e il benvenuto, **il 25 novembre la 0.1.2** con il pannello di Claude rifatto; si aggiorna da solo. Ogni versione va scritta in `CHANGELOG.md` e `docs/CHANGELOG.it.md` prima del rilascio. Il piano e com'è andata sono in [`PUBBLICAZIONE.md`](PUBBLICAZIONE.md), in quattro fasi da fare in ordine, ognuna col via dell'autore: aggiornamenti dentro Keel con un motore suo (crate `update`), controllati solo all'avvio (fase A fatta il 23 novembre); script di rilascio e di installazione (fase B fatta il 23 novembre: la chiave di firma è nel Portachiavi login come «Keel release signing key», e ne va tenuta una copia fuori dal Mac); pagina di download su KeelSite (fase C fatta il 23 novembre, legge `/updates.json`); sito su keel.mezzalab.eu dal mini PC, con il deploy da `main` e solo due versioni dei pacchetti. La firma di Apple non si fa, per scelta dell'autore del 25 novembre (niente account sviluppatore a 99 $ l'anno): chi installa con lo script del sito non vede l'avviso di macOS, chi scarica il DMG lo apre da Impostazioni di Sistema › Privacy e sicurezza › «Apri comunque». Dal 23 novembre l'app porta con sé gli avvisi delle licenze di terze parti (`crates/keel/THIRD-PARTY-LICENSES.txt`, scritto da `scripts/third-party-licenses.py`, visibile in Impostazioni › Aggiornamenti): vanno rigenerati quando cambiano le dipendenze, e un test e `release.sh` lo ricordano. Resta da decidere la lingua principale del sito (ora l'italiano).
 - La repo `Keel` è pubblica su GitHub dal 24 novembre. **La licenza** (25 novembre, `LICENSE`, in italiano `docs/LICENZA.it.md`) è scritta su misura, perché l'autore vuole che il codice si legga ma non si riusi: tutti i diritti riservati; il codice non si può copiare fuori da GitHub, modificare, compilare, ridistribuire, vendere, mettere in altri software né usare per addestrare modelli di IA; l'app si scarica dal sito e si usa gratis, anche per lavoro, ma non si condivide altrove, non si vende e non si modifica. Restano libere le parti di altri (`vendor/gpui-base` e `THIRD-PARTY-LICENSES.txt`). Vale la legge italiana. Keel non va chiamato «open source», né sul sito né nel README. Il sito la collega nel piè di pagina.
 - Il ramo `main` non esiste ancora su GitHub: il predefinito è `develop`.
 - La cartella `KeelSite/` dentro Keel è un sito vecchio del 21 novembre, in Next.js, messo lì dall'autore: non è in git e non va committata. Quello buono è la repo `KeelSite` accanto a Keel.
