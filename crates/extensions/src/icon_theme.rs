@@ -89,6 +89,22 @@ impl Associations {
     }
 }
 
+/// `dist/./../icons/a.svg` as `icons/a.svg`, without asking the disk: one
+/// picture has one path, which the image cache keys on.
+fn tidy(path: &Path) -> PathBuf {
+    let mut tidy = PathBuf::new();
+    for part in path.components() {
+        match part {
+            std::path::Component::CurDir => {}
+            std::path::Component::ParentDir if tidy.file_name().is_some() => {
+                tidy.pop();
+            }
+            part => tidy.push(part),
+        }
+    }
+    tidy
+}
+
 /// What an entry of the tree is, for picking its icon.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Entry<'a> {
@@ -132,7 +148,7 @@ impl IconTheme {
                     .filter_map(|(id, definition)| {
                         // Font glyphs (`fontCharacter`) are not drawn.
                         let path = definition["iconPath"].as_str()?;
-                        Some((id.clone(), folder.join(path)))
+                        Some((id.clone(), tidy(&folder.join(path))))
                     })
                     .collect()
             })
@@ -312,6 +328,18 @@ mod tests {
             Some("typescript.svg")
         );
         assert_eq!(icon("main.rs", "rust").as_deref(), Some("rust.svg"));
+        // The theme's `./../icons/` is tidied to one path.
+        let path = theme
+            .icon(
+                Entry::File {
+                    name: "main.rs",
+                    language: "rust",
+                },
+                false,
+            )
+            .unwrap();
+        assert!(!path.to_string_lossy().contains("/./") && !path.to_string_lossy().contains(".."));
+        assert!(path.ends_with("icons/rust.svg"));
         assert_eq!(
             file_icon(&theme, "main.rs", "rust", true).as_deref(),
             Some("rust_light.svg")

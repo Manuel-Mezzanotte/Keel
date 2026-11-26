@@ -657,11 +657,7 @@ impl Workbench {
                 .border_b_1()
                 .border_color(colors.border.opacity(0.6))
                 .bg(claude_colour().opacity(0.06))
-                .child(
-                    Icon::new(IconName::Folder)
-                        .xsmall()
-                        .text_color(claude_colour()),
-                )
+                .child(self.project_icon(folder, 14., cx))
                 .child(
                     div()
                         .id("agent-chat-folder-name")
@@ -1508,6 +1504,14 @@ impl Workbench {
         }
         for (index, item) in items.iter().enumerate() {
             let on = index == selected;
+            // A file or folder of the project shows its own picture.
+            let picture = match item {
+                ComposerItem::Path { relative, folder } => {
+                    let root = self.agent_folder();
+                    Some(self.path_icon(&root.join(relative), *folder, 14., cx))
+                }
+                _ => None,
+            };
             let (icon, name, detail) = match item {
                 ComposerItem::Command {
                     name,
@@ -1566,10 +1570,12 @@ impl Workbench {
                     .on_click(cx.listener(move |this, _, window, cx| {
                         this.choose_composer_item(index, window, cx)
                     }))
-                    .child(Icon::new(icon).xsmall().flex_none().text_color(if on {
-                        colors.accent
-                    } else {
-                        colors.muted
+                    .child(picture.unwrap_or_else(|| {
+                        Icon::new(icon)
+                            .xsmall()
+                            .flex_none()
+                            .text_color(if on { colors.accent } else { colors.muted })
+                            .into_any_element()
                     }))
                     .child(
                         div()
@@ -1670,15 +1676,7 @@ impl Workbench {
                     .bg(colors.hover)
                     .text_size(px(11.5))
                     .text_color(colors.text)
-                    .child(
-                        Icon::new(if folder {
-                            IconName::Folder
-                        } else {
-                            IconName::FileText
-                        })
-                        .xsmall()
-                        .text_color(colors.muted),
-                    )
+                    .child(self.path_icon(&attachment.path, folder, 14., cx))
                     .child(label)
                     .child(
                         Button::new(("agent-attachment", index))

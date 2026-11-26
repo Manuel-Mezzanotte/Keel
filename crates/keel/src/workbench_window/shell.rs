@@ -1070,6 +1070,7 @@ impl Workbench {
                     .parent()
                     .map(crate::recent::short_path)
                     .unwrap_or_default();
+                let picture = self.project_icon(&project, 18., cx);
                 div()
                     .id(("recent-project", index))
                     .h(px(44.))
@@ -1089,12 +1090,7 @@ impl Workbench {
                             cx,
                         )
                     }))
-                    .child(
-                        Icon::new(IconName::Folder)
-                            .size(px(16.))
-                            .flex_none()
-                            .text_color(colors.muted),
-                    )
+                    .child(picture)
                     .child(
                         div()
                             .flex_1()

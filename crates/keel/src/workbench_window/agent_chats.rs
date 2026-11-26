@@ -254,19 +254,8 @@ impl Workbench {
                     } else {
                         colors.hover
                     })
-                    .child(
-                        Icon::new(if card.here {
-                            IconName::FolderOpen
-                        } else {
-                            IconName::Folder
-                        })
-                        .xsmall()
-                        .text_color(if card.here {
-                            claude_colour()
-                        } else {
-                            colors.muted
-                        }),
-                    ),
+                    // The project's own picture, or its folder's.
+                    .child(self.project_icon(&card.folder, 14., cx)),
             )
             .child(
                 div()

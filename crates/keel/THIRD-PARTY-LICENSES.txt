@@ -2,7 +2,8 @@ Third-party software in Keel
 
 Keel is built on open source software. These are the notices and licences
 of everything compiled into the app, as their authors ask them to be passed
-on: 517 packages, and the libraries that come compiled inside them.
+on: 517 packages, and the libraries that come compiled inside them,
+and of the files of others that travel with it, such as its file icons.
 Each text covers the packages listed above it; the MIT and Apache 2.0
 licences, the same for many packages, are written once, after the copyright
 lines of all the packages they cover.
@@ -121,7 +122,8 @@ wait-timeout 0.2.1, waker-fn 1.2.0, walkdir 2.5.0, wasm-bindgen 0.2.130,
 wasm-bindgen-shared 0.2.130, wasm_dep_analyzer 0.4.0, web-time 1.1.0, weezl
 0.1.12, winnow 0.7.15, wyz 0.5.1, xml5ever 0.18.1, xmlwriter 0.1.0, y4m
 0.8.0, zed-font-kit 0.14.1-zed, zerocopy 0.8.63, zeroize 1.9.1, zip 9.5.1,
-zmij 1.0.23, zune-core 0.5.3, zune-inflate 0.2.54, zune-jpeg 0.5.15
+zmij 1.0.23, zune-core 0.5.3, zune-inflate 0.2.54, zune-jpeg 0.5.15,
+Material Icon Theme 5.40.0 (file icons)
 ----------------------------------------------------------------------------
 
 Copyright (c) The AccessKit contributors (accesskit 0.24.1; from its declared licence: the package has no licence file)
@@ -531,6 +533,7 @@ Copyright (c) 2014 Mathijs van de Nes (zip 9.5.1)
 Copyright (c) zune-image developers (zune-core 0.5.3)
 Copyright (c) the zune-inflate authors (zune-inflate 0.2.54; from its declared licence: the package has no licence file)
 Copyright (c) zune-image developers (zune-jpeg 0.5.15)
+Copyright (c) 2025 Material Extensions (Material Icon Theme 5.40.0 (file icons))
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal

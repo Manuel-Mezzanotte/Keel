@@ -69,6 +69,7 @@ mod pdf_view;
 mod peek;
 mod problem_matchers;
 mod problems;
+mod project_icons;
 mod pull_requests;
 mod restore;
 mod rulers;
@@ -134,7 +135,7 @@ pub(crate) use code_navigation::{
     GoToTypeDefinition, PeekDefinition, PeekReferences, RenameSymbol, RevealDefinition,
     ShowIncomingCalls, ShowOutgoingCalls,
 };
-pub(crate) use contributions::SelectIconTheme;
+pub(crate) use contributions::{SelectIconTheme, preload_keel_icons};
 pub(crate) use debug::{
     DebugConfigure, DebugEvaluateSelection, DebugPause, DebugRestart, DebugRun, DebugRunToCursor,
     DebugSelectAndStart, DebugStart, DebugStepInto, DebugStepOut, DebugStepOver, DebugStop,
@@ -709,6 +710,8 @@ impl Workbench {
         cx: &mut Context<Self>,
     ) -> Self {
         let mut subscriptions = Vec::new();
+        // Keel's own file icons, until the extensions say otherwise.
+        let icon_theme = contributions::initial_icon_theme(&settings);
         let this = cx.weak_entity();
         subscriptions.push(cx.intercept_keystrokes({
             let this = this.clone();
@@ -832,8 +835,8 @@ impl Workbench {
             watchdog: Default::default(),
             claude_ide: None,
             claude_diffs: Vec::new(),
+            icon_theme,
             agent_panel,
-            icon_theme: None,
             extension_languages: Default::default(),
             output,
             output_channel: panel_views::OutputChannel::Keel,

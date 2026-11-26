@@ -108,6 +108,8 @@ fn main() -> ExitCode {
                 all.extend(paths_to_open);
                 return open_detached(&app, &all);
             }
+            // Keel's file icons are read while the window opens.
+            workbench_window::preload_keel_icons();
             run(first, paths_to_open, socket);
             ExitCode::SUCCESS
         }

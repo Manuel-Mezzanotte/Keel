@@ -34,6 +34,9 @@ cp assets/brand/Keel.icns "$app/Contents/Resources/Keel.icns"
 cp crates/keel/THIRD-PARTY-LICENSES.txt "$app/Contents/Resources/THIRD-PARTY-LICENSES.txt"
 # Keel's own license travels with the app too.
 cp LICENSE "$app/Contents/Resources/LICENSE"
+# Keel's file icons (Material Icon Theme's, with their licence).
+mkdir -p "$app/Contents/Resources/icons"
+cp -R crates/keel/icons/. "$app/Contents/Resources/icons/"
 
 cat > "$app/Contents/Info.plist" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>

@@ -65,6 +65,7 @@ mod tests {
         for name in [
             "gpui-pre ",
             "gpui-component ",
+            "Material Icon Theme ",
             "deno_core ",
             "alacritty_terminal ",
             "tree-sitter ",

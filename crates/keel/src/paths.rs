@@ -18,6 +18,20 @@ pub fn data_dir() -> PathBuf {
         .join("Library/Application Support/com.manuelmezzanotte.keel")
 }
 
+/// Where the files that travel with Keel are, such as its file icons: the
+/// Resources folder of `Keel.app`, or the crate's folder when Keel runs
+/// from the build, as in development and in the tests.
+pub fn resources_dir() -> PathBuf {
+    if let Ok(program) = std::env::current_exe()
+        && let Some(contents) = program.parent().and_then(Path::parent)
+        && contents.ends_with("Contents")
+        && contents.join("Resources/icons").is_dir()
+    {
+        return contents.join("Resources");
+    }
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+}
+
 /// A path written the way Finder knows it: absolute, without `.` or `..`,
 /// with symbolic links resolved. A file that does not exist yet keeps its
 /// name in its resolved folder.

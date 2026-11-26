@@ -720,6 +720,17 @@ impl Workbench {
                 .border_color(colors.border.opacity(0.7))
                 .shadow_sm()
                 .children(chain.into_iter().map(|(index, row)| {
+                    // The open folder's picture, as in the tree below.
+                    let icon = match self.themed_icon(&row.path, true, true, cx) {
+                        Some(picture) => gpui::img(picture)
+                            .size(px(16.))
+                            .flex_none()
+                            .into_any_element(),
+                        None => Icon::new(IconName::FolderOpen)
+                            .small()
+                            .text_color(colors.accent)
+                            .into_any_element(),
+                    };
                     div()
                         .id(("tree-sticky", index))
                         .h(px(ROW_HEIGHT))
@@ -739,11 +750,7 @@ impl Workbench {
                                 .xsmall()
                                 .text_color(colors.faint),
                         )
-                        .child(
-                            Icon::new(IconName::FolderOpen)
-                                .small()
-                                .text_color(colors.accent),
-                        )
+                        .child(icon)
                         .child(div().truncate().child(row.name.clone()))
                 }))
                 .into_any_element(),

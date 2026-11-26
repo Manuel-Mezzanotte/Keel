@@ -4,9 +4,10 @@
 //! extensions, so turning one off takes its themes and languages away.
 
 use std::path::Path;
+use std::sync::OnceLock;
 
 use extensions::color_theme;
-use extensions::icon_theme::{self, Entry, IconTheme};
+use extensions::icon_theme::{self, Entry, IconTheme, IconThemeContribution};
 use extensions::languages::{self, LanguageRegistry};
 use gpui_component::ThemeRegistry;
 
@@ -22,6 +23,47 @@ pub(super) struct CustomColors {
     pub(super) title_foreground: Option<gpui::Hsla>,
     pub(super) status_background: Option<gpui::Hsla>,
     pub(super) status_foreground: Option<gpui::Hsla>,
+}
+
+/// Keel's own file icons, the default: Material Icon Theme's, which travel
+/// with the app (MIT, `crates/keel/icons/material`). Each file by its name
+/// and extension, each folder by its name.
+pub(super) const KEEL_ICONS: &str = "keel-material";
+/// The plain symbols Keel drew before it carried its own icons.
+pub(super) const SIMPLE_ICONS: &str = "keel-simple";
+
+/// Keel's own icon theme, read once for every window.
+fn keel_icons() -> Option<IconTheme> {
+    static THEME: OnceLock<Option<IconTheme>> = OnceLock::new();
+    THEME
+        .get_or_init(|| {
+            let contribution = IconThemeContribution {
+                id: KEEL_ICONS.to_owned(),
+                label: "Material".to_owned(),
+                path: crate::paths::resources_dir().join("icons/material/dist/material-icons.json"),
+            };
+            IconTheme::load(&contribution)
+                .map_err(|error| eprintln!("keel: {error:#}"))
+                .ok()
+        })
+        .clone()
+}
+
+/// Reads Keel's icons away from the window, at start, so they are there
+/// when it opens.
+pub(crate) fn preload_keel_icons() {
+    std::thread::spawn(|| {
+        keel_icons();
+    });
+}
+
+/// The icons a window starts with, before its extensions load: Keel's own,
+/// unless the settings ask for the plain symbols.
+pub(super) fn initial_icon_theme(settings: &Settings) -> Option<Rc<IconTheme>> {
+    (settings.string("workbench.iconTheme") != Some(SIMPLE_ICONS))
+        .then(keel_icons)
+        .flatten()
+        .map(Rc::new)
 }
 
 /// `#RGB`, `#RGBA`, `#RRGGBB` or `#RRGGBBAA`.
@@ -184,22 +226,29 @@ impl Workbench {
             .collect()
     }
 
-    /// Loads the icon theme `wanted`, if a running extension has it;
-    /// otherwise the Explorer keeps Keel's icons.
+    /// Loads the icon theme `wanted`: an extension's, if a running one has
+    /// it, the plain symbols for `keel-simple`, otherwise Keel's own icons.
     fn load_icon_theme(&mut self, running: &[InstalledExtension], wanted: Option<String>) {
-        self.icon_theme = wanted.and_then(|wanted| {
-            let contribution = running
-                .iter()
-                .flat_map(icon_theme::icon_themes)
-                .find(|theme| theme.id == wanted)?;
-            match IconTheme::load(&contribution) {
-                Ok(theme) => Some(Rc::new(theme)),
-                Err(error) => {
-                    self.log(format!("{wanted}: {error:#}"));
-                    None
+        if wanted.as_deref() == Some(SIMPLE_ICONS) {
+            self.icon_theme = None;
+            return;
+        }
+        let extension = wanted
+            .filter(|wanted| wanted != KEEL_ICONS)
+            .and_then(|wanted| {
+                let contribution = running
+                    .iter()
+                    .flat_map(icon_theme::icon_themes)
+                    .find(|theme| theme.id == wanted)?;
+                match IconTheme::load(&contribution) {
+                    Ok(theme) => Some(Rc::new(theme)),
+                    Err(error) => {
+                        self.log(format!("{wanted}: {error:#}"));
+                        None
+                    }
                 }
-            }
-        });
+            });
+        self.icon_theme = extension.or_else(|| keel_icons().map(Rc::new));
     }
 
     /// Loads the icon theme the settings name now.
@@ -286,6 +335,44 @@ impl Workbench {
             .into_any_element()
     }
 
+    /// The picture of a file or a folder, by its path, `size` points wide:
+    /// the icon theme's, otherwise Keel's symbol.
+    pub(super) fn path_icon(
+        &self,
+        path: &Path,
+        folder: bool,
+        size: f32,
+        cx: &App,
+    ) -> gpui::AnyElement {
+        use gpui_component::Sizable as _;
+        if !folder {
+            return self.file_icon_element(path, cx);
+        }
+        match self.themed_icon(path, true, false, cx) {
+            Some(picture) => gpui::img(picture)
+                .size(gpui::px(size))
+                .flex_none()
+                .into_any_element(),
+            None => gpui_component::Icon::new(gpui_kit_assets::IconName::Folder)
+                .small()
+                .text_color(cx.theme().muted_foreground)
+                .into_any_element(),
+        }
+    }
+
+    /// A project's picture: the icon it keeps for itself (its favicon, its
+    /// app's icon), otherwise its folder's.
+    pub(super) fn project_icon(&self, folder: &Path, size: f32, cx: &App) -> gpui::AnyElement {
+        match super::project_icons::own_icon(folder) {
+            Some(picture) => gpui::img(picture)
+                .size(gpui::px(size))
+                .flex_none()
+                .rounded(gpui::px(size * 0.22))
+                .into_any_element(),
+            None => self.path_icon(folder, true, size, cx),
+        }
+    }
+
     /// The theme picker: Keel's themes, then those of the extensions.
     pub(super) fn theme_names(&self) -> Vec<String> {
         let mut names: Vec<String> = crate::theme::NAMES
@@ -306,11 +393,15 @@ impl Workbench {
         names
     }
 
-    /// "Preferences: File Icon Theme": Keel's icons or an extension's.
+    /// "Preferences: File Icon Theme": Keel's icons, the plain symbols, or
+    /// an extension's.
     fn choose_icon_theme(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let strings = self.strings();
         let themes = self.icon_theme_contributions();
-        let mut items = vec![PickItem::new(strings.icon_theme_none)];
+        let mut items = vec![
+            PickItem::new(strings.icon_theme_none),
+            PickItem::new(strings.icon_theme_simple),
+        ];
         items.extend(
             themes
                 .iter()
@@ -327,10 +418,11 @@ impl Workbench {
             let Ok(Some(index)) = chosen.await else {
                 return;
             };
-            let id = index
-                .checked_sub(1)
-                .and_then(|index| themes.get(index))
-                .map(|theme| theme.id.clone());
+            let id = match index {
+                0 => None,
+                1 => Some(SIMPLE_ICONS.to_owned()),
+                index => themes.get(index - 2).map(|theme| theme.id.clone()),
+            };
             this.update(cx, |this, cx| this.set_icon_theme(id, cx)).ok();
         })
         .detach();
@@ -503,15 +595,28 @@ mod tests {
             assert!(crate::theme::is_dark("Ghost Night", cx));
         });
 
-        // The icon theme: Keel's icons until chosen, then the extension's.
+        // The icon theme: Keel's own (Material's) until another is chosen,
+        // then the extension's; the plain symbols on request.
         view.update(cx, |view, cx| {
-            assert!(view.themed_icon(&path, false, false, cx).is_none());
+            let keel = view.themed_icon(&path, false, false, cx).unwrap();
+            assert!(
+                keel.ends_with("material/icons/file.svg"),
+                "{}",
+                keel.display()
+            );
             view.set_icon_theme(Some("ghost-icons".into()), cx);
             let icon = view.themed_icon(&path, false, false, cx).unwrap();
             assert!(icon.ends_with("icons/ghost.svg"), "{}", icon.display());
             let folder = view.themed_icon(project.path(), true, false, cx).unwrap();
             assert!(folder.ends_with("icons/folder.svg"));
             view.set_icon_theme(None, cx);
+            let keel = view.themed_icon(&path, false, false, cx).unwrap();
+            assert!(
+                keel.ends_with("material/icons/file.svg"),
+                "{}",
+                keel.display()
+            );
+            view.set_icon_theme(Some(SIMPLE_ICONS.into()), cx);
             assert!(view.themed_icon(&path, false, false, cx).is_none());
         });
         let saved = std::fs::read_to_string(config.path().join("settings.json")).unwrap();
@@ -580,7 +685,13 @@ mod tests {
         cx.simulate_keystrokes("escape");
         draw(cx);
 
+        // Keel's own icons are a theme too; the plain symbols are not.
         view.update(cx, |view, cx| view.set_icon_theme(None, cx));
+        draw(cx);
+        assert!(cx.debug_bounds("icon:theme:spooky.ghost").is_some());
+        view.update(cx, |view, cx| {
+            view.set_icon_theme(Some(SIMPLE_ICONS.into()), cx)
+        });
         draw(cx);
         assert!(cx.debug_bounds("icon:theme:spooky.ghost").is_none());
         assert!(cx.debug_bounds("icon:keel:spooky.ghost").is_some());
@@ -651,5 +762,78 @@ mod tests {
             assert_eq!(colors.status_background, parse_color(&json!("#42b883")));
             assert_eq!(colors.status_foreground, None);
         });
+    }
+}
+
+#[cfg(test)]
+mod keel_icons_tests {
+    use super::*;
+
+    fn icon(theme: &IconTheme, name: &str, language: &str, light: bool) -> String {
+        theme
+            .icon(Entry::File { name, language }, light)
+            .unwrap()
+            .file_name()
+            .unwrap()
+            .to_string_lossy()
+            .into_owned()
+    }
+
+    fn folder(theme: &IconTheme, name: &str, expanded: bool) -> String {
+        theme
+            .icon(
+                Entry::Folder {
+                    name,
+                    expanded,
+                    root: false,
+                },
+                false,
+            )
+            .unwrap()
+            .file_name()
+            .unwrap()
+            .to_string_lossy()
+            .into_owned()
+    }
+
+    /// Keel carries Material Icon Theme's pictures: each file by its name
+    /// or extension, each folder by its name, and every picture is there.
+    #[test]
+    fn keel_has_its_own_file_and_folder_icons() {
+        let theme = keel_icons().expect("Keel's icons load");
+        assert_eq!(
+            icon(&theme, "booking-card.tsx", "typescriptreact", false),
+            "react_ts.svg"
+        );
+        assert_eq!(icon(&theme, "package.json", "json", false), "nodejs.svg");
+        assert_eq!(icon(&theme, "Cargo.toml", "toml", false), "toml.svg");
+        assert_eq!(icon(&theme, "main.rs", "rust", false), "rust.svg");
+        assert_eq!(
+            icon(&theme, "Dockerfile", "dockerfile", false),
+            "docker.svg"
+        );
+        assert_eq!(
+            icon(&theme, "notes.txt", "plaintext", false),
+            "document.svg"
+        );
+        assert_eq!(icon(&theme, "notes.zzz", "", false), "file.svg");
+        assert_eq!(folder(&theme, "src", false), "folder-src.svg");
+        assert_eq!(folder(&theme, "src", true), "folder-src-open.svg");
+        assert_eq!(folder(&theme, "node_modules", false), "folder-node.svg");
+        assert_eq!(folder(&theme, ".claude", false), "folder-claude.svg");
+        let names = [
+            ("a.tsx", "typescriptreact"),
+            ("a.ts", "typescript"),
+            ("a.py", "python"),
+            ("a.swift", "swift"),
+            ("README.md", "markdown"),
+            (".env", "dotenv"),
+        ];
+        for (name, language) in names {
+            for light in [false, true] {
+                let path = theme.icon(Entry::File { name, language }, light).unwrap();
+                assert!(path.is_file(), "{}", path.display());
+            }
+        }
     }
 }

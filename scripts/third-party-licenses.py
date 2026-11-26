@@ -30,6 +30,11 @@ EXTRA = ROOT / "scripts/licenses"
 TARGET = "aarch64-apple-darwin"
 LICENCE_FILE = re.compile(r"^(licen[cs]e|copying|notice|unlicense)([-._].*)?$", re.IGNORECASE)
 RULE = "-" * 76
+# Files of others that travel with the app without being compiled into it:
+# a name for the notices, and the licence they come with.
+BUNDLED = [
+    ("Material Icon Theme 5.40.0 (file icons)", ROOT / "crates/keel/icons/material/LICENSE.txt"),
+]
 
 
 def fingerprint(lock: str) -> str:
@@ -194,6 +199,16 @@ def render(lock: str) -> str:
                 line = f"{owner} ({name}{note})"
                 if line not in lines:
                     lines.append(line)
+    for name, licence in BUNDLED:
+        text = tidy(licence.read_text())
+        found = standard(text)
+        key, body, owners = found if found else ("text " + flat(text), text, [])
+        body_, names, lines = groups.setdefault(key, (body, [], []))
+        names.append(name)
+        for owner in owners:
+            line = f"{owner} ({name})"
+            if line not in lines:
+                lines.append(line)
     if missing:
         sys.exit(
             "No licence text for:\n  "
@@ -205,7 +220,8 @@ def render(lock: str) -> str:
 
 Keel is built on open source software. These are the notices and licences
 of everything compiled into the app, as their authors ask them to be passed
-on: {len(packages)} packages, and the libraries that come compiled inside them.
+on: {len(packages)} packages, and the libraries that come compiled inside them,
+and of the files of others that travel with it, such as its file icons.
 Each text covers the packages listed above it; the MIT and Apache 2.0
 licences, the same for many packages, are written once, after the copyright
 lines of all the packages they cover.
