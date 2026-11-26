@@ -81,6 +81,18 @@ pub struct WindowState {
     /// The pull requests page has been opened in the project.
     #[serde(default)]
     pub pulls: bool,
+    /// The chat open in Claude's panel, to open again.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub claude_chat: Option<ChatState>,
+}
+
+/// The chat open in Claude's panel: Claude Code's id for it, and its folder
+/// when it is another project's chat.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ChatState {
+    pub id: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub folder: Option<PathBuf>,
 }
 
 /// A bookmark on a line, with the line's text to find it again after edits.
@@ -260,6 +272,10 @@ mod tests {
             }],
             sidebar: true,
             side_view: "explorer".to_owned(),
+            claude_chat: Some(ChatState {
+                id: "b1f0c2d4-9e1a-4c56-8a2b-3f5e6d7c8b9a".to_owned(),
+                folder: Some(PathBuf::from("/Users/manuel/Desktop/MiniPCProgram")),
+            }),
             ..WindowState::default()
         };
         let file = state_file(data.path(), root);

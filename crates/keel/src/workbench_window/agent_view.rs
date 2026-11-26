@@ -306,6 +306,11 @@ impl Workbench {
             return false;
         }
         let Some((kind, start, items)) = self.composer_menu(cx) else {
+            // Esc stops Claude, as in Claude Code, once no menu is open.
+            if key == "escape" && self.agent_panel.running {
+                self.cancel_agent(cx);
+                return true;
+            }
             return false;
         };
         let menus = &self.agent_panel.menus;
@@ -1629,6 +1634,55 @@ impl Workbench {
                 .into_any_element()
         };
         let typing = panel.input.read(cx).focus_handle(cx).is_focused(window);
+        // What was written while Claude works, waiting for the turn to end.
+        let queued = panel.queued.as_ref().map(|(_, said)| {
+            div()
+                .debug_selector(|| "agent-queued".to_owned())
+                .min_h(px(26.))
+                .pl(px(8.))
+                .py(px(3.))
+                .flex()
+                .items_center()
+                .gap(px(6.))
+                .rounded(px(7.))
+                .bg(colors.hover.opacity(0.7))
+                .child(
+                    Icon::new(IconName::Clock)
+                        .xsmall()
+                        .text_color(colors.faint),
+                )
+                .child(
+                    div()
+                        .flex_1()
+                        .min_w_0()
+                        .flex()
+                        .flex_col()
+                        .child(
+                            div()
+                                .text_size(px(10.5))
+                                .text_color(colors.faint)
+                                .child(strings.agent_queued),
+                        )
+                        .child(
+                            div()
+                                .truncate()
+                                .text_size(px(12.))
+                                .text_color(colors.text)
+                                .child(said.replace('\n', " ")),
+                        ),
+                )
+                .child(
+                    Button::new("agent-unqueue")
+                        .ghost()
+                        .xsmall()
+                        .icon(Icon::new(IconName::X))
+                        .tooltip(strings.agent_unqueue)
+                        .on_click(cx.listener(|this, _, _, cx| {
+                            this.agent_panel.queued = None;
+                            cx.notify();
+                        })),
+                )
+        });
 
         let mode_button = self.render_mode_button(colors, cx);
         let model_button = self.render_model_button(colors, cx);
@@ -1727,6 +1781,7 @@ impl Workbench {
                         .flex()
                         .flex_col()
                         .gap_1()
+                        .children(queued)
                         .when(!panel.attachments.is_empty(), |input| {
                             input.child(div().pt_0p5().flex().flex_wrap().gap_1().children(chips))
                         })

@@ -110,6 +110,7 @@ impl Workbench {
                 .collect(),
             debug_configuration: self.debug.chosen.clone(),
             pulls: self.pulls.watched,
+            claude_chat: self.open_chat_state(),
         }
     }
 
@@ -358,6 +359,10 @@ impl Workbench {
             .collect();
         self.debug.chosen = state.debug_configuration.clone();
         self.pulls.watched = state.pulls;
+        self.agent_panel.restored = state
+            .claude_chat
+            .clone()
+            .map(|chat| (chat.id, chat.folder));
         self.load_branch_pull(cx);
         self.graph_collapsed = state.collapsed.iter().any(|section| section == "git-graph");
         self.outline.collapsed = state.collapsed.iter().any(|section| section == "outline");
@@ -653,6 +658,72 @@ mod tests {
         assert!(after.groups[0].tabs[0].pinned);
         assert!(!after.agent);
         assert!(after.expanded.contains(&project.root.join("src")));
+    }
+
+    #[gpui::test]
+    fn the_open_chat_comes_back(cx: &mut TestAppContext) {
+        cx.executor().allow_parking();
+        set_up(cx);
+        let project = project(r#"{ "keel.language": "en" }"#);
+        let (view, window) = open_window(cx, &project);
+        view.update_in(window, |view, window, cx| {
+            view.agent_panel.fake = true;
+            view.open_agent(window, cx);
+            view.agent_panel
+                .input
+                .update(cx, |input, cx| input.set_value("ciao", window, cx));
+            view.send_to_agent(window, cx);
+        });
+        let answered = |view: &Workbench| {
+            !view.agent_panel.running
+                && matches!(
+                    view.agent_panel.thread.entries.last(),
+                    Some(ai::thread::Entry::Agent(_))
+                )
+        };
+        let deadline = std::time::Instant::now() + Duration::from_secs(10);
+        while !view.read_with(window, |view, _| answered(view)) {
+            assert!(std::time::Instant::now() < deadline, "no answer");
+            window.executor().advance_clock(Duration::from_millis(100));
+            window.run_until_parked();
+            std::thread::sleep(Duration::from_millis(10));
+        }
+        let chat = session::ChatState {
+            id: "session-1".to_owned(),
+            folder: None,
+        };
+        let state = view.read_with(window, |view, cx| view.window_state(cx));
+        assert_eq!(state.claude_chat, Some(chat.clone()));
+        view.read_with(window, |view, cx| view.persist_now(cx));
+
+        // Opened again, the panel goes on with that chat once it shows.
+        let (again, window) = open_window(cx, &project);
+        again.update(window, |view, _| {
+            assert_eq!(
+                view.agent_panel.restored,
+                Some(("session-1".to_owned(), None))
+            );
+            view.agent_panel.fake = true;
+        });
+        // Until then it is kept, should the window close first.
+        let kept = again.read_with(window, |view, cx| view.window_state(cx));
+        assert_eq!(kept.claude_chat, Some(chat));
+        window.update(|window, cx| {
+            let _ = window.draw(cx);
+        });
+        let deadline = std::time::Instant::now() + Duration::from_secs(10);
+        while !again.read_with(window, |view, _| {
+            view.agent_panel.status == super::agent_panel::AgentStatus::Ready
+        }) {
+            assert!(std::time::Instant::now() < deadline, "the chat did not open");
+            window.executor().advance_clock(Duration::from_millis(100));
+            window.run_until_parked();
+            std::thread::sleep(Duration::from_millis(10));
+        }
+        again.read_with(window, |view, _| {
+            assert_eq!(view.agent_panel.restored, None);
+            assert_eq!(view.agent_panel.session.as_deref(), Some("session-1"));
+        });
     }
 
     #[gpui::test]

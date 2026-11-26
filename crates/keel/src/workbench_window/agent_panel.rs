@@ -176,6 +176,12 @@ pub(super) struct AgentPanel {
     pub(super) deleted_chats: HashSet<String>,
     /// A message written before the session was ready.
     waiting: Option<Vec<Value>>,
+    /// Messages written while Claude was at work, and what they show: they
+    /// go as one as soon as the turn ends.
+    pub(super) queued: Option<(Vec<Value>, String)>,
+    /// The chat the window had open when it closed, and its folder for a
+    /// chat of another project: it opens again once the panel shows.
+    pub(super) restored: Option<(String, Option<PathBuf>)>,
     /// A notice under the conversation, such as an error.
     pub(super) notice: Option<String>,
     /// Tests talk to the fake agent instead of the adapter.
@@ -268,6 +274,8 @@ impl AgentPanel {
             pending_deletes: Vec::new(),
             deleted_chats: HashSet::new(),
             waiting: None,
+            queued: None,
+            restored: None,
             notice: None,
             fake: false,
             snapshots: Vec::new(),
@@ -303,6 +311,7 @@ impl AgentPanel {
         self.permissions.clear();
         self.notice = None;
         self.context = None;
+        self.queued = None;
     }
 }
 
@@ -329,7 +338,9 @@ impl Workbench {
     pub(super) fn open_agent(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         self.layout.agent = true;
         self.agent_panel.view = AgentView::Agent;
-        self.ensure_agent(window, cx);
+        if !self.resume_restored_chat(window, cx) {
+            self.ensure_agent(window, cx);
+        }
         self.agent_panel
             .input
             .update(cx, |input, cx| input.focus(window, cx));
@@ -805,8 +816,7 @@ impl Workbench {
     /// Enter in the message box: sends the text and the attachments.
     pub(super) fn send_to_agent(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let text = self.agent_panel.input.read(cx).value().trim().to_owned();
-        if (text.is_empty() && self.agent_panel.attachments.is_empty()) || self.agent_panel.running
-        {
+        if text.is_empty() && self.agent_panel.attachments.is_empty() {
             return;
         }
         let mut blocks = vec![acp::text_block(&text)];
@@ -832,6 +842,21 @@ impl Workbench {
             input.set_value("", window, cx);
             input.set_rows(2, cx);
         });
+        // Claude is at work: the message waits for the turn to end, as in
+        // Claude Code, and more of them go together.
+        if self.agent_panel.running {
+            let shown = shown.trim().to_owned();
+            match &mut self.agent_panel.queued {
+                Some((queued, said)) => {
+                    queued.extend(blocks);
+                    said.push_str("\n\n");
+                    said.push_str(&shown);
+                }
+                None => self.agent_panel.queued = Some((blocks, shown)),
+            }
+            cx.notify();
+            return;
+        }
         self.agent_panel.thread.push_user(shown.trim());
         self.agent_panel.notice = None;
         if self.agent_panel.session.is_none() {
@@ -859,6 +884,16 @@ impl Workbench {
                 this.agent_panel.running = false;
                 this.mark_agent_chat_synced();
                 this.refresh_agent_changes();
+                this.session_changed(cx);
+                // What was written meanwhile goes now, in the same chat.
+                if let Some((blocks, said)) = this.agent_panel.queued.take() {
+                    this.agent_panel.thread.push_user(&said);
+                    this.agent_panel.notice = None;
+                    this.prompt_agent(blocks, window, cx);
+                    this.agent_panel.scroll.scroll_to_bottom();
+                    cx.notify();
+                    return;
+                }
                 match result {
                     Ok(answer) => {
                         let stop = answer["stopReason"].as_str().unwrap_or("end_turn");
@@ -1469,6 +1504,61 @@ mod tests {
                 view.agent_panel.notice.as_deref(),
                 Some(view.strings().agent_stop_reason("cancelled").as_str())
             );
+        });
+
+        // Written while Claude works, a message waits for the turn to end;
+        // Esc in the message box stops Claude, and the message goes then.
+        send(&view, cx, "wait");
+        wait_until(cx, "the second long turn", |cx| {
+            view.read_with(cx, |view, _| view.agent_panel.running)
+        });
+        send(&view, cx, "dopo");
+        view.read_with(cx, |view, _| {
+            assert_eq!(
+                view.agent_panel
+                    .queued
+                    .as_ref()
+                    .map(|(_, said)| said.as_str()),
+                Some("dopo")
+            );
+            assert!(
+                !view
+                    .agent_panel
+                    .thread
+                    .entries
+                    .contains(&Entry::User("dopo".into()))
+            );
+        });
+        cx.update(|window, cx| {
+            let _ = window.draw(cx);
+        });
+        assert!(cx.debug_bounds("agent-queued").is_some());
+        view.update_in(cx, |view, window, cx| {
+            view.agent_panel
+                .input
+                .update(cx, |input, cx| input.focus(window, cx));
+            assert!(view.composer_key("escape", window, cx));
+        });
+        wait_until(cx, "the answer to the queued message", |cx| {
+            last_answer(&view, cx).as_deref() == Some("You said: dopo")
+        });
+        view.read_with(cx, |view, _| {
+            assert!(view.agent_panel.queued.is_none());
+            let said: Vec<&str> = view
+                .agent_panel
+                .thread
+                .entries
+                .iter()
+                .filter_map(|entry| match entry {
+                    Entry::User(text) => Some(text.as_str()),
+                    _ => None,
+                })
+                .collect();
+            assert_eq!(said[said.len() - 2..], ["wait", "dopo"]);
+        });
+        // With Claude idle, Esc is left to the message box.
+        view.update_in(cx, |view, window, cx| {
+            assert!(!view.composer_key("escape", window, cx));
         });
     }
 }

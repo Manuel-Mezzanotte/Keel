@@ -348,12 +348,51 @@ impl Workbench {
 
     /// The file Claude Code keeps the chat `id` in.
     fn agent_chat_file(&self, id: &str) -> Option<PathBuf> {
+        self.chat_file_in(id, &self.agent_chat_folder())
+    }
+
+    /// The file of the chat `id` of the folder `cwd`; none in the tests.
+    fn chat_file_in(&self, id: &str, cwd: &Path) -> Option<PathBuf> {
         if self.agent_panel.fake {
             return None;
         }
         let claude = ai::history::claude_dir()?;
-        let folder = ai::history::project_folder(&claude, &self.agent_chat_folder());
+        let folder = ai::history::project_folder(&claude, cwd);
         Some(folder.join(format!("{id}.jsonl")))
+    }
+
+    /// The open chat, as the session keeps it: one with something said,
+    /// or the one that waits to open again.
+    pub(super) fn open_chat_state(&self) -> Option<crate::session::ChatState> {
+        let panel = &self.agent_panel;
+        if let Some((id, folder)) = &panel.restored {
+            return Some(crate::session::ChatState {
+                id: id.clone(),
+                folder: folder.clone(),
+            });
+        }
+        let id = panel.session.clone()?;
+        (!panel.thread.entries.is_empty()).then(|| crate::session::ChatState {
+            id,
+            folder: panel.chat_folder.clone(),
+        })
+    }
+
+    /// Opens again the chat the window had open when it closed, if its file
+    /// is still there. Whether it did.
+    pub(super) fn resume_restored_chat(&mut self, window: &mut Window, cx: &mut Context<Self>) -> bool {
+        let Some((id, folder)) = self.agent_panel.restored.take() else {
+            return false;
+        };
+        let cwd = folder.clone().unwrap_or_else(|| self.agent_folder());
+        if self
+            .chat_file_in(&id, &cwd)
+            .is_some_and(|file| !file.is_file())
+        {
+            return false;
+        }
+        self.open_agent_chat(id, folder, window, cx);
+        true
     }
 
     /// Notes when the open chat's file changed, as Keel has it now.

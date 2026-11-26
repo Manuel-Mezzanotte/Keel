@@ -2565,6 +2565,17 @@ impl Render for Workbench {
         if self.layout.panel && self.layout.panel_view == PanelView::DebugConsole {
             self.console_input(window, cx);
         }
+        // The chat the window had open comes back once Claude's panel shows.
+        // Tests never start the real Claude: only their fake agent.
+        if self.agent_panel.restored.is_some()
+            && self.layout.agent
+            && self.agent_panel.view == super::agent_panel::AgentView::Agent
+            && (!cfg!(test) || self.agent_panel.fake)
+        {
+            cx.defer_in(window, |this, window, cx| {
+                this.resume_restored_chat(window, cx);
+            });
+        }
         if !self.first_frame_drawn {
             self.first_frame_drawn = true;
             // Once the window is on screen: how the last update went, and
