@@ -212,6 +212,16 @@ mod native {
         }
     }
 
+    pub fn start_dictation() -> bool {
+        let Some(app) = app() else {
+            return false;
+        };
+        // Up the responder chain from the field with the keyboard to the
+        // application, which starts dictation into that field.
+        // SAFETY: `startDictation:` takes the sender, here none.
+        unsafe { app.sendAction_to_from(objc2::sel!(startDictation:), None, None) }
+    }
+
     pub fn accessibility() -> Accessibility {
         if MainThreadMarker::new().is_none() {
             return Accessibility::default();
@@ -268,6 +278,20 @@ pub fn mark_menus(window: &str, help: &str) {
 pub fn bring_all_to_front() {
     #[cfg(target_os = "macos")]
     native::bring_all_to_front();
+}
+
+/// Starts macOS's dictation into the field that has the keyboard, as Edit ›
+/// Start Dictation does in every Mac app: what is said is written there,
+/// in the language set for dictation. Whether macOS took the request.
+pub fn start_dictation() -> bool {
+    #[cfg(target_os = "macos")]
+    {
+        native::start_dictation()
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        false
+    }
 }
 
 /// The number on Keel's icon in the Dock, or none.

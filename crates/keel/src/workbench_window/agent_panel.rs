@@ -1307,6 +1307,23 @@ mod tests {
             // An answer is copied as Claude wrote it.
             view.copy_agent_answer("**Fatto.**\n".to_owned(), cx);
         });
+
+        // ⌘D dictates in Claude's message box, and only there.
+        let cmd_d = gpui::Keystroke::parse("cmd-d").unwrap();
+        view.update_in(cx, |view, window, cx| {
+            view.agent_panel
+                .input
+                .update(cx, |input, cx| input.focus(window, cx));
+        });
+        view.update_in(cx, |view, window, cx| {
+            assert!(view.dictation_key(&cmd_d, window, cx));
+            let plain_d = gpui::Keystroke::parse("d").unwrap();
+            assert!(!view.dictation_key(&plain_d, window, cx));
+            view.focus_pane(view.active, window, cx);
+        });
+        view.update_in(cx, |view, window, cx| {
+            assert!(!view.dictation_key(&cmd_d, window, cx));
+        });
         let copied = cx.read_from_clipboard().and_then(|item| item.text());
         assert_eq!(copied.as_deref(), Some("**Fatto.**"));
     }

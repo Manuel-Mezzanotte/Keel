@@ -2048,6 +2048,10 @@ impl Workbench {
         if !keystroke.modifiers.modified() && self.composer_key(&keystroke.key, window, cx) {
             return true;
         }
+        // ⌘D there dictates.
+        if self.dictation_key(keystroke, window, cx) {
+            return true;
+        }
         // Esc closes a peek first, then the Explorer's filter.
         if keystroke.key == "escape"
             && !keystroke.modifiers.modified()

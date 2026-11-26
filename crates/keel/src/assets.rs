@@ -87,7 +87,8 @@ gpui_kit_assets::icon_assets!(
         TextCursorInput,
         ListChecks,
         ShieldAlert,
-        Zap
+        Zap,
+        Mic
     ]
 );
 

@@ -335,6 +335,47 @@ impl Workbench {
         true
     }
 
+    /// Dictation into Claude's message box: the box takes the keyboard,
+    /// then macOS's dictation writes what is said in it.
+    pub(super) fn dictate_to_agent(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.agent_panel
+            .input
+            .update(cx, |input, cx| input.focus(window, cx));
+        // Once the box has the keyboard, which macOS reads from the window.
+        cx.defer_in(window, |_, _, _| {
+            crate::mac::start_dictation();
+        });
+    }
+
+    /// ⌘D in Claude's message box starts dictation, as in the Claude Code
+    /// extension; elsewhere it stays "add the next occurrence". Whether the
+    /// key was used.
+    pub(super) fn dictation_key(
+        &mut self,
+        keystroke: &gpui::Keystroke,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> bool {
+        let modifiers = keystroke.modifiers;
+        if keystroke.key != "d"
+            || !modifiers.platform
+            || modifiers.shift
+            || modifiers.alt
+            || modifiers.control
+            || !self.layout.agent
+            || !self
+                .agent_panel
+                .input
+                .read(cx)
+                .focus_handle(cx)
+                .is_focused(window)
+        {
+            return false;
+        }
+        self.dictate_to_agent(window, cx);
+        true
+    }
+
     /// Puts an answer of Claude on the clipboard, in the Markdown it was
     /// written in.
     pub(super) fn copy_agent_answer(&mut self, text: String, cx: &mut Context<Self>) {
@@ -1765,6 +1806,12 @@ impl Workbench {
             strings.agent_commands,
             "/",
         );
+        let dictate = Button::new("agent-dictate")
+            .ghost()
+            .xsmall()
+            .icon(Icon::new(IconName::Mic))
+            .tooltip(strings.agent_dictate)
+            .on_click(cx.listener(|this, _, window, cx| this.dictate_to_agent(window, cx)));
         let menu = self.render_composer_menu(colors, cx);
         div()
             .flex_none()
@@ -1835,6 +1882,7 @@ impl Workbench {
                                 .gap(px(2.))
                                 .child(mention)
                                 .child(command)
+                                .child(dictate)
                                 .children(mode_button)
                                 .child(div().flex_1())
                                 .children(context_button)
