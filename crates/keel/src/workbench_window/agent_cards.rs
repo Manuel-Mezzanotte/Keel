@@ -274,7 +274,8 @@ impl Workbench {
         let model = self.agent_option("model")?;
         let name = model
             .current_name()
-            .unwrap_or(strings.agent_model)
+            .map(ai::session_meta::readable_model)
+            .unwrap_or_else(|| strings.agent_model.to_owned())
             .split(" (")
             .next()
             .unwrap_or_default()
@@ -461,7 +462,11 @@ impl Workbench {
                 continue;
             }
             let (id, chosen) = (model.id.clone(), value.value.clone());
-            let name = value.name.split(" (").next().unwrap_or_default().to_owned();
+            let name = ai::session_meta::readable_model(&value.name)
+                .split(" (")
+                .next()
+                .unwrap_or_default()
+                .to_owned();
             // "Default (recommended)": the words in brackets go under it.
             let hint = value.description.clone().or_else(|| {
                 value

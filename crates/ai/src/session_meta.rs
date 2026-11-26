@@ -42,6 +42,50 @@ impl ConfigOption {
     }
 }
 
+/// A model as people call it: Claude Code may name the model in use by
+/// its id (`claude-opus-5-5`, from a setting) rather than as its list does
+/// ("Opus 5.5"). Anything that is not such an id stays as it is.
+pub fn readable_model(name: &str) -> String {
+    let (id, wide) = match name.strip_suffix("[1m]") {
+        Some(id) => (id, true),
+        None => (name, false),
+    };
+    let Some(rest) = id.strip_prefix("claude-") else {
+        return name.to_owned();
+    };
+    let mut family = None;
+    let mut version = Vec::new();
+    for part in rest.split('-') {
+        if part.chars().all(|c| c.is_ascii_digit()) {
+            // A date, as in `claude-sonnet-4-5-20250929`, is not the version.
+            if part.len() <= 2 {
+                version.push(part);
+            }
+        } else if family.is_none() && part.chars().all(|c| c.is_ascii_alphabetic()) {
+            family = Some(part);
+        } else {
+            return name.to_owned();
+        }
+    }
+    let Some(family) = family else {
+        return name.to_owned();
+    };
+    let mut readable: String = family
+        .chars()
+        .take(1)
+        .flat_map(char::to_uppercase)
+        .chain(family.chars().skip(1))
+        .collect();
+    if !version.is_empty() {
+        readable.push(' ');
+        readable.push_str(&version.join("."));
+    }
+    if wide {
+        readable.push_str(" (1M)");
+    }
+    readable
+}
+
 /// The options of a `session/new` or `session/load` answer, or of a
 /// `config_option_update`: `configOptions`, or the older `modes` as an
 /// option called `mode`.
@@ -481,6 +525,23 @@ fn days_from_civil(year: i64, month: i64, day: i64) -> i64 {
 
 #[cfg(test)]
 mod tests {
+
+    #[test]
+    fn model_ids_read_as_names() {
+        assert_eq!(readable_model("claude-opus-5-5"), "Opus 5.5");
+        assert_eq!(readable_model("claude-fable-5-2"), "Fable 5.2");
+        assert_eq!(readable_model("claude-sonnet-4-5-20250929"), "Sonnet 4.5");
+        assert_eq!(readable_model("claude-3-5-haiku-20241022"), "Haiku 3.5");
+        assert_eq!(readable_model("claude-opus-5-5[1m]"), "Opus 5.5 (1M)");
+        // Names, aliases and other providers' models stay as they are.
+        assert_eq!(readable_model("Opus 5.5"), "Opus 5.5");
+        assert_eq!(readable_model("opus"), "opus");
+        assert_eq!(
+            readable_model("qwen/qwen-2.5-coder-32b-instruct"),
+            "qwen/qwen-2.5-coder-32b-instruct"
+        );
+    }
+
     use serde_json::json;
 
     use super::*;

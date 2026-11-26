@@ -40,6 +40,9 @@ pub(super) enum AgentView {
 /// How many chats the list keeps.
 const MOST_CHATS: usize = 60;
 
+/// Whether the Mac stays awake while Claude works (on by default).
+pub(super) const KEEP_AWAKE_SETTING: &str = "keel.claude.keepAwake";
+
 /// The Claude app's chats: those of the project in `cwd`, and those of the
 /// other projects of its account, by project, as chats of the list.
 fn read_app_chats(cwd: &Path) -> (Vec<ai::history::AppChat>, Vec<(PathBuf, Vec<Chat>)>) {
@@ -178,6 +181,8 @@ pub(super) struct AgentPanel {
     pub(super) deleted_chats: HashSet<String>,
     /// A message written before the session was ready.
     waiting: Option<Vec<Value>>,
+    /// Keeps the Mac awake while a turn runs.
+    awake: Option<crate::mac::Awake>,
     /// Messages written while Claude was at work, and what they show: they
     /// go as one as soon as the turn ends.
     pub(super) queued: Option<(Vec<Value>, String)>,
@@ -277,6 +282,7 @@ impl AgentPanel {
             pending_renames: Vec::new(),
             deleted_chats: HashSet::new(),
             waiting: None,
+            awake: None,
             queued: None,
             restored: None,
             notice: None,
@@ -585,6 +591,7 @@ impl Workbench {
                 self.agent_panel.session = None;
                 self.agent_panel.chat_folder = None;
                 self.agent_panel.running = false;
+                self.agent_panel.awake = None;
                 self.agent_panel.permissions.clear();
                 self.agent_panel.status =
                     AgentStatus::Failed(self.strings().agent_stopped.to_owned());
@@ -898,11 +905,22 @@ impl Workbench {
             return;
         };
         self.agent_panel.running = true;
+        // The Mac stays awake while Claude works, unless told otherwise.
+        let keep_awake = !cfg!(test)
+            && self
+                .settings
+                .get(KEEP_AWAKE_SETTING)
+                .and_then(Value::as_bool)
+                .unwrap_or(true);
+        if keep_awake && self.agent_panel.awake.is_none() {
+            self.agent_panel.awake = Some(crate::mac::stay_awake("Claude is working in Keel"));
+        }
         let turn = agent.prompt(&session, blocks);
         cx.spawn_in(window, async move |this, cx| {
             let result = turn.await;
             this.update_in(cx, |this, window, cx| {
                 this.agent_panel.running = false;
+                this.agent_panel.awake = None;
                 this.mark_agent_chat_synced();
                 this.refresh_agent_changes();
                 this.session_changed(cx);

@@ -76,7 +76,7 @@ polling = "3.11.0"
 # Dock's badge, accessibility, files on the pasteboard, dragging files out):
 # the same bindings GPUI itself uses.
 objc2 = "0.6.5"
-objc2-foundation = { version = "0.3.2", default-features = false, features = ["std", "NSArray", "NSString", "NSURL", "NSGeometry", "NSObject"] }
+objc2-foundation = { version = "0.3.2", default-features = false, features = ["std", "NSArray", "NSString", "NSURL", "NSGeometry", "NSObject", "NSProcessInfo"] }
 objc2-app-kit = { version = "0.3.2", default-features = false, features = ["std", "NSApplication", "NSDockTile", "NSMenu", "NSMenuItem", "NSPasteboard", "NSPasteboardItem", "NSResponder", "NSRunningApplication", "NSWorkspace", "NSView", "NSWindow", "NSEvent", "NSDragging", "NSDraggingItem", "NSDraggingSession", "NSImage", "NSGraphics"] }
 
 # Git: line differences for the editor's margin and for staging blocks.

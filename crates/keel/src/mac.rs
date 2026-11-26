@@ -1,12 +1,37 @@
 //! The few things of macOS that GPUI does not reach: the Window and Help
 //! menus as the system knows them (with the list of windows and the search
-//! field), the Dock's badge and bounce, the accessibility settings, and
-//! files on the pasteboard, which Finder, Mail and Slack paste.
+//! field), the Dock's badge and bounce, the accessibility settings, files
+//! on the pasteboard, which Finder, Mail and Slack paste, and keeping the
+//! Mac awake while Claude works.
 //!
 //! Each call does nothing off the main thread, as in tests.
 
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicUsize, Ordering};
+
+/// While it lives, the Mac does not go to sleep when left alone, as for a
+/// download: Claude works on. The screen still dims and locks as set.
+pub struct Awake(
+    objc2::rc::Retained<objc2::runtime::ProtocolObject<dyn objc2::runtime::NSObjectProtocol>>,
+);
+
+/// Keeps the Mac awake until the [`Awake`] is dropped.
+pub fn stay_awake(reason: &str) -> Awake {
+    let info = objc2_foundation::NSProcessInfo::processInfo();
+    Awake(info.beginActivityWithOptions_reason(
+        objc2_foundation::NSActivityOptions::IdleSystemSleepDisabled,
+        &objc2_foundation::NSString::from_str(reason),
+    ))
+}
+
+impl Drop for Awake {
+    fn drop(&mut self) {
+        let info = objc2_foundation::NSProcessInfo::processInfo();
+        // SAFETY: the token is the one `beginActivityWithOptions:reason:`
+        // gave, ended once.
+        unsafe { info.endActivity(&self.0) };
+    }
+}
 
 /// Things that waited for you while Keel was in the background: the number
 /// on its icon in the Dock.
@@ -290,5 +315,28 @@ pub fn copy_files(paths: &[PathBuf], text: &str) -> bool {
     {
         let _ = (paths, text);
         false
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// What macOS says keeps it awake now, from `pmset`.
+    fn assertions() -> String {
+        let out = std::process::Command::new("/usr/bin/pmset")
+            .args(["-g", "assertions"])
+            .output()
+            .expect("pmset runs");
+        String::from_utf8_lossy(&out.stdout).into_owned()
+    }
+
+    #[test]
+    fn the_mac_stays_awake_until_let_go() {
+        let reason = format!("Keel test {}", std::process::id());
+        let awake = stay_awake(&reason);
+        assert!(assertions().contains(&reason), "{}", assertions());
+        drop(awake);
+        assert!(!assertions().contains(&reason));
     }
 }
