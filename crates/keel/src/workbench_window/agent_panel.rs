@@ -172,6 +172,8 @@ pub(super) struct AgentPanel {
     pub(super) deleting: Option<String>,
     /// Chats to delete once the agent runs.
     pub(super) pending_deletes: Vec<String>,
+    /// Chats to rename once the agent runs: id and title.
+    pub(super) pending_renames: Vec<(String, String)>,
     /// Chats deleted here: a list asked for before stays without them.
     pub(super) deleted_chats: HashSet<String>,
     /// A message written before the session was ready.
@@ -272,6 +274,7 @@ impl AgentPanel {
             more_models: false,
             deleting: None,
             pending_deletes: Vec::new(),
+            pending_renames: Vec::new(),
             deleted_chats: HashSet::new(),
             waiting: None,
             queued: None,
@@ -473,6 +476,9 @@ impl Workbench {
                     this.agent_panel.auth_methods = methods;
                     for id in std::mem::take(&mut this.agent_panel.pending_deletes) {
                         this.delete_agent_chat(id, cx);
+                    }
+                    for (id, title) in std::mem::take(&mut this.agent_panel.pending_renames) {
+                        this.rename_agent_chat_to(id, title, cx);
                     }
                 })
                 .ok();
@@ -811,6 +817,21 @@ impl Workbench {
             .input
             .update(cx, |input, cx| input.focus(window, cx));
         cx.notify();
+    }
+
+    /// Files and folders of the Explorer, with "Add to Claude": they go
+    /// with the next message, and the chat shows.
+    pub(super) fn add_paths_to_agent(
+        &mut self,
+        paths: Vec<PathBuf>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.layout.agent = true;
+        self.agent_panel.view = AgentView::Agent;
+        self.agent_panel.show_chats = false;
+        self.attach_to_agent(paths, window, cx);
+        self.session_changed(cx);
     }
 
     /// Enter in the message box: sends the text and the attachments.
@@ -1257,7 +1278,19 @@ mod tests {
             assert_eq!(view.agent_panel.attachments.len(), 1);
             view.open_file(&path, window, cx);
             assert!(!view.claude_touched.contains(&path));
+
+            // "Add to Claude" in the Explorer attaches and shows the chat.
+            view.agent_panel.attachments.clear();
+            view.layout.agent = false;
+            view.add_paths_to_agent(vec![path.clone(), project.path().to_path_buf()], window, cx);
+            assert!(view.layout.agent);
+            assert_eq!(view.agent_panel.attachments.len(), 2);
+
+            // An answer is copied as Claude wrote it.
+            view.copy_agent_answer("**Fatto.**\n".to_owned(), cx);
         });
+        let copied = cx.read_from_clipboard().and_then(|item| item.text());
+        assert_eq!(copied.as_deref(), Some("**Fatto.**"));
     }
 
     #[gpui::test]
@@ -1479,6 +1512,29 @@ mod tests {
                 view.agent_panel.thread.entries[1],
                 Entry::Agent("You said: ciao".into())
             );
+        });
+
+        // A chat takes a title of yours: at once in the list and the
+        // header, and in Claude Code, which lists it so from then on.
+        view.update(cx, |view, cx| {
+            view.rename_agent_chat_to("session-1".to_owned(), "  Prenotazioni ".to_owned(), cx);
+            assert_eq!(view.agent_title(), "Prenotazioni");
+            assert!(
+                view.agent_panel
+                    .chats
+                    .iter()
+                    .any(|chat| chat.id == "session-1" && chat.title == "Prenotazioni")
+            );
+            view.agent_panel.chats.clear();
+        });
+        view.update_in(cx, |view, window, cx| view.refresh_agent_history(window, cx));
+        wait_until(cx, "the renamed chat in the list", |cx| {
+            view.read_with(cx, |view, _| {
+                view.agent_panel
+                    .chats
+                    .iter()
+                    .any(|chat| chat.id == "session-1" && chat.title == "Prenotazioni")
+            })
         });
 
         // The panel draws: messages, tools, plan and the message box.

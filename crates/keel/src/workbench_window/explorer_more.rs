@@ -70,6 +70,13 @@ pub struct OpenInTerminal {
     pub path: PathBuf,
 }
 
+/// The row, or the rows chosen with it, go with Claude's next message.
+#[derive(Clone, Debug, PartialEq, gpui::Action)]
+#[action(namespace = explorer, no_json)]
+pub struct AddToClaude {
+    pub path: PathBuf,
+}
+
 #[derive(Clone, Debug, PartialEq, gpui::Action)]
 #[action(namespace = explorer, no_json)]
 pub struct SelectForCompare {
@@ -153,6 +160,16 @@ impl Workbench {
             }))
             .on_action(cx.listener(|this, action: &OpenInTerminal, window, cx| {
                 this.open_in_terminal(action.path.clone(), window, cx)
+            }))
+            .on_action(cx.listener(|this, action: &AddToClaude, window, cx| {
+                // The rows chosen together, when the menu is on one of them.
+                let chosen = this.chosen_paths();
+                let paths = if chosen.contains(&action.path) {
+                    chosen
+                } else {
+                    vec![action.path.clone()]
+                };
+                this.add_paths_to_agent(paths, window, cx)
             }))
             .on_action(cx.listener(|this, action: &SelectForCompare, _, cx| {
                 this.tree_extras.compare_with = Some(action.path.clone());

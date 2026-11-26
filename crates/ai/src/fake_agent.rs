@@ -8,7 +8,8 @@
 //! - any other prompt is answered with "You said: <text>";
 //! - a prompt with `wait` waits until `session/cancel`;
 //! - `pwd` answers with the folder the session works in;
-//! - `session/list` and `session/load` know the sessions it made.
+//! - `session/list` and `session/load` know the sessions it made, and
+//!   `session/set_title` names them.
 
 use std::io::{self, BufRead as _, BufReader, Write as _};
 use std::sync::mpsc;
@@ -36,6 +37,8 @@ struct Fake {
     sessions: Vec<Session>,
     /// Messages read while waiting for an answer, handled after.
     queued: Vec<Value>,
+    /// Titles given with `session/set_title`, by session.
+    titles: Vec<(String, String)>,
 }
 
 impl Fake {
@@ -225,6 +228,13 @@ impl Fake {
                 json!({})
             }
             "authenticate" | "session/close" => json!({}),
+            "session/set_title" => {
+                let session = params["sessionId"].as_str().unwrap_or_default().to_owned();
+                let title = params["title"].as_str().unwrap_or_default().trim().to_owned();
+                self.titles.retain(|(known, _)| *known != session);
+                self.titles.push((session, title.clone()));
+                json!({ "title": title })
+            }
             "session/delete" => {
                 let session = params["sessionId"].as_str().unwrap_or_default();
                 self.sessions.retain(|(known, _, _)| known != session);
@@ -254,7 +264,14 @@ impl Fake {
                     .sessions
                     .iter()
                     .filter(|(_, known, said)| known == cwd && !said.is_empty())
-                    .map(|(session, cwd, said)| json!({ "sessionId": session, "cwd": cwd, "title": said[0].0 }))
+                    .map(|(session, cwd, said)| {
+                        let title = self
+                            .titles
+                            .iter()
+                            .find(|(known, _)| known == session)
+                            .map_or(said[0].0.as_str(), |(_, title)| title.as_str());
+                        json!({ "sessionId": session, "cwd": cwd, "title": title })
+                    })
                     .collect();
                 json!({ "sessions": sessions })
             }
@@ -329,6 +346,7 @@ fn run(input: io::PipeReader, out: io::PipeWriter) {
         next_id: 0,
         sessions: Vec::new(),
         queued: Vec::new(),
+        titles: Vec::new(),
     };
     loop {
         let message = if fake.queued.is_empty() {

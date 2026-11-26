@@ -327,6 +327,19 @@ impl Agent {
         self.request("session/delete", json!({ "sessionId": session }))
     }
 
+    /// Gives a session a title of the user's: Claude Code keeps it, and no
+    /// title it makes up replaces it.
+    pub fn set_title(
+        &self,
+        session: &str,
+        title: &str,
+    ) -> impl Future<Output = Result<Value>> + use<> {
+        self.request(
+            "session/set_title",
+            json!({ "sessionId": session, "title": title }),
+        )
+    }
+
     /// Ends a session in the agent, so it can be loaded again afresh.
     pub fn close_session(&self, session: &str) -> impl Future<Output = Result<Value>> + use<> {
         self.request("session/close", json!({ "sessionId": session }))

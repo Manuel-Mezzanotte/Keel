@@ -459,8 +459,11 @@ impl Workbench {
                 )
                 .into_any_element();
         }
+        // Claude Code's chats can be renamed and deleted here; the Claude
+        // app's keep their title and are deleted in the app.
         let deletable = !chat.app;
         let delete_id = chat.id.clone();
+        let rename = (chat.id.clone(), chat.title.clone());
         div()
             .id(id.clone())
             .group(group.clone())
@@ -514,6 +517,20 @@ impl Workbench {
                         .right(px(4.))
                         .invisible()
                         .group_hover(group, |bin| bin.visible())
+                        .flex()
+                        .items_center()
+                        .child(
+                            Button::new(SharedString::from(format!("{id}-rename")))
+                                .ghost()
+                                .xsmall()
+                                .icon(Icon::new(IconName::Pencil))
+                                .tooltip(strings.agent_rename_chat)
+                                .on_click(cx.listener(move |this, _, window, cx| {
+                                    cx.stop_propagation();
+                                    let (id, title) = rename.clone();
+                                    this.rename_agent_chat(id, title, window, cx)
+                                })),
+                        )
                         .child(
                             Button::new(SharedString::from(format!("{id}-delete")))
                                 .ghost()

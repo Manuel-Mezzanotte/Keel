@@ -1392,6 +1392,13 @@ impl Workbench {
                 };
                 menu.separator()
                     .menu(
+                        strings.agent_add_to_claude,
+                        Box::new(super::explorer_more::AddToClaude {
+                            path: menu_path.clone(),
+                        }),
+                    )
+                    .separator()
+                    .menu(
                         strings.explorer_cut,
                         Box::new(super::explorer_more::CutFiles),
                     )

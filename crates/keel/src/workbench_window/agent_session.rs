@@ -15,6 +15,7 @@ use std::time::Duration;
 
 use ai::session_meta::{self, Account, ConfigOption};
 use anyhow::Result;
+use gpui_component::Sizable as _;
 use gpui_component::input::InputState;
 
 use super::agent_panel::{AgentStatus, AgentView};
@@ -603,6 +604,78 @@ impl Workbench {
             let deleted = deleted.await;
             this.update(cx, |this, cx| {
                 if let Err(error) = deleted {
+                    this.agent_panel.notice = Some(format!("{error:#}"));
+                }
+                cx.notify();
+            })
+            .ok();
+        })
+        .detach();
+        cx.notify();
+    }
+
+    /// Asks a new title for a chat, in a small dialog.
+    pub(super) fn rename_agent_chat(
+        &mut self,
+        id: String,
+        title: String,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let placeholder = self.strings().agent_chat_title;
+        let input = cx.new(|cx| {
+            let mut state = InputState::new(window, cx).placeholder(placeholder);
+            state.set_value(title, window, cx);
+            state
+        });
+        let this = cx.weak_entity();
+        let field = input.clone();
+        // The dialog takes Enter as its OK, which reads the field.
+        window.open_dialog(cx, move |dialog, _, _| {
+            let this = this.clone();
+            let id = id.clone();
+            let shown = field.clone();
+            let field = field.clone();
+            dialog
+                .w(px(360.))
+                .on_ok(move |_, _, cx| {
+                    let typed = field.read(cx).value().trim().to_owned();
+                    let id = id.clone();
+                    this.update(cx, |this, cx| this.rename_agent_chat_to(id, typed, cx))
+                        .ok();
+                    true
+                })
+                .child(gpui_component::input::Input::new(&shown).small())
+        });
+        input.update(cx, |input, cx| {
+            input.focus(window, cx);
+            input.select_all(window, cx);
+        });
+    }
+
+    /// Gives a chat the title `title` in Claude Code; with the agent off,
+    /// once it runs. The list shows it at once.
+    pub(super) fn rename_agent_chat_to(&mut self, id: String, title: String, cx: &mut Context<Self>) {
+        let title = title.trim().to_owned();
+        if title.is_empty() {
+            return;
+        }
+        for chat in self.agent_panel.chats.iter_mut().filter(|chat| chat.id == id) {
+            chat.title = title.clone();
+        }
+        if self.agent_panel.session.as_deref() == Some(id.as_str()) {
+            self.agent_panel.thread.title = Some(title.clone());
+        }
+        let Some(agent) = self.agent_panel.agent.clone() else {
+            self.agent_panel.pending_renames.push((id, title));
+            cx.notify();
+            return;
+        };
+        let renamed = agent.set_title(&id, &title);
+        cx.spawn(async move |this, cx| {
+            let renamed = renamed.await;
+            this.update(cx, |this, cx| {
+                if let Err(error) = renamed {
                     this.agent_panel.notice = Some(format!("{error:#}"));
                 }
                 cx.notify();

@@ -335,6 +335,14 @@ impl Workbench {
         true
     }
 
+    /// Puts an answer of Claude on the clipboard, in the Markdown it was
+    /// written in.
+    pub(super) fn copy_agent_answer(&mut self, text: String, cx: &mut Context<Self>) {
+        cx.write_to_clipboard(gpui::ClipboardItem::new_string(text.trim().to_owned()));
+        self.status_message = Some(self.strings().agent_copied.to_owned());
+        cx.notify();
+    }
+
     // -----------------------------------------------------------------
     // The header
 
@@ -953,11 +961,41 @@ impl Workbench {
                         .child(text.clone()),
                 )
                 .into_any_element(),
-            Entry::Agent(_) => match self.agent_panel.markdown.get(&index) {
-                Some((state, _)) => div()
-                    .text_size(px(13.))
-                    .child(TextView::new(state))
-                    .into_any_element(),
+            Entry::Agent(text) => match self.agent_panel.markdown.get(&index) {
+                Some((state, _)) => {
+                    // Under an answer, on hover: copy it as Claude wrote it,
+                    // in Markdown. Not while it is still being written.
+                    let group: gpui::SharedString = format!("agent-answer-{index}").into();
+                    let live = self.agent_panel.running
+                        && index + 1 == self.agent_panel.thread.entries.len();
+                    let copied = text.clone();
+                    div()
+                        .group(group.clone())
+                        .flex()
+                        .flex_col()
+                        .child(div().text_size(px(13.)).child(TextView::new(state)))
+                        .when(!live, |answer| {
+                            answer.child(
+                                div()
+                                    .h(px(22.))
+                                    .flex()
+                                    .items_center()
+                                    .invisible()
+                                    .group_hover(group, |row| row.visible())
+                                    .child(
+                                        Button::new(("agent-copy-answer", index))
+                                            .ghost()
+                                            .xsmall()
+                                            .icon(Icon::new(IconName::Copy))
+                                            .tooltip(self.strings().agent_copy_answer)
+                                            .on_click(cx.listener(move |this, _, _, cx| {
+                                                this.copy_agent_answer(copied.clone(), cx)
+                                            })),
+                                    ),
+                            )
+                        })
+                        .into_any_element()
+                }
                 None => div().into_any_element(),
             },
             Entry::Thought(text) => {
