@@ -193,8 +193,10 @@ Dopo le prime prove dell'app vera (18 novembre) sono arrivati altri giri di rito
   - il codice: `agent_panel.rs` tiene la conversazione e il dialogo con l'agente, `agent_view.rs` la disegna (menu `/` e `@` compresi), `agent_session.rs` gestisce account, chiave, opzioni, limiti, eliminazione e sincronizzazione, `agent_cards.rs` disegna le schede di modo, modello e consumo; `crates/ai/src/session_meta.rs` legge i messaggi del protocollo. L'agente finto dei test (`fake_agent.rs`) fa anche account, logout, comandi e opzioni. Le foto: `KEEL_SNAPSHOTS_ONLY=claude scripts/snapshots.sh <cartella>` (`claude-home`, `-chats`, `-chat`, `-slash`, `-mention`, `-model`, `-mode`, `-usage`, `-tools`, `-login`);
   - provato: i test con l'agente finto (comandi, file, modello, logout, tasti dei menu) e la forma delle risposte dell'adattatore vero per l'account. **Da provare a mano**: una chat dell'app Claude continuata in Keel e poi riaperta nell'app (l'app potrebbe mostrare i messaggi di Keel solo dopo averla riaperta); login e logout veri (il logout esce anche da Claude Code nel terminale, perché il login è lo stesso), la chiave API, una chat continuata nel terminale e ripresa nel pannello.
 
+- **la 0.1.3, prima sottofase** (26 novembre, su `develop`, non ancora in una versione): le chat degli altri progetti si aprono nella finestra dove si lavora, con Claude che lavora nella loro cartella; Esc ferma Claude; un messaggio scritto mentre Claude lavora aspetta il turno; la chat aperta torna riaprendo la finestra; rinomina delle chat, copia delle risposte, «Aggiungi a Claude» dall'albero; il nome del modello leggibile; il Mac sveglio mentre Claude lavora; la dettatura di macOS nel campo (⌘D). Il dettaglio, quello che è andato diversamente e le prove a mano sono in [`PIANO-0.1.3.md`](PIANO-0.1.3.md), «Com'è andata».
+
 Stato dei controlli all'ultimo commit:
-- tutti i test passano: 587, più 28 da lanciare a mano; nell'app 326, più 6 (rilanciati il 26 novembre);
+- tutti i test passano: 594, più 28 da lanciare a mano; nell'app 332, più 6 (26 novembre);
 - clippy non segnala niente;
 - la prima schermata di Keel arriva in 330 ms, media di sei avvii;
 - **memoria di Keel** (22 novembre, versione installata, M4 Pro, language server spenti), come la dà Monitoraggio Attività: 132 MB con una finestra vuota, 271 MB con un progetto e un file, 299 MB con 450 file e 20 schede, 326 MB con due progetti. I 130–150 MB scritti in `PIANO.md` sono la memoria residente (RSS), che non conta quella grafica: non vanno usati per i confronti;
@@ -215,7 +217,7 @@ Stato dei controlli all'ultimo commit:
 
 ### La 0.1.3
 
-La proposta è in [`PIANO-0.1.3.md`](PIANO-0.1.3.md) (26 novembre): le chat degli altri progetti nella finestra dove si lavora, le icone di serie come Material Icon Theme, e quello che è venuto fuori confrontando Keel con l'estensione ufficiale di Claude Code, VS Code e Zed. Si parte solo col via dell'autore.
+Il piano è in [`PIANO-0.1.3.md`](PIANO-0.1.3.md), approvato il 26 novembre: sei sottofasi, dalle cose di Claude all'uscita. La prima è fatta; la prossima è quella delle icone di serie (Material Icon Theme dentro Keel). Ogni sottofase parte col via dell'autore.
 
 ### Subito: le prove a mano
 

@@ -335,7 +335,7 @@ flowchart LR
 ## Sviluppo
 
 ```bash
-cargo test --workspace                     # 587 test, senza finestre sullo schermo
+cargo test --workspace                     # 594 test, senza finestre sullo schermo
 cargo clippy --workspace --all-targets     # nessun avviso
 scripts/snapshots.sh <cartella>            # la finestra disegnata fuori dallo schermo, in PNG
 scripts/third-party-licenses.py            # gli avvisi delle licenze, dopo aver cambiato le dipendenze

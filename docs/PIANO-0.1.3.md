@@ -1,6 +1,6 @@
 # Keel 0.1.3 — proposta
 
-*Scritto il 26 novembre 2026, sulla 0.1.2. Stato: **proposta, da approvare**. Niente parte senza il via dell'autore.*
+*Scritto il 26 novembre 2026, sulla 0.1.2. Stato: **approvata il 26 novembre** («Sì, parti»); **sottofase 1 fatta il 26 novembre**, su `develop`, con le prove a mano ancora da fare (vedi «Com'è andata»).*
 
 Da dove viene:
 - **le due richieste dell'autore** del 26 novembre: le chat degli altri progetti nella finestra dove si lavora, e le icone di serie come Material Icon Theme;
@@ -143,6 +143,35 @@ Una sottofase alla volta, ognuna chiusa da test automatici, immagini di `scripts
 5. **Git e difetti** (8, e i difetti del 9).
 6. **L'uscita:** il confronto rimisurato, i documenti, il sito, `CHANGELOG.md` e `docs/CHANGELOG.it.md`, poi il rilascio con `scripts/release.sh` (VPN accesa, il codice di verifica lo scrive l'autore), il push di `develop` e del tag quando lo chiede l'autore, e la pagina delle novità del sito.
 
+## Com'è andata
+
+### Sottofase 1 — Claude, subito (26 novembre)
+
+**Fatto**, un commit per argomento su `develop`:
+- **Le chat degli altri progetti si aprono qui** (`fc535d8`). Ogni chat ha la sua cartella (`chat_folder` nel pannello): `session/load` la riceve, e la seguono la rilettura della chat, il suo file e «Continua nel terminale» (`cd` nella cartella, oppure un terminale nuovo in basso se a destra Claude Code è al lavoro). Sopra la chat una fascia dice «Claude lavora in …», con «Apri il progetto». «+» torna a questo progetto. `windows::open_then` non serviva più ed è stato tolto.
+- **Esc ferma Claude, i messaggi aspettano il turno, la chat torna** (`f8c2086`, `35c8025`). Un messaggio scritto mentre Claude lavora compare sopra il campo («Parte quando Claude ha finito», con la X per toglierlo) e parte alla fine del turno; più messaggi partono come uno, con i testi uniti. La sessione del progetto ricorda la chat aperta e la sua cartella (`claude_chat` in `WindowState`): riaprendo la finestra, la chat torna quando il pannello di Claude si vede, e Claude riparte.
+- **Rinomina, copia, «Aggiungi a Claude»** (`931adbd`). La matita accanto al cestino rinomina una chat di Claude Code con `session/set_title`; un pulsante sotto ogni risposta la copia in Markdown; nel menu col tasto destro dell'albero «Aggiungi a Claude» allega il file, o i file scelti insieme.
+- **Nome del modello leggibile e Mac sveglio** (`fcc3789`). `readable_model` in `session_meta.rs` (`claude-opus-5-5` → «Opus 5.5»; gli altri nomi restano). Durante un turno Keel tiene sveglio il Mac con `NSProcessInfo` (`mac::stay_awake`), con `keel.claude.keepAwake` (acceso di serie) in Impostazioni › File e finestre, gruppo «Claude».
+- **Dettatura** (`8f4d523`). Il microfono nel campo e ⌘D quando il cursore è lì avviano la dettatura di macOS (`startDictation:` all'applicazione): niente da installare, nessun permesso nuovo per Keel.
+- **Un difetto trovato con le foto** (`35c8025`): due messaggi scritti mentre Claude si avviava si sovrascrivevano e partiva solo l'ultimo; ora partono insieme. E un messaggio in coda aspetta 150 ms dopo la fine del turno, perché gli ultimi pezzi della risposta arrivano a Keel separati dalla fine del turno e prima comparivano dopo il messaggio.
+
+**Diverso dal piano:**
+- **Archiviare le chat non si può:** l'adattatore dà `_session/archive` solo ai programmi di JetBrains (AIR). Resta eliminarle.
+- **«Aggiungi a Claude» nel menu dell'editor non c'è:** quel menu è di gpui-component, e per aggiungere una voce andrebbe rifatto tutto. Per la selezione restano `@` (la prima voce è la selezione) e il comando «Claude Code: Aggiungi il file o la selezione alla conversazione».
+
+**Controlli:** 594 test, tutti verdi, più 28 da lanciare a mano (nell'app 332, più 6); clippy pulito; le foto di `scripts/snapshots.sh` (`claude-elsewhere`, `claude-queued` e le altre del pannello) guardate. Il test del Mac sveglio chiede a macOS con `pmset` se l'attività c'è davvero.
+
+**Le tue prove a mano:**
+1. Da una finestra di un progetto, nel pannello di Claude, apri una chat di un altro progetto: si apre lì, con «Claude lavora in …». Chiedile «in che cartella sei?».
+2. «Apri il progetto» apre quel progetto in una finestra sua, e la chat resta dov'è.
+3. Su quella chat, «Continua nel terminale»: Claude Code riparte nella cartella giusta.
+4. Mentre Claude lavora, scrivi un altro messaggio e premi Invio: aspetta sopra il campo e parte alla fine. Esc nel campo ferma Claude.
+5. Chiudi Keel con una chat aperta e riaprilo: la chat torna.
+6. Rinomina una chat con la matita; copia una risposta; tasto destro su un file dell'albero → «Aggiungi a Claude».
+7. Il nome del modello nel campo dice «Opus 5.5», non l'id.
+8. ⌘D nel campo, o il microfono, poi parla: il testo deve comparire nel campo. Se macOS chiede di attivare la dettatura, si attiva in Impostazioni di Sistema › Tastiera. Questa è l'unica cosa che da qui non si è potuta provare.
+9. Mentre Claude lavora, nel Terminale `pmset -g assertions | grep Keel` mostra «Claude is working in Keel»; a turno finito sparisce.
+
 ## Dopo la 0.1.3
 
 Restano in `IDEE.md`, per la 0.1.4 o dopo:
@@ -154,11 +183,12 @@ Restano in `IDEE.md`, per la 0.1.4 o dopo:
 - **VoiceOver**;
 - **lo stile personale** (`style.css`).
 
-## Da decidere 🔸
+## Decisioni
 
-- Se l'anteprima web (punto 7) entra nella 0.1.3 o passa alla 0.1.4.
-- Le icone di serie: Material Icon Theme per tutti fin dalla prima apertura (proposta), oppure solo a scelta.
-- Il progetto con la sua icona nei recenti e nelle chat (punto 2, «In più»): sì o no.
+Prese col via del 26 novembre, che ha accettato le scelte proposte:
+- l'anteprima web (punto 7) entra nella 0.1.3;
+- le icone di Material Icon Theme sono quelle di serie per tutti, fin dalla prima apertura;
+- ogni progetto ha la sua icona nei recenti e nei gruppi delle chat (punto 2, «In più»).
 
 ## Fonti
 
