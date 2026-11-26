@@ -340,6 +340,23 @@ impl Agent {
         )
     }
 
+    /// Copies a chat into a new one, up to the agent's message `message`
+    /// (the whole chat without it), working in `cwd`. The answer names the
+    /// new session, already open.
+    pub fn fork_session(
+        &self,
+        session: &str,
+        cwd: &Path,
+        message: Option<&str>,
+    ) -> impl Future<Output = Result<Value>> + use<> {
+        let mut params = json!({ "sessionId": session, "cwd": cwd, "mcpServers": [] });
+        // The fork point as `claude-agent-acp` reads it (JetBrains' AIR).
+        if let Some(message) = message {
+            params["_meta"] = json!({ "jetbrains": { "air": { "fork": { "version": 1, "messageId": message } } } });
+        }
+        self.request("session/fork", params)
+    }
+
     /// Ends a session in the agent, so it can be loaded again afresh.
     pub fn close_session(&self, session: &str) -> impl Future<Output = Result<Value>> + use<> {
         self.request("session/close", json!({ "sessionId": session }))

@@ -119,6 +119,17 @@ pub(super) struct Permission {
     pub(super) options: Vec<(String, String, String)>,
 }
 
+/// A file as it was before Claude first changed it in a turn: the turn is
+/// the entry of the message that started it. Bringing the code back to a
+/// message puts back the oldest copy of each file changed from there on.
+#[derive(Clone, Debug, PartialEq)]
+pub(super) struct Checkpoint {
+    pub(super) turn: usize,
+    pub(super) path: PathBuf,
+    /// None for a file Claude made.
+    pub(super) before: Option<String>,
+}
+
 /// A file, or part of one, sent along with the next message.
 #[derive(Clone, Debug, PartialEq)]
 pub(super) struct Attachment {
@@ -224,6 +235,12 @@ pub(super) struct AgentPanel {
     pub(super) snapshots: Vec<(PathBuf, Option<String>)>,
     /// The kept files that differ now, for the review.
     pub(super) changes: Vec<super::agent_review::AgentChange>,
+    /// The files before each turn changed them, to bring the code back.
+    pub(super) checkpoints: Vec<Checkpoint>,
+    /// The entry of the message whose turn runs or ran last.
+    pub(super) turn: Option<usize>,
+    /// The message whose code is to come back, after a second click.
+    pub(super) rewinding: Option<usize>,
 }
 
 impl AgentPanel {
@@ -315,6 +332,9 @@ impl AgentPanel {
             fake: false,
             snapshots: Vec::new(),
             changes: Vec::new(),
+            checkpoints: Vec::new(),
+            turn: None,
+            rewinding: None,
         };
         (panel, vec![events, filtered])
     }
@@ -347,6 +367,9 @@ impl AgentPanel {
         self.notice = None;
         self.context = None;
         self.queued = None;
+        self.checkpoints.clear();
+        self.turn = None;
+        self.rewinding = None;
     }
 }
 
@@ -763,6 +786,20 @@ impl Workbench {
     /// change it, so the change can be undone.
     pub(super) fn remember_before_agent_edit(&mut self, path: &Path) {
         self.claude_touched.insert(path.to_path_buf());
+        // The copy of this turn, the first time the turn changes the file.
+        if let Some(turn) = self.agent_panel.turn
+            && !self
+                .agent_panel
+                .checkpoints
+                .iter()
+                .any(|known| known.turn == turn && known.path == path)
+        {
+            self.agent_panel.checkpoints.push(Checkpoint {
+                turn,
+                path: path.to_path_buf(),
+                before: std::fs::read_to_string(path).ok(),
+            });
+        }
         if self
             .agent_panel
             .snapshots
@@ -935,6 +972,13 @@ impl Workbench {
             return;
         };
         self.agent_panel.running = true;
+        // The turn belongs to the message that starts it, the last one sent.
+        self.agent_panel.turn = self
+            .agent_panel
+            .thread
+            .entries
+            .iter()
+            .rposition(|entry| matches!(entry, Entry::User(_)));
         // The Mac stays awake while Claude works, unless told otherwise.
         let keep_awake = !cfg!(test)
             && self
@@ -985,6 +1029,140 @@ impl Workbench {
             .ok();
         })
         .detach();
+    }
+
+    /// Whether the code can come back to the message at `entry`: a turn
+    /// from there on changed files.
+    pub(super) fn can_rewind_to(&self, entry: usize) -> bool {
+        self.agent_panel
+            .checkpoints
+            .iter()
+            .any(|checkpoint| checkpoint.turn >= entry)
+    }
+
+    /// Brings the code back to how it was when the message at `entry` was
+    /// sent: each file changed from that turn on gets its oldest copy back,
+    /// and a file Claude made goes to the Trash. Commands Claude ran (an
+    /// install, a `sed`) are not undone, as in Claude Code.
+    pub(super) fn rewind_code_to(&mut self, entry: usize, cx: &mut Context<Self>) {
+        self.agent_panel.rewinding = None;
+        let mut oldest: Vec<(PathBuf, Option<String>)> = Vec::new();
+        let mut later: Vec<&Checkpoint> = self
+            .agent_panel
+            .checkpoints
+            .iter()
+            .filter(|checkpoint| checkpoint.turn >= entry)
+            .collect();
+        later.sort_by_key(|checkpoint| checkpoint.turn);
+        for checkpoint in later {
+            if !oldest.iter().any(|(path, _)| *path == checkpoint.path) {
+                oldest.push((checkpoint.path.clone(), checkpoint.before.clone()));
+            }
+        }
+        let mut failed = Vec::new();
+        for (path, before) in &oldest {
+            let done = match before {
+                Some(text) => std::fs::write(path, text).map_err(|error| error.to_string()),
+                None if path.exists() => files::trash(path).map_err(|error| error.to_string()),
+                None => Ok(()),
+            };
+            if let Err(error) = done {
+                failed.push(format!("{}: {error}", path.display()));
+            }
+        }
+        self.agent_panel
+            .checkpoints
+            .retain(|checkpoint| checkpoint.turn < entry);
+        self.refresh_agent_changes();
+        let strings = self.strings();
+        self.status_message = Some(if failed.is_empty() {
+            strings.agent_rewound(oldest.len())
+        } else {
+            failed.join("; ")
+        });
+        cx.notify();
+    }
+
+    /// A new chat that goes on from the answer at `entry`: Claude Code copies
+    /// the chat up to it (`session/fork`), and the panel moves there. From a
+    /// message of yours, the copy stops before it and the message waits in
+    /// the box, to be sent again or changed.
+    pub(super) fn fork_agent_chat(
+        &mut self,
+        entry: usize,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let (Some(agent), Some(session)) = (
+            self.agent_panel.agent.clone(),
+            self.agent_panel.session.clone(),
+        ) else {
+            return;
+        };
+        let thread = &self.agent_panel.thread;
+        let (answer, rewrite) = match thread.entries.get(entry) {
+            Some(Entry::User(text)) => (
+                thread.entries[..entry]
+                    .iter()
+                    .rposition(|known| matches!(known, Entry::Agent(_))),
+                Some(text.clone()),
+            ),
+            Some(Entry::Agent(_)) => (Some(entry), None),
+            _ => return,
+        };
+        let last_answer = thread
+            .entries
+            .iter()
+            .rposition(|known| matches!(known, Entry::Agent(_)));
+        let message = answer.and_then(|answer| thread.message_ids.get(&answer).cloned());
+        // Without the id, only the whole chat can be copied.
+        if message.is_none() && answer.is_some() && answer != last_answer {
+            return;
+        }
+        if self.agent_panel.running {
+            self.cancel_agent(cx);
+        }
+        let forked = match (answer, &message) {
+            // Before the first answer: nothing to copy, a new chat.
+            (None, _) => None,
+            (_, message) => {
+                Some(agent.fork_session(&session, &self.agent_chat_folder(), message.as_deref()))
+            }
+        };
+        let Some(forked) = forked else {
+            self.new_agent_conversation(window, cx);
+            if let Some(text) = rewrite {
+                self.agent_panel
+                    .input
+                    .update(cx, |input, cx| input.set_value(text, window, cx));
+            }
+            return;
+        };
+        cx.spawn_in(window, async move |this, cx| {
+            let forked = forked.await;
+            this.update_in(cx, |this, window, cx| {
+                match forked {
+                    Ok(answer) => {
+                        let Some(id) = answer["sessionId"].as_str().map(str::to_owned) else {
+                            return;
+                        };
+                        this.load_agent_conversation(id, window, cx);
+                        if let Some(text) = rewrite {
+                            this.agent_panel
+                                .input
+                                .update(cx, |input, cx| input.set_value(text, window, cx));
+                        }
+                        this.refresh_agent_history(window, cx);
+                        this.session_changed(cx);
+                    }
+                    Err(error) => this.agent_panel.notice = Some(format!("{error:#}")),
+                }
+                cx.notify();
+            })
+            .ok();
+        })
+        .detach();
+        cx.notify();
     }
 
     /// Sends what was written while Claude worked; with a turn running
@@ -1468,6 +1646,136 @@ mod tests {
             last_answer(&view, cx).unwrap(),
             format!("cwd: {}", here.display())
         );
+    }
+
+    #[gpui::test]
+    fn the_code_comes_back_to_a_message_and_a_chat_forks(cx: &mut TestAppContext) {
+        cx.executor().allow_parking();
+        cx.update(|cx| {
+            gpui_component::init(cx);
+            language::register_grammars();
+            init(cx);
+        });
+        let project = tempfile::tempdir().unwrap();
+        std::fs::create_dir_all(project.path().join(".git")).unwrap();
+        let path = std::path::absolute(project.path().join("booking.ts")).unwrap();
+        std::fs::write(&path, "const price = 90;\n").unwrap();
+        // The project without the file open: the fake agent reads the disk.
+        let root = path.parent().unwrap().to_path_buf();
+        let (view, cx) = cx.add_window_view(|window, cx| {
+            let mut workbench = Workbench::new(
+                Opening::new(Some(root), None),
+                test_settings(),
+                None,
+                window,
+                cx,
+            );
+            workbench.agent_panel.fake = true;
+            workbench
+        });
+        let users =
+            |view: &Entity<Workbench>, cx: &mut VisualTestContext| -> Vec<(usize, String)> {
+                view.read_with(cx, |view, _| {
+                    view.agent_panel
+                        .thread
+                        .entries
+                        .iter()
+                        .enumerate()
+                        .filter_map(|(index, entry)| match entry {
+                            Entry::User(text) => Some((index, text.clone())),
+                            _ => None,
+                        })
+                        .collect()
+                })
+            };
+        // Two turns, each changing the file.
+        view.update_in(cx, |view, window, cx| view.open_agent(window, cx));
+        for (old, new) in [("90", "95"), ("95", "99")] {
+            send(&view, cx, &format!("edit {} {old} {new}", path.display()));
+            wait_until(cx, "the permission", |cx| {
+                view.read_with(cx, |view, _| !view.agent_panel.permissions.is_empty())
+            });
+            view.update(cx, |view, cx| view.answer_permission(0, "allow", cx));
+            wait_until(cx, "the edit", |cx| {
+                last_answer(&view, cx).as_deref() == Some("Done.")
+            });
+        }
+        assert_eq!(
+            std::fs::read_to_string(&path).unwrap(),
+            "const price = 99;\n"
+        );
+        let said = users(&view, cx);
+        let (first, second) = (said[0].0, said[1].0);
+
+        // Back to the second message: the file as it was when it was sent.
+        view.update(cx, |view, cx| {
+            assert!(view.can_rewind_to(second));
+            view.rewind_code_to(second, cx);
+            assert!(!view.can_rewind_to(second));
+            assert!(view.can_rewind_to(first));
+        });
+        assert_eq!(
+            std::fs::read_to_string(&path).unwrap(),
+            "const price = 95;\n"
+        );
+        // Back to the first: as before Claude touched it.
+        view.update(cx, |view, cx| view.rewind_code_to(first, cx));
+        assert_eq!(
+            std::fs::read_to_string(&path).unwrap(),
+            "const price = 90;\n"
+        );
+
+        // A new chat from an answer: the chat up to it, and no further.
+        send(&view, cx, "uno");
+        wait_until(cx, "the first answer", |cx| {
+            last_answer(&view, cx).as_deref() == Some("You said: uno")
+        });
+        send(&view, cx, "due");
+        wait_until(cx, "the second answer", |cx| {
+            last_answer(&view, cx).as_deref() == Some("You said: due")
+        });
+        let before = view.read_with(cx, |view, _| view.agent_panel.session.clone());
+        let answer = view.read_with(cx, |view, _| {
+            view.agent_panel
+                .thread
+                .entries
+                .iter()
+                .position(|entry| *entry == Entry::Agent("You said: uno".into()))
+                .unwrap()
+        });
+        view.update_in(cx, |view, window, cx| {
+            view.fork_agent_chat(answer, window, cx)
+        });
+        wait_until(cx, "the fork", |cx| {
+            view.read_with(cx, |view, _| {
+                view.agent_panel.session != before
+                    && view
+                        .agent_panel
+                        .thread
+                        .entries
+                        .contains(&Entry::Agent("You said: uno".into()))
+            })
+        });
+        let texts: Vec<String> = users(&view, cx).into_iter().map(|(_, text)| text).collect();
+        assert!(texts.contains(&"uno".to_owned()));
+        assert!(!texts.contains(&"due".to_owned()));
+
+        // From a message of yours: the chat before it, the message in the box.
+        let forked = view.read_with(cx, |view, _| view.agent_panel.session.clone());
+        let uno = users(&view, cx)
+            .into_iter()
+            .find(|(_, text)| text == "uno")
+            .unwrap()
+            .0;
+        view.update_in(cx, |view, window, cx| view.fork_agent_chat(uno, window, cx));
+        wait_until(cx, "the fork before the message", |cx| {
+            view.read_with(cx, |view, cx| {
+                view.agent_panel.session != forked
+                    && view.agent_panel.input.read(cx).value() == "uno"
+            })
+        });
+        let texts: Vec<String> = users(&view, cx).into_iter().map(|(_, text)| text).collect();
+        assert!(!texts.contains(&"uno".to_owned()), "{texts:?}");
     }
 
     #[gpui::test]

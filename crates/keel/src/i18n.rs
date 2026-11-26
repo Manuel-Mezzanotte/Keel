@@ -651,6 +651,11 @@ pub struct Strings {
     pub agent_open_project: &'static str,
     pub agent_chat_title: &'static str,
     pub agent_add_to_claude: &'static str,
+    pub agent_rewind: &'static str,
+    pub agent_rewind_sure: &'static str,
+    pub agent_rewound_text: &'static str,
+    pub agent_fork_from_message: &'static str,
+    pub agent_fork_from_answer: &'static str,
     pub agent_dictate: &'static str,
     pub agent_rename_chat: &'static str,
     pub agent_copy_answer: &'static str,
@@ -1873,6 +1878,11 @@ impl Strings {
             .replace("{total}", &total.to_string())
     }
 
+    pub fn agent_rewound(&self, count: usize) -> String {
+        self.agent_rewound_text
+            .replace("{count}", &count.to_string())
+    }
+
     pub fn agent_works_in(&self, name: &str) -> String {
         self.agent_works_in_text.replace("{name}", name)
     }
@@ -2723,6 +2733,11 @@ pub const ITALIAN: Strings = Strings {
     agent_open_project: "Apri il progetto",
     agent_chat_title: "Titolo della chat",
     agent_add_to_claude: "Aggiungi a Claude",
+    agent_rewind: "Riporta il codice a qui",
+    agent_rewind_sure: "I file cambiati da Claude da qui in poi tornano com'erano. Riporto?",
+    agent_rewound_text: "Codice riportato a quel messaggio: {count} file",
+    agent_fork_from_message: "Riprendi da qui in una chat nuova",
+    agent_fork_from_answer: "Continua da qui in una chat nuova",
     agent_dictate: "Detta (⌘D)",
     agent_rename_chat: "Rinomina la chat",
     agent_copy_answer: "Copia la risposta",
@@ -3963,6 +3978,11 @@ pub const ENGLISH: Strings = Strings {
     agent_open_project: "Open the project",
     agent_chat_title: "Chat title",
     agent_add_to_claude: "Add to Claude",
+    agent_rewind: "Bring the code back to here",
+    agent_rewind_sure: "The files Claude changed from here on go back to how they were. Bring them back?",
+    agent_rewound_text: "Code brought back to that message: {count} files",
+    agent_fork_from_message: "Pick up from here in a new chat",
+    agent_fork_from_answer: "Go on from here in a new chat",
     agent_dictate: "Dictate (⌘D)",
     agent_rename_chat: "Rename chat",
     agent_copy_answer: "Copy the answer",

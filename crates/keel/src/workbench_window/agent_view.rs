@@ -983,11 +983,17 @@ impl Workbench {
         cx: &mut Context<Self>,
     ) -> AnyElement {
         match entry {
-            // Your messages on the right, in a quiet bubble.
-            Entry::User(text) => div()
-                .flex()
-                .justify_end()
-                .child(
+            // Your messages on the right, in a quiet bubble; on hover, the
+            // code brought back to it and a new chat from it.
+            Entry::User(text) => {
+                let strings = self.strings();
+                let group: gpui::SharedString = format!("agent-said-{index}").into();
+                let idle = !self.agent_panel.running;
+                let rewind = idle && self.can_rewind_to(index);
+                let fork =
+                    idle && self.agent_panel.agent.is_some() && self.agent_panel.session.is_some();
+                let asking = self.agent_panel.rewinding == Some(index);
+                let bubble = div().flex().justify_end().child(
                     div()
                         .max_w(px(self.agent_width * 0.84))
                         .px(px(12.))
@@ -999,8 +1005,92 @@ impl Workbench {
                         .line_height(px(19.))
                         .text_color(colors.text)
                         .child(text.clone()),
-                )
-                .into_any_element(),
+                );
+                let actions = if asking {
+                    div()
+                        .flex()
+                        .flex_col()
+                        .items_end()
+                        .gap_1()
+                        .px(px(10.))
+                        .py(px(6.))
+                        .rounded(px(8.))
+                        .bg(cx.theme().warning.opacity(0.08))
+                        .child(
+                            div()
+                                .text_size(px(12.))
+                                .text_color(colors.text)
+                                .child(strings.agent_rewind_sure),
+                        )
+                        .child(
+                            div()
+                                .flex()
+                                .gap_1()
+                                .child(
+                                    Button::new(("agent-rewind-no", index))
+                                        .ghost()
+                                        .xsmall()
+                                        .label(strings.cancel)
+                                        .on_click(cx.listener(|this, _, _, cx| {
+                                            this.agent_panel.rewinding = None;
+                                            cx.notify();
+                                        })),
+                                )
+                                .child(
+                                    Button::new(("agent-rewind-yes", index))
+                                        .warning()
+                                        .xsmall()
+                                        .label(strings.agent_rewind)
+                                        .on_click(cx.listener(move |this, _, _, cx| {
+                                            this.rewind_code_to(index, cx)
+                                        })),
+                                ),
+                        )
+                        .into_any_element()
+                } else {
+                    div()
+                        .h(px(22.))
+                        .flex()
+                        .justify_end()
+                        .gap_0p5()
+                        .invisible()
+                        .group_hover(group.clone(), |row| row.visible())
+                        .when(rewind, |row| {
+                            row.child(
+                                Button::new(("agent-rewind", index))
+                                    .ghost()
+                                    .xsmall()
+                                    .icon(Icon::new(IconName::Undo2))
+                                    .tooltip(strings.agent_rewind)
+                                    .on_click(cx.listener(move |this, _, _, cx| {
+                                        this.agent_panel.rewinding = Some(index);
+                                        cx.notify();
+                                    })),
+                            )
+                        })
+                        .when(fork, |row| {
+                            row.child(
+                                Button::new(("agent-fork-message", index))
+                                    .ghost()
+                                    .xsmall()
+                                    .icon(Icon::new(IconName::GitBranch))
+                                    .tooltip(strings.agent_fork_from_message)
+                                    .on_click(cx.listener(move |this, _, window, cx| {
+                                        this.fork_agent_chat(index, window, cx)
+                                    })),
+                            )
+                        })
+                        .into_any_element()
+                };
+                div()
+                    .group(group)
+                    .flex()
+                    .flex_col()
+                    .gap_0p5()
+                    .child(bubble)
+                    .when(rewind || fork || asking, |said| said.child(actions))
+                    .into_any_element()
+            }
             Entry::Agent(text) => match self.agent_panel.markdown.get(&index) {
                 Some((state, _)) => {
                     // Under an answer, on hover: copy it as Claude wrote it,
@@ -1009,6 +1099,16 @@ impl Workbench {
                     let live = self.agent_panel.running
                         && index + 1 == self.agent_panel.thread.entries.len();
                     let copied = text.clone();
+                    // A new chat from here: with the answer's id, or for the
+                    // last answer, which copies the whole chat.
+                    let thread = &self.agent_panel.thread;
+                    let last = thread
+                        .entries
+                        .iter()
+                        .rposition(|entry| matches!(entry, Entry::Agent(_)));
+                    let fork = self.agent_panel.agent.is_some()
+                        && self.agent_panel.session.is_some()
+                        && (thread.message_ids.contains_key(&index) || last == Some(index));
                     div()
                         .group(group.clone())
                         .flex()
@@ -1031,7 +1131,21 @@ impl Workbench {
                                             .on_click(cx.listener(move |this, _, _, cx| {
                                                 this.copy_agent_answer(copied.clone(), cx)
                                             })),
-                                    ),
+                                    )
+                                    .when(fork, |row| {
+                                        row.child(
+                                            Button::new(("agent-fork-answer", index))
+                                                .ghost()
+                                                .xsmall()
+                                                .icon(Icon::new(IconName::GitBranch))
+                                                .tooltip(self.strings().agent_fork_from_answer)
+                                                .on_click(cx.listener(
+                                                    move |this, _, window, cx| {
+                                                        this.fork_agent_chat(index, window, cx)
+                                                    },
+                                                )),
+                                        )
+                                    }),
                             )
                         })
                         .into_any_element()

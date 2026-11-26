@@ -77,6 +77,9 @@ pub struct Thread {
     pub commands: Vec<(String, String)>,
     pub mode: Option<String>,
     pub title: Option<String>,
+    /// The agent's id of the last message in each answer, by entry: a
+    /// chat forks from there (`session/fork`).
+    pub message_ids: std::collections::HashMap<usize, String>,
 }
 
 /// The text of a content block; links and resources by their name.
@@ -170,7 +173,13 @@ impl Thread {
     /// Applies the `update` of a `session/update` notification.
     pub fn apply(&mut self, update: &Value) {
         match update["sessionUpdate"].as_str().unwrap_or_default() {
-            "agent_message_chunk" => self.append(Entry::Agent, block_text(&update["content"])),
+            "agent_message_chunk" => {
+                self.append(Entry::Agent, block_text(&update["content"]));
+                if let Some(id) = update["messageId"].as_str().filter(|id| !id.is_empty()) {
+                    self.message_ids
+                        .insert(self.entries.len() - 1, id.to_owned());
+                }
+            }
             "agent_thought_chunk" => self.append(Entry::Thought, block_text(&update["content"])),
             // Sent when a past conversation is replayed.
             "user_message_chunk" => self.append(Entry::User, block_text(&update["content"])),
@@ -282,6 +291,19 @@ impl Thread {
 
 #[cfg(test)]
 mod tests {
+
+    #[test]
+    fn answers_keep_the_id_of_their_last_message() {
+        let mut thread = Thread::default();
+        thread.push_user("Ciao");
+        thread.apply(&json!({ "sessionUpdate": "agent_message_chunk", "messageId": "m1", "content": { "type": "text", "text": "Ci" } }));
+        thread.apply(&json!({ "sessionUpdate": "agent_message_chunk", "messageId": "m2", "content": { "type": "text", "text": "ao" } }));
+        thread.push_user("Poi");
+        thread.apply(&json!({ "sessionUpdate": "agent_message_chunk", "content": { "type": "text", "text": "Ok" } }));
+        assert_eq!(thread.message_ids.get(&1).map(String::as_str), Some("m2"));
+        assert_eq!(thread.message_ids.get(&3), None);
+    }
+
     use serde_json::json;
 
     use super::*;

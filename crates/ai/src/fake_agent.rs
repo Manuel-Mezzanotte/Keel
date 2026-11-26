@@ -9,7 +9,9 @@
 //! - a prompt with `wait` waits until `session/cancel`;
 //! - `pwd` answers with the folder the session works in;
 //! - `session/list` and `session/load` know the sessions it made, and
-//!   `session/set_title` names them.
+//!   `session/set_title` names them;
+//! - its answers carry a `messageId` (`<session>-<n>`), and `session/fork`
+//!   copies a session up to one of them, or whole.
 
 use std::io::{self, BufRead as _, BufReader, Write as _};
 use std::sync::mpsc;
@@ -175,8 +177,19 @@ impl Fake {
         } else {
             format!("You said: {}", text.trim())
         };
+        let message = format!(
+            "{session}-{}",
+            self.sessions
+                .iter()
+                .find(|(known, _, _)| *known == session)
+                .map_or(0, |(_, _, said)| said.len())
+        );
         for chunk in reply.split_inclusive(' ') {
-            self.text(&session, "agent_message_chunk", chunk);
+            self.update(
+                &session,
+                json!({ "sessionUpdate": "agent_message_chunk", "messageId": message,
+                    "content": { "type": "text", "text": chunk } }),
+            );
         }
         if let Some((_, _, said)) = self
             .sessions
@@ -239,6 +252,25 @@ impl Fake {
                 self.titles.push((session, title.clone()));
                 json!({ "title": title })
             }
+            "session/fork" => {
+                let source = params["sessionId"].as_str().unwrap_or_default();
+                let cwd = params["cwd"].as_str().unwrap_or_default().to_owned();
+                let said = self
+                    .sessions
+                    .iter()
+                    .find(|(known, _, _)| known == source)
+                    .map(|(_, _, said)| said.clone())
+                    .unwrap_or_default();
+                // Up to the answer named, or the whole chat.
+                let upto = params["_meta"]["jetbrains"]["air"]["fork"]["messageId"]
+                    .as_str()
+                    .and_then(|id| id.rsplit('-').next()?.parse::<usize>().ok())
+                    .map_or(said.len(), |index| (index + 1).min(said.len()));
+                let session = format!("session-{}", self.sessions.len() + 1);
+                self.sessions
+                    .push((session.clone(), cwd, said[..upto].to_vec()));
+                json!({ "sessionId": session })
+            }
             "session/delete" => {
                 let session = params["sessionId"].as_str().unwrap_or_default();
                 self.sessions.retain(|(known, _, _)| known != session);
@@ -292,9 +324,13 @@ impl Fake {
                         said.clone()
                     })
                     .unwrap_or_default();
-                for (user, agent) in said {
+                for (index, (user, agent)) in said.into_iter().enumerate() {
                     self.text(&session, "user_message_chunk", &user);
-                    self.text(&session, "agent_message_chunk", &agent);
+                    self.update(
+                        &session,
+                        json!({ "sessionUpdate": "agent_message_chunk", "messageId": format!("{session}-{index}"),
+                            "content": { "type": "text", "text": agent } }),
+                    );
                 }
                 json!({})
             }
