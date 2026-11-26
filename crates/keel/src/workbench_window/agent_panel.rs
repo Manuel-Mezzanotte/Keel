@@ -129,9 +129,12 @@ pub(super) struct AgentPanel {
     /// The project's chats in Claude Code, the latest first: read from its
     /// files at first, then from the agent.
     pub(super) chats: Vec<Chat>,
-    /// The Claude app's chats of other projects, by project: they open in
-    /// their project's window.
+    /// The Claude app's chats of other projects, by project: they open
+    /// here, and Claude goes on working in their folder.
     pub(super) other_chats: Vec<(PathBuf, Vec<Chat>)>,
+    /// The folder of the open chat when it is another project's: Claude
+    /// works there, where the chat began. None for this project's chats.
+    pub(super) chat_folder: Option<PathBuf>,
     /// The projects whose chats are folded in the lists, by folder.
     pub(super) folded_projects: HashSet<PathBuf>,
     /// The list of chats is shown in place of the chat.
@@ -243,6 +246,7 @@ impl AgentPanel {
             key_input: None,
             chats: Vec::new(),
             other_chats: Vec::new(),
+            chat_folder: None,
             folded_projects: HashSet::new(),
             show_chats: false,
             chat_filter,
@@ -310,6 +314,15 @@ impl Workbench {
             .clone()
             .or_else(|| std::env::var_os("HOME").map(PathBuf::from))
             .unwrap_or_else(|| PathBuf::from("/"))
+    }
+
+    /// The folder the open chat works in: its own project's for a chat of
+    /// another project, otherwise this one's.
+    pub(super) fn agent_chat_folder(&self) -> PathBuf {
+        self.agent_panel
+            .chat_folder
+            .clone()
+            .unwrap_or_else(|| self.agent_folder())
     }
 
     /// Shows the agent and starts it if needed.
@@ -436,7 +449,11 @@ impl Workbench {
         let resume = self.agent_panel.pending_load.take();
         if let Some(id) = &resume {
             self.agent_panel.session = Some(id.clone());
+        } else {
+            self.agent_panel.chat_folder = None;
         }
+        // A chat of another project goes on in its own folder.
+        let chat_cwd = self.agent_chat_folder();
         cx.spawn_in(window, async move |this, cx| {
             let ready = initialize.await;
             if let Ok(answer) = &ready {
@@ -450,7 +467,7 @@ impl Workbench {
                 .ok();
             }
             let session = match (ready, resume) {
-                (Ok(_), Some(id)) => agent.load_session(&id, &cwd).await.map(|mut loaded| {
+                (Ok(_), Some(id)) => agent.load_session(&id, &chat_cwd).await.map(|mut loaded| {
                     loaded["sessionId"] = json!(id);
                     loaded
                 }),
@@ -549,6 +566,7 @@ impl Workbench {
                 self.log(format!("Claude: the agent stopped. {tail}"));
                 self.agent_panel.agent = None;
                 self.agent_panel.session = None;
+                self.agent_panel.chat_folder = None;
                 self.agent_panel.running = false;
                 self.agent_panel.permissions.clear();
                 self.agent_panel.status =
@@ -891,6 +909,8 @@ impl Workbench {
         self.agent_panel.reset_thread();
         self.agent_panel.show_chats = false;
         self.agent_panel.session = None;
+        // A new chat is always this project's.
+        self.agent_panel.chat_folder = None;
         let opened = agent.new_session(&self.agent_folder());
         cx.spawn_in(window, async move |this, cx| {
             let session = opened.await;
@@ -1012,7 +1032,8 @@ impl Workbench {
         .detach();
     }
 
-    /// Opens a past conversation: the agent replays it.
+    /// Opens a past conversation: the agent replays it, in the folder the
+    /// chat works in (`agent_chat_folder`).
     pub(super) fn load_agent_conversation(
         &mut self,
         id: String,
@@ -1037,7 +1058,7 @@ impl Workbench {
         self.agent_panel.reset_thread();
         self.note_app_chat(&id);
         self.agent_panel.session = Some(id.clone());
-        let loaded = agent.load_session(&id, &self.agent_folder());
+        let loaded = agent.load_session(&id, &self.agent_chat_folder());
         cx.spawn_in(window, async move |this, cx| {
             let loaded = loaded.await;
             this.update(cx, |this, cx| {
@@ -1101,7 +1122,7 @@ impl Workbench {
             )
             .on_action(
                 cx.listener(|this, action: &LoadAgentConversation, window, cx| {
-                    this.load_agent_conversation(action.id.clone(), window, cx)
+                    this.open_agent_chat(action.id.clone(), None, window, cx)
                 }),
             )
             .on_action(cx.listener(|this, action: &SetAgentMode, _, cx| {
@@ -1202,6 +1223,95 @@ mod tests {
             view.open_file(&path, window, cx);
             assert!(!view.claude_touched.contains(&path));
         });
+    }
+
+    #[gpui::test]
+    fn a_chat_of_another_project_opens_here_in_its_folder(cx: &mut TestAppContext) {
+        cx.executor().allow_parking();
+        cx.update(|cx| {
+            gpui_component::init(cx);
+            language::register_grammars();
+            init(cx);
+        });
+        let project = tempfile::tempdir().unwrap();
+        std::fs::create_dir_all(project.path().join(".git")).unwrap();
+        let path = std::path::absolute(project.path().join("booking.ts")).unwrap();
+        std::fs::write(&path, "const price = 90;\n").unwrap();
+        let other = tempfile::tempdir().unwrap();
+        let other = std::fs::canonicalize(other.path()).unwrap();
+        let document = Document::open(&path).unwrap();
+        let (view, cx) = cx.add_window_view(|window, cx| {
+            let mut workbench = Workbench::new(Some(document), test_settings(), None, window, cx);
+            workbench.agent_panel.fake = true;
+            workbench
+        });
+        let here = view.read_with(cx, |view, _| view.agent_folder());
+        let windows = |cx: &mut VisualTestContext| cx.update(|_, cx| cx.windows().len());
+        let before = windows(cx);
+
+        // A chat, then a new one: the first is now listed with another
+        // project, as the Claude app's chats of other folders are.
+        view.update_in(cx, |view, window, cx| view.open_agent(window, cx));
+        send(&view, cx, "ciao");
+        wait_until(cx, "the answer", |cx| last_answer(&view, cx).is_some());
+        view.update_in(cx, |view, window, cx| {
+            view.new_agent_conversation(window, cx)
+        });
+        wait_until(cx, "a new session", |cx| {
+            view.read_with(cx, |view, _| {
+                view.agent_panel.session.as_deref() == Some("session-2")
+            })
+        });
+        view.update_in(cx, |view, window, cx| {
+            view.agent_panel.other_chats = vec![(
+                other.clone(),
+                vec![Chat {
+                    id: "session-1".into(),
+                    title: "Documentazione".into(),
+                    updated: 0,
+                    app: true,
+                }],
+            )];
+            view.open_agent_chat("session-1".into(), Some(other.clone()), window, cx);
+        });
+        wait_until(cx, "the chat of the other project", |cx| {
+            view.read_with(cx, |view, _| view.agent_panel.thread.entries.len() >= 2)
+        });
+
+        // It opened here, with no window of its own, and works in its folder.
+        assert_eq!(windows(cx), before);
+        view.read_with(cx, |view, _| {
+            assert_eq!(view.agent_panel.chat_folder.as_deref(), Some(other.as_path()));
+            assert_eq!(view.agent_panel.session.as_deref(), Some("session-1"));
+            assert_eq!(view.agent_title(), "Documentazione");
+        });
+        send(&view, cx, "pwd");
+        wait_until(cx, "the folder", |cx| {
+            last_answer(&view, cx).is_some_and(|answer| answer.starts_with("cwd:"))
+        });
+        assert_eq!(
+            last_answer(&view, cx).unwrap(),
+            format!("cwd: {}", other.display())
+        );
+        // The panel says where Claude works.
+        cx.update(|window, cx| {
+            let _ = window.draw(cx);
+        });
+        assert!(cx.debug_bounds("agent-chat-folder").is_some());
+
+        // A new chat is this project's again.
+        view.update_in(cx, |view, window, cx| {
+            view.new_agent_conversation(window, cx)
+        });
+        view.read_with(cx, |view, _| assert_eq!(view.agent_panel.chat_folder, None));
+        send(&view, cx, "pwd");
+        wait_until(cx, "the folder of the new chat", |cx| {
+            last_answer(&view, cx).is_some_and(|answer| answer.starts_with("cwd:"))
+        });
+        assert_eq!(
+            last_answer(&view, cx).unwrap(),
+            format!("cwd: {}", here.display())
+        );
     }
 
     #[gpui::test]

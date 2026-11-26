@@ -40,6 +40,11 @@ fn claude_with(prompt: &str) -> String {
     format!("{CLAUDE} {quoted}")
 }
 
+/// A path for the shell, in single quotes: `'` itself as `'\''`.
+fn shell_quote(path: &Path) -> String {
+    format!("'{}'", path.display().to_string().replace('\'', r"'\''"))
+}
+
 /// The handle on the left edge of Claude Code's panel.
 #[derive(Clone)]
 pub(super) struct AgentResize;
@@ -132,6 +137,14 @@ impl Workbench {
         if self.agent_panel.running {
             self.cancel_agent(cx);
         }
+        // A chat of another project resumes from its folder: Claude Code
+        // finds a chat in the folder it runs in.
+        if self.agent_panel.session.as_deref() == Some(session.as_str())
+            && let Some(folder) = self.agent_panel.chat_folder.clone()
+        {
+            self.resume_chat_in(&folder, &session, window, cx);
+            return;
+        }
         self.layout.agent = true;
         self.agent_panel.view = super::agent_panel::AgentView::Terminal;
         let resume = format!("{CLAUDE} --resume {session}");
@@ -150,6 +163,50 @@ impl Workbench {
         }
         if let Some(agent) = &self.agent_terminal {
             agent.view.read(cx).focus_handle(cx).focus(window, cx);
+        }
+        self.session_changed(cx);
+        cx.notify();
+    }
+
+    /// Resumes the chat `session` of another project from that project's
+    /// folder: in the terminal on the right when its shell is free (or
+    /// there is none), otherwise in a new terminal of the bottom panel, so
+    /// a Claude Code at work there is left alone.
+    fn resume_chat_in(
+        &mut self,
+        folder: &Path,
+        session: &str,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let resume = format!("{CLAUDE} --resume {session}");
+        match &self.agent_terminal {
+            Some(agent) if agent.view.read(cx).runs_shell() => {
+                self.layout.agent = true;
+                self.agent_panel.view = super::agent_panel::AgentView::Terminal;
+                agent
+                    .view
+                    .read(cx)
+                    .run(&format!("cd {} && {resume}", shell_quote(folder)));
+                agent.view.read(cx).focus_handle(cx).focus(window, cx);
+            }
+            Some(_) => {
+                let spawn = terminal_view::shell_spawn(folder.to_path_buf(), cx);
+                if let Some(view) = self.add_terminal(spawn, None, true, window, cx) {
+                    view.read(cx).run(&resume);
+                }
+            }
+            None => {
+                self.layout.agent = true;
+                self.agent_panel.view = super::agent_panel::AgentView::Terminal;
+                let spawn = terminal_view::shell_spawn(folder.to_path_buf(), cx);
+                if !self.start_agent_terminal(spawn, &resume, window, cx) {
+                    return;
+                }
+                if let Some(agent) = &self.agent_terminal {
+                    agent.view.read(cx).focus_handle(cx).focus(window, cx);
+                }
+            }
         }
         self.session_changed(cx);
         cx.notify();
@@ -267,6 +324,18 @@ mod tests {
     use gpui::TestAppContext;
 
     use super::*;
+
+    #[test]
+    fn a_folder_is_quoted_whole_for_the_shell() {
+        assert_eq!(
+            shell_quote(Path::new("/Users/me/Desktop/Mini PC")),
+            "'/Users/me/Desktop/Mini PC'"
+        );
+        assert_eq!(
+            shell_quote(Path::new("/tmp/l'altro")),
+            r"'/tmp/l'\''altro'"
+        );
+    }
 
     #[gpui::test]
     fn claude_code_opens_on_the_right_and_its_panel_widens(cx: &mut TestAppContext) {

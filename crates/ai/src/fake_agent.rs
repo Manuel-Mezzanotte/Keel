@@ -7,6 +7,7 @@
 //!   says "Done.";
 //! - any other prompt is answered with "You said: <text>";
 //! - a prompt with `wait` waits until `session/cancel`;
+//! - `pwd` answers with the folder the session works in;
 //! - `session/list` and `session/load` know the sessions it made.
 
 use std::io::{self, BufRead as _, BufReader, Write as _};
@@ -156,6 +157,15 @@ impl Fake {
                 "title": "grep -n \"fn render\" crates/keel/src", "status": "completed" }),
             );
             "Fatto: il comando ha letto il file.".to_owned()
+        } else if text.trim() == "pwd" {
+            // The folder the session works in, as it was last opened.
+            let cwd = self
+                .sessions
+                .iter()
+                .find(|(known, _, _)| *known == session)
+                .map(|(_, cwd, _)| cwd.clone())
+                .unwrap_or_default();
+            format!("cwd: {cwd}")
         } else if text.trim() == "/usage" {
             // Claude Code's own `/usage`, as the adapter writes it.
             "## Usage\n\n> Claude pro subscription usage\n\n### Limits\n\n**5-hour limit** — **74%** · Resets Nov 25, 2:10 PM GMT+1\n\n`███████████████░░░░░`\n\n**Weekly · all models** — **86%** · Resets Nov 29, 2:00 AM GMT+1\n\n---\n\n### This session\n\n| Cost | API time | Active |\n|:--|:--|:--|\n| $0.00 | 0s | 3s |\n".to_owned()
@@ -250,11 +260,16 @@ impl Fake {
             }
             "session/load" => {
                 let session = params["sessionId"].as_str().unwrap_or_default().to_owned();
+                // The session works in the folder it is opened in.
+                let cwd = params["cwd"].as_str().unwrap_or_default().to_owned();
                 let said = self
                     .sessions
-                    .iter()
+                    .iter_mut()
                     .find(|(known, _, _)| *known == session)
-                    .map(|(_, _, said)| said.clone())
+                    .map(|(_, known_cwd, said)| {
+                        *known_cwd = cwd;
+                        said.clone()
+                    })
                     .unwrap_or_default();
                 for (user, agent) in said {
                     self.text(&session, "user_message_chunk", &user);

@@ -210,28 +210,6 @@ pub fn open(path: Option<PathBuf>, cx: &mut App) {
     }
 }
 
-/// Opens a project's folder where [`open`] would, then lets `then` act on
-/// its window, such as to go on with a chat there.
-pub fn open_then(
-    folder: PathBuf,
-    then: impl FnOnce(&mut Workbench, &mut gpui::Window, &mut gpui::Context<Workbench>) + 'static,
-    cx: &mut App,
-) {
-    let folder = paths::normalize(&folder);
-    open(Some(folder.clone()), cx);
-    let found = cx
-        .global::<Windows>()
-        .0
-        .iter()
-        .find(|window| window.root.as_deref() == Some(folder.as_path()))
-        .map(|window| (window.handle, window.workbench.clone()));
-    if let Some((handle, workbench)) = found {
-        let _ = handle.update(cx, |_, window, cx| {
-            let _ = workbench.update(cx, |workbench, cx| then(workbench, window, cx));
-        });
-    }
-}
-
 /// The active window, when it shows nothing: no project and no files.
 /// Opening a project from it replaces it, as VS Code does.
 fn blank_active_window(cx: &App) -> Option<WindowHandle<Root>> {

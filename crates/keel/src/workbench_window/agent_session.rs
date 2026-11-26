@@ -289,6 +289,7 @@ impl Workbench {
                         // The chat stays in Claude Code's files, for later.
                         this.agent_panel.needs_login = true;
                         this.agent_panel.session = None;
+                        this.agent_panel.chat_folder = None;
                         this.agent_panel.reset_thread();
                         if let Some(account) = &mut this.agent_panel.account {
                             account.signed_in = false;
@@ -351,7 +352,7 @@ impl Workbench {
             return None;
         }
         let claude = ai::history::claude_dir()?;
-        let folder = ai::history::project_folder(&claude, &self.agent_folder());
+        let folder = ai::history::project_folder(&claude, &self.agent_chat_folder());
         Some(folder.join(format!("{id}.jsonl")))
     }
 
@@ -418,10 +419,11 @@ impl Workbench {
     /// both places at once would split it, so the panel says so.
     pub(super) fn note_app_chat(&mut self, id: &str) {
         let now = unix_now();
-        let busy = self
-            .agent_panel
+        let panel = &self.agent_panel;
+        let busy = panel
             .chats
             .iter()
+            .chain(panel.other_chats.iter().flat_map(|(_, chats)| chats))
             .any(|chat| chat.id == id && chat.app && now - chat.updated < APP_CHAT_BUSY);
         if busy {
             self.agent_panel.notice = Some(self.strings().agent_app_chat_busy.to_owned());
@@ -555,6 +557,7 @@ impl Workbench {
             }
             self.agent_panel.reset_thread();
             self.agent_panel.session = None;
+            self.agent_panel.chat_folder = None;
         }
         let deleted = agent.delete_session(&id);
         cx.spawn(async move |this, cx| {
@@ -571,8 +574,10 @@ impl Workbench {
         cx.notify();
     }
 
-    /// Goes on with a chat: here, or, for a chat of another project, in that
-    /// project's window, which opens or comes forward.
+    /// Goes on with a chat here, in this window's panel. A chat of another
+    /// project (`folder`) keeps working in its own folder, where it began:
+    /// its history speaks of that folder's files, and Claude Code keeps
+    /// chats by folder.
     pub(super) fn open_agent_chat(
         &mut self,
         id: String,
@@ -580,34 +585,21 @@ impl Workbench {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let Some(folder) = folder.filter(|folder| *folder != self.agent_folder()) else {
-            self.load_agent_conversation(id, window, cx);
-            return;
-        };
-        self.agent_panel.show_chats = false;
-        cx.defer(move |cx| {
-            crate::windows::open_then(
-                folder,
-                move |workbench, window, cx| workbench.open_claude_chat(id, window, cx),
-                cx,
-            );
-        });
-        cx.notify();
-    }
-
-    /// Shows Claude's panel and goes on with the chat `id` in it.
-    pub(crate) fn open_claude_chat(
-        &mut self,
-        id: String,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
+        self.agent_panel.chat_folder = folder.filter(|folder| *folder != self.agent_folder());
         self.layout.agent = true;
         self.agent_panel.view = AgentView::Agent;
-        self.read_claude_chats(cx);
         self.load_agent_conversation(id, window, cx);
         self.session_changed(cx);
         cx.notify();
+    }
+
+    /// Opens the folder of the open chat as a project, in its own window;
+    /// the chat stays here.
+    pub(super) fn open_chat_project(&mut self, cx: &mut Context<Self>) {
+        let Some(folder) = self.agent_panel.chat_folder.clone() else {
+            return;
+        };
+        cx.defer(move |cx| crate::windows::open(Some(folder), cx));
     }
 
     /// Stops the agent and starts it again, as after a new key.
@@ -617,6 +609,7 @@ impl Workbench {
         }
         self.agent_panel.agent = None;
         self.agent_panel.session = None;
+        self.agent_panel.chat_folder = None;
         self.agent_panel.account = None;
         self.agent_panel.needs_login = false;
         self.agent_panel.login = None;

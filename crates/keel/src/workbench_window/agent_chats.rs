@@ -2,7 +2,8 @@
 //! card for each project, the open one first, with its name, a fold and how
 //! many chats it has; in it the chats, the latest first. The home shows the
 //! latest few of each project, the list of chats all of them, this
-//! project's by day, with a field to find one.
+//! project's by day, with a field to find one. A chat of another project
+//! opens here too, and Claude goes on working in that project's folder.
 
 use std::path::{Path, PathBuf};
 
@@ -392,7 +393,12 @@ impl Workbench {
             .duration_since(std::time::UNIX_EPOCH)
             .map_or(0, |elapsed| elapsed.as_secs() as i64);
         let strings = self.strings();
-        let current = here && self.agent_panel.session.as_deref() == Some(chat.id.as_str());
+        // The open chat, in the card of the folder it works in.
+        let current = self.agent_panel.session.as_deref() == Some(chat.id.as_str())
+            && match &self.agent_panel.chat_folder {
+                Some(open) => folder == Some(open.as_path()),
+                None => here,
+            };
         let chat_id = chat.id.clone();
         let when =
             (chat.updated > 0).then(|| super::scm_graph::relative_time(chat.updated, now, italian));

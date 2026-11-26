@@ -345,10 +345,19 @@ impl Workbench {
         {
             return title.clone();
         }
+        // In the list of the folder the chat works in.
+        let listed = match &panel.chat_folder {
+            Some(folder) => panel
+                .other_chats
+                .iter()
+                .find(|(known, _)| known == folder)
+                .map_or(&[][..], |(_, chats)| chats.as_slice()),
+            None => panel.chats.as_slice(),
+        };
         if let Some(chat) = panel
             .session
             .as_ref()
-            .and_then(|id| panel.chats.iter().find(|chat| &chat.id == id))
+            .and_then(|id| listed.iter().find(|chat| &chat.id == id))
         {
             return chat.title.clone();
         }
@@ -555,6 +564,7 @@ impl Workbench {
             .min_h_0()
             .flex()
             .flex_col()
+            .children(self.render_chat_folder(colors, cx))
             .child(body)
             .children(self.render_agent_plan(colors))
             .children(self.render_agent_changes(colors, cx))
@@ -569,6 +579,58 @@ impl Workbench {
             )
             .child(self.render_agent_input(colors, window, cx))
             .into_any_element()
+    }
+
+    /// Over a chat of another project: the folder Claude works in, and a
+    /// way to open that project in its own window.
+    fn render_chat_folder(&self, colors: Colors, cx: &mut Context<Self>) -> Option<AnyElement> {
+        let folder = self.agent_panel.chat_folder.as_ref()?;
+        let strings = self.strings();
+        let name = folder
+            .file_name()
+            .map(|name| name.to_string_lossy().into_owned())
+            .unwrap_or_else(|| folder.display().to_string());
+        Some(
+            div()
+                .id("agent-chat-folder")
+                .debug_selector(|| "agent-chat-folder".to_owned())
+                .flex_none()
+                .h(px(30.))
+                .px(px(12.))
+                .flex()
+                .items_center()
+                .gap(px(6.))
+                .border_b_1()
+                .border_color(colors.border.opacity(0.6))
+                .bg(claude_colour().opacity(0.06))
+                .child(
+                    Icon::new(IconName::Folder)
+                        .xsmall()
+                        .text_color(claude_colour()),
+                )
+                .child(
+                    div()
+                        .id("agent-chat-folder-name")
+                        .flex_1()
+                        .min_w_0()
+                        .truncate()
+                        .text_size(px(12.))
+                        .text_color(colors.muted)
+                        .tooltip({
+                            let path = folder.display().to_string();
+                            move |window, cx| gpui_component::tooltip::Tooltip::new(path.clone()).build(window, cx)
+                        })
+                        .child(strings.agent_works_in(&name)),
+                )
+                .child(
+                    Button::new("agent-open-chat-project")
+                        .ghost()
+                        .xsmall()
+                        .label(strings.agent_open_project)
+                        .on_click(cx.listener(|this, _, _, cx| this.open_chat_project(cx))),
+                )
+                .into_any_element(),
+        )
     }
 
     /// Before the first message: Claude's mark, how it is doing, a way in
