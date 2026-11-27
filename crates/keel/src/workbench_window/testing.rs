@@ -348,7 +348,22 @@ pub(super) fn test_command(root: &Path, path: &Path, test: Option<&FoundTest>) -
                 .components()
                 .next()
                 .is_some_and(|first| first.as_os_str() == "tests");
-            let mut command = format!("cargo test -p {package}");
+            // From the project's top `-p` finds the crate only in the
+            // top's workspace; elsewhere (a crate in a folder of its own,
+            // or in a workspace further down) cargo is told its manifest.
+            let top_workspace = crate_dir == root
+                || std::fs::read_to_string(root.join("Cargo.toml"))
+                    .is_ok_and(|text| text.lines().any(|line| line.trim() == "[workspace]"));
+            let mut command = if top_workspace {
+                format!("cargo test -p {package}")
+            } else {
+                let manifest = crate_dir.join("Cargo.toml");
+                let manifest = manifest.strip_prefix(root).unwrap_or(&manifest);
+                format!(
+                    "cargo test --manifest-path {}",
+                    shell_quote(&manifest.to_string_lossy())
+                )
+            };
             let filter = match test {
                 Some(test) if integration => test.filter.rsplit("::").next().map(str::to_owned),
                 Some(test) => Some(test.filter.clone()),
@@ -1224,6 +1239,7 @@ mod tests {
         let folder = tempfile::tempdir().unwrap();
         let root = folder.path();
         std::fs::create_dir_all(root.join("crates/editor/src")).unwrap();
+        std::fs::write(root.join("Cargo.toml"), "[workspace]\nmembers = [\"crates/*\"]\n").unwrap();
         std::fs::write(
             root.join("crates/editor/Cargo.toml"),
             "[package]\nname = \"editor\"\nversion = \"0.1.0\"\n\n[dependencies]\nname = 1\n",
@@ -1243,6 +1259,26 @@ mod tests {
         assert_eq!(
             test_command(root, &file, None).as_deref(),
             Some("cargo test -p editor -- text_edits::")
+        );
+        // A crate in a folder of its own, with no workspace at the top:
+        // cargo is told its manifest, from the top.
+        std::fs::create_dir_all(root.join("tools/prezzi/src")).unwrap();
+        std::fs::write(
+            root.join("tools/prezzi/Cargo.toml"),
+            "[package]\nname = \"prezzi\"\nversion = \"0.1.0\"\n",
+        )
+        .unwrap();
+        std::fs::remove_file(root.join("Cargo.toml")).unwrap();
+        let file = root.join("tools/prezzi/src/lib.rs");
+        let test = FoundTest {
+            line: 3,
+            name: "rounds".into(),
+            filter: "tests::rounds".into(),
+            group: false,
+        };
+        assert_eq!(
+            test_command(root, &file, Some(&test)).as_deref(),
+            Some("cargo test --manifest-path tools/prezzi/Cargo.toml -- tests::rounds --exact")
         );
 
         std::fs::create_dir_all(root.join("web/src")).unwrap();
