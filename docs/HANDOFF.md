@@ -1,6 +1,6 @@
 # Keel — passaggio di consegne
 
-*Scritto il 18 novembre 2026, aggiornato il 25 novembre con il pannello di Claude rifatto, l'import da VS Code, «Prepara Keel», il comando `keel` e Keel che da fermo non consuma più, usciti con la 0.1.2; il 26 novembre con i documenti allineati e la proposta della 0.1.3 ([`PIANO-0.1.3.md`](PIANO-0.1.3.md)). Cosa cambia in ogni versione è in [`CHANGELOG.it.md`](CHANGELOG.it.md).*
+*Scritto il 18 novembre 2026, aggiornato il 25 novembre con il pannello di Claude rifatto, l'import da VS Code, «Prepara Keel», il comando `keel` e Keel che da fermo non consuma più, usciti con la 0.1.2; il 26 novembre con i documenti allineati e la proposta della 0.1.3 ([`PIANO-0.1.3.md`](PIANO-0.1.3.md)); il 27 novembre con la 0.1.3 fatta (sottofasi 1–5) e il confronto rimisurato, in attesa dell'uscita. Cosa cambia in ogni versione è in [`CHANGELOG.it.md`](CHANGELOG.it.md).*
 
 Questo documento serve a chi riprende il lavoro su Keel, persona o assistente, senza aver seguito la storia. Spiega:
 - che cos'è il progetto e perché esiste;
@@ -15,7 +15,7 @@ Il dettaglio di ogni fase, con le decisioni e le prove, è in [`PIANO.md`](PIANO
 ## 1. Cos'è Keel e perché esiste
 
 Keel è un **IDE personale per macOS scritto in Rust**. L'idea è avere un editor:
-- **veloce e leggero:** con lo stesso progetto e lo stesso file Keel occupa 265 MB, VS Code 1.014 e Cursor 1.320 (la colonna Memoria di Monitoraggio Attività; il confronto è al punto 3);
+- **veloce e leggero:** con lo stesso progetto e lo stesso file Keel occupa 180 MB, VS Code 748 e Cursor 1.344 (la colonna Memoria di Monitoraggio Attività, 27 novembre; il confronto è al punto 3);
 - **bello:** stile Apple, disposizione come Cursor, tema predefinito blu mezzanotte;
 - **familiare:** stesse scorciatoie e stessi nomi dei comandi di VS Code, `settings.json` e `keybindings.json` compatibili;
 - **estendibile:** le estensioni di VS Code funzionano dove possibile, e quelle dell'autore sempre. La prova del nove è **VSAuto Ghost**, la sua estensione di «fake coding».
@@ -42,7 +42,7 @@ Nasce dalla curiosità per le app native in Rust e dal desiderio di un editor tu
 
 | Percorso | Contenuto |
 |---|---|
-| `crates/keel` | l'app: finestre, interfaccia, tutte le viste (~81.000 righe) |
+| `crates/keel` | l'app: finestre, interfaccia, tutte le viste (~93.000 righe) |
 | `crates/editor` | aggiunte all'editor: decorazioni, testo fantasma, comandi sulle righe |
 | `crates/extensions` | lettore VSIX, Open VSX, host V8 con il ponte `vscode` (in `src/js`), impostazioni delle estensioni |
 | `crates/lsp` | client dei language server, installazione dei server, linguaggi |
@@ -55,10 +55,12 @@ Nasce dalla curiosità per le app native in Rust e dal desiderio di un editor tu
 | `crates/workbench` | logica senza interfaccia condivisa col ponte: scorciatoie, clausole «when», posizioni, URI |
 | `crates/ai` | Claude Code: protocollo IDE e pannello agente ACP |
 | `crates/pdf` | anteprima PDF con PDFKit |
+| `crates/web` | pagine web in una scheda: il WebKit di macOS (`WKWebView`) sopra la finestra, come in Sail |
 | `crates/update` | aggiornamenti di Keel: elenco delle versioni, download controllato (peso, SHA-256, firma Ed25519), sostituzione dell'app dopo la chiusura |
 | `vendor/gpui-base` | copia dell'editor di gpui-component, con le correzioni che servivano (pieghe, più cursori) |
+| `crates/keel/icons/material` | le icone di Material Icon Theme 5.40.0 (MIT) che Keel usa di serie, con l'elenco e la licenza; si aggiornano con `scripts/update-material-icons.sh` |
 | `fixtures/` | file e pacchetti di estensioni per i test |
-| `scripts/` | `bundle-macos.sh` (crea `Keel.app`), `make-dmg.sh` (crea il DMG), `measure-memory.sh`, `release.sh` e `install.sh` (pubblicazione), `third-party-licenses.py` (gli avvisi delle licenze, con i testi mancanti in `licenses/`) |
+| `scripts/` | `bundle-macos.sh` (crea `Keel.app`), `make-dmg.sh` (crea il DMG), `measure-memory.sh`, `release.sh` e `install.sh` (pubblicazione), `update-material-icons.sh` (le icone da una versione nuova di Material Icon Theme), `third-party-licenses.py` (gli avvisi delle licenze, con i testi mancanti in `licenses/`) |
 | `assets/` | il marchio e le immagini del README (`readme/`: testata e confronto sono SVG animati, il resto sono finestre vere disegnate da Keel). Il video di 40 secondi in cima ai due README non sta qui: è caricato su GitHub (un link `user-attachments`, l'unico modo perché GitHub lo mostri con il player) e si rifà con `film/render.sh` della repo `KeelSite` |
 | `README.md` | la presentazione per chi arriva sulla repo, in inglese; in italiano è `docs/README.it.md`. Vanno aggiornati insieme |
 | `LICENSE` | la licenza di Keel, in inglese; in italiano è `docs/LICENZA.it.md`. Codice da leggere e basta, app gratis da usare anche per lavoro (punto 4, «Punti aperti») |
@@ -75,6 +77,9 @@ L'interfaccia sta quasi tutta in `crates/keel/src/workbench_window/`, un file pe
 - `tabs.rs`: gruppi di editor, schede trascinate, divisioni in ogni direzione;
 - `claude_inline.rs`: Claude nell'editor (Cmd+I) e il messaggio del commit;
 - `agent_panel.rs`, `agent_view.rs`, `agent_session.rs`, `agent_cards.rs`, `agent_chats.rs`: il pannello di Claude (la conversazione con l'agente, il disegno con i menu `/` e `@`, account e limiti, le schede di modello, modo e consumo, le chat per progetto); il protocollo è in `crates/ai` (`acp.rs`, `session_meta.rs`, `history.rs`);
+- `agent_review.rs`: le modifiche di Claude file per file, con Accetta, Rifiuta e i commenti sulle righe;
+- `web_preview.rs`: la pagina web in una scheda, sopra `crates/web`;
+- `contributions.rs` e `project_icons.rs`: le icone di file e cartelle (quelle di Material di serie) e l'immagine di ogni progetto;
 - `testing.rs`: test dal margine e vista Test;
 - `debug.rs`, `debug_config.rs`, `debug_view.rs`, `breakpoints.rs`: debugger, sopra `crates/dap`;
 - `tasks.rs`, `task_config.rs`, `problem_matchers.rs`: attività di `tasks.json`, con gli errori nei Problemi;
@@ -193,23 +198,29 @@ Dopo le prime prove dell'app vera (18 novembre) sono arrivati altri giri di rito
   - il codice: `agent_panel.rs` tiene la conversazione e il dialogo con l'agente, `agent_view.rs` la disegna (menu `/` e `@` compresi), `agent_session.rs` gestisce account, chiave, opzioni, limiti, eliminazione e sincronizzazione, `agent_cards.rs` disegna le schede di modo, modello e consumo; `crates/ai/src/session_meta.rs` legge i messaggi del protocollo. L'agente finto dei test (`fake_agent.rs`) fa anche account, logout, comandi e opzioni. Le foto: `KEEL_SNAPSHOTS_ONLY=claude scripts/snapshots.sh <cartella>` (`claude-home`, `-chats`, `-chat`, `-slash`, `-mention`, `-model`, `-mode`, `-usage`, `-tools`, `-login`);
   - provato: i test con l'agente finto (comandi, file, modello, logout, tasti dei menu) e la forma delle risposte dell'adattatore vero per l'account. **Da provare a mano**: una chat dell'app Claude continuata in Keel e poi riaperta nell'app (l'app potrebbe mostrare i messaggi di Keel solo dopo averla riaperta); login e logout veri (il logout esce anche da Claude Code nel terminale, perché il login è lo stesso), la chiave API, una chat continuata nel terminale e ripresa nel pannello.
 
-- **la 0.1.3, prima sottofase** (26 novembre, su `develop`, non ancora in una versione): le chat degli altri progetti si aprono nella finestra dove si lavora, con Claude che lavora nella loro cartella; Esc ferma Claude; un messaggio scritto mentre Claude lavora aspetta il turno; la chat aperta torna riaprendo la finestra; rinomina delle chat, copia delle risposte, «Aggiungi a Claude» dall'albero; il nome del modello leggibile; il Mac sveglio mentre Claude lavora; la dettatura di macOS nel campo (⌘D). Il dettaglio, quello che è andato diversamente e le prove a mano sono in [`PIANO-0.1.3.md`](PIANO-0.1.3.md), «Com'è andata».
+- **la 0.1.3** (26 e 27 novembre, su `develop`, non ancora uscita), in cinque sottofasi:
+  - *Claude:* le chat degli altri progetti si aprono nella finestra dove si lavora, con Claude nella loro cartella; Esc ferma Claude; un messaggio scritto mentre Claude lavora aspetta il turno; la chat aperta torna riaprendo la finestra; rinomina delle chat, copia delle risposte, «Aggiungi a Claude» dall'albero; il nome del modello leggibile; il Mac sveglio mentre Claude lavora; la dettatura (⌘D); il codice riportato a un messaggio e le chat divise da una risposta; il piano in una scheda, rimandato con le note; i commenti sulle righe delle modifiche di Claude, mandati insieme;
+  - *le icone:* Material Icon Theme dentro Keel, di serie, e l'immagine di ogni progetto;
+  - *l'anteprima web:* la pagina del progetto in una scheda, col WebKit di macOS (`crates/web`);
+  - *Git e difetti:* cosa cambia il ramo rispetto a `main`, i file trascinati dalla vista Git, ⌘ con la rotella nel terminale, i test di un crate senza workspace, Cmd+P che apre dietro l'elenco, «Non mostrare più» sugli avvisi, il messaggio del commit in una finestra grande.
+
+  Il dettaglio, quello che è andato diversamente e le prove a mano sono in [`PIANO-0.1.3.md`](PIANO-0.1.3.md), «Com'è andata».
 
 Stato dei controlli all'ultimo commit:
-- tutti i test passano: 594, più 28 da lanciare a mano; nell'app 332, più 6 (26 novembre);
+- tutti i test passano: 607, più 28 da lanciare a mano; nell'app 343, più 6 (27 novembre);
 - clippy non segnala niente;
 - la prima schermata di Keel arriva in 330 ms, media di sei avvii;
 - **memoria di Keel** (22 novembre, versione installata, M4 Pro, language server spenti), come la dà Monitoraggio Attività: 132 MB con una finestra vuota, 271 MB con un progetto e un file, 299 MB con 450 file e 20 schede, 326 MB con due progetti. I 130–150 MB scritti in `PIANO.md` sono la memoria residente (RSS), che non conta quella grafica: non vanno usati per i confronti;
-- **confronto** (22 novembre, stesso Mac, stesso progetto e stesso file Rust, profilo vuoto, nessuna estensione, media di tre avvii):
+- **confronto** (rimisurato il 27 novembre con la 0.1.3, stesso Mac, stesso progetto e stesso file Rust, profilo vuoto, nessuna estensione, media di tre avvii; il 22 novembre erano 265, 1.014 e 1.320 MB):
 
   | | Keel | VS Code 1.125 | Cursor 3.30 |
   |---|---|---|---|
-  | Memoria di tutti i processi, dopo 40 s | 265 MB | 1.014 MB | 1.320 MB |
-  | Avvio | 425 ms | 653 ms | 970 ms |
-  | App su disco | 137 MB | 1.096 MB | 1.446 MB |
-  | Processi | 1 | 8 | 14 |
+  | Memoria di tutti i processi, dopo 40 s | 180 MB | 748 MB | 1.344 MB |
+  | Avvio | 448 ms | 1.038 ms | 1.636 ms |
+  | App su disco | 144 MB | 1.096 MB | 1.436 MB |
+  | Processi | 1 | 8 | 15 |
 
-  Per Keel l'avvio è fino alla finestra sullo schermo; per VS Code e Cursor è il tempo che dichiarano loro (`--prof-append-timers`), e la loro finestra vuota compare più o meno quando quella di Keel. Su disco VS Code e Cursor sono universali, Keel è solo per Apple Silicon.
+  Per Keel l'avvio è fino alla finestra sullo schermo; per VS Code e Cursor è il tempo che dichiarano loro (`--prof-append-timers`), in avvii a parte perché quell'opzione li chiude appena scrive i tempi; la loro finestra vuota compare più o meno quando quella di Keel. Su disco VS Code e Cursor sono universali, Keel è solo per Apple Silicon. Come rifarlo: ogni avvio con una cartella sua (`KEEL_DATA_DIR`, `--user-data-dir` ed `--extensions-dir`); per VS Code e Cursor il percorso del profilo deve essere corto (il loro socket non supera 103 caratteri), per esempio dentro `target/`; la memoria è `footprint` (la `phys_footprint`) di tutti i processi dell'app, quelli figli e quelli che usano la sua cartella. Il lanciatore di VS Code e Cursor resta il processo principale; quello di Keel, aperto fuori dal Terminale, anche.
 
 ---
 
@@ -217,7 +228,7 @@ Stato dei controlli all'ultimo commit:
 
 ### La 0.1.3
 
-Il piano è in [`PIANO-0.1.3.md`](PIANO-0.1.3.md), approvato il 26 novembre: sei sottofasi, dalle cose di Claude all'uscita. La prima è fatta; la prossima è quella delle icone di serie (Material Icon Theme dentro Keel). Ogni sottofase parte col via dell'autore.
+Il piano è in [`PIANO-0.1.3.md`](PIANO-0.1.3.md), approvato il 26 novembre: sei sottofasi, dalle cose di Claude all'uscita. Le prime cinque sono fatte (26 e 27 novembre), con `CHANGELOG.md`, `docs/CHANGELOG.it.md`, i README e la pagina delle novità del sito già scritti. Resta l'uscita: `scripts/release.sh 0.1.3 <note>` con la VPN accesa (il codice di verifica lo scrive l'autore), poi il push di `develop` e del tag, e del sito, quando lo chiede l'autore.
 
 ### Subito: le prove a mano
 
@@ -234,7 +245,7 @@ Trovati il 22 novembre misurando e fotografando Keel per la pagina di presentazi
   - *La CPU* (7% di un core con un file aperto e la finestra davanti) veniva da un giro senza fine: le decorazioni dell'editor (parentesi colorate, la parola sotto il cursore, i segni nella barra di scorrimento) avvisano l'editor quando cambiano; l'editor avvisava Keel come se il cursore si fosse mosso, e dopo 160 ms Keel le ricalcolava e le rimetteva. Erano sei ridisegni al secondo senza fare niente. Ora si ricalcolano solo se cambiano testo, cursore o tema (`writing.rs`, `cursor_moved`), e decorazioni uguali non si rimettono. Un test lo controlla.
   - *La memoria grafica* (+125 MB) non era di Keel né dei tracciati: GPUI riserva le stesse cose con o senza file (misurato con una copia di GPUI che annotava ogni allocazione). È la memoria che macOS tiene per una finestra che si ridisegna spesso, e il cursore che lampeggia la ridisegna due volte al secondo. Ora il cursore smette di lampeggiare dopo 10 secondi senza tasti né clic e resta visibile, come in GNOME (`theme::caret_blink`); `"editor.cursorBlinking": "solid"` lo tiene sempre fermo. Dopo qualche secondo fermo macOS si riprende la memoria.
   - *Misure* (versione release, M4 Pro, progetto Keel con `layout.rs` aperto, finestra davanti): CPU da fermo dal 7,1% allo 0%; memoria da 272 a 157 MB, 15 secondi dopo l'ultimo tasto. Mentre si scrive i 120 MB tornano, perché la finestra si aggiorna: succede a ogni app che si ridisegna.
-- **test di un crate in una sottocartella senza workspace:** non partono, perché `cargo test -p` viene lanciato dalla cartella del progetto.
+- **test di un crate in una sottocartella senza workspace: corretto il 27 novembre** (0.1.3): partono dalla cima del progetto con `--manifest-path`.
 
 ### Prossimo lavoro proposto: lo stile personale
 

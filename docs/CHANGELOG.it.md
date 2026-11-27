@@ -5,6 +5,74 @@ da solo: le novità che mostra nell'aggiornamento vengono da qui, più brevi.
 
 *In English: [CHANGELOG.md](../CHANGELOG.md).*
 
+## 0.1.3 — 27 novembre 2026
+
+### Claude
+
+- **Le chat degli altri progetti si aprono qui,** nella finestra dove
+  lavori, con Claude che lavora nella loro cartella: una fascia sopra la
+  chat dice dove, con «Apri il progetto». «+» torna a questo progetto.
+- **Scrivere mentre Claude lavora:** il messaggio aspetta sopra il campo e
+  parte appena il turno finisce; più messaggi partono insieme. Esc nel
+  campo ferma Claude.
+- **La chat aperta torna** quando riapri il progetto.
+- **Riportare il codice a un messaggio:** da un tuo messaggio, ogni file
+  cambiato da quel turno in poi torna com'era; un file creato da Claude va
+  nel Cestino. Da una risposta, **continua in una chat nuova** da lì.
+- **Il piano in una scheda:** quando Claude chiede «Ready to code?», il
+  piano si apre nell'editor, da leggere intero, cambiare e annotare;
+  «Rivedi con le mie note» glielo rimanda.
+- **Commenti sulle modifiche di Claude:** nella scheda di una modifica, il
+  numero di una riga o il 💬 di un blocco apre un commento; i commenti si
+  vedono sotto le loro righe e partono insieme, ognuno con il suo codice.
+- **La dettatura** nel campo: il microfono, o ⌘D.
+- **Rinominare una chat, copiare una risposta,** e «Aggiungi a Claude» col
+  tasto destro sui file dell'albero.
+- **I nomi dei modelli leggibili** («Opus 5.5»), e il Mac resta sveglio
+  mentre Claude lavora (Impostazioni › File e finestre).
+
+### Le icone
+
+- **Material Icon Theme dentro Keel:** i file secondo nome ed estensione
+  (`.tsx` con l'atomo di React, `package.json`, `Dockerfile`…) e le
+  cartelle aperte o chiuse, dal primo avvio, nell'albero, nelle schede, in
+  Git, nella ricerca, in Apri file, in Problemi e nel pannello di Claude.
+  I simboli semplici restano come «Icone semplici».
+- **I progetti con la loro immagine** (la loro icona, la favicon o il logo)
+  nei progetti recenti e nelle chat di Claude.
+
+### La pagina accanto al codice
+
+- **Una pagina web in una scheda:** la pagina del progetto
+  (`localhost:3000`) si apre in Keel, da Porte o dalla palette, con avanti,
+  indietro, ricarica, la larghezza di un telefono e di un tablet,
+  l'Inspector di Safari, «Apri nel browser» e «Mostra a Claude», che mette
+  un'immagine della pagina nel messaggio dopo. È il WebKit di macOS: i
+  suoi processi esistono solo mentre una pagina è aperta.
+
+### Git
+
+- **Cosa cambia il ramo** rispetto a `main`, in una pagina, prima di aprire
+  una pull request.
+- **Il messaggio del commit in una finestra grande:** Maiusc+Esc nel
+  messaggio, o ⤢ sotto; ⌘↩ fa il commit da lì.
+- **I file trascinati dalla vista Git** nel terminale (il percorso),
+  nell'editor (si aprono) o nella chat di Claude.
+
+### Cose più piccole
+
+- **Apri file (⌘P):** → nel campo vuoto, o ⌥↩, apre un file dietro
+  l'elenco e lascia l'elenco aperto.
+- **«Non mostrare più»** sugli avvisi che si ripetono (estensioni,
+  programmi nel terminale, comandi lunghi, Claude); un comando li fa
+  tornare.
+- **⌘ con la rotella** ingrandisce o rimpicciolisce il testo del terminale.
+
+### Corretto
+
+- I test di un crate in una sottocartella di un progetto senza workspace
+  Cargo non partivano.
+
 ## 0.1.2 — 25 novembre 2026
 
 ### Il pannello di Claude, rifatto

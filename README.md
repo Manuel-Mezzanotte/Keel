@@ -50,7 +50,7 @@ A keel is the part of a boat under the water: nobody sees it, and it keeps every
 <table>
   <tr>
     <td><b>Light</b></td>
-    <td>One process and no browser inside. With a project open it uses 265 MB, where VS Code uses 1,014 and Cursor 1,320.</td>
+    <td>One process and no browser inside. With a project open it uses 180 MB, where VS Code uses 748 and Cursor 1,344.</td>
   </tr>
   <tr>
     <td><b>Native</b></td>
@@ -77,22 +77,22 @@ A keel is the part of a boat under the water: nobody sees it, and it keeps every
 ## By the numbers
 
 <p align="center">
-  <img src="assets/readme/comparison.svg" alt="Memory with the same project open: Keel 265 MB, VS Code 1,014 MB, Cursor 1,320 MB" width="100%">
+  <img src="assets/readme/comparison.svg" alt="Memory with the same project open: Keel 180 MB, VS Code 748 MB, Cursor 1,344 MB" width="100%">
 </p>
 
 | | Keel | VS Code 1.125 | Cursor 3.30 |
 |:--|--:|--:|--:|
-| Memory, all processes | **265 MB** | 1,014 MB | 1,320 MB |
-| Time to start | **425 ms** | 653 ms | 970 ms |
-| App on disk | **137 MB** | 1,096 MB | 1,446 MB |
-| Processes | **1** | 8 | 14 |
+| Memory, all processes | **180 MB** | 748 MB | 1,344 MB |
+| Time to start | **448 ms** | 1,038 ms | 1,636 ms |
+| App on disk | **144 MB** | 1,096 MB | 1,436 MB |
+| Processes | **1** | 8 | 15 |
 
 <details>
 <summary><b>How this was measured</b></summary>
 
 <br>
 
-On 22 November 2026, on one Mac with an M4 Pro and macOS 27: the same project, the same Rust file open, an empty profile and no extensions. Each figure is the mean of three starts.
+On 27 November 2026, on one Mac with an M4 Pro and macOS 27: the same project, the same Rust file open, an empty profile and no extensions. Each figure is the mean of three starts.
 
 - **Memory** is the physical footprint of every process, 40 seconds after the start: the number in Activity Monitor's *Memory* column.
 - **Time to start** is, for Keel, until its window is on screen; for VS Code and Cursor, the time they report themselves (`--prof-append-timers`). Their empty window appears at about the same moment as Keel's.
@@ -106,6 +106,8 @@ On 22 November 2026, on one Mac with an M4 Pro and macOS 27: the same project, t
 ### Claude, where the code is
 
 <kbd>⌘</kbd> <kbd>I</kbd> on a few lines, say what you want, read the difference, keep it or put it back. Claude can also write the commit message, explain a failed command, or fix a problem from the list.
+
+The panel on the right holds your chats with Claude Code, of every project. Bring the code back to any message, go on from an answer in a new chat, read the plan in a tab and send it back with your notes, comment on the lines Claude changed, or dictate.
 
 <p align="center"><img src="assets/readme/claude.webp" alt="Lines written by Claude in the editor, with the buttons to keep them or undo them" width="92%"></p>
 
@@ -164,16 +166,16 @@ Differences side by side, with the words that changed and the code that moved. S
 | Area | What is there |
 |:--|:--|
 | **Editor** | Tree-sitter colours, several cursors, folding, sticky scroll, minimap, rulers, bracket colours, snippets, rename, peek definition, call hierarchy, references and types at the end of lines, bookmarks, clipboard history |
-| **Files** | Explorer with Git colours, Quick Open, Quick Look, autosave, local history, unsaved files that survive a quit or a crash, changes on disk noticed and compared |
+| **Files** | Explorer with Git colours and Material Icon Theme's icons built in, Quick Open, Quick Look, autosave, local history, unsaved files that survive a quit or a crash, changes on disk noticed and compared |
 | **Search** | In files with replace, regular expressions, results in a tab that can be edited |
-| **Git** | Stage by file or block, side by side or inline differences, moved code, commit, push, pull, sync, the author of each line, the graph, images compared |
+| **Git** | Stage by file or block, side by side or inline differences, moved code, what a branch changes against `main`, commit (the message also in a big window), push, pull, sync, the author of each line, the graph, images compared |
 | **GitHub** | Pull requests through `gh`: lists, conversation, checks, comments on lines, review, merge, checkout |
 | **Debug** | Rust, C, C++ and Swift with lldb-dap, Python with debugpy, Node and TypeScript with js-debug; `launch.json` |
 | **Tests** | Rust's `#[test]`, Vitest, Jest and pytest, run or debugged from the margin, with their outcome |
 | **Tasks** | `tasks.json`, plus the cargo, npm and TypeScript tasks Keel finds, with their errors in Problems |
 | **Terminal** | Splits, shell integration, jumps between commands, quick fixes, text that comes back after a restart, open ports |
-| **Claude** | The panel with your chats, shared with Claude Code in the terminal: sign in, model and mode, `/` for commands and your skills, `@` for any file or folder. <kbd>⌘</kbd> <kbd>I</kbd>, the commit message, fixes from Problems and from the terminal, the IDE link for Claude Code |
-| **Preview** | Markdown and PDF |
+| **Claude** | The panel with the chats of every project, shared with Claude Code in the terminal: sign in, model and mode, `/` for commands and your skills, `@` for any file or folder, dictation, messages that wait while Claude works. The code brought back to a message, chats forked, the plan in a tab, comments on Claude's changes. <kbd>⌘</kbd> <kbd>I</kbd>, the commit message, fixes from Problems and from the terminal, the IDE link for Claude Code |
+| **Preview** | Markdown, PDF, and the project's web page in a tab, with a phone's and a tablet's width |
 | **The Mac** | Native menus, recent projects in the Dock, files dragged to and from Finder, notifications, light and dark with the system |
 
 </details>
@@ -296,7 +298,7 @@ flowchart LR
     app --> code["<b>The code</b><br>editor · language · lsp"] --> code_on["tree-sitter, language servers"]
     app --> run["<b>Running it</b><br>dap · terminal"] --> run_on["debug adapters, your shell"]
     app --> project["<b>The project</b><br>files · git · settings · workbench"] --> project_on["your files, your repository"]
-    app --> around["<b>Around it</b><br>extensions · ai · pdf"] --> around_on["V8, Claude Code, PDFKit"]
+    app --> around["<b>Around it</b><br>extensions · ai · pdf · web"] --> around_on["V8, Claude Code, PDFKit, WebKit"]
 
     classDef hull fill:#0f1d52,stroke:#0f1d52,color:#ffffff
     classDef crate fill:#2f55c9,stroke:#2f55c9,color:#ffffff
@@ -327,6 +329,7 @@ flowchart LR
 | `crates/workbench` | Logic shared with the bridge: shortcuts, `when` clauses, URIs |
 | `crates/ai` | Claude Code: the IDE protocol and the ACP agent panel |
 | `crates/pdf` | PDF preview with PDFKit |
+| `crates/web` | Web pages in a tab, with macOS's WebKit |
 | `crates/update` | Keel's own updates: the list of releases, the checked download, the swap of the app |
 | `vendor/gpui-base` | gpui-component's editor, with the changes Keel needs ([list](vendor/gpui-base/KEEL.md)) |
 
@@ -335,7 +338,7 @@ flowchart LR
 ## Development
 
 ```bash
-cargo test --workspace                     # 594 tests, with no window on screen
+cargo test --workspace                     # 607 tests, with no window on screen
 cargo clippy --workspace --all-targets     # no warnings
 scripts/snapshots.sh <folder>              # the window drawn off screen, as PNG
 scripts/third-party-licenses.py            # the licence notices, after changing dependencies
@@ -359,6 +362,7 @@ Keel collects nothing. It connects only to:
 - **the sites of the language servers and debug adapters** it installs, each checked against a published checksum where there is one;
 - **the JSON schemas** those servers ask for, such as the one of `package.json`, from SchemaStore and the sites of their tools;
 - **your Git remotes**, when you push and pull, and every few minutes to see if there are new commits (`git.autofetch` turns it off);
+- **the pages you open** in a web tab, such as your project's `localhost:3000`;
 - **GitHub**, through your own `gh`, when you open pull requests;
 - **Claude**, through your own Claude Code, when you use it.
 
@@ -367,8 +371,9 @@ Keel collects nothing. It connects only to:
 The thirteen phases of the plan are done, from the first prototype to the debugger and the pull requests; each version since is in [CHANGELOG.md](CHANGELOG.md). What comes next:
 
 - [x] Less graphics memory when a file is open, and no work at rest (0.1.2)
+- [x] File icons built in, a web page beside the code, the commit message in a big window (0.1.3)
+- [ ] Several Claude chats at once, each in its own worktree
 - [ ] Node and TypeScript debugging tried for real
-- [ ] Commit message in a large tab
 - [ ] A tab dragged out into a window of its own
 - [ ] Your own `style.css`, to restyle any part of Keel
 - [x] Updates from Keel itself (0.1.0)
@@ -388,7 +393,7 @@ The thirteen phases of the plan are done, from the first prototype to the debugg
 
 ## Acknowledgements
 
-Keel stands on [GPUI](https://github.com/zed-industries/zed), the GPU framework made for Zed, and on [gpui-component](https://github.com/longbridge/gpui-component), both under the Apache 2.0 licence. It also uses [deno_core](https://github.com/denoland/deno_core) for extensions, [alacritty_terminal](https://github.com/alacritty/alacritty) for terminals and [tree-sitter](https://tree-sitter.github.io) for the colours of the code.
+Keel stands on [GPUI](https://github.com/zed-industries/zed), the GPU framework made for Zed, and on [gpui-component](https://github.com/longbridge/gpui-component), both under the Apache 2.0 licence. It also uses [deno_core](https://github.com/denoland/deno_core) for extensions, [alacritty_terminal](https://github.com/alacritty/alacritty) for terminals and [tree-sitter](https://tree-sitter.github.io) for the colours of the code. The file and folder icons are [Material Icon Theme](https://github.com/material-extensions/vscode-material-icon-theme)'s, under the MIT licence.
 
 Keel is not affiliated with Microsoft, Anysphere, Anthropic, GitHub or Apple. Visual Studio Code, Cursor, Claude, GitHub and Mac are trademarks of their owners.
 

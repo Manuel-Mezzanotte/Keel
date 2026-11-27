@@ -50,7 +50,7 @@ La chiglia (in inglese *keel*) è la parte della barca sotto l'acqua: non la ved
 <table>
   <tr>
     <td><b>Leggero</b></td>
-    <td>Un processo solo e nessun browser dentro. Con un progetto aperto usa 265 MB, VS Code 1.014 e Cursor 1.320.</td>
+    <td>Un processo solo e nessun browser dentro. Con un progetto aperto usa 180 MB, VS Code 748 e Cursor 1.344.</td>
   </tr>
   <tr>
     <td><b>Nativo</b></td>
@@ -77,22 +77,22 @@ La chiglia (in inglese *keel*) è la parte della barca sotto l'acqua: non la ved
 ## I numeri
 
 <p align="center">
-  <img src="../assets/readme/comparison.svg" alt="Memoria con lo stesso progetto aperto: Keel 265 MB, VS Code 1.014 MB, Cursor 1.320 MB" width="100%">
+  <img src="../assets/readme/comparison.svg" alt="Memoria con lo stesso progetto aperto: Keel 180 MB, VS Code 748 MB, Cursor 1.344 MB" width="100%">
 </p>
 
 | | Keel | VS Code 1.125 | Cursor 3.30 |
 |:--|--:|--:|--:|
-| Memoria, tutti i processi | **265 MB** | 1.014 MB | 1.320 MB |
-| Avvio | **425 ms** | 653 ms | 970 ms |
-| App su disco | **137 MB** | 1.096 MB | 1.446 MB |
-| Processi | **1** | 8 | 14 |
+| Memoria, tutti i processi | **180 MB** | 748 MB | 1.344 MB |
+| Avvio | **448 ms** | 1.038 ms | 1.636 ms |
+| App su disco | **144 MB** | 1.096 MB | 1.436 MB |
+| Processi | **1** | 8 | 15 |
 
 <details>
 <summary><b>Come è stato misurato</b></summary>
 
 <br>
 
-Il 22 novembre 2026, su un Mac con M4 Pro e macOS 27: lo stesso progetto, lo stesso file Rust aperto, un profilo vuoto e nessuna estensione. Ogni numero è la media di tre avvii.
+Il 27 novembre 2026, su un Mac con M4 Pro e macOS 27: lo stesso progetto, lo stesso file Rust aperto, un profilo vuoto e nessuna estensione. Ogni numero è la media di tre avvii.
 
 - **Memoria:** quella di tutti i processi, 40 secondi dopo l'avvio, come nella colonna *Memoria* di Monitoraggio Attività.
 - **Avvio:** per Keel fino alla finestra sullo schermo; per VS Code e Cursor il tempo che dichiarano loro (`--prof-append-timers`). La loro finestra vuota compare più o meno quando quella di Keel.
@@ -106,6 +106,8 @@ Il 22 novembre 2026, su un Mac con M4 Pro e macOS 27: lo stesso progetto, lo ste
 ### Claude, dove sta il codice
 
 <kbd>⌘</kbd> <kbd>I</kbd> su qualche riga, dici cosa vuoi, leggi la differenza, la tieni o la annulli. Claude può anche scrivere il messaggio del commit, spiegare un comando fallito o correggere un problema dall'elenco.
+
+Il pannello a destra tiene le tue chat con Claude Code, di tutti i progetti. Riporta il codice a un messaggio qualsiasi, continua da una risposta in una chat nuova, leggi il piano in una scheda e rimandalo con le tue note, commenta le righe che Claude ha cambiato, oppure detta.
 
 <p align="center"><img src="../assets/readme/claude.webp" alt="Righe scritte da Claude nell'editor, con i pulsanti per tenerle o annullarle" width="92%"></p>
 
@@ -164,16 +166,16 @@ Differenze affiancate, con le parole cambiate e il codice spostato. Metti in sta
 | Area | Cosa c'è |
 |:--|:--|
 | **Editor** | Colori con tree-sitter, più cursori, pieghe, sticky scroll, minimappa, righelli, parentesi colorate, snippet, rinomina, sbircia la definizione, gerarchia delle chiamate, riferimenti e tipi in fondo alla riga, segnalibri, cronologia degli appunti |
-| **File** | Esplora risorse con i colori di Git, Cmd+P, Quick Look, salvataggio automatico, cronologia locale, file non salvati che tornano dopo una chiusura o un crash, cambi dal disco notati e confrontati |
+| **File** | Esplora risorse con i colori di Git e le icone di Material Icon Theme già dentro, Cmd+P, Quick Look, salvataggio automatico, cronologia locale, file non salvati che tornano dopo una chiusura o un crash, cambi dal disco notati e confrontati |
 | **Ricerca** | Nei file con sostituzione, espressioni regolari, risultati in una scheda modificabile |
-| **Git** | Stage per file o blocco, differenze affiancate o in linea, codice spostato, commit, push, pull, sincronizzazione, autore di ogni riga, grafico, immagini a confronto |
+| **Git** | Stage per file o blocco, differenze affiancate o in linea, codice spostato, cosa cambia un ramo rispetto a `main`, commit (il messaggio anche in una finestra grande), push, pull, sincronizzazione, autore di ogni riga, grafico, immagini a confronto |
 | **GitHub** | Pull request attraverso `gh`: elenchi, conversazione, controlli, commenti sulle righe, revisione, unione, passaggio al ramo |
 | **Debug** | Rust, C, C++ e Swift con lldb-dap, Python con debugpy, Node e TypeScript con js-debug; `launch.json` |
 | **Test** | `#[test]` di Rust, Vitest, Jest e pytest, eseguiti o in debug dal margine, con l'esito |
 | **Attività** | `tasks.json`, più quelle di cargo, npm e TypeScript che Keel trova, con gli errori nei Problemi |
 | **Terminale** | Divisioni, integrazione della shell, salti fra i comandi, correzioni rapide, testo che torna dopo il riavvio, porte aperte |
-| **Claude** | Il pannello con le tue chat, in comune con Claude Code nel terminale: accesso, modello e modo, `/` per i comandi e le tue skill, `@` per ogni file o cartella. <kbd>⌘</kbd> <kbd>I</kbd>, il messaggio del commit, correzioni dai Problemi e dal terminale, il collegamento per Claude Code |
-| **Anteprima** | Markdown e PDF |
+| **Claude** | Il pannello con le chat di tutti i progetti, in comune con Claude Code nel terminale: accesso, modello e modo, `/` per i comandi e le tue skill, `@` per ogni file o cartella, la dettatura, i messaggi che aspettano mentre Claude lavora. Il codice riportato a un messaggio, le chat divise, il piano in una scheda, i commenti sulle modifiche di Claude. <kbd>⌘</kbd> <kbd>I</kbd>, il messaggio del commit, correzioni dai Problemi e dal terminale, il collegamento per Claude Code |
+| **Anteprima** | Markdown, PDF, e la pagina web del progetto in una scheda, con la larghezza di un telefono e di un tablet |
 | **Il Mac** | Menu veri, progetti recenti nel Dock, file trascinati da e verso il Finder, notifiche, chiaro e scuro con il sistema |
 
 </details>
@@ -296,7 +298,7 @@ flowchart LR
     app --> code["<b>Il codice</b><br>editor · language · lsp"] --> code_on["tree-sitter, language server"]
     app --> run["<b>Farlo girare</b><br>dap · terminal"] --> run_on["debugger, la tua shell"]
     app --> project["<b>Il progetto</b><br>files · git · settings · workbench"] --> project_on["i tuoi file, il tuo repository"]
-    app --> around["<b>Intorno</b><br>extensions · ai · pdf"] --> around_on["V8, Claude Code, PDFKit"]
+    app --> around["<b>Intorno</b><br>extensions · ai · pdf · web"] --> around_on["V8, Claude Code, PDFKit, WebKit"]
 
     classDef hull fill:#0f1d52,stroke:#0f1d52,color:#ffffff
     classDef crate fill:#2f55c9,stroke:#2f55c9,color:#ffffff
@@ -327,6 +329,7 @@ flowchart LR
 | `crates/workbench` | Logica condivisa col ponte: scorciatoie, clausole `when`, URI |
 | `crates/ai` | Claude Code: protocollo IDE e pannello agente ACP |
 | `crates/pdf` | Anteprima PDF con PDFKit |
+| `crates/web` | Pagine web in una scheda, con il WebKit di macOS |
 | `crates/update` | gli aggiornamenti di Keel: l'elenco delle versioni, il download controllato, la sostituzione dell'app |
 | `vendor/gpui-base` | L'editor di gpui-component, con le modifiche che servivano ([elenco](../vendor/gpui-base/KEEL.md)) |
 
@@ -335,7 +338,7 @@ flowchart LR
 ## Sviluppo
 
 ```bash
-cargo test --workspace                     # 594 test, senza finestre sullo schermo
+cargo test --workspace                     # 607 test, senza finestre sullo schermo
 cargo clippy --workspace --all-targets     # nessun avviso
 scripts/snapshots.sh <cartella>            # la finestra disegnata fuori dallo schermo, in PNG
 scripts/third-party-licenses.py            # gli avvisi delle licenze, dopo aver cambiato le dipendenze
@@ -359,6 +362,7 @@ Keel non raccoglie niente. Si collega solo a:
 - **i siti dei language server e dei debugger** che installa, controllati con l'impronta pubblicata dove c'è;
 - **gli schemi JSON** che quei server chiedono, come quello di `package.json`, da SchemaStore e dai siti degli strumenti;
 - **i tuoi remoti Git**, quando fai push e pull, e ogni pochi minuti per vedere se ci sono commit nuovi (`git.autofetch` lo spegne);
+- **le pagine che apri** in una scheda web, come il `localhost:3000` del tuo progetto;
 - **GitHub**, attraverso il tuo `gh`, quando apri le pull request;
 - **Claude**, attraverso il tuo Claude Code, quando lo usi.
 
@@ -367,8 +371,9 @@ Keel non raccoglie niente. Si collega solo a:
 Le tredici fasi del piano sono fatte, dal primo prototipo al debugger e alle pull request; ogni versione da allora è in [CHANGELOG.it.md](CHANGELOG.it.md). Cosa viene dopo:
 
 - [x] Meno memoria grafica con un file aperto, e niente lavoro da fermo (0.1.2)
+- [x] Le icone dei file già dentro, una pagina web accanto al codice, il messaggio del commit in una finestra grande (0.1.3)
+- [ ] Più chat di Claude insieme, ognuna nel suo worktree
 - [ ] Debug di Node e TypeScript provato davvero
-- [ ] Messaggio del commit in una scheda grande
 - [ ] Una scheda trascinata fuori in una finestra sua
 - [ ] Il tuo `style.css`, per ridisegnare qualunque parte di Keel
 - [x] Aggiornamenti da Keel stesso (0.1.0)
@@ -388,7 +393,7 @@ Le tredici fasi del piano sono fatte, dal primo prototipo al debugger e alle pul
 
 ## Ringraziamenti
 
-Keel sta su [GPUI](https://github.com/zed-industries/zed), il motore grafico di Zed, e su [gpui-component](https://github.com/longbridge/gpui-component), entrambi con licenza Apache 2.0. Usa anche [deno_core](https://github.com/denoland/deno_core) per le estensioni, [alacritty_terminal](https://github.com/alacritty/alacritty) per i terminali e [tree-sitter](https://tree-sitter.github.io) per i colori del codice.
+Keel sta su [GPUI](https://github.com/zed-industries/zed), il motore grafico di Zed, e su [gpui-component](https://github.com/longbridge/gpui-component), entrambi con licenza Apache 2.0. Usa anche [deno_core](https://github.com/denoland/deno_core) per le estensioni, [alacritty_terminal](https://github.com/alacritty/alacritty) per i terminali e [tree-sitter](https://tree-sitter.github.io) per i colori del codice. Le icone di file e cartelle sono quelle di [Material Icon Theme](https://github.com/material-extensions/vscode-material-icon-theme), con licenza MIT.
 
 Keel non è legato a Microsoft, Anysphere, Anthropic, GitHub o Apple. Visual Studio Code, Cursor, Claude, GitHub e Mac sono marchi dei rispettivi proprietari.
 

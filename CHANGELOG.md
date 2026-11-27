@@ -5,6 +5,71 @@ itself: the notes it shows in the update come from here, shorter.
 
 *In italiano: [docs/CHANGELOG.it.md](docs/CHANGELOG.it.md).*
 
+## 0.1.3 — 27 November 2026
+
+### Claude
+
+- **Chats of other projects open here,** in the window you work in, with
+  Claude working in their folder: a strip over the chat says where, with
+  "Open the project". "+" comes back to this project.
+- **Write while Claude works:** a message waits over the box and goes as
+  soon as the turn ends; several go as one. Esc in the box stops Claude.
+- **The open chat comes back** when you open the project again.
+- **Bring the code back to a message:** on one of your messages, every
+  file changed from that turn on goes back as it was; a file Claude made
+  goes to the Trash. From an answer, **go on in a new chat** from there.
+- **The plan in a tab:** when Claude asks "Ready to code?", its plan opens
+  in the editor, to read whole, change and annotate; "Revise with my
+  notes" sends it back.
+- **Comments on Claude's changes:** in a change's tab, a line's number or a
+  block's 💬 opens a comment; the comments show under their lines and go
+  to Claude together, each with its code.
+- **Dictation** in the message box: the microphone, or ⌘D.
+- **Rename a chat, copy an answer,** and "Add to Claude" with a right click
+  on files of the tree.
+- **Model names you can read** ("Opus 5.5"), and the Mac stays awake while
+  Claude works (Settings › Files and Windows).
+
+### Icons
+
+- **Material Icon Theme built in:** files by name and extension (`.tsx`
+  with React's atom, `package.json`, `Dockerfile`…) and folders open or
+  closed, from the first start, in the tree, tabs, Git, Search, Quick Open,
+  Problems and Claude's panel. The plain symbols stay as "Simple icons".
+- **Projects with their own picture** (their icon, favicon or logo) in the
+  recent projects and in Claude's chats.
+
+### The page beside the code
+
+- **A web page in a tab:** the project's page (`localhost:3000`) opens in
+  Keel, from Ports or the palette, with back, forward, reload, a phone's
+  and a tablet's width, Safari's inspector, "Open in the browser" and
+  "Show to Claude", which puts a picture of the page in the next message.
+  It is macOS's WebKit: its processes exist only while a page is open.
+
+### Git
+
+- **What the branch changes** against `main`, in one page, before opening a
+  pull request.
+- **The commit message in a big window:** Shift+Esc in the message, or ⤢
+  under it; ⌘↩ commits from there.
+- **Files dragged from Source Control** into the terminal (their path), the
+  editor (they open) or Claude's chat.
+
+### Smaller things
+
+- **Quick Open:** → in an empty field, or ⌥↩, opens a file behind the list
+  and keeps the list open.
+- **"Don't Show Again"** on the notices that come back (extensions,
+  programs in the terminal, long commands, Claude); a command brings them
+  back.
+- **⌘ with the wheel** makes the terminal's text bigger or smaller.
+
+### Fixed
+
+- The tests of a crate in a subfolder of a project without a Cargo
+  workspace did not start.
+
 ## 0.1.2 — 25 November 2026
 
 ### Claude's panel, redone

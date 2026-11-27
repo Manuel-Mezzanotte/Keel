@@ -1,6 +1,6 @@
 # Keel — cosa fare dopo
 
-*Scritto il 24 novembre 2026, sulla versione di `develop` col benvenuto del primo avvio.*
+*Scritto il 24 novembre 2026, sulla versione di `develop` col benvenuto del primo avvio; segnate il 27 novembre le idee fatte con la 0.1.3.*
 
 Questa è la lista di cosa si potrebbe aggiungere o migliorare in Keel. Nasce da tre cose:
 - **quello che Keel ha oggi**, letto nel codice e in `DETTAGLI.md` e `HANDOFF.md`;
@@ -16,7 +16,7 @@ Le fonti sono in fondo. Niente qui è deciso: ogni voce parte solo col via dell'
 - **VS Code resta il più usato** (70,9% nel sondaggio di Stack Overflow 2026, era 75,9% nel 2025). Cursor scende al 14,9%. Chi arriva su Keel arriva quasi sempre da VS Code.
 - **Il centro si è spostato sugli agenti.** Claude Code è l'agente più usato nel sondaggio. VS Code, Cursor, Zed, Xcode 27 e Warp nell'ultimo anno hanno lavorato quasi solo su questo: più sessioni insieme, ognuna nel suo worktree, il piano da approvare prima, e soprattutto **rivedere bene quello che l'agente ha cambiato**.
 - **L'editor diventa il posto dove si guida e si controlla l'agente.** È lo spazio giusto per Keel: leggero, nativo, con Claude Code già dentro.
-- **La leggerezza conta ancora.** Le critiche a VS Code sono memoria e lentezza con tante estensioni. Il vantaggio di Keel (265 MB contro 1.014) va difeso prima di tutto il resto.
+- **La leggerezza conta ancora.** Le critiche a VS Code sono memoria e lentezza con tante estensioni. Il vantaggio di Keel (180 MB contro 748, rimisurato il 27 novembre) va difeso prima di tutto il resto.
 
 ## Come leggere la lista
 
@@ -31,11 +31,11 @@ Le fonti sono in fondo. Niente qui è deciso: ogni voce parte solo col via dell'
 | # | Cosa | Perché adesso | Peso |
 |---|---|---|---|
 | 1 | ~~**Correggere la memoria grafica e la CPU da fermo**~~ **fatto il 24 novembre** | Da fermo, con un file aperto: CPU dal 7% allo 0%, memoria da 272 a 157 MB. Il racconto è in `HANDOFF.md` | — |
-| 2 | **Rivedere le modifiche di Claude come in Warp e Xcode 27** | Oggi si accetta o si rifiuta. Serve l'elenco dei file toccati dalla sessione, le differenze blocco per blocco e i commenti sulle righe mandati a Claude tutti insieme | grande |
+| 2 | ~~**Rivedere le modifiche di Claude come in Warp e Xcode 27**~~ **fatto con la 0.1.3** | L'elenco dei file toccati, le differenze, Accetta e Rifiuta per file, i commenti sulle righe e sui blocchi mandati a Claude tutti insieme | — |
 | 3 | ~~**Importare da VS Code**~~ **fatto il 25 novembre** | Impostazioni, scorciatoie, frammenti, progetti recenti ed estensioni, da VS Code come da Cursor | — |
 | 4 | **Go e Swift** | Keel non ha né server né colori per Go, Swift, PHP, Ruby, Kotlin, Vue e Svelte. Go è fra i linguaggi più usati; Swift è il linguaggio del Mac, e `sourcekit-lsp` c'è già con Xcode | medio |
 | 5 | **Più sessioni di Claude insieme, ognuna nel suo worktree** | È la novità di Cursor 3, della finestra Agenti di VS Code e di Zed 1.0. Keel segue già i worktree, ma non li crea né li mostra | grande |
-| 6 | **Il piano di Claude da commentare, e tornare indietro** | Claude Code nell'estensione di VS Code apre il piano come documento con commenti in riga, e ha i punti a cui tornare (checkpoint) | medio |
+| 6 | ~~**Il piano di Claude da commentare, e tornare indietro**~~ **fatto con la 0.1.3** | Il piano in una scheda, cambiato e annotato e rimandato con «Rivedi con le mie note»; il codice riportato a un messaggio; le chat divise da una risposta | — |
 | 7 | ~~**Dopo il benvenuto, tre scelte**~~ **fatto il 25 novembre** | «Prepara Keel»: tema, «Importa» da VS Code o Cursor, comando `keel` nel Terminale | — |
 | 8 | **Un editor per i conflitti a tre colonne** | Oggi un file in conflitto si apre in una scheda con un pulsante per ogni conflitto (la corrente, quella in arrivo o entrambe) e «Salva e metti in stage» (fase 5.3). Manca la vista a tre colonne di VS Code e IntelliJ, con la base e il risultato, e i pulsanti dentro l'editor normale | medio |
 | 9 | ~~**Firma e notarizzazione di Apple**~~ **non si fa**, per scelta dell'autore (25 novembre): niente account sviluppatore a 99 $ l'anno | Chi installa con lo script del sito (`curl … \| sh`) non vede l'avviso di macOS; chi scarica il DMG dal browser sì, e deve aprirlo da Impostazioni di Sistema › Privacy e sicurezza › «Apri comunque» | — |
@@ -51,12 +51,12 @@ Le fonti sono in fondo. Niente qui è deciso: ogni voce parte solo col via dell'
 
 | Cosa | Chi ce l'ha | Peso |
 |---|---|---|
-| **Revisione delle modifiche della sessione:** un elenco dei file toccati da Claude, le differenze blocco per blocco con accetta o rifiuta, commenti sulle righe raccolti e mandati a Claude in un colpo solo | Warp (anche per Claude Code), Xcode 27, Claude Code in VS Code | grande |
+| ~~**Revisione delle modifiche della sessione**~~ fatta con la 0.1.3: i commenti sulle righe raccolti e mandati a Claude in un colpo solo | Warp (anche per Claude Code), Xcode 27, Claude Code in VS Code | — |
 | **Sessioni parallele:** più chat di Claude che lavorano insieme, ognuna in un worktree suo, con un elenco che dice chi ha finito e chi aspetta una risposta | Cursor 3, VS Code 1.140–1.146 («Inbox»), Zed 1.0 | grande |
-| **Il piano come documento:** `/plan` apre il piano in una scheda, lo si commenta riga per riga e poi si dà il via | Claude Code in VS Code, Xcode 27 | medio |
-| **Tornare indietro:** i punti della conversazione a cui riportare il codice, la chat o entrambi | Claude Code in VS Code | medio |
+| ~~**Il piano come documento**~~ fatto con la 0.1.3 (le note si scrivono nel piano stesso) | Claude Code in VS Code, Xcode 27 | — |
+| ~~**Tornare indietro**~~ fatto con la 0.1.3: il codice riportato a un messaggio, e la chat divisa da una risposta | Claude Code in VS Code | — |
 | **Le chat di Claude in una scheda** invece che solo nel pannello di destra, da affiancare al codice | Xcode 27, VS Code 1.140 | medio |
-| **Anteprima nel browser integrato:** una scheda con la pagina del progetto (`localhost`) accanto al codice, con WebKit di macOS; poi Claude che la guarda e la usa | VS Code 1.147 («Browser Use»), Cursor 3.7 | grande |
+| **Anteprima nel browser integrato:** la scheda con la pagina del progetto e «Mostra a Claude» sono fatte con la 0.1.3; resta Claude che la usa da solo (clic, moduli) | VS Code 1.147 («Browser Use»), Cursor 3.7 | grande |
 | **Cercare dentro il testo delle conversazioni passate** (oggi si cerca solo nei titoli delle chat) | Cursor 3.11 | medio |
 | **Suggerimenti col Tab** (la riga successiva prevista mentre scrivi) 🔸 — serve decidere chi li calcola: un modello locale o un servizio | Zed (Zeta), Cursor, Copilot | grande |
 | **Automazioni a orario** (un controllo ogni mattina, una revisione ogni sera) | VS Code 1.145, Cursor 3.8 | grande, più avanti |
@@ -81,10 +81,10 @@ Le fonti sono in fondo. Niente qui è deciso: ogni voce parte solo col via dell'
 |---|---|---|
 | **Editor dei conflitti**: la vista a tre colonne, con la base e il risultato, e «Accetta la corrente», «Accetta quella in arrivo», «Entrambe» anche sopra i conflitti nell'editor normale (la scheda con un pulsante per conflitto c'è già dalla fase 5.3) | VS Code, IntelliJ | medio |
 | **Worktree**: crearli, aprirli e chiuderli dalla vista Git, copiando le impostazioni del progetto e collegando le cartelle ignorate (`node_modules`, `target`) | VS Code 1.140, IntelliJ 2026.3, Zed | medio |
-| **«Cosa cambia rispetto a main»**: i file del ramo confrontati con il ramo di base, prima di aprire una pull request | Zed 1.29 | piccolo |
+| ~~**«Cosa cambia rispetto a main»**~~ fatto con la 0.1.3 | Zed 1.29 | — |
 | **Rebase interattivo** con le righe da spostare, unire o togliere | IntelliJ, GitLens | medio |
 | **Pull request: i limiti di oggi**: segnare una discussione come risolta, i commenti sulle righe tolte, le immagini nei testi | GitHub, VS Code | medio |
-| **Trascinare un file dalla vista Git nel terminale o nell'editor** | Zed 1.28 | piccolo |
+| ~~**Trascinare un file dalla vista Git nel terminale o nell'editor**~~ fatto con la 0.1.3, anche nella chat di Claude | Zed 1.28 | — |
 
 ## Debug e test
 
@@ -94,7 +94,7 @@ Le fonti sono in fondo. Niente qui è deciso: ogni voce parte solo col via dell'
 | **Punti d'interruzione su funzioni e su dati** | VS Code, Xcode | medio |
 | **Provare davvero il debug di Node e TypeScript** (oggi non provato su questo Mac) | — | piccolo |
 | **Copertura dei test nel margine**: le righe toccate dai test in verde, le altre in rosso (`cargo llvm-cov`, Vitest, pytest-cov) | IntelliJ 2026.3, VS Code | medio |
-| **Correggere i test di un crate in una sottocartella senza workspace** (difetto noto) | — | piccolo |
+| ~~**Correggere i test di un crate in una sottocartella senza workspace**~~ fatto con la 0.1.3 | — | — |
 | **Valori colorati per tipo** nelle variabili del debugger | Zed 1.24 | piccolo |
 
 ## Terminale
@@ -103,7 +103,7 @@ Le fonti sono in fondo. Niente qui è deciso: ogni voce parte solo col via dell'
 |---|---|---|
 | **Terminale in una finestra sua** | richiesta tra le più votate di VS Code | medio (con il punto 10) |
 | **Comprimere l'output di un comando** e copiarlo intero con un clic, sfruttando l'integrazione della shell che Keel ha già | Warp (blocchi) | medio |
-| **Ingrandire il testo con la rotella** tenendo Cmd | Zed 1.28 | piccolo |
+| ~~**Ingrandire il testo con la rotella** tenendo Cmd~~ fatto con la 0.1.3 | Zed 1.28 | — |
 
 ## Interfaccia e Mac
 
@@ -137,7 +137,7 @@ Le fonti sono in fondo. Niente qui è deciso: ogni voce parte solo col via dell'
 
 ## Prestazioni, da misurare prima di promettere
 
-- **Memoria grafica e CPU da fermo**: corrette il 24 novembre (vedi `HANDOFF.md`). Da rimisurare il confronto con VS Code e Cursor del README e del sito, dove Keel ora pesa meno.
+- **Memoria grafica e CPU da fermo**: corrette il 24 novembre (vedi `HANDOFF.md`); il confronto con VS Code e Cursor del README e del sito è stato rimisurato il 27 novembre.
 - **File grandi**: Keel chiede prima di aprirli, ma va misurato come si muove con un file di 50–100 MB e con un progetto di 100.000 file.
 - **Tempo di avvio** con 20 schede e due progetti (oggi la prima schermata arriva in 330 ms con una finestra vuota).
 - **Il benvenuto**: misurato al 22% di un core mentre si muove; si può abbassare disegnando le onde con colonne più larghe.

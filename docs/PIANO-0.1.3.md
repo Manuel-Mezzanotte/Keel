@@ -1,6 +1,6 @@
 # Keel 0.1.3 — proposta
 
-*Scritto il 26 novembre 2026, sulla 0.1.2. Stato: **approvata il 26 novembre** («Sì, parti»); **sottofase 1 fatta il 26 novembre**, su `develop`, con le prove a mano ancora da fare (vedi «Com'è andata»).*
+*Scritto il 26 novembre 2026, sulla 0.1.2. Stato: **approvata il 26 novembre** («Sì, parti»); **sottofasi 1–5 fatte il 26 e 27 novembre**, su `develop`, con le prove a mano ancora da fare (vedi «Com'è andata»); resta l'uscita (sottofase 6).*
 
 Da dove viene:
 - **le due richieste dell'autore** del 26 novembre: le chat degli altri progetti nella finestra dove si lavora, e le icone di serie come Material Icon Theme;
@@ -171,6 +171,92 @@ Una sottofase alla volta, ognuna chiusa da test automatici, immagini di `scripts
 7. Il nome del modello nel campo dice «Opus 5.5», non l'id.
 8. ⌘D nel campo, o il microfono, poi parla: il testo deve comparire nel campo. Se macOS chiede di attivare la dettatura, si attiva in Impostazioni di Sistema › Tastiera. Questa è l'unica cosa che da qui non si è potuta provare.
 9. Mentre Claude lavora, nel Terminale `pmset -g assertions | grep Keel` mostra «Claude is working in Keel»; a turno finito sparisce.
+
+### Sottofase 2 — Le icone (26 novembre)
+
+**Fatto** (`daaa538`):
+- **Material Icon Theme 5.40.0 dentro Keel**, in `crates/keel/icons/material` (le 1.256 icone, l'elenco `dist/material-icons.json` e la licenza MIT), attivo dalla prima apertura: ogni file per nome ed estensione, ogni cartella per nome, aperta o chiusa, con le varianti per i temi chiari. Si vede nell'albero e nelle cartelle fissate in alto, nelle schede, nella vista Git, nella ricerca, in Cmd+P, in Problemi e nel pannello di Claude (menu `@` e file allegati). I simboli di prima restano come «Icone semplici»; un tema di icone di un'estensione, scelto, vince ancora.
+- **L'elenco si legge una volta sola** per tutte le finestre, da un thread all'avvio (`preload_keel_icons` in `contributions.rs`); i percorsi del tema sono messi in ordine (`dist/./../icons` → `icons`) in `extensions/src/icon_theme.rs`. Le icone viaggiano in `Keel.app/Contents/Resources/icons` (`scripts/bundle-macos.sh`), e l'avviso della licenza è in `THIRD-PARTY-LICENSES.txt` (`BUNDLED` in `scripts/third-party-licenses.py`).
+- **Ogni progetto con la sua immagine** (`project_icons.rs`): l'icona che tiene per sé (`.keel/icon.svg`), quella di un'app web, la favicon o un logo, altrimenti la cartella; nei progetti recenti della pagina iniziale e nelle schede delle chat di Claude.
+- **Per una versione nuova** delle icone: `scripts/update-material-icons.sh <cartella dell'estensione>` copia elenco, icone e licenza, e aggiorna la versione negli avvisi (scritto il 27 novembre, insieme al ringraziamento nel README).
+
+**Le tue prove a mano:**
+1. Apri un progetto web (Hospitality o filierafacile): i `.tsx` hanno l'atomo di React, `package.json`, `.env`, `Dockerfile` le loro icone; `src`, `components`, `public`, `.github` le loro cartelle, diverse aperte e chiuse.
+2. Col tema Chiaro le icone usano le varianti chiare.
+3. Palette › «Preferenze: Tema icona file» › «Icone semplici» rimette i simboli di prima.
+4. Nella pagina iniziale i progetti recenti hanno la loro immagine (la favicon di un'app web, per esempio).
+
+### Sottofase 3 — Claude, più a fondo (26 e 27 novembre)
+
+**Fatto:**
+- **Riportare il codice a un messaggio** (`a549875`). Prima della prima modifica di ogni turno Keel tiene una copia di ogni file (`checkpoints` in `agent_panel.rs`). Passando su un tuo messaggio, «Riporta il codice a qui» chiede una volta e rimette ogni file cambiato da quel turno in poi; un file creato da Claude va nel Cestino. Come in Claude Code, quello che hanno cambiato i comandi non torna.
+- **Dividere una chat** (`a549875`). Su una risposta, «Continua da qui in una chat nuova» copia la chat fino a lì con `session/fork` (il punto è il `messageId` della risposta, che ora il pannello tiene); da un tuo messaggio la copia si ferma prima, e il messaggio aspetta nel campo.
+- **Il piano in una scheda** (`65c01ba`). Quando Claude esce dalla modalità Piano e chiede «Ready to code?», il piano si apre come scheda Markdown dell'editor. Il riquadro del permesso offre «Rivedi con le mie note»: il piano come si legge ora torna a Claude, che continua a pianificare; «Apri il piano» se la scheda è stata chiusa. Il sì chiude la scheda.
+- **I commenti sulle modifiche di Claude** (`9bba40d`, 27 novembre). Nella scheda di una modifica di Claude, il numero di una riga, o il 💬 di un blocco, apre una finestra per il commento (⌘↩ lo tiene, vuoto si toglie). I commenti si vedono sotto le loro righe, come su GitHub, e «Manda a Claude» (nella scheda e nel riquadro delle modifiche del pannello) li manda tutti in un messaggio, ognuno con il file, le righe e il codice citato. Rifiutare una modifica toglie i suoi commenti. Anche le note delle pull request ora stanno sotto la riga, così il codice tiene la sua larghezza.
+
+**Diverso dal piano:**
+- **Le note sul piano si scrivono nel piano stesso,** che è un documento dell'editor: non ci sono commenti separati sulle righe del piano. «Rivedi con le mie note» manda il piano come si legge, con le note dentro.
+- **I commenti sulle modifiche** si mettono su una riga o su un blocco, non su una selezione: la vista delle differenze di Keel non è un editor.
+
+**Le tue prove a mano:**
+1. Chiedi a Claude due modifiche in due messaggi. Sul primo messaggio, «Riporta il codice a qui»: i file tornano com'erano prima del primo turno.
+2. Su una risposta, «Continua da qui in una chat nuova»: la chat nuova ha la storia fino a lì.
+3. In modalità Piano chiedi qualcosa di grande: il piano si apre in una scheda; cambia una riga e aggiungi una nota, poi «Rivedi con le mie note».
+4. Dopo una modifica di Claude, apri la sua scheda: clic sul numero di una riga, scrivi, ⌘↩; il 💬 di un blocco; poi «Manda a Claude» e guarda il messaggio partito.
+
+### Sottofase 4 — L'anteprima web (27 novembre)
+
+**Fatto** (`47018f9`):
+- **Una pagina web in una scheda.** Il nuovo crate `web` mette il WebKit di macOS (`WKWebView`) sopra la finestra, come fa Sail; Keel disegna la barra sopra e lascia lo spazio sotto, dove la pagina sta mentre la sua scheda si vede, e si nasconde quando è aperta una finestra di dialogo. Si apre da Porte («Apri in Keel») o dalla palette («Anteprima: Apri la pagina del progetto», con le porte aperte tra cui scegliere).
+- **La barra:** avanti, indietro, ricarica, l'indirizzo, la larghezza di un tablet e di un telefono, «Mostra a Claude» (un'immagine della pagina va col messaggio dopo), l'Inspector di WebKit e «Apri nel browser».
+- `objc2-web-kit` è entrato negli avvisi delle licenze.
+
+**Diverso dal piano:** la pagina non si apre dall'avviso «La porta 3000 è aperta», che è una scritta nella barra di stato e non un avviso con pulsanti: si apre da Porte e dalla palette.
+
+**Le tue prove a mano:**
+1. In un progetto web lancia `pnpm dev` nel terminale; in Porte, «Apri in Keel»: la pagina si apre in una scheda.
+2. Naviga, poi avanti e indietro; ricarica; la larghezza del telefono e del tablet; l'Inspector; «Apri nel browser».
+3. «Mostra a Claude», poi scrivi «cosa vedi?» nel pannello: l'immagine parte col messaggio.
+4. Con la pagina aperta, apri Cmd+P o cambia scheda: la pagina sparisce e torna.
+
+### Sottofase 5 — Git e difetti (27 novembre)
+
+**Fatto:**
+- **Cosa cambia rispetto a main** (`d0a1716`): «Git: Cosa cambia rispetto al ramo di base», nella palette e nel menu della vista Git, apre una pagina con tutti i file cambiati dal ramo da quando si è staccato dal ramo di base (`origin/HEAD`, altrimenti `main` o `master`), come li mostrerebbe una pull request.
+- **File trascinati dalla vista Git, e ⌘ con la rotella** (`a95f5e2`): un file cambiato si trascina come uno dell'albero, nel terminale (scrive il percorso), nell'editor (si apre) o nella chat di Claude; ⌘ con la rotella o il trackpad ingrandisce il testo del terminale, da 8 a 40 punti.
+- **I test di un crate in una sottocartella** (`9d327e5`): partono dalla cima del progetto con `--manifest-path`, che il crate sia in un workspace o no.
+- **Cmd+P** (`164948c`): → nel campo vuoto, o ⌥↩ dovunque, apre il file evidenziato in una scheda che resta e lascia aperto l'elenco; in fondo all'elenco lo dice «→ per aprire dietro».
+- **«Non mostrare più»** (`99c9977`) sugli avvisi che si ripetono: i messaggi delle estensioni, i programmi del terminale che chiamano, i comandi lunghi finiti e Claude che aspetta mentre Keel è dietro. Gli avvisi nascosti restano in `keel.notifications.hidden`; «Avvisi: mostra di nuovo quelli nascosti» li fa tornare tutti.
+- **Il messaggio del commit in grande** (`25e754f`): Maiusc+Esc nel messaggio, o ⤢ sotto, apre lo stesso testo in una finestra grande, tenuta allineata col campo; ⌘↩ fa il commit da lì.
+
+**Diverso dal piano:** il messaggio del commit si scrive in una finestra grande sopra l'editor, come in Zed, non in una scheda: resta legato al campo della vista Git, e Claude (✦) e il commit leggono lo stesso testo.
+
+**Le tue prove a mano:**
+1. Su un ramo con qualche commit, palette → «Git: Cosa cambia rispetto al ramo di base».
+2. Trascina un file dalla vista Git nel terminale, nell'editor e nella chat di Claude.
+3. ⌘ con la rotella sul terminale.
+4. Cmd+P, frecce, → su un file: si apre dietro e l'elenco resta; scrivi qualche lettera e ⌥↩.
+5. Su un avviso che torna (per esempio un comando lungo finito con Keel dietro), «Non mostrare più»; poi la palette → «Avvisi: mostra di nuovo quelli nascosti».
+6. Nella vista Git scrivi un messaggio e premi Maiusc+Esc; scrivi qualche riga, poi ⌘↩.
+
+**Controlli delle sottofasi 2–5:** 607 test, tutti verdi, più 28 da lanciare a mano (nell'app 343, più 6); clippy pulito; gli avvisi delle licenze aggiornati; le foto di `scripts/snapshots.sh` guardate, con quattro nuove: `commit-big` (la finestra grande del messaggio), `claude-review` e `claude-review-tab` (i commenti sulle modifiche di Claude). Le foto hanno trovato due difetti, corretti prima del commit: la nota di un commento accanto alla riga schiacciava il codice in una colonna di una lettera (ora va sotto la riga), e il ⌘↩ dentro il pulsante blu non si leggeva.
+
+### Sottofase 6 — L'uscita (27 novembre, in corso)
+
+**Il confronto rimisurato**, con lo stesso metodo del 22 novembre (stesso Mac, progetto Keel con `layout.rs` aperto, profilo vuoto, nessuna estensione, language server spenti, media di tre avvii), sulla versione release della 0.1.3:
+
+| | Keel | VS Code 1.125 | Cursor 3.30 |
+|---|---|---|---|
+| Memoria di tutti i processi, dopo 40 s | 180 MB (171, 193, 175) | 748 MB (736, 828, 680) | 1.344 MB (1.575, 1.239, 1.217) |
+| Avvio | 448 ms | 1.038 ms (due avvii su tre: il primo non ha scritto i tempi) | 1.636 ms |
+| App su disco | 144 MB | 1.096 MB | 1.436 MB |
+| Processi | 1 | 8 | 15 |
+
+Il 22 novembre erano 265, 1.014 e 1.320 MB. Keel scende per la correzione della 0.1.2; VS Code risulta più leggero e più lento di allora, con la stessa versione: sono le sue variazioni da un avvio all'altro, e i tempi d'avvio ora vengono da avvii a parte, perché `--prof-append-timers` chiude l'editor appena scrive i tempi. Su disco Keel cresce di 7 MB per le icone. Le cifre nuove sono nei due README, nel grafico `assets/readme/comparison.svg`, in `src/site.ts` e nel film di KeelSite (`film/Film.tsx`), che va ridisegnato con `film/render.sh` e ricaricato su GitHub dall'autore.
+
+**Fatto anche:** `CHANGELOG.md` e `docs/CHANGELOG.it.md`; i README (pannello di Claude, aree, privacy con le pagine web, stato, crate `web`, ringraziamento a Material Icon Theme); `HANDOFF.md`, `IDEE.md` e `DETTAGLI.md`; nel sito la pagina delle novità con la 0.1.3 (build 5), la domanda «Cosa manda in rete?» con i remoti Git e Claude, e le icone di Material nella copia di Keel. Le note del rilascio sono in `target/release-notes-0.1.3.md`.
+
+**Resta:** `scripts/release.sh 0.1.3 target/release-notes-0.1.3.md` con la VPN accesa (il codice di verifica lo scrive l'autore), poi, quando lo chiede l'autore, il push di `develop` e del tag, e di KeelSite su `main` per pubblicare la pagina delle novità.
 
 ## Dopo la 0.1.3
 

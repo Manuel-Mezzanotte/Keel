@@ -77,9 +77,8 @@ Keel nuovo è installato in /Applications: chiudi quello aperto e riaprilo. Ecco
 
 ## Cosa non c'è ancora, e perché
 
+- **Fatti con la 0.1.3:** il messaggio del commit in una finestra grande (Maiusc+Esc, o ⤢ sotto il messaggio); Cmd+P con → (nel campo vuoto) o ⌥↩ che apre il file dietro l'elenco e lo lascia aperto; «Non mostrare più» sugli avvisi che si ripetono, con «Avvisi: mostra di nuovo quelli nascosti» per farli tornare.
 - **Ancora da fare:**
-  - il commit in una scheda grande (Maiusc+Esc);
-  - Cmd+P con freccia a destra che apre il file in secondo piano;
   - una scheda trascinata fuori che apre una finestra nuova: le finestre di Keel sono una per progetto, e due finestre sullo stesso progetto vorrebbero documenti in comune. Per ora la scheda trascinata fuori porta il suo file nel Finder. Dentro la finestra invece si trascina su un bordo e divide l'editor.
 - **A metà:**
   - i suggerimenti in riga: ci sono i tipi, in fondo alla riga perché l'editor di gpui-component non sa disegnare in mezzo al testo; i nomi dei parametri in fondo alla riga non direbbero a quale argomento si riferiscono, quindi non ci sono;
@@ -89,7 +88,6 @@ Keel nuovo è installato in /Applications: chiudi quello aperto e riaprilo. Ecco
   - gli spazi visibili solo ai bordi o nella selezione;
   - i risultati della ricerca nella barra di scorrimento;
   - lo scorrimento morbido, che resta quello di macOS (il cursore invece scivola);
-  - «Non mostrare più» negli avvisi;
   - il numero dei cursori nella barra di stato.
 
 ## Le sei cose che hai chiesto tu
@@ -245,7 +243,7 @@ Ho riguardato un'immagine della vista delle differenze, disegnata ieri da `scrip
 | Elenco degli stash, con Applica, Estrai, Elimina e le differenze | VS Code, Zed | fatto | 3 |
 | Branch nuovo senza remoto: «Pubblica il branch» al posto di Push, poi «Crea pull request» | VS Code, GitHub Desktop | fatto | 3 |
 | Vista ad albero o a elenco dei file cambiati | VS Code, Zed | fatto | 3 |
-| Commit con il campo più grande in una scheda (Maiusc+Esc), per i messaggi lunghi | Zed, VS Code | non ancora | 3 |
+| Commit con il campo più grande in una scheda (Maiusc+Esc), per i messaggi lunghi | Zed, VS Code | fatto con la 0.1.3, in una finestra grande | 3 |
 
 ### Git: dentro l'editor
 
@@ -285,7 +283,7 @@ Ho riguardato un'immagine della vista delle differenze, disegnata ieri da `scrip
 | Luoghi recenti: i punti dove sei stato, con un pezzetto di codice ciascuno | JetBrains | fatto | 4 |
 | Cmd+P: scorrendo l'elenco il file si vede già nell'editor, Esc torna dov'eri | Sublime, VS Code | fatto | 4 |
 | Cmd+P: `file.ts:42` apre alla riga 42; `@` i simboli del file, `#` quelli del progetto, `>` i comandi | VS Code, Sublime | fatto | 4 |
-| Cmd+P: freccia a destra apre il file in secondo piano e lascia aperto l'elenco | VS Code | non ancora | 4 |
+| Cmd+P: freccia a destra apre il file in secondo piano e lascia aperto l'elenco | VS Code | fatto con la 0.1.3 (anche ⌥↩) | 4 |
 | Sbirciare la definizione e i riferimenti in un riquadro dentro l'editor (Alt+F12, Maiusc+F12) | VS Code | fatto | 4 |
 | Gerarchia delle chiamate: chi chiama questa funzione, e chi chiama quelli | VS Code, JetBrains | fatto | 4 |
 | Struttura del file in una vista della barra laterale, che segue il cursore | VS Code, Zed | fatto | 4 |
@@ -345,7 +343,7 @@ Ho riguardato un'immagine della vista delle differenze, disegnata ieri da `scrip
 | Cosa | Da dove | Keel oggi | Giro |
 |---|---|---|---|
 | Avvisi in basso a destra, che entrano e escono con un movimento, impilati se sono più di uno | VS Code, Zed | fatto | 1 |
-| Ogni avviso con le sue azioni, e «Non mostrare più» per quelli che si ripetono | VS Code, JetBrains | a metà: le azioni sì, «Non mostrare più» no | 1 |
+| Ogni avviso con le sue azioni, e «Non mostrare più» per quelli che si ripetono | VS Code, JetBrains | fatto (il secondo con la 0.1.3) | 1 |
 | Campanella con gli avvisi passati e «Non disturbare» | VS Code | fatto | 1 |
 | Avanzamento nella barra di stato per git, i language server e le installazioni | VS Code | fatto | 1 |
 | Notifiche di macOS solo quando Keel è in secondo piano | macOS | fatto | 1 |
