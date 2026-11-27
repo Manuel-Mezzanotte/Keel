@@ -965,6 +965,10 @@ pub struct Strings {
     pub git_protected_commit: &'static str,
     pub git_protected_branch: &'static str,
     pub command_show_stashes: &'static str,
+    pub command_compare_with_base: &'static str,
+    pub diff_against_text: &'static str,
+    pub git_no_base: &'static str,
+    pub git_nothing_against_text: &'static str,
     pub command_copy_permalink: &'static str,
     pub command_open_permalink: &'static str,
     pub command_line_history: &'static str,
@@ -1514,6 +1518,7 @@ impl Strings {
             "git.stageAll" => self.command_git_stage_all,
             "git.unstageAll" => self.command_git_unstage_all,
             "git.cleanAll" => self.command_git_discard_all,
+            "keel.git.compareWithBase" => self.command_compare_with_base,
             "git.push" => self.command_git_push,
             "git.undoCommit" => self.command_undo_commit,
             "git.viewChanges" => self.command_view_changes,
@@ -1899,6 +1904,14 @@ impl Strings {
     pub fn agent_rewound(&self, count: usize) -> String {
         self.agent_rewound_text
             .replace("{count}", &count.to_string())
+    }
+
+    pub fn diff_against(&self, base: &str) -> String {
+        self.diff_against_text.replace("{base}", base)
+    }
+
+    pub fn git_nothing_against(&self, base: &str) -> String {
+        self.git_nothing_against_text.replace("{base}", base)
     }
 
     pub fn agent_works_in(&self, name: &str) -> String {
@@ -2999,6 +3012,10 @@ pub const ITALIAN: Strings = Strings {
     git_protected_commit: "Fai il commit",
     git_protected_branch: "Crea un branch",
     command_show_stashes: "Git: Modifiche messe da parte",
+    command_compare_with_base: "Git: Cosa cambia rispetto al ramo di base",
+    diff_against_text: "Rispetto a {base}",
+    git_no_base: "Non trovo il ramo di base: né origin/HEAD, né main o master.",
+    git_nothing_against_text: "Il ramo non cambia niente rispetto a {base}.",
     command_copy_permalink: "Git: Copia il link alla riga",
     command_open_permalink: "Git: Apri la riga nel browser",
     command_line_history: "Git: Storia delle righe selezionate",
@@ -4261,6 +4278,10 @@ pub const ENGLISH: Strings = Strings {
     git_protected_commit: "Commit",
     git_protected_branch: "Create Branch",
     command_show_stashes: "Git: Show Stashes",
+    command_compare_with_base: "Git: What Changes Against the Base Branch",
+    diff_against_text: "Against {base}",
+    git_no_base: "No base branch found: neither origin/HEAD, nor main or master.",
+    git_nothing_against_text: "The branch changes nothing against {base}.",
     command_copy_permalink: "Git: Copy Link to Line",
     command_open_permalink: "Git: Open Line in Browser",
     command_line_history: "Git: History of the Selected Lines",

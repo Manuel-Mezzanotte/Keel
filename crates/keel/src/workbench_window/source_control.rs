@@ -45,12 +45,53 @@ actions!(
         GitStashPop,
         GitRefresh,
         CheckoutBranch,
-        CreateBranch
+        CreateBranch,
+        CompareWithBase
     ]
 );
 
 pub(crate) fn bindings() -> Vec<KeyBinding> {
     vec![KeyBinding::new("cmd-enter", Commit, Some(MESSAGE_CONTEXT))]
+}
+
+impl Workbench {
+    /// "What changes against main": every file the branch changed since it
+    /// parted from the base branch (`origin/HEAD`, else `main`), in one
+    /// page, as a pull request would show them, before opening one.
+    pub(super) fn compare_with_base(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let strings = self.strings();
+        let Some(repo) = self.scm.repo.as_ref() else {
+            return;
+        };
+        let Some(base) = repo.base_branch() else {
+            self.report(strings.git_no_base.to_owned());
+            cx.notify();
+            return;
+        };
+        let from = match repo.merge_base(&base, "HEAD") {
+            Ok(from) if !from.is_empty() => from,
+            _ => {
+                self.report(strings.git_no_base.to_owned());
+                cx.notify();
+                return;
+            }
+        };
+        let changed = repo
+            .files_between(&from, "HEAD")
+            .map(|files| files.len())
+            .unwrap_or(0);
+        if changed == 0 {
+            self.status_message = Some(strings.git_nothing_against(&base));
+            cx.notify();
+            return;
+        }
+        self.open_diff(
+            "",
+            super::diff_view::DiffSource::Branch { base, from },
+            window,
+            cx,
+        );
+    }
 }
 
 /// Which list of the view a file is in.
@@ -848,6 +889,9 @@ impl Workbench {
 
     pub(super) fn source_control_actions(&self, root: Div, cx: &mut Context<Self>) -> Div {
         root.on_action(cx.listener(|this, _: &Commit, window, cx| this.commit(false, window, cx)))
+            .on_action(cx.listener(|this, _: &CompareWithBase, window, cx| {
+                this.compare_with_base(window, cx)
+            }))
             .on_action(
                 cx.listener(|this, _: &CommitAmend, window, cx| this.commit_amend(window, cx)),
             )
@@ -991,6 +1035,7 @@ impl Workbench {
                             .separator()
                             .menu(strings.scm_checkout, Box::new(CheckoutBranch))
                             .menu(strings.scm_create_branch, Box::new(CreateBranch))
+                            .menu(strings.command_compare_with_base, Box::new(CompareWithBase))
                             .separator()
                             .menu(strings.scm_stash, Box::new(GitStash))
                             .menu(strings.scm_stash_pop, Box::new(GitStashPop))

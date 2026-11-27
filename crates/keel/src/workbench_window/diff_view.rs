@@ -48,6 +48,9 @@ pub(super) enum DiffSource {
         from: String,
         to: String,
     },
+    /// What the branch changed since it parted from `base` (where it
+    /// parted: `from`), as a pull request would show it, before opening one.
+    Branch { base: String, from: String },
 }
 
 /// A tab with differences.
@@ -80,6 +83,7 @@ pub(super) fn diff_uri(path: &str, source: &DiffSource) -> String {
         DiffSource::Pull { number, to, .. } => {
             return format!("keel-pull:{number}/{to}/{path}");
         }
+        DiffSource::Branch { base, .. } => return format!("keel-branch:{base}/{path}"),
     };
     format!("keel-diff:{kind}/{path}")
 }
@@ -111,6 +115,7 @@ impl Workbench {
             | DiffSource::LocalHistory(_)
             | DiffSource::Clipboard
             | DiffSource::Pull { .. }
+            | DiffSource::Branch { .. }
             | DiffSource::Files(_) => {
                 return Err("not a git difference".to_owned());
             }
@@ -185,7 +190,8 @@ impl Workbench {
                 }
             };
             let headers = source == DiffSource::AllChanges
-                || (path.is_empty() && matches!(source, DiffSource::Pull { .. }));
+                || (path.is_empty()
+                    && matches!(source, DiffSource::Pull { .. } | DiffSource::Branch { .. }));
             let doc = super::diff_pane::DiffDoc::new(files, self.diff_split, headers);
             let strings = self.strings();
             let name = path.rsplit('/').next().unwrap_or(path);
@@ -196,6 +202,8 @@ impl Workbench {
                 DiffSource::AllChanges => strings.diff_all_changes.to_owned(),
                 DiffSource::Pull { number, .. } if path.is_empty() => format!("PR #{number}"),
                 DiffSource::Pull { number, .. } => format!("{name} (PR #{number})"),
+                DiffSource::Branch { base, .. } if path.is_empty() => strings.diff_against(base),
+                DiffSource::Branch { base, .. } => format!("{name} ({})", strings.diff_against(base)),
                 DiffSource::LocalHistory(_) => format!("{name} ({})", strings.history_version),
                 DiffSource::Clipboard => format!("{name} ↔ {}", strings.diff_clipboard),
                 DiffSource::Files(other) => {
@@ -253,6 +261,7 @@ impl Workbench {
                 | DiffSource::LocalHistory(_)
                 | DiffSource::Clipboard
                 | DiffSource::Pull { .. }
+                | DiffSource::Branch { .. }
                 | DiffSource::Files(_) => strings.diff_all_changes.to_owned(),
             };
             self.documents.insert(
@@ -380,6 +389,21 @@ impl Workbench {
                     diff
                 })
                 .collect(),
+            DiffSource::Branch { from, .. } => repo
+                .files_between(from, "HEAD")
+                .map_err(|error| error.to_string())?
+                .into_iter()
+                .filter(|file| path.is_empty() || file.path == path)
+                .map(|file| {
+                    let before = file.original.as_deref().unwrap_or(&file.path);
+                    super::diff_model::FileDiff::new(
+                        &file.path,
+                        &repo.text_at(from, before).unwrap_or_default(),
+                        &repo.text_at("HEAD", &file.path).unwrap_or_default(),
+                        ignore,
+                    )
+                })
+                .collect(),
             DiffSource::AllChanges => self
                 .scm
                 .status
@@ -418,7 +442,8 @@ impl Workbench {
             _ => BlockActions::None,
         };
         let all = source == DiffSource::AllChanges
-            || (tab.path.is_empty() && matches!(source, DiffSource::Pull { .. }));
+            || (tab.path.is_empty()
+                && matches!(source, DiffSource::Pull { .. } | DiffSource::Branch { .. }));
         let keys = |action: &dyn gpui::Action| {
             window
                 .highest_precedence_binding_for_action(action)
@@ -766,6 +791,7 @@ impl Workbench {
                                 | DiffSource::Proposed(_)
                                 | DiffSource::Agent(_)
                                 | DiffSource::Pull { .. }
+                                | DiffSource::Branch { .. }
                                 | DiffSource::AllChanges
                         ) =>
                 {
@@ -990,6 +1016,50 @@ mod tests {
             .output()
             .unwrap();
         String::from_utf8_lossy(&output.stdout).into_owned()
+    }
+
+    /// "What changes against the base branch": the branch's files since it
+    /// parted from main, in one page, and nothing on main itself.
+    #[gpui::test]
+    fn a_branch_shows_what_it_changes_against_main(cx: &mut TestAppContext) {
+        cx.update(|cx| {
+            gpui_component::init(cx);
+            language::register_grammars();
+            crate::workbench_window::init(cx);
+        });
+        let folder = tempfile::tempdir().unwrap();
+        let root = fs::canonicalize(folder.path()).unwrap();
+        git(&root, &["init", "-q", "-b", "main"]);
+        git(&root, &["config", "user.name", "Test"]);
+        git(&root, &["config", "user.email", "test@example.com"]);
+        git(&root, &["config", "commit.gpgsign", "false"]);
+        fs::write(root.join("a.txt"), "uno\n").unwrap();
+        git(&root, &["add", "."]);
+        git(&root, &["commit", "-q", "-m", "first"]);
+        let settings = Settings::load(root.join(".git/keel-test-settings.json"), None);
+        let opening = Opening::new(Some(root.clone()), None);
+        let (view, cx) =
+            cx.add_window_view(|window, cx| Workbench::new(opening, settings, None, window, cx));
+        // On main: nothing to compare.
+        view.update_in(cx, |view, window, cx| {
+            view.compare_with_base(window, cx);
+            assert!(!view.documents.keys().any(|uri| uri.starts_with("keel-branch:")));
+        });
+        git(&root, &["switch", "-q", "-c", "prezzi"]);
+        fs::write(root.join("a.txt"), "uno\ndue\n").unwrap();
+        fs::write(root.join("b.txt"), "nuovo\n").unwrap();
+        git(&root, &["add", "."]);
+        git(&root, &["commit", "-q", "-m", "prezzi"]);
+        view.update_in(cx, |view, window, cx| {
+            view.compare_with_base(window, cx);
+            let document = &view.documents["keel-branch:main/"];
+            let Backing::Diff(tab) = &document.backing else {
+                panic!("not a differences tab");
+            };
+            assert_eq!(tab.title, view.strings().diff_against("main"));
+            let doc = tab.doc.as_ref().unwrap();
+            assert_eq!(doc.counts(), (2, 0));
+        });
     }
 
     #[gpui::test]
