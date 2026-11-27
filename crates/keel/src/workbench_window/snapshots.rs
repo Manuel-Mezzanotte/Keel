@@ -427,6 +427,27 @@ fn shots() -> Vec<Shot> {
             window.clear_notifications(cx);
             cx.notify();
         }));
+        // A long commit message, in its big window (Shift+Esc).
+        shots.push(shot(name("commit-big"), |workbench, window, cx| {
+            workbench.layout.show_side_view(SideView::SourceControl);
+            workbench.scm.message.update(cx, |input, cx| {
+                input.set_value(
+                    "feat: the commit message in a big window\n\nA long message reads better here, with room for the why\nand for the lines under the title.",
+                    window,
+                    cx,
+                )
+            });
+            workbench.expand_commit_message(window, cx);
+        }));
+        shots.push(shot(name("after-commit-big"), |workbench, window, cx| {
+            window.close_all_dialogs(cx);
+            workbench
+                .scm
+                .message
+                .update(cx, |input, cx| input.set_value("", window, cx));
+            workbench.layout.show_side_view(SideView::Explorer);
+            cx.notify();
+        }));
     }
     // The Claude panel: its start with the project's real chats, read
     // from disk, then a chat with the tests' fake agent, so nothing is

@@ -649,6 +649,12 @@ pub const COMMANDS: &[KeelCommand] = &[
         context: None,
     },
     KeelCommand {
+        id: "keel.git.expandCommitMessage",
+        action: || Box::new(crate::workbench_window::ExpandCommitMessage),
+        default_key: None,
+        context: None,
+    },
+    KeelCommand {
         id: "keel.preview.open",
         action: || Box::new(crate::workbench_window::OpenWebPreview),
         default_key: None,

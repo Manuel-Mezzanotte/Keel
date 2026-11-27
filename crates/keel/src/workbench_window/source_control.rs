@@ -46,12 +46,19 @@ actions!(
         GitRefresh,
         CheckoutBranch,
         CreateBranch,
-        CompareWithBase
+        CompareWithBase,
+        ExpandCommitMessage
     ]
 );
 
+/// The lines of the commit message's big window.
+const BIG_MESSAGE_ROWS: usize = 18;
+
 pub(crate) fn bindings() -> Vec<KeyBinding> {
-    vec![KeyBinding::new("cmd-enter", Commit, Some(MESSAGE_CONTEXT))]
+    vec![
+        KeyBinding::new("cmd-enter", Commit, Some(MESSAGE_CONTEXT)),
+        KeyBinding::new("shift-escape", ExpandCommitMessage, Some(MESSAGE_CONTEXT)),
+    ]
 }
 
 impl Workbench {
@@ -843,6 +850,121 @@ impl Workbench {
         .detach();
     }
 
+    /// The commit message in a big window, for a long one, as Zed's
+    /// Shift+Esc: the same text, kept in step with the field, so Claude's
+    /// ✦ and the commit read it too. ⌘↩ commits, Esc or Shift+Esc goes
+    /// back to the field.
+    pub(super) fn expand_commit_message(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if self.scm.repo.is_none() || window.has_active_dialog(cx) {
+            return;
+        }
+        let strings = self.strings();
+        let text = self.scm.message.read(cx).value().to_string();
+        let big = cx.new(|cx| {
+            TextareaState::new(window, cx)
+                .placeholder(strings.scm_message)
+                .rows(BIG_MESSAGE_ROWS)
+                .default_value(text)
+        });
+        let field = self.scm.message.clone();
+        cx.subscribe_in(
+            &big,
+            window,
+            move |_, big, event: &InputEvent, window, cx| {
+                if matches!(event, InputEvent::Change) {
+                    let value = big.read(cx).value().to_string();
+                    field.update(cx, |field, cx| field.set_value(value, window, cx));
+                }
+            },
+        )
+        .detach();
+        let branch = self.scm.status.branch.clone().unwrap_or_default();
+        let title = if branch.is_empty() {
+            strings.scm_message.to_owned()
+        } else {
+            format!("{} · {branch}", strings.scm_message)
+        };
+        let this = cx.weak_entity();
+        let shown = big.clone();
+        window.open_dialog(cx, move |dialog, _, cx| {
+            let colors = Colors::new(cx);
+            let hint = this
+                .upgrade()
+                .and_then(|this| this.read(cx).commit_message_hint(cx));
+            let (keys, back, close) = (this.clone(), this.clone(), this.clone());
+            dialog
+                .w(px(720.))
+                .title(title.clone())
+                .on_close(move |_, window, cx| {
+                    if let Some(this) = back.upgrade() {
+                        let field = this.read(cx).scm.message.clone();
+                        field.update(cx, |field, cx| field.focus(window, cx));
+                    }
+                })
+                .child(
+                    div()
+                        .key_context(MESSAGE_CONTEXT)
+                        .capture_key_down(move |event, window, cx| {
+                            let keystroke = &event.keystroke;
+                            let modifiers = keystroke.modifiers;
+                            if keystroke.key == "enter" && modifiers.platform && !modifiers.shift {
+                                cx.stop_propagation();
+                                window.close_dialog(cx);
+                                keys.update(cx, |this, cx| this.commit(false, window, cx))
+                                    .ok();
+                            } else if keystroke.key == "escape" && modifiers.shift {
+                                cx.stop_propagation();
+                                window.close_dialog(cx);
+                            }
+                        })
+                        .flex()
+                        .flex_col()
+                        .gap_2()
+                        .child(Textarea::new(&shown))
+                        .child(
+                            div()
+                                .flex()
+                                .items_center()
+                                .gap_2()
+                                .child(
+                                    div()
+                                        .flex_1()
+                                        .min_w_0()
+                                        .text_xs()
+                                        .text_color(match &hint {
+                                            Some((_, true)) => cx.theme().warning,
+                                            _ => colors.faint,
+                                        })
+                                        .child(match hint.clone() {
+                                            Some((hint, _)) => hint,
+                                            None => strings.commit_title_long_tip.to_owned(),
+                                        }),
+                                )
+                                .child(key_hint("⌘↩", colors))
+                                .child(
+                                    Button::new("scm-big-commit")
+                                        .primary()
+                                        .small()
+                                        .icon(Icon::new(IconName::Check))
+                                        .label(strings.scm_commit)
+                                        .on_click({
+                                            let close = close.clone();
+                                            move |_, window, cx| {
+                                                window.close_dialog(cx);
+                                                close
+                                                    .update(cx, |this, cx| {
+                                                        this.commit(false, window, cx)
+                                                    })
+                                                    .ok();
+                                            }
+                                        }),
+                                ),
+                        ),
+                )
+        });
+        big.update(cx, |big, cx| big.focus(window, cx));
+    }
+
     fn ask_branch_name(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let placeholder = self.strings().scm_branch_name;
         let input = cx.new(|cx| InputState::new(window, cx).placeholder(placeholder));
@@ -891,6 +1013,9 @@ impl Workbench {
         root.on_action(cx.listener(|this, _: &Commit, window, cx| this.commit(false, window, cx)))
             .on_action(cx.listener(|this, _: &CompareWithBase, window, cx| {
                 this.compare_with_base(window, cx)
+            }))
+            .on_action(cx.listener(|this, _: &ExpandCommitMessage, window, cx| {
+                this.expand_commit_message(window, cx)
             }))
             .on_action(
                 cx.listener(|this, _: &CommitAmend, window, cx| this.commit_amend(window, cx)),
@@ -1149,6 +1274,17 @@ impl Workbench {
                     .border_color(colors.border.opacity(0.6))
                     .child(branch_chip)
                     .children(sync)
+                    // ⤢: the message in a big window (Shift+Esc).
+                    .child(
+                        Button::new("scm-message-expand")
+                            .ghost()
+                            .xsmall()
+                            .icon(Icon::new(IconName::Maximize))
+                            .tooltip(strings.scm_expand_message)
+                            .on_click(cx.listener(|this, _, window, cx| {
+                                this.expand_commit_message(window, cx)
+                            })),
+                    )
                     // ✦: Claude writes the message from the changes.
                     .child(
                         Button::new("scm-message-claude")
@@ -1894,6 +2030,92 @@ mod tests {
         cx.simulate_prompt_answer("Stage All and Commit");
         settle(cx);
         assert_eq!(view.read_with(cx, |view, _| view.git_change_count()), 0);
+    }
+
+    /// Shift+Esc in the message opens it in a big window: typing there
+    /// changes the field, and Cmd+Enter commits.
+    #[gpui::test]
+    fn a_long_commit_message_is_written_in_a_big_window(cx: &mut TestAppContext) {
+        cx.executor().allow_parking();
+        cx.update(|cx| {
+            gpui_component::init(cx);
+            crate::workbench_window::init(cx);
+        });
+        let folder = tempfile::tempdir().unwrap();
+        let root = fs::canonicalize(folder.path()).unwrap();
+        git(&root, &["init", "-q", "-b", "main"]);
+        git(&root, &["config", "user.name", "Test"]);
+        git(&root, &["config", "user.email", "test@example.com"]);
+        git(&root, &["config", "commit.gpgsign", "false"]);
+        fs::write(root.join("a.txt"), "uno\n").unwrap();
+        git(&root, &["add", "."]);
+        git(&root, &["commit", "-q", "-m", "first"]);
+        fs::write(root.join("a.txt"), "uno\ndue\n").unwrap();
+        git(&root, &["add", "."]);
+
+        let config = tempfile::tempdir().unwrap();
+        let settings_file = config.path().join("settings.json");
+        fs::write(&settings_file, r#"{ "keel.language": "en" }"#).unwrap();
+        let settings = Settings::load(&settings_file, None);
+        let opening = Opening::new(Some(root.clone()), None);
+        let (view, cx) = cx.add_window_view(|window, cx| {
+            gpui_component::Root::new(
+                cx.new(|cx| Workbench::new(opening, settings, None, window, cx)),
+                window,
+                cx,
+            )
+        });
+        let view = view.read_with(cx, |root, _| {
+            root.view().clone().downcast::<Workbench>().unwrap()
+        });
+        let settle = |cx: &mut gpui::VisualTestContext| {
+            for _ in 0..50 {
+                cx.executor().advance_clock(REFRESH_PAUSE * 2);
+                cx.run_until_parked();
+                if view.read_with(cx, |view, _| view.scm.busy.is_none()) {
+                    break;
+                }
+                std::thread::sleep(Duration::from_millis(20));
+            }
+        };
+        settle(cx);
+        view.update(cx, |view, cx| {
+            view.layout.show_side_view(SideView::SourceControl);
+            cx.notify();
+        });
+        cx.run_until_parked();
+        view.update_in(cx, |view, window, cx| {
+            view.scm
+                .message
+                .update(cx, |input, cx| input.set_value("add due", window, cx));
+            view.scm
+                .message
+                .update(cx, |input, cx| input.focus(window, cx));
+        });
+        cx.simulate_keystrokes("shift-escape");
+        cx.run_until_parked();
+        assert!(cx.update(|window, cx| window.has_active_dialog(cx)));
+        // The big field starts with the text and gives it back as it changes.
+        cx.simulate_keystrokes("cmd-down enter enter");
+        cx.simulate_input("Why: the second line.");
+        cx.run_until_parked();
+        assert_eq!(
+            view.read_with(cx, |view, cx| view.scm.message.read(cx).value().to_string()),
+            "add due\n\nWhy: the second line."
+        );
+        cx.simulate_keystrokes("cmd-enter");
+        settle(cx);
+        assert!(!cx.update(|window, cx| window.has_active_dialog(cx)));
+        let log = Command::new("git")
+            .arg("-C")
+            .arg(&root)
+            .args(["log", "-1", "--format=%B"])
+            .output()
+            .unwrap();
+        assert_eq!(
+            String::from_utf8_lossy(&log.stdout).trim_end(),
+            "add due\n\nWhy: the second line."
+        );
     }
 
     /// Git and the Explorer speak to each other, and every git command
