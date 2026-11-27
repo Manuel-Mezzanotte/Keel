@@ -173,8 +173,7 @@ pub(crate) use shell::window_options;
 pub(crate) use signature_help::TriggerParameterHints;
 pub(crate) use source_control::{
     CheckoutBranch, Commit, CommitAmend, CompareWithBase, CreateBranch, DiscardAll, GitFetch,
-    GitPull, GitPush,
-    GitRefresh, GitStash, GitStashPop, GitSync, StageAll, UnstageAll,
+    GitPull, GitPush, GitRefresh, GitStash, GitStashPop, GitSync, StageAll, UnstageAll,
     bindings as source_control_bindings,
 };
 pub(crate) use tasks::{

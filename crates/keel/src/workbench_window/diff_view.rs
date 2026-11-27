@@ -203,7 +203,9 @@ impl Workbench {
                 DiffSource::Pull { number, .. } if path.is_empty() => format!("PR #{number}"),
                 DiffSource::Pull { number, .. } => format!("{name} (PR #{number})"),
                 DiffSource::Branch { base, .. } if path.is_empty() => strings.diff_against(base),
-                DiffSource::Branch { base, .. } => format!("{name} ({})", strings.diff_against(base)),
+                DiffSource::Branch { base, .. } => {
+                    format!("{name} ({})", strings.diff_against(base))
+                }
                 DiffSource::LocalHistory(_) => format!("{name} ({})", strings.history_version),
                 DiffSource::Clipboard => format!("{name} ↔ {}", strings.diff_clipboard),
                 DiffSource::Files(other) => {
@@ -1043,7 +1045,12 @@ mod tests {
         // On main: nothing to compare.
         view.update_in(cx, |view, window, cx| {
             view.compare_with_base(window, cx);
-            assert!(!view.documents.keys().any(|uri| uri.starts_with("keel-branch:")));
+            assert!(
+                !view
+                    .documents
+                    .keys()
+                    .any(|uri| uri.starts_with("keel-branch:"))
+            );
         });
         git(&root, &["switch", "-q", "-c", "prezzi"]);
         fs::write(root.join("a.txt"), "uno\ndue\n").unwrap();

@@ -1540,6 +1540,17 @@ impl Workbench {
                     }
                 }
                 let open_path = path.clone();
+                let dragged = self
+                    .scm
+                    .repo
+                    .as_ref()
+                    .map(|repo| repo.absolute(&path))
+                    .filter(|absolute| !deleted && absolute.exists())
+                    .map(|absolute| super::explorer::DraggedPath {
+                        name: name.clone(),
+                        path: absolute,
+                        others: Vec::new(),
+                    });
                 let icon = self.file_icon_element(Path::new(&path), cx);
                 // Just staged or unstaged: it slides into its section.
                 let arrived = self
@@ -1565,6 +1576,12 @@ impl Workbench {
                     .on_click(cx.listener(move |this, _: &ClickEvent, window, cx| {
                         this.open_change(&open_path, section, window, cx)
                     }))
+                    // Dragged as from the Explorer: into the terminal it
+                    // writes its path, into the editor it opens, into the
+                    // chat it goes with the message. A deleted file stays.
+                    .when_some(dragged, |row, dragged| {
+                        row.on_drag(dragged, |dragged, _, _, cx| cx.new(|_| dragged.clone()))
+                    })
                     .child(icon)
                     // The name keeps its room; the folder gives way first.
                     .child(

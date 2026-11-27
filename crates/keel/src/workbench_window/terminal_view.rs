@@ -182,6 +182,8 @@ pub(crate) struct TerminalView {
     grid_size: Rc<Cell<(usize, usize)>>,
     /// Lines of a trackpad scroll not yet worth a whole line.
     scroll_remainder: f32,
+    /// Points of a Cmd+scroll not yet worth a size of the text.
+    zoom_remainder: f32,
     /// A drag that selects text, rather than going to the program.
     selecting: bool,
     exited: bool,
@@ -364,6 +366,7 @@ impl TerminalView {
             metrics: Rc::new(Cell::new(None)),
             grid_size: Rc::new(Cell::new((80, 24))),
             scroll_remainder: 0.,
+            zoom_remainder: 0.,
             selecting: false,
             exited: false,
             find: None,
@@ -1162,11 +1165,37 @@ impl TerminalView {
         }
     }
 
+    /// Makes the text `steps` points bigger (or smaller, below zero), once
+    /// a whole point has gathered; between 8 and 40 points.
+    fn zoom_by(&mut self, steps: f32, cx: &mut Context<Self>) {
+        self.zoom_remainder += steps;
+        let whole = self.zoom_remainder.trunc();
+        if whole == 0. {
+            return;
+        }
+        self.zoom_remainder -= whole;
+        let size = (self.font_size.as_f32() + whole).clamp(8., 40.);
+        if size != self.font_size.as_f32() {
+            self.font_size = px(size);
+            cx.notify();
+        }
+    }
+
+    #[cfg(test)]
+    fn font_size(&self) -> f32 {
+        self.font_size.as_f32()
+    }
+
     fn scroll(&mut self, event: &ScrollEvent, _: &mut Window, cx: &mut Context<Self>) {
         let Some(metrics) = self.metrics.get() else {
             return;
         };
         let delta = event.delta.pixel_delta(metrics.line_height).y;
+        // Cmd with the wheel makes the text bigger or smaller, as in Zed.
+        if event.modifiers.platform {
+            self.zoom_by(delta / metrics.line_height, cx);
+            return;
+        }
         self.scroll_remainder += delta / metrics.line_height;
         let lines = self.scroll_remainder.trunc() as i32;
         self.scroll_remainder -= lines as f32;
@@ -2038,6 +2067,26 @@ mod tests {
         });
         view.update_in(cx, |view, window, cx| view.focus_handle.focus(window, cx));
         (view, cx)
+    }
+
+    #[gpui::test]
+    fn cmd_and_the_wheel_change_the_text_size(cx: &mut TestAppContext) {
+        let (view, cx) = terminal(cx, "sleep 30");
+        view.update(cx, |view, cx| {
+            // Less than a point waits; a whole one changes the size.
+            view.zoom_by(0.6, cx);
+            assert_eq!(view.font_size(), 12.);
+            view.zoom_by(0.6, cx);
+            assert_eq!(view.font_size(), 13.);
+            // The 0.2 left over counts with the next scroll.
+            view.zoom_by(-3., cx);
+            assert_eq!(view.font_size(), 11.);
+            // Never below 8 or above 40.
+            view.zoom_by(-20., cx);
+            assert_eq!(view.font_size(), 8.);
+            view.zoom_by(100., cx);
+            assert_eq!(view.font_size(), 40.);
+        });
     }
 
     fn wait_until(cx: &mut VisualTestContext, check: impl Fn(&mut VisualTestContext) -> bool) {

@@ -304,7 +304,12 @@ impl Repo {
     /// The branch the others start from: the one the remote prefers
     /// (`origin/HEAD`), else `main` or `master`, on the remote or here.
     pub fn base_branch(&self) -> Option<String> {
-        if let Ok(preferred) = self.run(&["symbolic-ref", "--quiet", "--short", "refs/remotes/origin/HEAD"]) {
+        if let Ok(preferred) = self.run(&[
+            "symbolic-ref",
+            "--quiet",
+            "--short",
+            "refs/remotes/origin/HEAD",
+        ]) {
             let preferred = preferred.trim();
             if !preferred.is_empty() {
                 return Some(preferred.to_owned());
@@ -312,7 +317,10 @@ impl Repo {
         }
         ["origin/main", "origin/master", "main", "master"]
             .into_iter()
-            .find(|branch| self.run(&["rev-parse", "--verify", "--quiet", branch]).is_ok())
+            .find(|branch| {
+                self.run(&["rev-parse", "--verify", "--quiet", branch])
+                    .is_ok()
+            })
             .map(str::to_owned)
     }
 
