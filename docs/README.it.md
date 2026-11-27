@@ -38,7 +38,7 @@ con un quarto della memoria di VS Code e le stesse scorciatoie.
 
 <br>
 
-https://github.com/user-attachments/assets/a0a01bb9-4cb1-43b5-9d88-5e27c818ede7
+https://github.com/user-attachments/assets/903bb763-64ab-4a1d-bf31-f65ba72a373c
 
 > [!NOTE]
 > **Keel è in anteprima.** Si scarica da [keel.mezzalab.eu](https://keel.mezzalab.eu) e si aggiorna da solo. Cosa cambia in ogni versione è in [CHANGELOG.it.md](CHANGELOG.it.md).

@@ -38,7 +38,7 @@ with a quarter of VS Code's memory and the same shortcuts.
 
 <br>
 
-https://github.com/user-attachments/assets/a0a01bb9-4cb1-43b5-9d88-5e27c818ede7
+https://github.com/user-attachments/assets/903bb763-64ab-4a1d-bf31-f65ba72a373c
 
 > [!NOTE]
 > **Keel is in pre-release.** It downloads from [keel.mezzalab.eu](https://keel.mezzalab.eu) and updates itself. What changes in each version is in [CHANGELOG.md](CHANGELOG.md).
