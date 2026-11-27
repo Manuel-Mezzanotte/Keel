@@ -704,6 +704,17 @@ pub struct Strings {
     pub web_open_in_keel: &'static str,
     pub agent_changes_text: &'static str,
     pub agent_accept_all: &'static str,
+    pub agent_comment_title: &'static str,
+    pub agent_comment_line: &'static str,
+    pub agent_comment_lines: &'static str,
+    pub agent_comment_hint: &'static str,
+    pub agent_comment_keys: &'static str,
+    pub agent_comment_block: &'static str,
+    agent_comment_one: &'static str,
+    agent_comment_many: &'static str,
+    pub agent_comments_send: &'static str,
+    pub agent_comments_clear: &'static str,
+    pub agent_review_feedback: &'static str,
     pub agent_reject_all: &'static str,
     pub agent_new_file: &'static str,
     pub agent_change_of_claude: &'static str,
@@ -1899,6 +1910,15 @@ impl Strings {
         self.agent_stopped_text.replace("{reason}", reason)
     }
 
+    pub fn agent_comments(&self, count: usize) -> String {
+        if count == 1 {
+            self.agent_comment_one.to_owned()
+        } else {
+            self.agent_comment_many
+                .replace("{count}", &count.to_string())
+        }
+    }
+
     pub fn agent_changes(&self, count: usize) -> String {
         self.agent_changes_text
             .replace("{count}", &count.to_string())
@@ -2826,6 +2846,17 @@ pub const ITALIAN: Strings = Strings {
     web_open_in_keel: "Apri in Keel",
     agent_changes_text: "Modifiche di Claude: {count} file",
     agent_accept_all: "Accetta tutte",
+    agent_comment_title: "Commento per Claude",
+    agent_comment_line: "{file}, riga {line}",
+    agent_comment_lines: "{file}, righe {from}–{to}",
+    agent_comment_hint: "Cosa deve cambiare qui?",
+    agent_comment_keys: "⌘↩ per tenerlo. I commenti partono tutti insieme con «Manda a Claude»; un commento vuoto si toglie.",
+    agent_comment_block: "Commenta il blocco (o fai clic sul numero di una riga)",
+    agent_comment_one: "1 commento",
+    agent_comment_many: "{count} commenti",
+    agent_comments_send: "Manda a Claude",
+    agent_comments_clear: "Togli i commenti",
+    agent_review_feedback: "Ho dei commenti sulle tue modifiche. Sistemale tenendone conto:",
     agent_reject_all: "Rifiuta tutte",
     agent_new_file: "nuovo",
     agent_change_of_claude: "Modifica di Claude",
@@ -4099,6 +4130,17 @@ pub const ENGLISH: Strings = Strings {
     web_open_in_keel: "Open in Keel",
     agent_changes_text: "Claude's changes: {count} files",
     agent_accept_all: "Accept all",
+    agent_comment_title: "Comment for Claude",
+    agent_comment_line: "{file}, line {line}",
+    agent_comment_lines: "{file}, lines {from}–{to}",
+    agent_comment_hint: "What should change here?",
+    agent_comment_keys: "⌘↩ to keep it. The comments go together with «Send to Claude»; an empty comment is taken away.",
+    agent_comment_block: "Comment on the block (or click a line's number)",
+    agent_comment_one: "1 comment",
+    agent_comment_many: "{count} comments",
+    agent_comments_send: "Send to Claude",
+    agent_comments_clear: "Remove the comments",
+    agent_review_feedback: "I have comments on your changes. Please address them:",
     agent_reject_all: "Reject all",
     agent_new_file: "new",
     agent_change_of_claude: "Change by Claude",

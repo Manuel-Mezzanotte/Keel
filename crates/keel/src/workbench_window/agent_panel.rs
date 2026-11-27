@@ -240,6 +240,8 @@ pub(super) struct AgentPanel {
     pub(super) snapshots: Vec<(PathBuf, Option<String>)>,
     /// The kept files that differ now, for the review.
     pub(super) changes: Vec<super::agent_review::AgentChange>,
+    /// What was said of the lines of Claude's changes, to send together.
+    pub(super) review: Vec<super::agent_review::ReviewComment>,
     /// The files before each turn changed them, to bring the code back.
     pub(super) checkpoints: Vec<Checkpoint>,
     /// The entry of the message whose turn runs or ran last.
@@ -338,6 +340,7 @@ impl AgentPanel {
             snapshots: Vec::new(),
             plan_doc: None,
             changes: Vec::new(),
+            review: Vec::new(),
             checkpoints: Vec::new(),
             turn: None,
             rewinding: None,

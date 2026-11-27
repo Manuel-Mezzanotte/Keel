@@ -623,6 +623,50 @@ fn shots() -> Vec<Shot> {
             workbench.agent_panel.chat_folder = Some(folder);
             cx.notify();
         }));
+        // Claude's change in its tab, with comments on its lines.
+        shots.push(shot(name("claude-review"), |workbench, window, cx| {
+            workbench.agent_panel.chat_folder = None;
+            let file = paths::data_dir().join("prezzi.ts");
+            let before = "const nights = 3;\nconst price = 90;\nconst total = nights * price;\n";
+            let _ = std::fs::write(
+                &file,
+                "const nights = 3;\nconst price = 95;\nconst total = nights * price + 10;\n",
+            );
+            workbench
+                .agent_panel
+                .snapshots
+                .push((file.clone(), Some(before.to_owned())));
+            workbench.refresh_agent_changes();
+            workbench.open_agent_change(&file, window, cx);
+            workbench.set_agent_comment(
+                &file,
+                1..2,
+                "Lascia 90: è il prezzo di bassa stagione".to_owned(),
+                window,
+                cx,
+            );
+            workbench.set_agent_comment(
+                &file,
+                2..3,
+                "Il 10 è la tassa di soggiorno? Mettila in una costante".to_owned(),
+                window,
+                cx,
+            );
+        }));
+        // The tab again in front: a search of an earlier picture may end
+        // after it opened.
+        shots.push(shot(name("claude-review-tab"), |workbench, window, cx| {
+            let file = paths::data_dir().join("prezzi.ts");
+            workbench.open_agent_change(&file, window, cx);
+        }));
+        shots.push(shot(
+            name("after-claude-review"),
+            |workbench, window, cx| {
+                workbench.clear_agent_comments(cx);
+                let file = paths::data_dir().join("prezzi.ts");
+                workbench.accept_agent_change(&file, window, cx);
+            },
+        ));
         // Logged out: the ways in, in place of the chat.
         if round == 1 {
             shots.push(shot(name("claude-login"), |workbench, window, cx| {

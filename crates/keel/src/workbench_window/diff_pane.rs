@@ -36,6 +36,9 @@ pub(super) enum BlockActions {
     StageOrRevert,
     /// Staged changes: take the block out of the stage.
     Unstage,
+    /// Claude's changes: a comment on a block, or on a line from its
+    /// number.
+    Comment,
     /// A commit, or someone's proposal: nothing to do on a block.
     None,
 }
@@ -427,6 +430,51 @@ impl Workbench {
 
     /// Stages a block of a differences tab, or takes it out of the
     /// stage, or undoes it in the file.
+    /// The comment on a block of Claude's changes: its new lines.
+    pub(super) fn comment_diff_block(
+        &mut self,
+        uri: &str,
+        file: usize,
+        hunk: usize,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let Some(Backing::Diff(tab)) = self.documents.get(uri).map(|document| &document.backing)
+        else {
+            return;
+        };
+        let Some((path, _, _, block)) = tab.doc.as_ref().and_then(|doc| doc.block(file, hunk))
+        else {
+            return;
+        };
+        // Lines only taken away: the comment goes on the line after them.
+        let lines = if block.new.is_empty() {
+            block.new.start..block.new.start + 1
+        } else {
+            block.new.clone()
+        };
+        self.comment_agent_lines(Path::new(&path), lines, window, cx);
+    }
+
+    /// The comment on one line of Claude's changes.
+    pub(super) fn comment_diff_line(
+        &mut self,
+        uri: &str,
+        file: usize,
+        line: usize,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let Some(Backing::Diff(tab)) = self.documents.get(uri).map(|document| &document.backing)
+        else {
+            return;
+        };
+        let Some((path, ..)) = tab.doc.as_ref().and_then(|doc| doc.file_lines(file)) else {
+            return;
+        };
+        self.comment_agent_lines(Path::new(&path), line..line + 1, window, cx);
+    }
+
     pub(super) fn diff_block_action(
         &mut self,
         uri: &str,
@@ -771,6 +819,8 @@ struct CellSpec<'a> {
     new_side: bool,
     /// Said at the right, as where a moved stretch went.
     note: Option<String>,
+    /// Said under the line: a comment on it.
+    below: Option<String>,
 }
 
 fn render_code(
@@ -800,6 +850,7 @@ fn render_code(
                 note: diff.moved_to_at(line).map(|to| {
                     super::notices::fill(strings.diff_moved_to, &[("line", &(to + 1).to_string())])
                 }),
+                below: None,
             },
             look,
             cx,
@@ -818,14 +869,13 @@ fn render_code(
                 file: row.file(),
                 line,
                 new_side: true,
-                note: diff.notes.get(&line).cloned().or_else(|| {
-                    diff.moved_from_at(line).map(|from| {
-                        super::notices::fill(
-                            strings.diff_moved_from,
-                            &[("line", &(from + 1).to_string())],
-                        )
-                    })
+                note: diff.moved_from_at(line).map(|from| {
+                    super::notices::fill(
+                        strings.diff_moved_from,
+                        &[("line", &(from + 1).to_string())],
+                    )
                 }),
+                below: diff.notes.get(&line).cloned(),
             },
             look,
             cx,
@@ -854,7 +904,8 @@ fn render_code(
                 file: row.file(),
                 line: new,
                 new_side: true,
-                note: diff.notes.get(&new).cloned(),
+                note: None,
+                below: diff.notes.get(&new).cloned(),
             },
             look,
             cx,
@@ -973,6 +1024,25 @@ fn block_buttons(file: usize, hunk: usize, index: usize, look: &Look) -> AnyElem
             strings.diff_unstage_block,
             false,
         )],
+        BlockActions::Comment => {
+            let workbench = look.workbench.clone();
+            let uri = look.uri.clone();
+            vec![
+                Button::new(("diff-block-comment", index))
+                    .ghost()
+                    .xsmall()
+                    .icon(Icon::new(IconName::MessageSquare))
+                    .tooltip(strings.agent_comment_block)
+                    .on_click(move |_, window, cx| {
+                        cx.stop_propagation();
+                        if let Some(workbench) = workbench.upgrade() {
+                            workbench.update(cx, |this, cx| {
+                                this.comment_diff_block(&uri, file, hunk, window, cx)
+                            });
+                        }
+                    }),
+            ]
+        }
         BlockActions::None => Vec::new(),
     };
     div()
@@ -1006,6 +1076,7 @@ fn cell(spec: CellSpec, look: &Look, cx: &App) -> AnyElement {
         line,
         new_side,
         note,
+        below,
     } = spec;
     let colors = look.colors;
     let theme = cx.theme();
@@ -1049,13 +1120,31 @@ fn cell(spec: CellSpec, look: &Look, cx: &App) -> AnyElement {
         });
         styles = gpui::combine_highlights(styles, emphasis).collect();
     }
-    let number = |value: Option<usize>| {
+    // In Claude's changes a line's number comments it.
+    let commenting = new_side && look.actions == BlockActions::Comment;
+    let number = |value: Option<usize>, which: u8| {
         div()
+            .id(SharedString::from(format!("diff-number-{which}")))
             .flex_none()
             .w(look.number_width)
             .pr_2()
             .text_right()
             .text_color(colors.faint)
+            .when(commenting && value.is_some(), |number| {
+                let workbench = look.workbench.clone();
+                let uri = look.uri.clone();
+                number
+                    .cursor_pointer()
+                    .hover(|number| number.text_color(colors.accent))
+                    .on_click(move |_, window, cx| {
+                        cx.stop_propagation();
+                        if let Some(workbench) = workbench.upgrade() {
+                            workbench.update(cx, |this, cx| {
+                                this.comment_diff_line(&uri, file, line, window, cx)
+                            });
+                        }
+                    })
+            })
             .child(
                 value
                     .map(|value| (value + 1).to_string())
@@ -1081,7 +1170,8 @@ fn cell(spec: CellSpec, look: &Look, cx: &App) -> AnyElement {
         }
     };
     let code = StyledText::new(SharedString::from(text.to_owned())).with_highlights(styles);
-    div()
+    let numbers_width = look.number_width * if two_numbers { 2. } else { 1. } + px(14.);
+    let line_row = div()
         .id(SharedString::from(format!(
             "diff-cell-{}-{line}",
             u8::from(new_side)
@@ -1094,10 +1184,11 @@ fn cell(spec: CellSpec, look: &Look, cx: &App) -> AnyElement {
         .line_height(look.line_height)
         .when_some(background, |cell, background| cell.bg(background))
         .when(two_numbers, |cell| {
-            cell.child(number(old_number)).child(number(new_number))
+            cell.child(number(old_number, 0))
+                .child(number(new_number, 1))
         })
         .when(!two_numbers, |cell| {
-            cell.child(number(old_number.or(new_number)))
+            cell.child(number(old_number.or(new_number), 2))
         })
         .child(
             div()
@@ -1125,6 +1216,27 @@ fn cell(spec: CellSpec, look: &Look, cx: &App) -> AnyElement {
                     .child(note),
             )
         })
-        .when(new_side, |cell| cell.on_click(open(line)))
-        .into_any_element()
+        .when(new_side, |cell| cell.on_click(open(line)));
+    match below {
+        // A comment goes under its line, in the line's colour, the whole
+        // of it, as GitHub's review does.
+        Some(below) => div()
+            .w_full()
+            .flex()
+            .flex_col()
+            .when_some(background, |cell, background| cell.bg(background))
+            .child(line_row)
+            .child(
+                div()
+                    .pl(numbers_width)
+                    .pr_3()
+                    .pb_1()
+                    .whitespace_normal()
+                    .text_xs()
+                    .text_color(theme.info)
+                    .child(below),
+            )
+            .into_any_element(),
+        None => line_row.into_any_element(),
+    }
 }

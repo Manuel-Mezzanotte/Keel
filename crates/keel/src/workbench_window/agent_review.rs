@@ -7,12 +7,27 @@
 use gpui::{AnyElement, StatefulInteractiveElement as _};
 use gpui_component::button::{Button, ButtonVariants as _};
 use gpui_component::diff::{Diff, DiffFile, DiffMode, DiffState};
+use gpui_component::input::{Textarea, TextareaState};
 use gpui_component::{ActiveTheme as _, Icon, Sizable as _};
 use gpui_kit_assets::IconName;
 
 use super::diff_view::{DiffSource, DiffTab, diff_uri};
 use super::shell::Colors;
 use super::*;
+
+/// A comment on lines of Claude's changes, as Warp's and Xcode's review:
+/// they wait together, beside their lines, and go to Claude as one
+/// message.
+#[derive(Clone, Debug, PartialEq)]
+pub(super) struct ReviewComment {
+    pub(super) path: PathBuf,
+    /// The lines of the file as it is now, from 0, the end left out.
+    pub(super) lines: std::ops::Range<usize>,
+    pub(super) text: String,
+}
+
+/// How many lines of code a comment quotes to Claude, at most.
+const QUOTED_LINES: usize = 8;
 
 /// A file the agent changed, as it stands now.
 #[derive(Clone, Debug, PartialEq)]
@@ -92,6 +107,10 @@ impl Workbench {
         }
         // An open file without unsaved changes shows the old text at once.
         self.reload_document(&Uri::file(path).to_string(), window, cx);
+        // Its lines are gone, and what was said of them.
+        self.agent_panel
+            .review
+            .retain(|comment| comment.path != path);
         self.close_agent_change_tab(path, window, cx);
         self.refresh_agent_changes();
         cx.notify();
@@ -153,12 +172,7 @@ impl Workbench {
             3,
         );
         let doc = super::diff_pane::DiffDoc::new(
-            vec![super::diff_model::FileDiff::new(
-                path.display().to_string(),
-                change.before.as_deref().unwrap_or_default(),
-                &now,
-                false,
-            )],
+            vec![self.agent_file_diff(&change, &now)],
             self.diff_split,
             false,
         );
@@ -207,6 +221,243 @@ impl Workbench {
         cx.notify();
     }
 
+    /// A change's differences, with the comments beside their lines.
+    fn agent_file_diff(&self, change: &AgentChange, now: &str) -> super::diff_model::FileDiff {
+        let mut diff = super::diff_model::FileDiff::new(
+            change.path.display().to_string(),
+            change.before.as_deref().unwrap_or_default(),
+            now,
+            false,
+        );
+        diff.notes = self
+            .agent_panel
+            .review
+            .iter()
+            .filter(|comment| comment.path == change.path)
+            .map(|comment| {
+                let line = comment.lines.end.saturating_sub(1).max(comment.lines.start);
+                (line, format!("💬 {}", comment.text.trim()))
+            })
+            .collect();
+        diff
+    }
+
+    /// Shows the comments again in the open tab of a change.
+    fn refresh_agent_change_notes(&mut self, path: &Path) {
+        let Some(change) = self
+            .agent_panel
+            .changes
+            .iter()
+            .find(|change| change.path == path)
+            .cloned()
+        else {
+            return;
+        };
+        let uri = diff_uri("", &DiffSource::Agent(path.display().to_string()));
+        let Some(Backing::Diff(tab)) = self.documents.get(&uri).map(|document| &document.backing)
+        else {
+            return;
+        };
+        let Some(doc) = tab.doc.clone() else {
+            return;
+        };
+        let now = std::fs::read_to_string(path).unwrap_or_default();
+        doc.set_files(vec![self.agent_file_diff(&change, &now)]);
+    }
+
+    /// The comment on these lines of a change: a window to write it, with
+    /// what was written before.
+    pub(super) fn comment_agent_lines(
+        &mut self,
+        path: &Path,
+        lines: std::ops::Range<usize>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        if window.has_active_dialog(cx) {
+            return;
+        }
+        let strings = self.strings();
+        let before = self
+            .agent_panel
+            .review
+            .iter()
+            .find(|comment| comment.path == path && comment.lines.start == lines.start)
+            .map(|comment| comment.text.clone())
+            .unwrap_or_default();
+        let field = cx.new(|cx| {
+            TextareaState::new(window, cx)
+                .placeholder(strings.agent_comment_hint)
+                .rows(4)
+                .default_value(before)
+        });
+        let name = path
+            .file_name()
+            .map(|name| name.to_string_lossy().into_owned())
+            .unwrap_or_default();
+        let place = if lines.len() <= 1 {
+            super::notices::fill(
+                strings.agent_comment_line,
+                &[("file", &name), ("line", &(lines.start + 1).to_string())],
+            )
+        } else {
+            super::notices::fill(
+                strings.agent_comment_lines,
+                &[
+                    ("file", &name),
+                    ("from", &(lines.start + 1).to_string()),
+                    ("to", &lines.end.to_string()),
+                ],
+            )
+        };
+        let this = cx.weak_entity();
+        let path = path.to_path_buf();
+        let shown = field.clone();
+        window.open_dialog(cx, move |dialog, _, cx| {
+            let muted = Colors::new(cx).muted;
+            let (this, field, path, lines) =
+                (this.clone(), shown.clone(), path.clone(), lines.clone());
+            let saved = (this.clone(), field.clone(), path.clone(), lines.clone());
+            dialog
+                .w(px(520.))
+                .title(format!("{} · {place}", strings.agent_comment_title))
+                .on_ok(move |_, window, cx| {
+                    let text = field.read(cx).value().trim().to_owned();
+                    this.update(cx, |this, cx| {
+                        this.set_agent_comment(&path, lines.clone(), text, window, cx)
+                    })
+                    .ok();
+                    true
+                })
+                .child(
+                    div()
+                        .capture_key_down(move |event, window, cx| {
+                            let keystroke = &event.keystroke;
+                            if keystroke.key == "enter" && keystroke.modifiers.platform {
+                                cx.stop_propagation();
+                                let (this, field, path, lines) = saved.clone();
+                                let text = field.read(cx).value().trim().to_owned();
+                                window.close_dialog(cx);
+                                this.update(cx, |this, cx| {
+                                    this.set_agent_comment(&path, lines, text, window, cx)
+                                })
+                                .ok();
+                            }
+                        })
+                        .flex()
+                        .flex_col()
+                        .gap_2()
+                        .child(Textarea::new(&shown))
+                        .child(
+                            div()
+                                .text_xs()
+                                .text_color(muted)
+                                .child(strings.agent_comment_keys),
+                        ),
+                )
+        });
+        field.update(cx, |field, cx| field.focus(window, cx));
+    }
+
+    /// Keeps the comment on these lines; an empty one takes it away.
+    pub(super) fn set_agent_comment(
+        &mut self,
+        path: &Path,
+        lines: std::ops::Range<usize>,
+        text: String,
+        _window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let review = &mut self.agent_panel.review;
+        review.retain(|comment| !(comment.path == path && comment.lines.start == lines.start));
+        if !text.is_empty() {
+            review.push(ReviewComment {
+                path: path.to_path_buf(),
+                lines,
+                text,
+            });
+            review.sort_by(|a, b| (&a.path, a.lines.start).cmp(&(&b.path, b.lines.start)));
+        }
+        self.refresh_agent_change_notes(path);
+        cx.notify();
+    }
+
+    /// Every comment goes to Claude in one message, each with the lines it
+    /// speaks of; what is written in the field goes with them.
+    pub(super) fn send_agent_comments(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if self.agent_panel.review.is_empty() {
+            return;
+        }
+        let comments = std::mem::take(&mut self.agent_panel.review);
+        let message = self.agent_review_message(&comments);
+        let typed = self.agent_panel.input.read(cx).value().trim().to_owned();
+        let text = if typed.is_empty() {
+            message
+        } else {
+            format!("{typed}\n\n{message}")
+        };
+        self.agent_panel
+            .input
+            .update(cx, |input, cx| input.set_value(text, window, cx));
+        let paths: std::collections::BTreeSet<PathBuf> = comments
+            .iter()
+            .map(|comment| comment.path.clone())
+            .collect();
+        for path in paths {
+            self.refresh_agent_change_notes(&path);
+        }
+        self.send_to_agent(window, cx);
+        self.agent_panel.scroll.scroll_to_bottom();
+    }
+
+    /// Takes every comment away.
+    pub(super) fn clear_agent_comments(&mut self, cx: &mut Context<Self>) {
+        let paths: std::collections::BTreeSet<PathBuf> = self
+            .agent_panel
+            .review
+            .drain(..)
+            .map(|comment| comment.path)
+            .collect();
+        for path in paths {
+            self.refresh_agent_change_notes(&path);
+        }
+        cx.notify();
+    }
+
+    /// The message of the comments: each file with its lines quoted, then
+    /// what was said of them.
+    fn agent_review_message(&self, comments: &[ReviewComment]) -> String {
+        let strings = self.strings();
+        let mut message = strings.agent_review_feedback.to_owned();
+        for comment in comments {
+            let shown = self
+                .project
+                .root
+                .as_ref()
+                .and_then(|root| comment.path.strip_prefix(root).ok())
+                .unwrap_or(&comment.path)
+                .display()
+                .to_string();
+            let place = if comment.lines.len() <= 1 {
+                format!("{shown}:{}", comment.lines.start + 1)
+            } else {
+                format!("{shown}:{}-{}", comment.lines.start + 1, comment.lines.end)
+            };
+            let text = std::fs::read_to_string(&comment.path).unwrap_or_default();
+            let code: Vec<&str> = text
+                .lines()
+                .skip(comment.lines.start)
+                .take(comment.lines.len().clamp(1, QUOTED_LINES))
+                .collect();
+            message.push_str(&format!("\n\n`{place}`\n"));
+            if !code.is_empty() {
+                message.push_str(&format!("```\n{}\n```\n", code.join("\n")));
+            }
+            message.push_str(comment.text.trim());
+        }
+        message
+    }
+
     fn close_agent_change_tab(&mut self, path: &Path, window: &mut Window, cx: &mut Context<Self>) {
         let uri = diff_uri("", &DiffSource::Agent(path.display().to_string()));
         while let Some((group, tab)) = self.groups.iter().enumerate().find_map(|(group, tabs)| {
@@ -242,6 +493,8 @@ impl Workbench {
                 .child(
                     div()
                         .flex_1()
+                        .min_w_0()
+                        .truncate()
                         .text_color(colors.muted)
                         .child(strings.agent_changes(changes.len())),
                 )
@@ -263,6 +516,12 @@ impl Workbench {
                             this.accept_all_agent_changes(window, cx)
                         })),
                 );
+        let comments = (!self.agent_panel.review.is_empty()).then(|| {
+            div()
+                .flex()
+                .justify_end()
+                .child(self.render_agent_comments_bar("agent-panel-comments", false, colors, cx))
+        });
         let rows =
             changes.iter().enumerate().map(|(index, change)| {
                 let name = change
@@ -338,9 +597,59 @@ impl Workbench {
                 .flex_col()
                 .gap_0p5()
                 .child(header)
+                .children(comments)
                 .children(rows)
                 .into_any_element(),
         )
+    }
+
+    /// How many comments wait, with «Send to Claude», and ✕ where there is
+    /// room.
+    fn render_agent_comments_bar(
+        &self,
+        id: &'static str,
+        compact: bool,
+        colors: Colors,
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
+        let strings = self.strings();
+        let count = self.agent_panel.review.len();
+        div()
+            .flex()
+            .items_center()
+            .gap_1()
+            .child(
+                Icon::new(IconName::MessageSquare)
+                    .xsmall()
+                    .text_color(colors.accent),
+            )
+            .child(
+                div()
+                    .text_xs()
+                    .text_color(colors.muted)
+                    .child(strings.agent_comments(count)),
+            )
+            .when(!compact, |bar| {
+                bar.child(
+                    Button::new((id, 0usize))
+                        .ghost()
+                        .xsmall()
+                        .icon(Icon::new(IconName::X))
+                        .tooltip(strings.agent_comments_clear)
+                        .on_click(cx.listener(|this, _, _, cx| this.clear_agent_comments(cx))),
+                )
+            })
+            .child(
+                Button::new((id, 1usize))
+                    .outline()
+                    .small()
+                    .icon(Icon::new(IconName::ArrowUp))
+                    .label(strings.agent_comments_send)
+                    .on_click(
+                        cx.listener(|this, _, window, cx| this.send_agent_comments(window, cx)),
+                    ),
+            )
+            .into_any_element()
     }
 
     /// The tab of one change: the differences, with Accept and Reject.
@@ -408,6 +717,9 @@ impl Workbench {
                     .text_color(colors.muted)
                     .child(format!("{} · {}", strings.agent_change_of_claude, tab.path)),
             )
+            .when(!self.agent_panel.review.is_empty(), |toolbar| {
+                toolbar.child(self.render_agent_comments_bar("agent-tab", true, colors, cx))
+            })
             .children(previous.map(|previous| {
                 Button::new("agent-tab-previous")
                     .ghost()
@@ -489,7 +801,7 @@ impl Workbench {
                     Some(doc) => self.render_diff_doc(
                         &diff_uri("", &DiffSource::Agent(path.to_owned())),
                         doc,
-                        super::diff_pane::BlockActions::None,
+                        super::diff_pane::BlockActions::Comment,
                         colors,
                         window,
                         cx,
@@ -554,6 +866,107 @@ mod tests {
             view.read_with(cx, |view, _| {
                 !view.agent_panel.running && !view.agent_panel.changes.is_empty()
             })
+        });
+    }
+
+    /// Comments on the lines of Claude's changes wait beside their lines
+    /// and go to Claude together, with the code they speak of.
+    #[gpui::test]
+    fn comments_on_claudes_lines_go_together(cx: &mut TestAppContext) {
+        cx.executor().allow_parking();
+        cx.update(|cx| {
+            gpui_component::init(cx);
+            language::register_grammars();
+            init(cx);
+        });
+        let project = tempfile::tempdir().unwrap();
+        std::fs::create_dir_all(project.path().join(".git")).unwrap();
+        let path = std::path::absolute(project.path().join("booking.ts")).unwrap();
+        std::fs::write(&path, "const nights = 3;\nconst price = 90;\n").unwrap();
+        let document = Document::open(&path).unwrap();
+        let mut workbench = None;
+        let (_root, cx) = cx.add_window_view(|window, cx| {
+            let view = cx.new(|cx| {
+                let mut workbench =
+                    Workbench::new(Some(document), test_settings(), None, window, cx);
+                workbench.agent_panel.fake = true;
+                workbench.open_agent(window, cx);
+                workbench
+            });
+            workbench = Some(view.clone());
+            gpui_component::Root::new(view, window, cx)
+        });
+        let view = workbench.unwrap();
+        wait_until(cx, "the agent", |cx| {
+            view.read_with(cx, |view, _| {
+                view.agent_panel.status == super::super::agent_panel::AgentStatus::Ready
+            })
+        });
+        agent_edit(&view, cx, &path, "90", "95");
+        view.update_in(cx, |view, window, cx| {
+            view.open_agent_change(&path, window, cx)
+        });
+        // A line's comment, written in its window and kept with ⌘↩.
+        let uri = diff_uri("", &DiffSource::Agent(path.display().to_string()));
+        view.update_in(cx, |view, window, cx| {
+            view.comment_diff_line(&uri, 0, 1, window, cx)
+        });
+        cx.run_until_parked();
+        assert!(cx.update(|window, cx| window.has_active_dialog(cx)));
+        cx.simulate_input("Keep 90, it is the price of the low season");
+        cx.simulate_keystrokes("cmd-enter");
+        cx.run_until_parked();
+        assert!(!cx.update(|window, cx| window.has_active_dialog(cx)));
+        // The block's comment, and the note beside the line.
+        view.update_in(cx, |view, window, cx| {
+            view.set_agent_comment(&path, 0..1, "Name it nightsCount".into(), window, cx);
+        });
+        view.read_with(cx, |view, _| {
+            assert_eq!(view.agent_panel.review.len(), 2);
+            assert_eq!(view.agent_panel.review[0].lines, 0..1);
+            let Some(Backing::Diff(tab)) = view.documents.get(&uri).map(|doc| &doc.backing) else {
+                panic!()
+            };
+            let (_, text, _) = tab.doc.as_ref().unwrap().file_lines(0).unwrap();
+            assert_eq!(text[1], "const price = 95;");
+        });
+        // An empty comment takes it away.
+        view.update_in(cx, |view, window, cx| {
+            view.set_agent_comment(&path, 0..1, String::new(), window, cx);
+            view.set_agent_comment(&path, 0..1, "Name it nightsCount".into(), window, cx);
+        });
+        assert_eq!(
+            view.read_with(cx, |view, _| view.agent_panel.review.len()),
+            2
+        );
+        // Together, as one message with the code quoted.
+        view.update_in(cx, |view, window, cx| view.send_agent_comments(window, cx));
+        cx.run_until_parked();
+        view.read_with(cx, |view, _| {
+            assert!(view.agent_panel.review.is_empty());
+            let said = view
+                .agent_panel
+                .thread
+                .entries
+                .iter()
+                .rev()
+                .find_map(|entry| match entry {
+                    ai::thread::Entry::User(text) => Some(text.clone()),
+                    _ => None,
+                })
+                .unwrap();
+            assert!(
+                said.starts_with("Ho dei commenti sulle tue modifiche"),
+                "{said}"
+            );
+            assert!(
+                said.contains("`booking.ts:1`\n```\nconst nights = 3;\n```\nName it nightsCount"),
+                "{said}"
+            );
+            assert!(
+                said.contains("`booking.ts:2`\n```\nconst price = 95;\n```\nKeep 90"),
+                "{said}"
+            );
         });
     }
 
