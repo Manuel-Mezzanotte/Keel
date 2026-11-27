@@ -1239,7 +1239,11 @@ mod tests {
         let folder = tempfile::tempdir().unwrap();
         let root = folder.path();
         std::fs::create_dir_all(root.join("crates/editor/src")).unwrap();
-        std::fs::write(root.join("Cargo.toml"), "[workspace]\nmembers = [\"crates/*\"]\n").unwrap();
+        std::fs::write(
+            root.join("Cargo.toml"),
+            "[workspace]\nmembers = [\"crates/*\"]\n",
+        )
+        .unwrap();
         std::fs::write(
             root.join("crates/editor/Cargo.toml"),
             "[package]\nname = \"editor\"\nversion = \"0.1.0\"\n\n[dependencies]\nname = 1\n",
