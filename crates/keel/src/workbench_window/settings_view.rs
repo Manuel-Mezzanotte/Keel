@@ -15,6 +15,8 @@ pub(super) enum PageKind {
     Settings,
     Keybindings,
     Pulls,
+    /// A web page; each has its own uri, this one and a number.
+    Web,
 }
 
 impl PageKind {
@@ -23,6 +25,7 @@ impl PageKind {
             PageKind::Settings => "keel-settings:",
             PageKind::Keybindings => "keel-keybindings:",
             PageKind::Pulls => "keel-pulls:",
+            PageKind::Web => "keel-web:",
         }
     }
 }

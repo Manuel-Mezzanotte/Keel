@@ -643,6 +643,12 @@ pub const COMMANDS: &[KeelCommand] = &[
         context: None,
     },
     KeelCommand {
+        id: "keel.preview.open",
+        action: || Box::new(crate::workbench_window::OpenWebPreview),
+        default_key: None,
+        context: None,
+    },
+    KeelCommand {
         id: "keel.agent.addToConversation",
         action: || Box::new(AddToAgent),
         default_key: None,

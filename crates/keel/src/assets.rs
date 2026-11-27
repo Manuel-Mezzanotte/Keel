@@ -88,7 +88,12 @@ gpui_kit_assets::icon_assets!(
         ListChecks,
         ShieldAlert,
         Zap,
-        Mic
+        Mic,
+        Monitor,
+        Tablet,
+        Smartphone,
+        Camera,
+        AppWindow
     ]
 );
 

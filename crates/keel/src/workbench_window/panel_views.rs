@@ -216,6 +216,17 @@ impl Workbench {
                         .child(format!("{} ({})", port.process, port.pid)),
                 )
                 .child(
+                    Button::new(("preview-port", number as usize))
+                        .ghost()
+                        .small()
+                        .icon(Icon::new(IconName::AppWindow))
+                        .tooltip(strings.web_open_in_keel)
+                        .on_click(cx.listener(move |this, _, window, cx| {
+                            cx.stop_propagation();
+                            this.open_web_page(&format!("localhost:{number}"), window, cx)
+                        })),
+                )
+                .child(
                     Button::new(("open-port", number as usize))
                         .ghost()
                         .small()

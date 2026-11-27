@@ -674,6 +674,7 @@ impl Workbench {
             return;
         }
         let removed = self.documents.remove(uri);
+        self.forget_web_page(uri);
         // A proposal of Claude Code closed without an answer is rejected.
         if uri.starts_with(super::claude_diff::PROPOSED_SCHEME) {
             self.claude_diff_closed(uri);

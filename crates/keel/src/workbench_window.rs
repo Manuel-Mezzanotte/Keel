@@ -97,6 +97,7 @@ mod terminal_view;
 mod terminals;
 mod testing;
 mod updates;
+mod web_preview;
 mod writing;
 
 pub(crate) use editing::{
@@ -189,6 +190,7 @@ pub(crate) use terminals::{
 };
 pub(crate) use testing::DebugTestAtCursor;
 pub(crate) use testing::{RerunLastTests, RunAllTests, RunTestAtCursor, RunTestsInFile};
+pub(crate) use web_preview::OpenWebPreview;
 pub(crate) use writing::{
     DeleteDuplicateLines, ExpandSelection, JoinLines, JumpToBracket, ShrinkSelection,
     SortLinesAscending, SortLinesDescending, TransformToCamelcase, TransformToKebabcase,
@@ -528,6 +530,11 @@ pub struct Workbench {
     claude_ide: Option<claude_ide::ClaudeIde>,
     /// Edits Claude Code proposed, waiting for Accept or Reject.
     claude_diffs: Vec<claude_diff::ProposedEdit>,
+    /// The web pages open in tabs, by the uri of their tab.
+    web_pages: web_preview::WebPages,
+    next_web_page: u64,
+    /// Reads the open pages' address and title while any is open.
+    web_watch: Option<Task<()>>,
     /// Claude Code as a conversation, on the right.
     agent_panel: agent_panel::AgentPanel,
     /// The file icon theme of `workbench.iconTheme`; none uses Keel's icons.
@@ -835,6 +842,9 @@ impl Workbench {
             watchdog: Default::default(),
             claude_ide: None,
             claude_diffs: Vec::new(),
+            web_pages: Default::default(),
+            next_web_page: 0,
+            web_watch: None,
             icon_theme,
             agent_panel,
             extension_languages: Default::default(),
@@ -1096,6 +1106,9 @@ impl Workbench {
             }
             Backing::Page(settings_view::PageKind::Keybindings) => {
                 return self.strings().keybindings_tab_title.to_owned();
+            }
+            Backing::Page(settings_view::PageKind::Web) => {
+                return self.web_page_title(&document.uri);
             }
             _ => {}
         }

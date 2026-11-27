@@ -1257,6 +1257,7 @@ impl Workbench {
             Backing::Page(super::settings_view::PageKind::Keybindings) => {
                 symbol(IconName::Keyboard)
             }
+            Backing::Page(super::settings_view::PageKind::Web) => symbol(IconName::Globe),
             Backing::ExtensionDetails(_) => symbol(IconName::Blocks),
             Backing::Graph(_) => symbol(IconName::GitGraph),
             Backing::Results(_) => symbol(IconName::Search),
@@ -1783,6 +1784,9 @@ impl Workbench {
                             }
                             super::settings_view::PageKind::Pulls => {
                                 self.render_pulls_page(colors, cx)
+                            }
+                            super::settings_view::PageKind::Web => {
+                                self.render_web_page(&pane.uri, colors, window, cx)
                             }
                         }),
                         Some(Backing::Preview(tab)) => div()
@@ -2561,6 +2565,8 @@ impl Render for Workbench {
         if self.layout.panel && self.layout.panel_view == PanelView::DebugConsole {
             self.console_input(window, cx);
         }
+        // Web pages show again only where their tab is drawn this frame.
+        self.hide_web_pages();
         // The chat the window had open comes back once Claude's panel shows.
         // Tests never start the real Claude: only their fake agent.
         if self.agent_panel.restored.is_some()
@@ -2663,6 +2669,7 @@ impl Render for Workbench {
         let root = self.setup_actions(root, cx);
         let root = self.claude_diff_actions(root, cx);
         let root = self.agent_panel_actions(root, cx);
+        let root = self.web_preview_actions(root, cx);
         let root = self.editing_actions(root, cx);
         let root = self.find_actions(root, cx);
         let root = self.notice_actions(root, cx);
