@@ -228,11 +228,13 @@ impl Workbench {
             )),
         };
         let view = view.downgrade();
-        let notice = notice.action(strings.terminal_show, move |this, window, cx| {
-            if let Some(view) = view.upgrade() {
-                this.reveal_terminal(&view, window, cx);
-            }
-        });
+        let notice = notice
+            .action(strings.terminal_show, move |this, window, cx| {
+                if let Some(view) = view.upgrade() {
+                    this.reveal_terminal(&view, window, cx);
+                }
+            })
+            .can_hide("terminal.longCommand");
         self.notify_user(notice, window, cx);
     }
 
@@ -258,11 +260,14 @@ impl Workbench {
         };
         let strings = self.strings();
         let view = view.downgrade();
-        let notice = Notice::info(title).action(strings.terminal_show, move |this, window, cx| {
-            if let Some(view) = view.upgrade() {
-                this.reveal_terminal(&view, window, cx);
-            }
-        });
+        let hide_key = format!("terminal:{title}");
+        let notice = Notice::info(title)
+            .action(strings.terminal_show, move |this, window, cx| {
+                if let Some(view) = view.upgrade() {
+                    this.reveal_terminal(&view, window, cx);
+                }
+            })
+            .can_hide(hide_key);
         self.notify_user(notice, window, cx);
     }
 

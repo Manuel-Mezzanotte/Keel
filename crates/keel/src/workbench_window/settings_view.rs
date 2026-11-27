@@ -506,6 +506,17 @@ pub(super) const CATALOG: &[Entry] = &[
         ),
     },
     Entry {
+        key: super::notices::HIDDEN_SETTING,
+        page: Page::Files,
+        kind: Kind::Json,
+        default: "[]",
+        title: ("Avvisi nascosti", "Hidden Notifications"),
+        description: (
+            "Gli avvisi chiusi con «Non mostrare più». Il comando «Avvisi: mostra di nuovo quelli nascosti» li fa tornare tutti.",
+            "The notifications closed with «Don't Show Again». The command «Notifications: Show Hidden Ones Again» brings them all back.",
+        ),
+    },
+    Entry {
         key: super::agent_panel::KEEP_AWAKE_SETTING,
         page: Page::Files,
         kind: Kind::Switch,

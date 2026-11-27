@@ -163,7 +163,9 @@ pub(crate) use markdown_preview::{ShowMarkdownPreview, ShowMarkdownPreviewToSide
 pub(crate) use nav_history::{
     GoBack, GoForward, GoToLastEdit, RecentEditors, ShowRecentPlaces, bindings as nav_bindings,
 };
-pub(crate) use notices::{ClearNotifications, ToggleDoNotDisturb, ToggleNotifications};
+pub(crate) use notices::{
+    ClearNotifications, ShowHiddenNotices, ToggleDoNotDisturb, ToggleNotifications,
+};
 pub(crate) use npm_scripts::RunNpmScript;
 pub(crate) use pdf_view::bindings as pdf_bindings;
 pub(crate) use problems::{NextProblem, PreviousProblem};
@@ -2576,11 +2578,14 @@ impl Workbench {
         // As in VS Code, a message that is not modal is a notice in the
         // corner, with the extension's buttons; closing it answers nothing.
         if !modal {
+            // The same words again and again can be told to stay away.
+            let hide_key = format!("extension:{message}");
             let mut notice = match params["severity"].as_str() {
                 Some("error") => notices::Notice::error(message),
                 Some("warning") => notices::Notice::warning(message),
                 _ => notices::Notice::info(message),
-            };
+            }
+            .can_hide(hide_key);
             let answered = Rc::new(std::cell::Cell::new(items.is_empty()));
             if items.is_empty() {
                 self.reply(id, Ok(Value::Null));

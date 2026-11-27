@@ -29,8 +29,8 @@ use crate::workbench_window::{
     PreviousBookmark, RerunLastTests, RunAllTests, RunTestAtCursor, RunTestsInFile, ToggleBookmark,
 };
 use crate::workbench_window::{
-    ClearNotifications, CloseFolder, RevertFile, SaveAll, SaveAs, ToggleAutoSave,
-    ToggleDoNotDisturb, ToggleNotifications, UndoLastCommit,
+    ClearNotifications, CloseFolder, RevertFile, SaveAll, SaveAs, ShowHiddenNotices,
+    ToggleAutoSave, ToggleDoNotDisturb, ToggleNotifications, UndoLastCommit,
 };
 use crate::workbench_window::{
     CloseAllEditors, CloseEditor, CloseEditorsInGroup, CloseOtherEditors, FocusGroup1, FocusGroup2,
@@ -1233,6 +1233,12 @@ pub const COMMANDS: &[KeelCommand] = &[
     KeelCommand {
         id: "workbench.action.toggleDoNotDisturbMode",
         action: || Box::new(ToggleDoNotDisturb),
+        default_key: None,
+        context: None,
+    },
+    KeelCommand {
+        id: "keel.notifications.showHidden",
+        action: || Box::new(ShowHiddenNotices),
         default_key: None,
         context: None,
     },

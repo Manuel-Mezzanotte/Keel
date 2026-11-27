@@ -126,7 +126,9 @@ fn section_of(key: &str) -> Option<(&'static str, &'static str)> {
         | "files.autoSaveDelay"
         | "files.trimTrailingWhitespace"
         | "files.insertFinalNewline" => ("Salvataggio", "Saving"),
-        "files.hotExit" | "window.restoreWindows" => ("Finestre", "Windows"),
+        "files.hotExit" | "window.restoreWindows" | super::notices::HIDDEN_SETTING => {
+            ("Finestre", "Windows")
+        }
         super::agent_panel::KEEP_AWAKE_SETTING => ("Claude", "Claude"),
         "explorer.autoReveal"
         | "explorer.compactFolders"

@@ -806,7 +806,8 @@ impl Workbench {
             .message(message)
             .action(self.strings().terminal_show, |this, window, cx| {
                 this.open_agent(window, cx)
-            });
+            })
+            .can_hide(format!("claude:{title}"));
         self.notify_user(notice, window, cx);
     }
 

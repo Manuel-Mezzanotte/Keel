@@ -9,7 +9,9 @@ use std::collections::VecDeque;
 use std::rc::Rc;
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use gpui::{AnyElement, Div, ElementId, MouseButton, StatefulInteractiveElement as _};
+use gpui::{
+    AnyElement, Div, ElementId, MouseButton, SharedString, StatefulInteractiveElement as _,
+};
 use gpui_component::button::{Button, ButtonVariants as _};
 use gpui_component::notification::{Notification, NotificationDelivery, NotificationType};
 use gpui_component::{Disableable as _, Icon, Selectable as _, Sizable as _};
@@ -22,11 +24,21 @@ use super::*;
 const KEPT: usize = 50;
 /// The width of the bell's list.
 const CENTER_WIDTH: f32 = 380.;
+/// The notices told «Don't show again», by their key.
+pub(super) const HIDDEN_SETTING: &str = "keel.notifications.hidden";
 
 actions!(
     keel,
-    [ToggleNotifications, ClearNotifications, ToggleDoNotDisturb]
+    [
+        ToggleNotifications,
+        ClearNotifications,
+        ToggleDoNotDisturb,
+        ShowHiddenNotices
+    ]
 );
+
+/// The kind of corner notice that can be hidden, for its id.
+struct HideableNotice;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(super) enum NoticeKind {
@@ -70,6 +82,9 @@ pub(super) struct Notice {
     pub(super) on_close: Option<NoticeAction>,
     /// When it came, in seconds since 1970.
     pub(super) at: i64,
+    /// A notice that comes back again and again offers «Don't show
+    /// again»: notices with this key then stay away.
+    pub(super) hide_key: Option<String>,
 }
 
 impl Notice {
@@ -81,6 +96,7 @@ impl Notice {
             actions: Vec::new(),
             on_close: None,
             at: now(),
+            hide_key: None,
         }
     }
 
@@ -122,6 +138,12 @@ impl Notice {
         action: impl Fn(&mut Workbench, &mut Window, &mut Context<Workbench>) + 'static,
     ) -> Self {
         self.on_close = Some(Rc::new(action));
+        self
+    }
+
+    /// Offers «Don't show again» for the notices with this key.
+    pub(super) fn can_hide(mut self, key: impl Into<String>) -> Self {
+        self.hide_key = Some(key.into());
         self
     }
 }
@@ -198,6 +220,17 @@ impl Workbench {
             Some(message) => format!("{} — {message}", notice.title),
             None => notice.title.clone(),
         });
+        // Told «Don't show again»: only the log has it.
+        if notice
+            .hide_key
+            .as_deref()
+            .is_some_and(|key| self.notice_hidden(key))
+        {
+            if let Some(on_close) = notice.on_close.clone() {
+                on_close(self, window, cx);
+            }
+            return;
+        }
         self.notices.list.push_front(notice.clone());
         self.notices.list.truncate(KEPT);
         if !self.notices.open {
@@ -242,6 +275,10 @@ impl Workbench {
         if in_background {
             note = note.delivery(NotificationDelivery::InAppAndSystem);
         }
+        // One of a kind in the corner, so «Don't show again» closes it.
+        if let Some(key) = notice.hide_key.clone() {
+            note = note.id1::<HideableNotice>(SharedString::from(key));
+        }
         if let Some(on_close) = notice.on_close.clone() {
             let workbench = cx.weak_entity();
             note = note.on_close(move |window, cx| {
@@ -250,11 +287,13 @@ impl Workbench {
                 }
             });
         }
-        if !notice.actions.is_empty() {
+        if !notice.actions.is_empty() || notice.hide_key.is_some() {
             let workbench = cx.weak_entity();
             let actions = notice.actions.clone();
+            let hide = self.hide_button(&notice);
             note = note.content(move |_, _, cx| {
-                notice_buttons(&actions, workbench.clone(), true, cx).into_any_element()
+                notice_buttons(&actions, hide.clone(), workbench.clone(), true, cx)
+                    .into_any_element()
             });
         }
         // A window without Keel's root, as in some tests, keeps the
@@ -284,6 +323,7 @@ impl Workbench {
             actions: fixes.clone(),
             on_close: None,
             at: now(),
+            hide_key: None,
         });
         self.notices.list.truncate(KEPT);
         self.log(format!("{title}: {detail}"));
@@ -349,6 +389,60 @@ impl Workbench {
             this.notices.quiet = !this.notices.quiet;
             cx.notify();
         }))
+        .on_action(cx.listener(|this, _: &ShowHiddenNotices, window, cx| {
+            this.show_hidden_notices(window, cx)
+        }))
+    }
+
+    /// The keys of the notices told «Don't show again».
+    fn hidden_notices(&self) -> Vec<String> {
+        self.settings
+            .get(HIDDEN_SETTING)
+            .and_then(Value::as_array)
+            .into_iter()
+            .flatten()
+            .filter_map(|key| key.as_str().map(str::to_owned))
+            .collect()
+    }
+
+    pub(super) fn notice_hidden(&self, key: &str) -> bool {
+        self.hidden_notices().iter().any(|hidden| hidden == key)
+    }
+
+    /// «Don't show again»: the notices with this key stay away, and the
+    /// one in the corner goes.
+    pub(super) fn hide_notices(&mut self, key: &str, window: &mut Window, cx: &mut Context<Self>) {
+        let mut hidden = self.hidden_notices();
+        if !hidden.iter().any(|hidden| hidden == key) {
+            hidden.push(key.to_owned());
+        }
+        self.change_setting(HIDDEN_SETTING, Some(json!(hidden)), window, cx);
+        if matches!(window.root::<gpui_component::Root>(), Some(Some(_))) {
+            window.remove_notification1::<HideableNotice>(SharedString::from(key.to_owned()), cx);
+        }
+    }
+
+    /// Every notice told «Don't show again» comes back.
+    pub(super) fn show_hidden_notices(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let count = self.hidden_notices().len();
+        if count > 0 {
+            self.change_setting(HIDDEN_SETTING, None, window, cx);
+        }
+        let strings = self.strings();
+        let notice = if count == 0 {
+            Notice::info(strings.notice_none_hidden)
+        } else {
+            Notice::success(strings.notice_hidden_back)
+        };
+        self.notify_user(notice, window, cx);
+    }
+
+    /// The «Don't show again» button of a notice that has one.
+    fn hide_button(&self, notice: &Notice) -> Option<(String, NoticeAction)> {
+        let key = notice.hide_key.clone()?;
+        let action: NoticeAction =
+            Rc::new(move |this: &mut Workbench, window, cx| this.hide_notices(&key, window, cx));
+        Some((self.strings().notice_dont_show.to_owned(), action))
     }
 
     /// The bell at the right of the status bar: a dot when something new
@@ -528,14 +622,18 @@ impl Workbench {
                                         div().text_xs().text_color(colors.muted).child(message),
                                     )
                                 })
-                                .when(!notice.actions.is_empty(), |column| {
-                                    column.child(notice_buttons(
-                                        &notice.actions,
-                                        workbench,
-                                        false,
-                                        cx,
-                                    ))
-                                }),
+                                .when(
+                                    !notice.actions.is_empty() || notice.hide_key.is_some(),
+                                    |column| {
+                                        column.child(notice_buttons(
+                                            &notice.actions,
+                                            self.hide_button(notice),
+                                            workbench,
+                                            false,
+                                            cx,
+                                        ))
+                                    },
+                                ),
                         )
                 }))
                 .into_any_element()
@@ -572,14 +670,29 @@ impl Workbench {
 
 /// A notice's buttons, in a row under its text.
 /// In a toast the first button stands out; in the bell's list they are
-/// all quiet, so the list reads as a list.
+/// all quiet, so the list reads as a list. «Don't show again» comes last,
+/// the quietest.
 fn notice_buttons(
     actions: &[(String, NoticeAction)],
+    hide: Option<(String, NoticeAction)>,
     workbench: gpui::WeakEntity<Workbench>,
     toast: bool,
     cx: &App,
 ) -> Div {
     let _ = cx;
+    let hide_button = hide.map(|(label, action)| {
+        let workbench = workbench.clone();
+        Button::new("notice-hide")
+            .label(label)
+            .small()
+            .ghost()
+            .on_click(move |_, window, cx| {
+                cx.stop_propagation();
+                if let Some(workbench) = workbench.upgrade() {
+                    workbench.update(cx, |this, cx| action(this, window, cx));
+                }
+            })
+    });
     div()
         .pt_1p5()
         .flex()
@@ -603,6 +716,7 @@ fn notice_buttons(
                 }
             })
         }))
+        .children(hide_button)
 }
 
 #[cfg(test)]
@@ -630,5 +744,73 @@ mod tests {
         assert_eq!(ago(0, 30 * 3600, &ITALIAN), "ieri");
         assert_eq!(ago(0, 3 * 86_400, &ENGLISH), "3 days ago");
         assert_eq!(ago(0, 70 * 86_400, &ITALIAN), "2 mesi fa");
+    }
+
+    #[gpui::test]
+    fn a_notice_told_not_to_show_stays_away_until_asked_back(cx: &mut gpui::TestAppContext) {
+        cx.update(|cx| {
+            gpui_component::init(cx);
+            crate::workbench_window::init(cx);
+        });
+        let folder = tempfile::tempdir().unwrap();
+        let base = std::fs::canonicalize(folder.path()).unwrap();
+        let root = base.join("Hospitality");
+        std::fs::create_dir_all(&root).unwrap();
+        let settings_file = base.join("settings.json");
+        std::fs::write(&settings_file, r#"{ "keel.language": "en" }"#).unwrap();
+        let settings = settings::Settings::load(&settings_file, None);
+        let opening = Opening::new(Some(root), None);
+        let mut workbench = None;
+        let (_root, cx) = cx.add_window_view(|window, cx| {
+            let view = cx.new(|cx| Workbench::new(opening, settings, None, window, cx));
+            workbench = Some(view.clone());
+            gpui_component::Root::new(view, window, cx)
+        });
+        let view = workbench.unwrap();
+        cx.run_until_parked();
+        let titles = |view: &Entity<Workbench>, cx: &mut gpui::VisualTestContext| {
+            view.read_with(cx, |view, _| {
+                view.notices
+                    .list
+                    .iter()
+                    .map(|notice| notice.title.clone())
+                    .collect::<Vec<_>>()
+            })
+        };
+        let again = |view: &Entity<Workbench>, cx: &mut gpui::VisualTestContext| {
+            view.update_in(cx, |view, window, cx| {
+                let notice = Notice::warning("Prettier is not installed").can_hide("extension:p");
+                view.notify_user(notice, window, cx);
+            });
+        };
+        again(&view, cx);
+        assert_eq!(titles(&view, cx), ["Prettier is not installed"]);
+        // «Don't show again»: the next ones only go to the log, and the
+        // setting keeps it for the next start.
+        view.update_in(cx, |view, window, cx| {
+            let notice = view.notices.list[0].clone();
+            let (label, hide) = view.hide_button(&notice).unwrap();
+            assert_eq!(label, "Don't Show Again");
+            hide(view, window, cx);
+        });
+        again(&view, cx);
+        assert_eq!(titles(&view, cx), ["Prettier is not installed"]);
+        let saved = std::fs::read_to_string(&settings_file).unwrap();
+        assert!(saved.contains("extension:p"), "{saved}");
+        // Notices without the key still come.
+        view.update_in(cx, |view, window, cx| {
+            view.notify_user(Notice::info("Pushed"), window, cx)
+        });
+        assert_eq!(titles(&view, cx)[0], "Pushed");
+        // The command brings them back.
+        cx.dispatch_action(ShowHiddenNotices);
+        cx.run_until_parked();
+        again(&view, cx);
+        assert_eq!(titles(&view, cx)[0], "Prettier is not installed");
+        assert!(
+            !std::fs::read_to_string(&settings_file)
+                .unwrap()
+                .contains("extension:p")
+        );
     }
 }
