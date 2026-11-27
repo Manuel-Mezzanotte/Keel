@@ -164,9 +164,32 @@ impl Workbench {
                     .detach();
             })
         };
+        // → (in an empty field) or ⌥↩: the file opens behind the list, as a
+        // tab of its own that stays, and the list stays open.
+        let kept: Rc<RefCell<HashSet<String>>> = Rc::default();
+        let on_open_behind: quick_pick::OnHighlight = {
+            let workbench = cx.weak_entity();
+            let paths = paths.clone();
+            let root = root.clone();
+            let kept = kept.clone();
+            Rc::new(move |index: usize, window: &mut Window, cx: &mut App| {
+                let Some(path) = paths.get(index).map(|path| root.join(path)) else {
+                    return;
+                };
+                let kept = kept.clone();
+                workbench
+                    .update(cx, |this, cx| {
+                        if let Some(uri) = this.open_behind(&path, window, cx) {
+                            kept.borrow_mut().insert(uri);
+                        }
+                    })
+                    .ok();
+            })
+        };
         let options = PickOptions {
             on_typed: Some(on_typed),
             on_highlight: Some(on_highlight),
+            on_open_behind: Some(on_open_behind),
             ..Default::default()
         };
         let chosen = quick_pick::show_with_options(
@@ -197,6 +220,7 @@ impl Workbench {
                         return;
                     }
                     if !open_before.contains(&looked)
+                        && !kept.borrow().contains(&looked)
                         && let Some((group, tab)) = this.find_tab(&looked, this.active)
                     {
                         this.close_tab_now(group, tab, window, cx);
@@ -235,6 +259,30 @@ impl Workbench {
         let uri = self.load_document(path, window, cx).ok()?;
         let column = self.active.min(self.panes.len().saturating_sub(1));
         self.show_tab(&uri, column, tabs::OpenAs::Preview, false, window, cx);
+        cx.notify();
+        Some(uri)
+    }
+
+    /// Opens a file as a tab that stays, without taking the keyboard from
+    /// Quick Open's list; its uri, when it opened.
+    pub(super) fn open_behind(
+        &mut self,
+        path: &Path,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> Option<String> {
+        if !path.is_file() {
+            return None;
+        }
+        // A lone pane takes the keyboard when it changes file: it goes
+        // back to the list.
+        let focused = window.focused(cx);
+        let uri = self.load_document(path, window, cx).ok()?;
+        let column = self.active.min(self.panes.len().saturating_sub(1));
+        self.show_tab(&uri, column, tabs::OpenAs::Normal, false, window, cx);
+        if let Some(focused) = focused {
+            window.focus(&focused, cx);
+        }
         cx.notify();
         Some(uri)
     }
@@ -405,6 +453,44 @@ mod tests {
         let title = view.read_with(cx, |view, _| view.window_title());
         assert_eq!(title, "booking-card.tsx — Hospitality");
         assert_eq!(cursor(&view, cx), (1, 0));
+    }
+
+    /// → in Quick Open's empty field, or ⌥↩, opens the highlighted file
+    /// behind the list, as a tab that stays; the list stays open.
+    #[gpui::test]
+    fn cmd_p_opens_a_file_behind_the_list(cx: &mut TestAppContext) {
+        let (_folder, root, view, cx) = project(cx);
+        let tabs = |view: &Entity<Workbench>, cx: &mut VisualTestContext| {
+            view.read_with(cx, |view, _| {
+                view.groups
+                    .iter()
+                    .flat_map(|group| &group.tabs)
+                    .map(|tab| tab.uri.clone())
+                    .collect::<Vec<_>>()
+            })
+        };
+        cx.simulate_keystrokes("cmd-p");
+        cx.run_until_parked();
+        cx.simulate_keystrokes("down");
+        cx.run_until_parked();
+        cx.simulate_keystrokes("right");
+        cx.run_until_parked();
+        assert!(cx.update(|window, cx| window.has_active_dialog(cx)));
+        let card = Uri::file(&root.join("src/components/booking-card.tsx")).to_string();
+        assert!(tabs(&view, cx).contains(&card), "{:?}", tabs(&view, cx));
+        // Typed letters: → moves in the field, ⌥↩ opens behind.
+        cx.simulate_input("booking.ts");
+        cx.run_until_parked();
+        cx.simulate_keystrokes("alt-enter");
+        cx.run_until_parked();
+        assert!(cx.update(|window, cx| window.has_active_dialog(cx)));
+        let lib = Uri::file(&root.join("src/lib/booking.ts")).to_string();
+        assert!(tabs(&view, cx).contains(&lib));
+        // Closing the list keeps them.
+        cx.simulate_keystrokes("escape");
+        cx.run_until_parked();
+        let open = tabs(&view, cx);
+        assert!(open.contains(&card) && open.contains(&lib), "{open:?}");
     }
 
     #[gpui::test]

@@ -52,7 +52,7 @@ fn title_row(title: String, cx: &App) -> impl IntoElement + use<> {
 }
 
 /// The keys of the list under it, as Raycast and Spotlight show them.
-fn key_hints(cx: &App) -> impl IntoElement + use<> {
+fn key_hints(behind: bool, cx: &App) -> impl IntoElement + use<> {
     let theme = cx.theme();
     let strings = crate::menus::language(cx).strings();
     let key = |keys: &'static str| {
@@ -88,6 +88,7 @@ fn key_hints(cx: &App) -> impl IntoElement + use<> {
         .text_color(theme.muted_foreground)
         .child(hint("↑↓", strings.pick_move))
         .child(hint("↩", strings.pick_choose))
+        .when(behind, |hints| hints.child(hint("→", strings.pick_behind)))
         .child(hint("esc", strings.pick_close))
 }
 
@@ -171,6 +172,10 @@ pub struct PickOptions {
     pub on_typed: Option<OnTyped>,
     /// Letting Ctrl go chooses the highlighted entry, for Ctrl+Tab.
     pub confirm_on_ctrl_release: bool,
+    /// Called with the highlighted entry's index on → in an empty field,
+    /// or on ⌥↩ anywhere: Quick Open opens the file behind the list, which
+    /// stays open, as VS Code does with →.
+    pub on_open_behind: Option<OnHighlight>,
 }
 
 thread_local! {
@@ -260,6 +265,10 @@ pub fn show_with_options(
         let on_highlight = options.on_highlight.clone();
         let on_typed = options.on_typed.clone();
         let ctrl_release = options.confirm_on_ctrl_release;
+        let open_behind = options.on_open_behind.clone();
+        let behind = open_behind.is_some();
+        let behind_state = state.clone();
+        let behind_shown = shown.clone();
         let confirm = finish.clone();
         let cancel = finish.clone();
         let close = finish.clone();
@@ -276,7 +285,7 @@ pub fn show_with_options(
         let command = Command::new(&state)
             .bordered(false)
             .max_h(px(LIST_HEIGHT))
-            .footer(|_, _, cx| key_hints(cx))
+            .footer(move |_, _, cx| key_hints(behind, cx))
             .filterable(false)
             .items(rows)
             .placeholder(placeholder.clone().unwrap_or_default())
@@ -318,6 +327,30 @@ pub fn show_with_options(
             .on_close(move |_, _, _| close(None))
             .child(
                 div()
+                    .when_some(open_behind, |list, open_behind| {
+                        list.capture_key_down(move |event, window, cx| {
+                            let keystroke = &event.keystroke;
+                            let modifiers = keystroke.modifiers;
+                            let right = keystroke.key == "right"
+                                && !modifiers.modified()
+                                && behind_state.read(cx).query(cx).is_empty();
+                            let alt_enter = keystroke.key == "enter"
+                                && modifiers.alt
+                                && !modifiers.platform
+                                && !modifiers.control;
+                            if !right && !alt_enter {
+                                return;
+                            }
+                            let chosen = behind_state
+                                .read(cx)
+                                .selected_index()
+                                .and_then(|index| behind_shown.borrow().get(index.row).copied());
+                            if let Some(chosen) = chosen {
+                                open_behind(chosen, window, cx);
+                                cx.stop_propagation();
+                            }
+                        })
+                    })
                     .when(ctrl_release, |list| {
                         list.on_modifiers_changed(|event, window, cx| {
                             if !event.modifiers.control {
@@ -402,7 +435,7 @@ pub fn show_dynamic(
         let command = Command::new(&state)
             .bordered(false)
             .max_h(px(LIST_HEIGHT))
-            .footer(|_, _, cx| key_hints(cx))
+            .footer(|_, _, cx| key_hints(false, cx))
             .filterable(false)
             .items(rows)
             .placeholder(placeholder.clone().unwrap_or_default())

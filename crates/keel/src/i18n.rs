@@ -741,6 +741,7 @@ pub struct Strings {
     pub pick_move: &'static str,
     pub pick_choose: &'static str,
     pub pick_close: &'static str,
+    pub pick_behind: &'static str,
     /// The first list of the welcome page.
     pub welcome_start: &'static str,
     pub welcome_go_to_file: &'static str,
@@ -2843,6 +2844,7 @@ pub const ITALIAN: Strings = Strings {
     pick_move: "per muoverti",
     pick_choose: "per scegliere",
     pick_close: "per chiudere",
+    pick_behind: "per aprire dietro",
     welcome_start: "Inizia",
     welcome_go_to_file: "Vai a un file",
     welcome_commands: "Tutti i comandi",
@@ -4109,6 +4111,7 @@ pub const ENGLISH: Strings = Strings {
     pick_move: "to move",
     pick_choose: "to choose",
     pick_close: "to close",
+    pick_behind: "to open behind",
     welcome_start: "Start",
     welcome_go_to_file: "Go to File",
     welcome_commands: "All Commands",
